@@ -23,3 +23,8 @@ localization microscopy data. Histochem Cell Biol 137, 1–10 (2012). https://do
   
 ### Low spatial correlation
 <img src="/Images/CBC_example_low.png" width="800px"/>
+
+# Hex bin point data
+`hex_bin.py`  
+Bin point based data on a hexagonal grid. A hexagonal grid is preferred in biological data because it more faithfully captures the shapes and curves than a rectangular grid.
+<img src="/Images/Hex_bin_example_data1810.png" width="800px"/>
