@@ -28,3 +28,8 @@ localization microscopy data. Histochem Cell Biol 137, 1–10 (2012). https://do
 `hex_bin.py`  
 Bin point based data on a hexagonal grid. A hexagonal grid is preferred in biological data because it more faithfully captures the shapes and curves than a rectangular grid.
 <img src="/Images/Hex_bin_example_data1810um.png" width="800px"/>
+
+# Color generator
+`many_colors.py`  
+Generate a large number of different colors. Not a spatial function but usefull for visualization. Colors are based on the HSV color weel and the function has the option to shuffle the colors random.  
+<img src="/Images/144_color_example.png" width="800px"/>
