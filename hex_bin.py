@@ -56,7 +56,7 @@ def make_hexbin(spacing, title, data, min_count=1):
 
         if xlength > ylength:
             #Find number of points   
-            n_points = math.ceil((max_x - min_x) / spacing)
+            n_points = ceil((max_x - min_x) / spacing)
             #Correct x range to match whole number of tiles
             extent = n_points * spacing
             difference_x = extent - xlength
@@ -79,7 +79,7 @@ def make_hexbin(spacing, title, data, min_count=1):
 
         else:
             #Find number of points  
-            n_points = math.ceil((max_y - min_y) / spacing)
+            n_points = ceil((max_y - min_y) / spacing)
             #Correct y range to match whole number of tiles
             extent = n_points * spacing
             difference_y = extent - ylength
@@ -138,5 +138,5 @@ def make_hexbin(spacing, title, data, min_count=1):
         hex_binned[name]['df'] = df_hex_filt
         hex_binned[name]['filt'] = filt
 
-        return hex_binned
+    return hex_binned
 
