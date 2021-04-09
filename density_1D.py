@@ -25,7 +25,6 @@ def get_rotation(x1, y1, x2, y2):
     Return the angle in radians.
     
     """
-    
     dx = x2 - x1
     dy = y2 - y1
     
@@ -90,6 +89,7 @@ def calc_density(points, line, width, bandwidth=1, kernel='gaussian', resolution
     `probability`(np.array): Probability under the KDE at the sampling points.
         Area under curve is 1 if bandwidth_extention is False.
     `sampling_points`(np.array): Points where the KDE has been sampled.
+    `filter`(np.array): Boolean array for the selected points.
     
     """
     
@@ -161,4 +161,4 @@ def calc_density(points, line, width, bandwidth=1, kernel='gaussian', resolution
         ax1.set_ylabel('Probability')
         ax1.set_xlabel('Position')
     
-    return probability, sample_space
+    return probability, sample_space, filt
