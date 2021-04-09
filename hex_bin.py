@@ -1,8 +1,3 @@
-
-
-# CODE MOVED TO THE HEX_REGIONALIZATION.PY FILE !!!!!!!!!!!!!!!!!!!
-
-
 import pandas as pd
 import numpy as np
 from matplotlib.pyplot import hexbin
