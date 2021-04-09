@@ -25,6 +25,7 @@ def make_hexbin(spacing, title, data, min_count=1):
     Dictionary with the datasets titles as kyes.
     For each dataset the following items are stored:
     `gene` --> Dictionary with tile counts for each gene.
+    `hexbin` --> matplotlib PolyCollection for hex bins.
     `coordinates` --> XY coordinates for all tiles.
     `coordinates_filt` --> XY coordinates for all tiles that have
         enough counts according to "min_count"
@@ -32,9 +33,6 @@ def make_hexbin(spacing, title, data, min_count=1):
         valid tiles.
     `spacing` --> Chosen spacing. Keep in mind that the distance between tile
         centers in different rows might deviate slightly. 
-    `hexagon_shape` --> matplotlib polygon. The first array contains the corner 
-        coordinates relative to the centroid. Centroids for each hexagon can be
-        found under "coordinates" or "coordinates_filt".
     
     """
     hex_binned = {}
@@ -44,7 +42,6 @@ def make_hexbin(spacing, title, data, min_count=1):
         print(f'Start processing {title[i]}          ', end='\r')
 
         #Determine canvas space
-        print(molecules)
         max_x = molecules.loc[:,'r_stitched_coords'].max()
         min_x = molecules.loc[:,'r_stitched_coords'].min()
         max_y = molecules.loc[:,'c_stitched_coords'].max()
