@@ -15,6 +15,11 @@ from skimage.measure import subdivide_polygon
 from shapely.ops import unary_union
 from itertools import combinations, permutations
 import geopandas as gp
+import psutil
+import gc
+import sys
+from multiprocessing import cpu_count
+from joblib import Parallel, delayed
 
 def read_spot_data(base_folder, full_name=True, rename_columns = {'r_px_microscope_stitched': 'y', 
                                                                   'c_px_microscope_stitched': 'x',
