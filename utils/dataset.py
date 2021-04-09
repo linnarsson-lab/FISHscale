@@ -48,7 +48,7 @@ class PandasDataset:
         App.exec_()
         App.quit()
 
-    def DBsegment(self,eps,min_samples,column_name='cell'):
+    def DBsegment(self,eps=25,min_samples=5,column_name='cell'):
         """
         Run DBscan segmentation on self.data, this will reassign a column on self.data with column_name
         """
