@@ -1,6 +1,6 @@
+# Cytograph clustering 
 
 import logging
-
 import community
 import leidenalg
 import networkx as nx
@@ -11,7 +11,6 @@ from sklearn.cluster import DBSCAN
 from sklearn.decomposition import PCA
 from sklearn.neighbors import NearestNeighbors
 from scipy.sparse.csgraph import connected_components
-
 import loompy
 
 

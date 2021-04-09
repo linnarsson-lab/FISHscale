@@ -1,4 +1,3 @@
-
 import networkx as nx
 import loompy
 from scipy.spatial import cKDTree as KDTree

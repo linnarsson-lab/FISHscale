@@ -216,20 +216,6 @@ class CollapsibleDialog(QDialog):
         return section
         
 
-def visualize(dataframe,columns,width=2000,height=2000,color_dic=None):
-    QtWidgets.QApplication.setStyle('Fusion')
-    App = QtWidgets.QApplication.instance()
-    if App is None:
-        App = QtWidgets.QApplication(sys.argv)
-    else:
-        print('QApplication instance already exists: %s' % str(App))
-
-    window = Window(dataframe,columns,width,height,color_dic) 
-    App.exec_()
-    App.quit()
-
-        
-
         
         
 
