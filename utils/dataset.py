@@ -2,7 +2,7 @@ import pandas as pd
 from FISHscale.visualization import Window
 from PyQt5 import QtWidgets
 import sys
-
+from datetime import datetime
 from sklearn.cluster import DBSCAN, MiniBatchKMeans, Birch, SpectralClustering
 import pandas as pd
 from tqdm import tqdm
@@ -58,7 +58,7 @@ class PandasDataset:
         clustering = DBSCAN(eps=eps, min_samples=min_samples).fit(X)
         self.labels = clustering.labels_
         self.data[column_name] = self.labels
-        print('DBscan assigned {}'.format(self.labels.max()))
+        print('DBscan found {} clusters'.format(self.labels.max()))
 
     def make_loom(self,
         filename:str,
@@ -102,7 +102,7 @@ class PandasDataset:
         rowattrs = {'gene':data.index.values}
         
         if save:
-            loompy.create(filename, data.values, rowattrs, colattrs)
+            loompy.create(filename+datetime.now.strftime("%d-%m-%Y%H:%M:%S"), data.values, rowattrs, colattrs)
             print('Loom File Created')
     
 

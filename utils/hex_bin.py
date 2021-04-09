@@ -44,6 +44,7 @@ def make_hexbin(spacing, title, data, min_count=1):
         print(f'Start processing {title[i]}          ', end='\r')
 
         #Determine canvas space
+        print(molecules)
         max_x = molecules.loc[:,'r_stitched_coords'].max()
         min_x = molecules.loc[:,'r_stitched_coords'].min()
         max_y = molecules.loc[:,'c_stitched_coords'].max()
