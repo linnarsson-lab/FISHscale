@@ -4,14 +4,12 @@ from tqdm import tqdm
 from collections import Counter
 import numpy as np
 import loompy
+from FISHscale.utils.dataset import PandasDataset
 #DBscan
 
-class DBsegment:
+class DBsegment(PandasDataset):
     def __init__(self,
-        data: pd.DataFrame,
-        x: str,
-        y: str,
-        gene_column: str,
+
         eps=30,
         min_samples=5):
 
