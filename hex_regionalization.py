@@ -80,25 +80,27 @@ def convert_spot_numpy(spots, x_label='r_px_microscope_stitched', y_label='c_px_
     return converted
 
 
-def make_hexbin(spacing, spots, min_count=1):
+def make_hexbin_serial(spacing, spots, min_count):
     """
-    Bin 2D expression data into hexagonal bins.
+    Serial wrapper around make_hexbin()
+    
+    Use when running out of memory with the parallel function.
     
     Input:
     `spacing`(int): distance between tile centers, in same units as the data. 
         The actual spacing will have a verry small deviation (tipically lower 
         than 2e-9%) in the y axis, due to the matplotlib hexbin function.
         The function makes hexagons with the point up: ⬡
-    `spots`(dict): Dictionary with datasets as keys. For every dataset there 
-        should be a pandas dataframe with columns ['x', 'y', 'gene'] for the
-        x and y coordinates and the gene labels respectively.
+    `spots`(dictionary): Dictionary with for each dataset aDataFrame with 
+        columns ['x', 'y', 'gene'] for the x and y coordinates and the gene 
+        labels respectively.
     `min_count`(int): Minimal number of molecules in a tile to keep the tile in 
-        the dataset. Default = 1. The algorithm will generate a lot of empty 
+        the dataset. The algorithm will generate a lot of empty 
         tiles, which are later discarded using the min_count threshold.
+        Suggested to be at least 1.
     
     Output:
-    Dictionary with the datasets titles as kyes.
-    For each dataset the following items are stored:
+    Dictionary with the following items:
     `gene` --> Dictionary with tile counts for each gene.
     `hexbin` --> matplotlib PolyCollection for hex bins.
     `coordinates` --> XY coordinates for all tiles.
@@ -110,107 +112,115 @@ def make_hexbin(spacing, spots, min_count=1):
         centers in different rows might deviate slightly. 
     
     """
-    hex_binned = {}
-    datasets = list(spots.keys())
+    dataset_keys = list(spots.keys())
+    results={}    
     
-    #Get genes
-    unique_genes = np.unique(spots[datasets[0]]['gene'])
-    n_genes = len(unique_genes)
+    
+    spacing_list = [spacing for i in dataset_keys]
+    datasets = [spots[k] for k in dataset_keys]
+    min_count_list = [min_count for i in dataset_keys]
+    
+    for d in dataset_keys:
+        results[d] = make_hexbin(spacing, spots[d], min_count)
 
-    #Iterate over datasets
-    for i, d in enumerate(datasets):
-        print(f'Start processing {d}                                            ', end='\r')
-        coords = spots[d]
+    return results
+
+
+def make_hexbin_parallel(spacing, spots, min_count, n_jobs=None):
+    """
+    Parallel wrapper around make_hexbin()
+    
+    Can consume 
+    
+    Input:
+    `spacing`(int): distance between tile centers, in same units as the data. 
+        The actual spacing will have a verry small deviation (tipically lower 
+        than 2e-9%) in the y axis, due to the matplotlib hexbin function.
+        The function makes hexagons with the point up: ⬡
+    `spots`(dictionary): Dictionary with for each dataset aDataFrame with 
+        columns ['x', 'y', 'gene'] for the x and y coordinates and the gene 
+        labels respectively.
+    `min_count`(int): Minimal number of molecules in a tile to keep the tile in 
+        the dataset. The algorithm will generate a lot of empty 
+        tiles, which are later discarded using the min_count threshold.
+        Suggested to be at least 1.
+    
+    Output:
+    Dictionary with the following items:
+    `gene` --> Dictionary with tile counts for each gene.
+    `hexbin` --> matplotlib PolyCollection for hex bins.
+    `coordinates` --> XY coordinates for all tiles.
+    `coordinates_filt` --> XY coordinates for all tiles that have
+        enough counts according to "min_count"
+    `df` --> Pandas dataframe with counts for all genes in all 
+        valid tiles.
+    `spacing` --> Chosen spacing. Keep in mind that the distance between tile
+        centers in different rows might deviate slightly. 
+    
+    """
+    dataset_keys = list(spots.keys())
+    spacing_list = [spacing for i in dataset_keys]
+    datasets = [spots[k] for k in dataset_keys]
+    min_count_list = [min_count for i in dataset_keys]
+
+    #Paralel execution for all datasets
+    with Pool(processes=n_jobs) as pool:
+        result = pool.starmap(make_hexbin, zip(spacing_list, datasets, min_count_list), 1)
         
-        max_x = coords.loc[:, 'x'].max()
-        min_x = coords.loc[:, 'x'].min()
-        max_y = coords.loc[:, 'y'].max()
-        min_y = coords.loc[:, 'y'].min()
+    pooled_results = {k:v for k,v in zip(dataset_keys, result)}
 
-        #Determine largest axes and use this to make a hexbin grid with square extent.
-        #If it is not square matplotlib will stretch the hexagonal tiles to an asymetric shape.
-        xlength = max_x - min_x
-        ylength = max_y - min_y
+    return pooled_results
 
-        if xlength > ylength:
-            #Find number of points   
-            n_points = math.ceil((max_x - min_x) / spacing)
-            #Correct x range to match whole number of tiles
-            extent = n_points * spacing
-            difference_x = extent - xlength
-            min_x = min_x - (0.5 * difference_x)
-            max_x = max_x + (0.5 * difference_x)
-            # *
-            #Adjust the y scale to match the number of tiles in x
-            #For the same lengt the number of tiles in x is not equal
-            #to the number of rows in y.
-            #For a hexagonal grid with the tiles pointing up, the distance
-            #between rows is (x_spacing * sqrt(3)) / 2
-            #(sqrt(3)/2 comes form sin(60))
-            xlength = max_x - min_x
-            y_spacing = (spacing * np.sqrt(3)) / 2
-            n_points_y = int(xlength / y_spacing)
-            extent_y = n_points_y * y_spacing
-            difference_y = extent_y - ylength
-            min_y = min_y - (0.5 * difference_y)
-            max_y = max_y + (0.5 * difference_y)
+def make_hexbin_joblib(spacing, spots, min_count, unique_genes, n_jobs=None):
+    """
+    Parallel wrapper around make_hexbin()
+    
+    Can consume 
+    
+    Input:
+    `spacing`(int): distance between tile centers, in same units as the data. 
+        The actual spacing will have a verry small deviation (tipically lower 
+        than 2e-9%) in the y axis, due to the matplotlib hexbin function.
+        The function makes hexagons with the point up: ⬡
+    `spots`(dictionary): Dictionary with for each dataset aDataFrame with 
+        columns ['x', 'y', 'gene'] for the x and y coordinates and the gene 
+        labels respectively.
+    `min_count`(int): Minimal number of molecules in a tile to keep the tile in 
+        the dataset. The algorithm will generate a lot of empty 
+        tiles, which are later discarded using the min_count threshold.
+        Suggested to be at least 1.
+    
+    Output:
+    Dictionary with the following items:
+    `gene` --> Dictionary with tile counts for each gene.
+    `hexbin` --> matplotlib PolyCollection for hex bins.
+    `coordinates` --> XY coordinates for all tiles.
+    `coordinates_filt` --> XY coordinates for all tiles that have
+        enough counts according to "min_count"
+    `df` --> Pandas dataframe with counts for all genes in all 
+        valid tiles.
+    `spacing` --> Chosen spacing. Keep in mind that the distance between tile
+        centers in different rows might deviate slightly. 
+    
+    """
+    dataset_keys = list(spots.keys())
+    #pacing_list = [spacing for i in dataset_keys]
+    #datasets = [spots[k] for k in dataset_keys]
+    #min_count_list = [min_count for i in dataset_keys]
 
-        else:
-            #Find number of points  
-            n_points = math.ceil((max_y - min_y) / spacing)
-            #Correct y range to match whole number of tiles
-            extent = n_points * spacing
-            difference_y = extent - ylength
-            min_y = min_y - (0.5 * difference_y)
-            max_y = max_y + (0.5 * difference_y)
-            #Correct x range to match y range
-            #because the x dimension is driving for the matplotlib hexbin function 
-            ylength = max_y - min_y
-            difference_x = ylength - xlength
-            min_x = min_x - (0.5 * difference_x)
-            max_x = max_x + (0.5 * difference_x)
-            #Adjust the y scale to match the number of tiles in x
-            #See explantion above at *
-            y_spacing = (spacing * np.sqrt(3)) / 2
-            n_points_y = int(ylength / y_spacing)
-            extent_y = n_points_y * y_spacing
-            difference_y = extent_y - ylength
-            min_y = min_y - (0.5 * difference_y)
-            max_y = max_y + (0.5 * difference_y)
-
-        #Make result dictionarys
-        hex_binned[d] = {}
-        hex_binned[d]['gene'] = {}
-        hex_binned[d]['spacing'] = spacing
+    #Paralel execution for all datasets
+    #with Pool(processes=n_jobs) as pool:
         
-        #Perform hexagonal binning for each gene
-        for g, c in coords.loc[:, ['x', 'y', 'gene']].groupby('gene'):
-            #Make hex bins and get data
-            hb = hexbin(c.loc[:,'x'], c.loc[:,'y'], gridsize=int(n_points), extent=[min_x, max_x, min_y, max_y], visible=False)
-            hex_binned[d]['gene'][g] = hb.get_array()
+    n_cores = cpu_count()
+    with Parallel(n_jobs=n_cores, backend='loky') as parallel:
+        result = parallel(delayed(make_hexbin)(spacing, spots[k], min_count, unique_genes) for k in dataset_keys)#zip(spacing_list, datasets, min_count_list))
+    #pool.starmap(make_hexbin, zip(spacing_list, datasets, min_count_list), 1)
+        
+    pooled_results = {k:v for k,v in zip(dataset_keys, result)}
+    del result
+    gc.collect()
 
-        #Get the coordinates of the tiles, parameters should be the same regardles of gene.
-        hex_bin_coord = hb.get_offsets()
-        hex_binned[d]['coordinates'] = hex_bin_coord
-        hex_binned[d]['hexagon_shape'] = hb.get_paths()
-
-        #Make dataframe with data
-        tiles = hex_bin_coord.shape[0]
-        df_hex = pd.DataFrame(data=np.zeros((len(hex_binned[d]['gene'].keys()), tiles)),
-                             index=unique_genes, columns=[f'{d}_{j}' for j in range(tiles)])
-        for gene in df_hex.index:
-            df_hex.loc[gene] = hex_binned[d]['gene'][gene]
-
-        #Filter on number of molecules
-        filt = df_hex.sum() >= min_count
-        df_hex_filt = df_hex.loc[:,filt]
-
-        #Save data
-        hex_binned[d]['coordinates_filt'] = hex_binned[d]['coordinates'][filt]
-        hex_binned[d]['df'] = df_hex_filt
-        hex_binned[d]['filt'] = filt
-
-    return hex_binned
+    return pooled_results
 
 
 def merge_norm(hex_bin, normalizer=None):
