@@ -7,11 +7,26 @@ from torch_geometric.utils import negative_sampling,batched_negative_sampling
 import numpy as np
 
 class TrainerGNN:
+
+
     def __init__(self,
         model,
         graphdata,
         n_epochs=50,
-        lr = 0.01):
+        lr = 0.01,
+        mode='autoencoder'):
+
+        """
+        Train the SAGE model, either in neighborhood autoencoder, neighborhood embedding or a combination of both.
+        Not proven that combination really has an effect.
+
+        Args:
+            model (torch.nn.Module): SAGE model
+            graphdata (GraphData): Dataset container
+            n_epochs (int, optional): number of epochs. Defaults to 50.
+            lr (float, optional): learning rate. Defaults to 0.01.
+            mode (str, optional): choose from autoencoder, ngh or both. Defaults to 'autoencoder'.
+        """        
 
         self.graphdata = graphdata
         self.train_loader = self.graphdata.train_loader
@@ -23,6 +38,7 @@ class TrainerGNN:
         self.model = model.to(self.device)
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=0.01)
         self.x,self.edge_index = self.graphdata.dataset.x.to(self.device), self.graphdata.dataset.edge_index.to(self.device)
+        self.mode =mode
         
     def train_step(self):
         self.model.train()
@@ -38,7 +54,12 @@ class TrainerGNN:
             rcl = self.model(self.x[n_id], adjs,self.graphdata.local_mean,self.graphdata.local_var)
             n_loss,ratio = self.model.neighborhood_loss(self.x[n_id], self.x[n_id_pos],self.x[n_id_neg],adjs)
             #print(ratio*1)
-            loss = rcl+ n_loss#ratio 
+            if self.mode == 'autoencoder':
+                loss = rcl #+  n_loss#ratio 
+            elif self.mode == 'ngh':
+                loss = n_loss
+            elif self.mode == 'both':
+                loss = n_loss + rcl
             #print(ratio)
             loss = loss.mean()
             
