@@ -3,7 +3,7 @@ import numpy as np
 from matplotlib.pyplot import hexbin
 from math import ceil
 
-def make_hexbin(spacing, title, data, min_count=1):
+def make_hexbin(spacing, data, min_count=1):
     """
     Bin 2D expression data into hexagonal bins.
     
@@ -38,14 +38,16 @@ def make_hexbin(spacing, title, data, min_count=1):
     hex_binned = {}
 
     #Iterate over datasets
-    for i, (molecules, name) in enumerate(zip(data, title)):
-        print(f'Start processing {title[i]}          ', end='\r')
+    for i, d in enumerate(data):
+        print(f'Start processing {d.filename}          ', end='\r')
 
+        name = d.filename
+        molecules = d.data
         #Determine canvas space
-        max_x = molecules.loc[:,'r_stitched_coords'].max()
-        min_x = molecules.loc[:,'r_stitched_coords'].min()
-        max_y = molecules.loc[:,'c_stitched_coords'].max()
-        min_y = molecules.loc[:,'c_stitched_coords'].min()
+        max_x = molecules.loc[:,d.x].max()
+        min_x = molecules.loc[:,d.x].min()
+        max_y = molecules.loc[:,d.y].max()
+        min_y = molecules.loc[:,d.y].min()
 
         #Determine largest axes and use this to make a hexbin grid with square extent.
         #If it is not square matplotlib will stretch the hexagonal tiles to an asymetric shape.
@@ -99,7 +101,8 @@ def make_hexbin(spacing, title, data, min_count=1):
             max_y = max_y + (0.5 * difference_y)
 
         #Get genes
-        unique_genes = np.unique(molecules.loc[:,'gene'])
+        print(d.filename)
+        unique_genes = np.unique(molecules.loc[:,d.gene_colum ])
         n_genes = len(unique_genes)
 
         #Make result dictionarys
@@ -108,9 +111,9 @@ def make_hexbin(spacing, title, data, min_count=1):
         hex_binned[name]['spacing'] = spacing
 
         #Perform hexagonal binning for each gene
-        for gene, coords in  molecules.loc[:, ['gene', 'r_stitched_coords', 'c_stitched_coords']].groupby('gene'):
-            coords_r = np.array(coords.loc[:,'r_stitched_coords'])
-            coords_c = np.array(coords.loc[:,'c_stitched_coords'])
+        for gene, coords in  molecules.loc[:, [d.gene_colum , d.x, d.y]].groupby(d.gene_colum ):
+            coords_r = np.array(coords.loc[:,d.x])
+            coords_c = np.array(coords.loc[:,d.y])
             #Make hex bins and get data
             hb = hexbin(coords_r, coords_c, gridsize=int(n_points), extent=[min_x, max_x, min_y, max_y], visible=False)
             hex_binned[name]['gene'][gene] = hb.get_array()

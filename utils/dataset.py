@@ -18,14 +18,15 @@ class PandasDataset:
     """
 
     def __init__(self,
-        data: pd.DataFrame,
+        filename: str,
         x: str= 'r_px_microscope_stitched',
         y: str='c_px_microscope_stitched',
         gene_column: str='below3Hdistance_genes',
         other_columns: list = None):
 
+        self.filename = filename
         self.x,self.y = x,y
-        self.data = data
+        self.data = pd.read_parquet(filename)
         self.gene_column = gene_column
 
 
