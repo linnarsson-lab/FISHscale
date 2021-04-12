@@ -11,15 +11,26 @@ def reparameterize_gaussian(mu, var):
     return Normal(mu, var.sqrt()).rsample()
 
 class SAGE(torch.nn.Module):
-    def __init__(self, in_channels, hidden_channels,num_layers):
+    """
+    GraphSAGE based model in combination with scvi variational autoencoder.
+
+    SAGE will learn to encode neighbors to allow either the reconstruction of the original nodes data helped by neighbor data or 
+    to generate similar embedding for closeby nodes (i.e. regionalization).
+
+
+    """    
+    def __init__(self, 
+        in_channels :int, 
+        hidden_channels:int,
+        num_layers):
+
         super(SAGE, self).__init__()
+        
         self.num_layers = num_layers
         self.convs = torch.nn.ModuleList()
 
-
         self.encoder_library = Encoder(in_channels,1)
         self.encoder_z = Encoder(hidden_channels,hidden_channels)
-
         self.decoder = Decoder(hidden_channels,in_channels)
 
         self.mean_encoder = nn.Linear(hidden_channels, hidden_channels)
@@ -106,6 +117,9 @@ class SAGE(torch.nn.Module):
 
 
 class FCLayers(nn.Module):
+    """
+    SCVI hidden layer
+    """
     def __init__(
         self,
         n_in: int,

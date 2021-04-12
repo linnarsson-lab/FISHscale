@@ -8,7 +8,6 @@ import numpy as np
 
 class TrainerGNN:
 
-
     def __init__(self,
         model,
         graphdata,
