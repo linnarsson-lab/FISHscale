@@ -40,7 +40,7 @@ def make_hexbin(spacing, data, min_count=1):
     #Iterate over datasets
     for i, d in enumerate(data):
         print(f'Start processing {d.filename}          ', end='\r')
-
+        title = d.filename
         name = d.filename
         molecules = d.data
         #Determine canvas space
@@ -101,8 +101,7 @@ def make_hexbin(spacing, data, min_count=1):
             max_y = max_y + (0.5 * difference_y)
 
         #Get genes
-        print(d.filename)
-        unique_genes = np.unique(molecules.loc[:,d.gene_colum ])
+        unique_genes = np.unique(molecules.loc[:,d.gene_column ])
         n_genes = len(unique_genes)
 
         #Make result dictionarys
@@ -111,7 +110,7 @@ def make_hexbin(spacing, data, min_count=1):
         hex_binned[name]['spacing'] = spacing
 
         #Perform hexagonal binning for each gene
-        for gene, coords in  molecules.loc[:, [d.gene_colum , d.x, d.y]].groupby(d.gene_colum ):
+        for gene, coords in  molecules.loc[:, [d.gene_column , d.x, d.y]].groupby(d.gene_column ):
             coords_r = np.array(coords.loc[:,d.x])
             coords_c = np.array(coords.loc[:,d.y])
             #Make hex bins and get data
