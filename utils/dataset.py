@@ -1,5 +1,6 @@
 import pandas as pd
 from FISHscale.visualization import Window
+from FISHscale.utils.hex_bin import HexBin
 from PyQt5 import QtWidgets
 import sys
 from datetime import datetime
@@ -10,7 +11,7 @@ from collections import Counter
 import numpy as np
 import loompy
 
-class PandasDataset:
+class PandasDataset(HexBin):
     """
     Base Class for FISHscale, still under development
 
@@ -29,14 +30,20 @@ class PandasDataset:
         self.data = pd.read_parquet(filename)
         self.gene_column = gene_column
 
+        self.hex_binned = HexBin()
+
 
     def visualize(self,columns=[],width=2000,height=2000,color_dic=None):
         """
         Run open3d visualization on self.data
-
         Pass to columns a list of strings, each string will be the class of the dots to be colored by. example: color by gene
-        """
 
+        Args:
+            columns (list, optional): List of columns to be plotted with different colors by visualizer. Defaults to [].
+            width (int, optional): Frame width. Defaults to 2000.
+            height (int, optional): Frame height. Defaults to 2000.
+            color_dic ([type], optional): Dictionary of colors if None it will assign random colors. Defaults to None.
+        """        
 
         QtWidgets.QApplication.setStyle('Fusion')
         App = QtWidgets.QApplication.instance()
@@ -52,12 +59,17 @@ class PandasDataset:
     def DBsegment(self,eps=25,min_samples=5,column_name='cell'):
         """
         Run DBscan segmentation on self.data, this will reassign a column on self.data with column_name
-        """
+
+        Args:
+            eps (int, optional): [description]. Defaults to 25.
+            min_samples (int, optional): [description]. Defaults to 5.
+            column_name (str, optional): [description]. Defaults to 'cell'.
+        """        
 
         print('Running DBscan segmentation')
         X = self.data.loc[:,[self.x,self.y]].values
         clustering = DBSCAN(eps=eps, min_samples=min_samples).fit(X)
-        self.labels = clustering.labels_
+        self.labels = np.array([-1 if (clustering.labels_ == x).sum() > 500 else x for x in clustering.labels_])
         self.data[column_name] = self.labels
         print('DBscan found {} clusters'.format(self.labels.max()))
 
