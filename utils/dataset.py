@@ -56,7 +56,7 @@ class PandasDataset(HexBin):
         App.exec_()
         App.quit()
 
-    def DBsegment(self,eps=25,min_samples=5,column_name='cell'):
+    def DBsegment(self,eps=25,min_samples=5,cutoff=250):
         """
         Run DBscan segmentation on self.data, this will reassign a column on self.data with column_name
 
@@ -64,24 +64,33 @@ class PandasDataset(HexBin):
             eps (int, optional): [description]. Defaults to 25.
             min_samples (int, optional): [description]. Defaults to 5.
             column_name (str, optional): [description]. Defaults to 'cell'.
+            cutoff (int,optional): cells with number of dots above this threshold will be removed and -1 passed to background dots
         """        
 
         print('Running DBscan segmentation')
         X = self.data.loc[:,[self.x,self.y]].values
         clustering = DBSCAN(eps=eps, min_samples=min_samples).fit(X)
-        self.labels = np.array([-1 if (clustering.labels_ == x).sum() > 500 else x for x in clustering.labels_])
-        self.data[column_name] = self.labels
+
+        print('Assigning background dots whose cluster has more than {}'.format(cutoff))
+        c =Counter(clustering.labels_)
+        bg = [x for x in c if c[x] > cutoff]
+        self.labels =  np.array([-1 if x in bg else x for x in clustering.labels_]) 
+        print('Bockground molecules: {}'.format((self.labels == -1).sum()))
+        #self.labels = np.array([-1 if (clustering.labels_ == x).sum() > 500 else x for x in clustering.labels_])
+        self.data['DBscan'] = self.labels
         print('DBscan found {} clusters'.format(self.labels.max()))
 
     def make_loom(self,
         filename:str,
+        cell_column:str,
+        with_background:bool=False,
         save=True):
         """
         Will generate the gene expression matrix and save it as loom file
         """
 
-
-        cell = {x[0]:x[1] for x in self.data.groupby('cell')}
+        cell = {x[0]:x[1] for x in self.data.groupby(cell_column)}
+        del cell[-1]
         genes = np.unique(self.data[self.gene_column])
 
         c0 = Counter({x:0 for x in genes})
@@ -104,14 +113,23 @@ class PandasDataset(HexBin):
 
         print('Assembling Gene by Cell Matrix')     
         df = np.stack(gene_cell).T
+        if genes == self.hex_binned.df.index.tolist():
+            df = np.concatenate([df, self.hex_binned.df.values])
+
+        print(df.shape)
         y = df.sum(axis=0)
         data = pd.DataFrame(data=df,index=genes)
 
         print('Creating Loom File')
-        grpcell  = self.data.groupby('cell')
-        centroids = [[(cell[1][self.y].min()+ cell[1][self.y].max())/2,(cell[1][self.x].min()+ cell[1][self.x].max())/2] for cell in grpcell]
-        max_l = [np.array([abs(cell[1][self.y].min() - cell[1][self.y].max()),abs(cell[1][self.x].min()- cell[1][self.x].max())]) for cell in grpcell]
-        colattrs = {'cell':np.array([cell[0] for cell in grpcell]),'cell_xy':np.array(centroids),'cell_length':np.array(max_l)}
+        grpcell  = self.data.groupby(cell_column)
+        centroids = np.array([[(cell[1][self.y].min()+ cell[1][self.y].max())/2,(cell[1][self.x].min()+ cell[1][self.x].max())/2] for cell in grpcell])
+        cells_id = np.array([cell[0] for cell in grpcell])
+
+        if with_background:
+            cells_id = np.concatentate([cells_id ,np.array([-x for x in range(1,self.hex_binned.df.shape[1] +1)])])
+            centroids = np.concatenate([centroids,self.hex_binned.coordinates])
+        
+        colattrs = {'cell':cells_id,'cell_xy':centroids}
         rowattrs = {'gene':data.index.values}
         
         if save:

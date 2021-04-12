@@ -5,7 +5,7 @@ from math import ceil
 
 
 class HexBin(object):
-    def make_hexbin(self, spacing, name=None,min_count=1):
+    def make_hexbin(self, spacing, name=None,min_count=1, background=False):
         """
         Bin 2D expression data into hexagonal bins.
         
@@ -43,6 +43,11 @@ class HexBin(object):
         print(f'Start processing {name}          ', end='\r')
         title = self.filename
         molecules = self.data
+
+        if background:
+            print('Keeping only background molecules for HexBin')
+            molecules = self.data[self.data['DBscan'] == -1]
+
         #Determine canvas space
         max_x = molecules.loc[:,self.x].max()
         min_x = molecules.loc[:,self.x].min()
@@ -110,32 +115,35 @@ class HexBin(object):
         self.hex_binned.gene = {}
         self.hex_binned.spacing= spacing
 
-
+        print('HexBinning...')
         #Perform hexagonal binning for each gene
         for gene, coords in  molecules.loc[:, [self.gene_column , self.x, self.y]].groupby(self.gene_column ):
             coords_r = np.array(coords.loc[:,self.x])
             coords_c = np.array(coords.loc[:,self.y])
             #Make hex bins and get data
-            hb = hexbin(coords_r, coords_c, gridsize=int(n_points), extent=[min_x, max_x, min_y, max_y], visible=True)
+            hb = hexbin(coords_r, coords_c, gridsize=int(n_points), extent=[min_x, max_x, min_y, max_y], visible=False)
             self.hex_binned.gene[gene] = hb.get_array()
 
+        print('Get coordinates')
         #Get the coordinates of the tiles, parameters should be the same regardles of gene.
         hex_bin_coord = hb.get_offsets()
         self.hex_binned.coordinates = hex_bin_coord
         self.hex_binned.hexagon_shape = hb.get_paths()
-
+        print('Make dataframe')
         #Make dataframe with data
         tiles = hex_bin_coord.shape[0]
         df_hex = pd.DataFrame(data=np.zeros((len(self.hex_binned.gene.keys()), tiles)),
                             index=unique_genes, columns=[name for j in range(tiles)])
         for gene in df_hex.index:
             df_hex.loc[gene] = self.hex_binned.gene[gene]
-
+        print('Filtering...')
         #Filter on number of molecules
         filt = df_hex.sum() >= min_count
         df_hex_filt = df_hex.loc[:,filt]
 
+        print('Storing under PandasDataset')
         #Save data
         self.hex_binned.coordinates_filt = self.hex_binned.coordinates[filt]
         self.hex_binned.df = df_hex_filt
         self.hex_binned.filt = filt
+
