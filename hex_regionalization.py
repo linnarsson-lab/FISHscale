@@ -73,7 +73,6 @@ def convert_spot_numpy(spots, x_label='r_px_microscope_stitched', y_label='c_px_
     Dictionary in with the same keys as the input. Containing the xy 
     coordinates and the gene labels.  
     
-    
     """
     datasets = list(spots.keys())
     converted = {d:{} for d in datasets}
@@ -1188,7 +1187,6 @@ def is_inside_sm(polygon, point):
 
     #print 'intersections =', intersections
     return intersections & 1  
-
 
 @njit(parallel=True)
 def is_inside_sm_parallel(points, polygon):
