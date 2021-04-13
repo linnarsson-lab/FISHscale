@@ -4,5 +4,11 @@
 			"path": "."
 		}
 	],
+<<<<<<< HEAD
 	"settings": {}
+=======
+	"settings": {
+		"python.pythonPath": "/home/lars/anaconda3/envs/eel/bin/python3.8"
+	}
+>>>>>>> master
 }

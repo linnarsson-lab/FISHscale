@@ -25,7 +25,6 @@ def get_rotation(x1, y1, x2, y2):
     Return the angle in radians.
     
     """
-    
     dx = x2 - x1
     dy = y2 - y1
     
