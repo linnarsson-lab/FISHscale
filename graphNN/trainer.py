@@ -116,7 +116,8 @@ class TrainerGNN:
             # `adjs` holds a list of `(edge_index, e_id, size)` tuples.
             n_id, n_id_pos, n_id_neg = self.sample(n_id,self.validation_loader)
             adjs = [adj.to(self.device) for adj in adjs]
-            qz_latent, _, _ = self.model.encode_neighborhood(self.x[n_id],adjs)
+            qn_latent = self.model.encode_neighborhood(self.x[n_id],adjs)
+            qz_latent = self.model.encoder_z(qn_latent)
             embedding.append(qz_latent.detach().numpy())
 
         X = np.concatenate(embedding)

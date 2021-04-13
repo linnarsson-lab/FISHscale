@@ -113,27 +113,32 @@ class PandasDataset(HexBin):
 
         print('Assembling Gene by Cell Matrix')     
         df = np.stack(gene_cell).T
-        if genes == self.hex_binned.df.index.tolist():
-            df = np.concatenate([df, self.hex_binned.df.values])
+        cells_id = np.arange(df.shape[1])
+        print('Cells_id_shape',cells_id.shape,df.shape)
+        if genes.tolist() == self.hex_binned.df.index.tolist():
+            print(df.shape)
+            print(self.hex_binned.df.values.shape)
+            df = np.concatenate([df, self.hex_binned.df.values],axis=1)
 
         print(df.shape)
         y = df.sum(axis=0)
         data = pd.DataFrame(data=df,index=genes)
 
         print('Creating Loom File')
-        grpcell  = self.data.groupby(cell_column)
+        grpcell  = self.data[self.data[cell_column] > -1].groupby(cell_column)
         centroids = np.array([[(cell[1][self.y].min()+ cell[1][self.y].max())/2,(cell[1][self.x].min()+ cell[1][self.x].max())/2] for cell in grpcell])
-        cells_id = np.array([cell[0] for cell in grpcell])
 
         if with_background:
-            cells_id = np.concatentate([cells_id ,np.array([-x for x in range(1,self.hex_binned.df.shape[1] +1)])])
-            centroids = np.concatenate([centroids,self.hex_binned.coordinates])
+            cells_id = np.concatenate([cells_id ,np.array([-x for x in range(1,self.hex_binned.df.shape[1] +1)])])
+            print('cells_id',cells_id.shape)
+            centroids = np.concatenate([centroids,self.hex_binned.coordinates_filt])
+            print('centroids',centroids.shape)
         
         colattrs = {'cell':cells_id,'cell_xy':centroids}
         rowattrs = {'gene':data.index.values}
         
         if save:
-            loompy.create(filename+datetime.now.strftime("%d-%m-%Y%H:%M:%S"), data.values, rowattrs, colattrs)
+            loompy.create(filename+datetime.now().strftime("%d-%m-%Y%H:%M:%S"), data.values, rowattrs, colattrs)
             print('Loom File Created')
     
 

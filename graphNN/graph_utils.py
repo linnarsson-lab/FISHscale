@@ -27,6 +27,7 @@ class GraphData:
         genes, # List of Genes
         coords, # Array of shape (Cells, 2), coordinates for the cells
         cells=None, # Array with cell_ids of shape (Cells)
+        with_background=False,
         distance_threshold = 250,
         minimum_nodes_connected = 3,
         ngh_sizes = [5, 10],
@@ -79,17 +80,17 @@ class GraphData:
 
     
     def compute_size(self):
-        self.train_size = int(self.cells.shape[0]*self.train_p)
-        self.test_size = self.cells.shape[0]-int(self.cells.shape[0]*self.train_p)
+        self.train_size = int(self.cells.max()*self.train_p)
+        self.test_size = self.cells.max()-int(self.cells.max()*self.train_p)
         
         random_state = np.random.RandomState(seed=0)
-        permutation = random_state.permutation(self.cells.shape[0])
+        permutation = random_state.permutation(self.cells.max())
         
         self.indices_test = torch.tensor(permutation[:self.test_size])
         #self.indices_test = np.array([x in indices_test for x in self.cells])
         self.indices_train = torch.tensor(permutation[self.test_size : (self.test_size + self.train_size)])
         #self.indices_train = np.array([x in indices_train for x in self.cells])    
-        self.indices_validation = torch.tensor(np.arange(self.cells.shape[0]))
+        self.indices_validation = torch.tensor(np.arange(self.cells.max()))
         #self.indices_validation = np.array([x in indices_validation for x in self.cells])
 
 
