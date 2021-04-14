@@ -1,0 +1,19 @@
+
+# Visual Studio code
+.vscode/*
+.vscode/
+*.code-workspace
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+*.pyc
+*.egg-info
+
+#ipynb
+*.ipynb
+*.ipynb_checkpoints
+
+*.DS_Store
