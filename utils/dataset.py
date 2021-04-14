@@ -79,6 +79,14 @@ class PandasDataset(HexBin):
         #self.labels = np.array([-1 if (clustering.labels_ == x).sum() > 500 else x for x in clustering.labels_])
         self.data['DBscan'] = self.labels
         print('DBscan found {} clusters'.format(self.labels.max()))
+        
+    def make_molecules_df(self):
+        molecules_df = []
+        genes = np.unique(self.data[self.gene_column])
+        for g in self.data[self.gene_column]:
+            e = np.where(genes != g, np.zeros(genes.shape[0]),1)
+            molecules_df.append(e)
+        self.molecules_df = np.stack(molecules_df).T
 
     def make_loom(self,
         filename:str,
