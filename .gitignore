@@ -17,5 +17,6 @@ __pycache__/
 *.ipynb_checkpoints
 
 *.DS_Store
-utils/__pycache__/__init__.cpython-38.pyc
+utils/__pycache__/
+**/__pycache__/
 FISHscale.code-workspace
