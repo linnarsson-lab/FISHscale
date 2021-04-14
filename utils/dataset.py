@@ -23,12 +23,19 @@ class PandasDataset(HexBin):
         x: str= 'r_px_microscope_stitched',
         y: str='c_px_microscope_stitched',
         gene_column: str='below3Hdistance_genes',
-        other_columns: list = None):
+        other_columns: list = None,
+        unique_genes: np.ndarray = None):
 
         self.filename = filename
+        self.dataset_name = self.filename.split('/')[-1].split('.')[0]
         self.x,self.y = x,y
         self.data = pd.read_parquet(filename)
         self.gene_column = gene_column
+        self.other_columns = other_columns
+        if not isinstance(unique_genes, np.ndarray):
+            self.unique_genes = np.unique(self.data[self.gene_column])
+        else:
+            self.unique_genes = unique_genes
 
         self.hex_binned = HexBin()
 
