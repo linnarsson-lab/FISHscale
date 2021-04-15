@@ -54,7 +54,7 @@ class SAGE(torch.nn.Module):
             kl_divergence_l = kl(Normal(ql_m, torch.sqrt(ql_v)),Normal(local_l_mean, torch.sqrt(local_l_var)),).sum(dim=1)
         else:
             kl_divergence_l = 0
-            library= 1
+            library= torch.tensor([1])
 
         x2 = self.encode_neighborhood(x,adjs)
         qz_m,qz_v,z_latent = self.encoder_z(x2)
