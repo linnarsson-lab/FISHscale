@@ -33,7 +33,7 @@ class PandasDataset(HexBin):
         self.hex_binned = HexBin()
 
 
-    def visualize(self,columns=[],width=2000,height=2000,color_dic=None):
+    def visualize(self,columns=[],width=2000,height=2000,show_axis=False,color_dic=None):
         """
         Run open3d visualization on self.data
         Pass to columns a list of strings, each string will be the class of the dots to be colored by. example: color by gene
