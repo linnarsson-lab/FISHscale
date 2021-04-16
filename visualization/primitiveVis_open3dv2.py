@@ -41,7 +41,7 @@ class Window:
         self.show_axis= show_axis
         print('Data Loaded')
 
-        self.vis = Visualizer(self.dic_pointclouds, columns, width=2000, height=2000, self.show_axis=False, color_dic=None)
+        self.vis = Visualizer(self.dic_pointclouds, columns, width=2000, height=2000, show_axis=self.show_axis, color_dic=None)
         self.collapse = CollapsibleDialog(self.dic_pointclouds,vis=self.vis)
         self.widget_lists = self.collapse.widget_lists
         self.collapse.show()
