@@ -58,6 +58,7 @@ class GraphData:
 
 
     def buildGraph(self, d_th):
+        print('Building graph...')
         G = nx.Graph()
 
         kdT = KDTree(self.coords)
@@ -73,6 +74,7 @@ class GraphData:
         return G
 
     def cleanGraph(self):
+        print('Cleaning graph...')
         for component in tqdm(list(nx.connected_components(self.G))):
             if len(component)< self.minimum_nodes_connected:
                 for node in component:
@@ -95,10 +97,12 @@ class GraphData:
 
 
     def load_dataset(self):
+        print('Loading dataset...')
         self.edges_tensor = torch.tensor(np.array(list(self.G.edges)).T)
         self.dataset = torch_geometric.data.Data(torch.tensor(self.data.T,dtype=torch.float32),edge_index=self.edges_tensor)
 
     def load_trainers(self):
+        print('Load trainers...')
         data = self.dataset
         self.train_loader = NeighborSampler(data.edge_index, sizes=self.ngh_sizes, batch_size=self.batch_size, shuffle=True,node_idx=self.indices_train,drop_last=True)
         self.test_loader = NeighborSampler(data.edge_index, sizes=self.ngh_sizes, batch_size=self.batch_size, shuffle=True,node_idx=self.indices_test,drop_last=True)

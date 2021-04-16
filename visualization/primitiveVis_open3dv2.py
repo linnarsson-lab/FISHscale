@@ -10,7 +10,10 @@ from PyQt5 import QtCore, QtGui
 from PyQt5.QtGui import * 
 from PyQt5.QtCore import * 
 import sys 
-import open3d as o3d
+try:
+    import open3d as o3d
+except:
+    pass
 import pandas as pd
 import numpy as np
 import random
