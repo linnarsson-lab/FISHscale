@@ -119,7 +119,6 @@ class TrainerGNN:
             loss,rcl,nl = self.train_step()
             #val_acc, test_acc = test()
             print(f'Epoch: {epoch:03d}, Loss: {loss:.4f}, RCL: {rcl:.4f}, Neighborhood Loss: {nl:.4f}')
-            
         self.save_model()
 
     
