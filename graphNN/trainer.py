@@ -5,6 +5,7 @@ from torch_cluster import random_walk
 from torch_geometric.data import NeighborSampler
 from torch_geometric.utils import negative_sampling,batched_negative_sampling
 import numpy as np
+from datetime import datetime
 
 class TrainerGNN:
 
@@ -50,15 +51,27 @@ class TrainerGNN:
             n_id, n_id_pos, n_id_neg = self.sample(n_id,self.train_loader)
             adjs = [adj.to(self.device) for adj in adjs]
             
-            rcl = self.model(self.x[n_id], adjs,self.graphdata.local_mean,self.graphdata.local_var)
-            n_loss,ratio = self.model.neighborhood_loss(self.x[n_id], self.x[n_id_pos],self.x[n_id_neg],adjs)
             #print(ratio*1)
             if self.mode == 'autoencoder':
+                rcl = self.model(self.x[n_id], adjs,self.graphdata.local_mean,self.graphdata.local_var)
                 loss = rcl #+  n_loss#ratio 
+
+                total_rcl += float(rcl.mean()) * adjs[-1].size[1]
             elif self.mode == 'ngh':
+                n_loss,ratio = self.model.neighborhood_loss(self.x[n_id], self.x[n_id_pos],self.x[n_id_neg],adjs)
                 loss = n_loss
+
+                total_nl += float(n_loss.mean()) * adjs[-1].size[1]
+
+
             elif self.mode == 'both':
+                rcl = self.model(self.x[n_id], adjs,self.graphdata.local_mean,self.graphdata.local_var)
+                n_loss,ratio = self.model.neighborhood_loss(self.x[n_id], self.x[n_id_pos],self.x[n_id_neg],adjs)
                 loss = n_loss + rcl
+
+                total_rcl += float(rcl.mean()) * adjs[-1].size[1]
+                total_nl += float(n_loss.mean()) * adjs[-1].size[1]
+
             #print(ratio)
             loss = loss.mean()
             
@@ -68,8 +81,7 @@ class TrainerGNN:
             self.optimizer.step()
 
             total_loss += float(loss) * adjs[-1].size[1]
-            total_rcl += float(rcl.mean()) * adjs[-1].size[1]
-            total_nl += float(n_loss.mean()) * adjs[-1].size[1]
+            
 
         return total_loss /self.graphdata.dataset.num_nodes, total_rcl/self.graphdata.dataset.num_nodes, total_nl/self.graphdata.dataset.num_nodes
 
@@ -107,9 +119,11 @@ class TrainerGNN:
             loss,rcl,nl = self.train_step()
             #val_acc, test_acc = test()
             print(f'Epoch: {epoch:03d}, Loss: {loss:.4f}, RCL: {rcl:.4f}, Neighborhood Loss: {nl:.4f}')
+        self.save_model()
 
     
     def latent_factor(self):
+        self.model.eval()
         embedding = []
 
         for batch_size, n_id, adjs in self.validation_loader:
@@ -124,6 +138,7 @@ class TrainerGNN:
         return X
 
     def latent_factor_neighborhood(self):
+        self.model.eval()
         embedding = []
 
         for batch_size, n_id, adjs in self.validation_loader:
@@ -135,3 +150,6 @@ class TrainerGNN:
 
         X = np.concatenate(embedding)
         return X
+
+    def save_model(self):
+        torch.save(self.model.state_dict(), 'SAGEmodel_mode-'+self.mode+datetime.now().strftime("%d-%m-%Y%H:%M:%S"))

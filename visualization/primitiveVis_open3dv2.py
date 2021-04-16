@@ -22,7 +22,7 @@ import time
 
 class Window: 
 
-    def __init__(self,dataframe,columns,width=2000,height=2000,color_dic=None): 
+    def __init__(self,dataframe,columns,width=2000,height=2000,show_axis=False,color_dic=None): 
         
         super().__init__() 
         
@@ -38,9 +38,10 @@ class Window:
         self.dataframe = dataframe
         self.color_dic = color_dic
         self.dic_pointclouds ={c:self.pass_data(c) for c in columns}
+        self.show_axis= show_axis
         print('Data Loaded')
 
-        self.vis = Visualizer(self.dic_pointclouds,columns,width=2000,height=2000,color_dic=None)
+        self.vis = Visualizer(self.dic_pointclouds, columns, width=2000, height=2000, self.show_axis=False, color_dic=None)
         self.collapse = CollapsibleDialog(self.dic_pointclouds,vis=self.vis)
         self.widget_lists = self.collapse.widget_lists
         self.collapse.show()
@@ -66,7 +67,7 @@ class Window:
         return dic_coords
     
 class Visualizer:
-    def __init__(self,dic_pointclouds,columns,width=2000,height=2000,color_dic=None):
+    def __init__(self,dic_pointclouds,columns,width=2000,height=2000,show_axis=False,color_dic=None):
         
         self.visM = o3d.visualization.Visualizer()
         self.visM.create_window(height=height,width=width,top=0,left=500)
@@ -80,6 +81,8 @@ class Visualizer:
         self.pcd.colors = o3d.utility.Vector3dVector(self.allcolors)   
         self.visM.add_geometry(self.pcd)
         opt = self.visM.get_render_option()
+        if show_axis:
+            opt.show_coordinate_frame = True
         opt.background_color = np.asarray([0, 0, 0])
     
     def execute(self):
