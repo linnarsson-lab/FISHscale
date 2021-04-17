@@ -60,8 +60,7 @@ class GraphData:
     def buildGraph(self, d_th):
         print('Building graph...')
         G = nx.Graph()
-
-        kdT = KDTree(self.coords)
+        kdT = KDTree(self.coords,balanced_tree=False)
         res = kdT.query_pairs(d_th)
         res = [(x[0],x[1]) for x in list(res)]
 
