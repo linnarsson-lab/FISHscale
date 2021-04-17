@@ -8,6 +8,9 @@ import torch
 from tqdm import tqdm
 from ogb.nodeproppred import PygNodePropPredDataset, Evaluator
 from torch_geometric.data import NeighborSampler
+from annoy import AnnoyIndex
+import random
+from tqdm import trange
 
 
 def compute_library_size(data):
@@ -56,7 +59,7 @@ class GraphData:
         self.load_dataset()
         self.load_trainers()
 
-
+    '''
     def buildGraph(self, d_th):
         print('Building graph...')
         G = nx.Graph()
@@ -71,6 +74,48 @@ class GraphData:
         # Add edges to graph
         G.add_edges_from(res)
         return G
+    '''
+
+    def buildGraph(self, d_th):
+        print('Building graph...')
+        G = nx.Graph()
+
+        t = AnnoyIndex(2, 'euclidean')  # Length of item vector that will be indexed
+        for i in trange(self.coords.shape[0]):
+            v = self.coords[i,:]
+            t.add_item(i, v)
+
+        print('Building tree...')
+        t.build(10) # 10 trees
+        print('Built tree.')
+        t.save('test.ann')
+
+        u = AnnoyIndex(2, 'euclidean')
+        u.load('test.ann') # super fast, will just mmap the file
+        print('Find neighbors below distance: {}'.format(d_th))
+
+        def find_pairs(k,nghs,tree,distance):
+            pair = [(k,n) for n in nghs if tree.get_distance(k,n) < distance]
+            return pair
+
+        def find_nn_distance(coords,tree,distance):
+            res = []
+            for i in trange(coords.shape[0]):
+                nghs = t.get_nns_by_item(i, 100)
+                pair = find_pairs(i,nghs,u,distance)
+                res += pair
+            return res
+        res = find_nn_distance(self.coords,u,d_th)
+
+        # Add nodes to graph
+        G.add_nodes_from((self.cells), test=False, val=False, label=0)
+        # Add node features to graph
+        nx.set_node_attributes(G,dict(zip((self.cells), self.data)), 'expression')
+        # Add edges to graph
+        G.add_edges_from(res)
+        return G
+
+
 
     def cleanGraph(self):
         print('Cleaning graph...')

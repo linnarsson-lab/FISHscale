@@ -147,7 +147,7 @@ class TrainerGNN:
             n_id, n_id_pos, n_id_neg = self.sample(n_id,self.validation_loader)
             adjs = [adj.to(self.device) for adj in adjs]
             qz_latent = self.model.encode_neighborhood(self.x[n_id],adjs)
-            embedding.append(qz_latent.detach().numpy())
+            embedding.append(qz_latent.cpu().detach().numpy())
 
         X = np.concatenate(embedding)
         return X
