@@ -7,6 +7,7 @@ from torch_geometric.utils import negative_sampling,batched_negative_sampling
 import numpy as np
 from datetime import datetime
 
+
 class TrainerGNN:
 
     def __init__(self,
@@ -132,7 +133,7 @@ class TrainerGNN:
             adjs = [adj.to(self.device) for adj in adjs]
             qn_latent = self.model.encode_neighborhood(self.x[n_id],adjs)
             qz_latent = self.model.encoder_z(qn_latent)
-            embedding.append(qz_latent.detach().numpy())
+            embedding.append(qz_latent.cpu().detach().numpy())
 
         X = np.concatenate(embedding)
         return X
