@@ -68,6 +68,8 @@ class Window:
                 col = np.array([color_dic[gene]]*coords.shape[0])/255
             dic_coords[str(gene)] = (coords,col)
         return dic_coords
+
+    
     
 class Visualizer:
     def __init__(self,dic_pointclouds,columns,width=2000,height=2000,show_axis=False,color_dic=None):
