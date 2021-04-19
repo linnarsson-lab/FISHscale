@@ -1,5 +1,5 @@
 import pandas as pd
-from FISHscale.visualization import Window
+from FISHscale import Window
 #from FISHscale.utils.hex_bin import HexBin
 from FISHscale.utils.hex_regionalization import regionalize
 from PyQt5 import QtWidgets
@@ -137,7 +137,7 @@ class PandasDataset(regionalize):
         else:
             print('QApplication instance already exists: %s' % str(App))
 
-        window = Window(self.data,[self.gene_column]+columns,width,height,color_dic) 
+        window = Window(self,[self.gene_column]+columns,width,height,color_dic) 
         App.exec_()
         App.quit()
 
@@ -273,15 +273,20 @@ class multi_dataset():
         """
         self.index=0
         self.datasets = self.load_data(filepath, x, y, gene_column, other_columns, unique_genes, pixel_size)
+        self.x,self.y,self.gene_column = x,y,gene_column
 
     def __iter__(self):
         return self
 
     def __next__(self):
-        if self.index <= 0 or self.index >= len(self.datasets):
+        if self.index >= len(self.datasets):
+            self.index = 0
             raise StopIteration
-        pd = self.datasets[self.value]
+            
+        index = self.index
         self.index += 1
+        pd = self.datasets[index]
+        
         return pd
 
     def load_data(self, filepath: str, x: str, y: str, gene_column: str, 
@@ -310,6 +315,29 @@ class multi_dataset():
             
         return results
         
+    def visualize(self,columns=[],width=2000,height=2000,show_axis=False,color_dic=None):
+        """
+        Run open3d visualization on self.data
+        Pass to columns a list of strings, each string will be the class of the dots to be colored by. example: color by gene
+
+        Args:
+            columns (list, optional): List of columns to be plotted with different colors by visualizer. Defaults to [].
+            width (int, optional): Frame width. Defaults to 2000.
+            height (int, optional): Frame height. Defaults to 2000.
+            color_dic ([type], optional): Dictionary of colors if None it will assign random colors. Defaults to None.
+        """        
+
+        QtWidgets.QApplication.setStyle('Fusion')
+        App = QtWidgets.QApplication.instance()
+        if App is None:
+            App = QtWidgets.QApplication(sys.argv)
+        else:
+            print('QApplication instance already exists: %s' % str(App))
+
+        window = Window(self,[self.gene_column]+columns,width,height,color_dic) 
+        App.exec_()
+        App.quit()
+
 
 
 
