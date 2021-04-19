@@ -271,7 +271,18 @@ class multi_dataset():
                 Defaults to "1 micrometer".
 
         """
+        self.index=0
         self.datasets = self.load_data(filepath, x, y, gene_column, other_columns, unique_genes, pixel_size)
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        if self.index <= 0 or self.index >= len(self.datasets):
+            raise StopIteration
+        pd = self.datasets[self.value]
+        self.index += 1
+        return pd
 
     def load_data(self, filepath: str, x: str, y: str, gene_column: str, 
         other_columns: list, unique_genes: np.ndarray, pixel_size: str):
@@ -291,7 +302,7 @@ class multi_dataset():
             for i, f in enumerate(files):
                 #if self.verbose:
                 #    print(f'Loading dataset ({i}/{len(files)})', end='\r')
-                results.append(PandasDataset(f, x, y, gene_column, other_columns, unique_genes=unique_genes, pixel_size=pixel_size, verbose=False))
+                results.append(PandasDataset(f, x, y, gene_column, other_columns, unique_genes=unique_genes, pixel_size=pixel_size, z_offset=1000*i,verbose=False))
                 #Get unique genes of first dataset if not defined
                 if not isinstance(unique_genes, np.ndarray):
                     unique_genes = results[0].unique_genes
