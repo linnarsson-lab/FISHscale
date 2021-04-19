@@ -8,6 +8,9 @@ import torch
 from tqdm import tqdm
 from ogb.nodeproppred import PygNodePropPredDataset, Evaluator
 from torch_geometric.data import NeighborSampler
+from annoy import AnnoyIndex
+import random
+from tqdm import trange
 
 
 def compute_library_size(data):
@@ -56,8 +59,9 @@ class GraphData:
         self.load_dataset()
         self.load_trainers()
 
-
+    '''
     def buildGraph(self, d_th):
+        print('Building graph...')
         G = nx.Graph()
 
         kdT = KDTree(self.coords)
@@ -71,8 +75,51 @@ class GraphData:
         # Add edges to graph
         G.add_edges_from(res)
         return G
+    '''
+
+    def buildGraph(self, d_th):
+        print('Building graph...')
+        G = nx.Graph()
+
+        t = AnnoyIndex(2, 'euclidean')  # Length of item vector that will be indexed
+        for i in trange(self.coords.shape[0]):
+            v = self.coords[i,:]
+            t.add_item(i, v)
+
+        print('Building tree...')
+        t.build(10) # 10 trees
+        print('Built tree.')
+        t.save('test.ann')
+
+        u = AnnoyIndex(2, 'euclidean')
+        u.load('test.ann') # super fast, will just mmap the file
+        print('Find neighbors below distance: {}'.format(d_th))
+
+        def find_pairs(k,nghs,tree,distance):
+            pair = [(k,n) for n in nghs if tree.get_distance(k,n) < distance]
+            return pair
+
+        def find_nn_distance(coords,tree,distance):
+            res = []
+            for i in trange(coords.shape[0]):
+                nghs = t.get_nns_by_item(i, 100)
+                pair = find_pairs(i,nghs,u,distance)
+                res += pair
+            return res
+        res = find_nn_distance(self.coords,u,d_th)
+
+        # Add nodes to graph
+        G.add_nodes_from((self.cells), test=False, val=False, label=0)
+        # Add node features to graph
+        nx.set_node_attributes(G,dict(zip((self.cells), self.data)), 'expression')
+        # Add edges to graph
+        G.add_edges_from(res)
+        return G
+
+
 
     def cleanGraph(self):
+        print('Cleaning graph...')
         for component in tqdm(list(nx.connected_components(self.G))):
             if len(component)< self.minimum_nodes_connected:
                 for node in component:
@@ -95,10 +142,12 @@ class GraphData:
 
 
     def load_dataset(self):
+        print('Loading dataset...')
         self.edges_tensor = torch.tensor(np.array(list(self.G.edges)).T)
         self.dataset = torch_geometric.data.Data(torch.tensor(self.data.T,dtype=torch.float32),edge_index=self.edges_tensor)
 
     def load_trainers(self):
+        print('Load trainers...')
         data = self.dataset
         self.train_loader = NeighborSampler(data.edge_index, sizes=self.ngh_sizes, batch_size=self.batch_size, shuffle=True,node_idx=self.indices_train,drop_last=True)
         self.test_loader = NeighborSampler(data.edge_index, sizes=self.ngh_sizes, batch_size=self.batch_size, shuffle=True,node_idx=self.indices_test,drop_last=True)

@@ -22,7 +22,8 @@ class SAGE(torch.nn.Module):
     def __init__(self, 
         in_channels :int, 
         hidden_channels:int,
-        num_layers):
+        num_layers,
+        compute_library=False):
 
         super(SAGE, self).__init__()
         
@@ -40,14 +41,21 @@ class SAGE(torch.nn.Module):
             in_channels = in_channels if i == 0 else hidden_channels
             self.convs.append(SAGEConv(in_channels, hidden_channels))
 
+        self.compute_library = compute_library
+
         
     def forward(self, x, adjs,local_l_mean,local_l_var):
         target_nodes = adjs[-1].size[1]
         local_l_mean = torch.reshape(torch.ones([target_nodes],dtype=torch.float32)*local_l_mean,[target_nodes,1]).cpu()
         local_l_var = torch.reshape(torch.ones([target_nodes],dtype=torch.float32)*local_l_var,[target_nodes,1]).cpu()
-        ql_m, ql_v,library = self.encoder_library(torch.log(x[:target_nodes]+1))
-        kl_divergence_l = kl(Normal(ql_m, torch.sqrt(ql_v)),Normal(local_l_mean, torch.sqrt(local_l_var)),).sum(dim=1)
         
+        if self.compute_library:
+            ql_m, ql_v,library = self.encoder_library(torch.log(x[:target_nodes]+1))
+            kl_divergence_l = kl(Normal(ql_m, torch.sqrt(ql_v)),Normal(local_l_mean, torch.sqrt(local_l_var)),).sum(dim=1)
+        else:
+            kl_divergence_l = 0
+            library= torch.tensor([1])
+
         x2 = self.encode_neighborhood(x,adjs)
         qz_m,qz_v,z_latent = self.encoder_z(x2)
         mean = torch.zeros_like(qz_m)

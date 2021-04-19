@@ -118,7 +118,7 @@ class PandasDataset(regionalize):
             self.data = self.data + np.array([self.x_offset, self.y_offset])
 
 
-    def visualize(self,columns=[],width=2000,height=2000,color_dic=None):
+    def visualize(self,columns=[],width=2000,height=2000,show_axis=False,color_dic=None):
         """
         Run open3d visualization on self.data
         Pass to columns a list of strings, each string will be the class of the dots to be colored by. example: color by gene
@@ -164,6 +164,14 @@ class PandasDataset(regionalize):
         #self.labels = np.array([-1 if (clustering.labels_ == x).sum() > 500 else x for x in clustering.labels_])
         self.data['DBscan'] = self.labels
         print('DBscan found {} clusters'.format(self.labels.max()))
+        
+    def make_molecules_df(self):
+        molecules_df = []
+        genes = np.unique(self.data[self.gene_column])
+        for g in self.data[self.gene_column]:
+            e = np.where(genes != g, np.zeros(genes.shape[0]),1)
+            molecules_df.append(e)
+        self.molecules_df = np.stack(molecules_df).T
 
     def make_loom(self,
         filename:str,
