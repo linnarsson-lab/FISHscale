@@ -22,7 +22,7 @@ import time
 
 class Window: 
 
-    def __init__(self,dataframe,columns,width=2000,height=2000,show_axis=False,color_dic=None): 
+    def __init__(self,pandas_dataset,columns,width=2000,height=2000,show_axis=False,color_dic=None): 
         
         super().__init__() 
         
@@ -35,7 +35,9 @@ class Window:
         """
         # setting title 
 
-        self.dataframe = dataframe
+        self.dataframe = pandas_dataset.data
+        self.x_label,self.y_label = pandas_dataset.x, pandas_dataset.y
+        self.offset = np.array([pandas_dataset.z_offset, pandas_dataset.x_offset, pandas_dataset.y_offset])
         self.color_dic = color_dic
         self.dic_pointclouds ={c:self.pass_data(c) for c in columns}
         self.show_axis= show_axis
@@ -57,8 +59,9 @@ class Window:
         gene_grp = {g[0]:g[1] for g in gene_grp}
         dic_coords = {}
         for gene in gene_grp:
-            coords = gene_grp[gene].loc[:,['c_px_microscope_stitched','r_px_microscope_stitched']].to_numpy()
-            coords = np.vstack([coords[:,0],coords[:,1],np.ones(coords.shape[0])]).T
+            coords = gene_grp[gene].loc[:,[self.x_label,self.y_label]].to_numpy()
+            coords = np.vstack([coords[:,0],coords[:,1],np.zeros(coords.shape[0])]).T
+            coords = coords + self.offset
             if self.color_dic == None:
                 col = np.array([(r(),r(),r())]*coords.shape[0])/255 
             else:
