@@ -88,9 +88,6 @@ class Dataset(regionalize, Iteration):
             self.unique_genes = np.unique(self.gene)
         else:
             self.unique_genes = unique_genes
-        
-        #gene_dict = dict(zip(self.unique_genes, ))
-        
 
         #Handle scale
         self.ureg = UnitRegistry()
