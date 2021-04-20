@@ -34,8 +34,10 @@ class Window:
         color_dic: pass dictionary of desired color in RGB for each unique gene in the parquet_file
         
         """
+
         # setting title 
-        if type(pandas_dataset) == FISHscale.utils.dataset.PandasDataset:
+        if str(pandas_dataset.__class__) == str(FISHscale.utils.dataset.PandasDataset):
+            print('Single Dataset')
             self.dataframe = pandas_dataset.data
             self.x_label,self.y_label = pandas_dataset.x, pandas_dataset.y
             self.name = pandas_dataset.filename
@@ -44,7 +46,10 @@ class Window:
             self.dic_pointclouds ={c:self.pass_data(c) for c in columns}
             self.dic_pointclouds['File'] = [str(self.name)]
 
-        if type(pandas_dataset) ==  FISHscale.utils.dataset.multi_dataset:
+            print('Data Loaded')
+
+        elif str(pandas_dataset.__class__) == str(FISHscale.utils.dataset.multi_dataset):
+            print('MultiDataset')
             self.multi_data = pandas_dataset
             self.x_label,self.y_label = pandas_dataset.x, pandas_dataset.y
             
@@ -53,10 +58,9 @@ class Window:
             self.dic_pointclouds['File'] = []
             for x in self.multi_data:
                 self.dic_pointclouds['File'].append(str(x.filename))
+            print('Data Loaded')
 
         self.show_axis= show_axis
-        print('Data Loaded')
-
         self.vis = Visualizer(self.dic_pointclouds, columns, width=2000, height=2000, show_axis=self.show_axis, color_dic=None)
         self.collapse = CollapsibleDialog(self.dic_pointclouds,vis=self.vis)
         self.widget_lists = self.collapse.widget_lists
@@ -95,7 +99,11 @@ class Window:
         dic_coords = {}
         for dataframe in self.multi_data:
             print(dataframe.filename)
-            gene_grp = dataframe.data.groupby(column)
+
+            if column == self.multi_data.gene_column:
+                print(column,dataframe.gene_column)
+                gene_grp = dataframe.data.groupby(dataframe.gene_column)
+
             gene_grp = {g[0]:g[1] for g in gene_grp}
             
             offset = np.array([dataframe.z_offset, dataframe.x_offset, dataframe.y_offset])

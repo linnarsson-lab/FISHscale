@@ -240,7 +240,7 @@ class multi_dataset():
     """
 
 
-    def __init__(self, filepath: str,
+    def __init__(self,
         x: str = 'r_px_microscope_stitched',
         y: str ='c_px_microscope_stitched',
         gene_column: str = 'below3Hdistance_genes',
@@ -250,8 +250,6 @@ class multi_dataset():
         """Load multiple datasets as PandasDataset object. 
 
         Args:
-            filepath (str): Path to files. Files must be pandas dataframes in
-                .parquet format. 
             x (str, optional): [description]. Defaults to 
                 'r_px_microscope_stitched'.
             y (str, optional): [description]. Defaults to 
@@ -272,8 +270,10 @@ class multi_dataset():
 
         """
         self.index=0
-        self.datasets = self.load_data(filepath, x, y, gene_column, other_columns, unique_genes, pixel_size)
-        self.x,self.y,self.gene_column = x,y,gene_column
+        self.x,self.y,self.gene_column,self.other_columns = x,y,gene_column, other_columns
+        self.unique_genes= unique_genes
+        self.pixel_size = pixel_size
+        
 
     def __iter__(self):
         return self
@@ -289,8 +289,16 @@ class multi_dataset():
         
         return pd
 
-    def load_data(self, filepath: str, x: str, y: str, gene_column: str, 
-        other_columns: list, unique_genes: np.ndarray, pixel_size: str):
+    def load_data(self, filepath: str):
+        """
+        Load files from folder
+
+        Args:
+            filepath (str): folder to look for parquet files
+
+        Returns:
+            self.dataset (list): list of all PandasDataset contained in filepath. 
+        """        
 
         #Correct slashes in path
         if os.name == 'nt': #I guess this would work
@@ -307,13 +315,23 @@ class multi_dataset():
             for i, f in enumerate(files):
                 #if self.verbose:
                 #    print(f'Loading dataset ({i}/{len(files)})', end='\r')
-                results.append(PandasDataset(f, x, y, gene_column, other_columns, unique_genes=unique_genes, pixel_size=pixel_size, x_offset=100000*i,verbose=False))
+                results.append(PandasDataset(f, self.x, self.y, self.gene_column, self.other_columns, unique_genes=self.unique_genes, pixel_size=self.pixel_size,verbose=False))
                 #Get unique genes of first dataset if not defined
-                if not isinstance(unique_genes, np.ndarray):
-                    unique_genes = results[0].unique_genes
+                if not isinstance(self.unique_genes, np.ndarray):
+                    self.unique_genes = results[0].unique_genes
                 pbar.update(1)
             
-        return results
+        self.datasets = results
+
+    def load_PandasDatasets(self,PD_list:list):
+        """
+        Load PandasDataset 
+
+        Args:
+            PD_list (list): list of PandasDatasets
+        """        
+        self.datasets = PD_list
+
         
     def visualize(self,columns=[],width=2000,height=2000,show_axis=False,color_dic=None):
         """
