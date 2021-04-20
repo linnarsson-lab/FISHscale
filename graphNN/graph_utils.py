@@ -11,6 +11,8 @@ from torch_geometric.data import NeighborSampler
 from annoy import AnnoyIndex
 import random
 from tqdm import trange
+import pickle
+import os
 
 
 def compute_library_size(data):
@@ -80,32 +82,45 @@ class GraphData:
         print('Building graph...')
         G = nx.Graph()
 
-        t = AnnoyIndex(2, 'euclidean')  # Length of item vector that will be indexed
-        for i in trange(self.coords.shape[0]):
-            v = self.coords[i,:]
-            t.add_item(i, v)
 
-        print('Building tree...')
-        t.build(10) # 10 trees
-        print('Built tree.')
-        t.save('test.ann')
+        if not os.path.isfile('Edges-{}Nodes.pkl'.format(self.data.shape[1])):
+            t = AnnoyIndex(2, 'euclidean')  # Length of item vector that will be indexed
+            for i in trange(self.coords.shape[0]):
+                v = self.coords[i,:]
+                t.add_item(i, v)
 
-        u = AnnoyIndex(2, 'euclidean')
-        u.load('test.ann') # super fast, will just mmap the file
-        print('Find neighbors below distance: {}'.format(d_th))
+            print('Building tree...')
+            t.build(10) # 10 trees
+            print('Built tree.')
+            t.save('test.ann')
 
-        def find_pairs(k,nghs,tree,distance):
-            pair = [(k,n) for n in nghs if tree.get_distance(k,n) < distance]
-            return pair
+            u = AnnoyIndex(2, 'euclidean')
+            u.load('test.ann') # super fast, will just mmap the file
+            print('Find neighbors below distance: {}'.format(d_th))
 
-        def find_nn_distance(coords,tree,distance):
-            res = []
-            for i in trange(coords.shape[0]):
-                nghs = t.get_nns_by_item(i, 100)
-                pair = find_pairs(i,nghs,u,distance)
-                res += pair
-            return res
-        res = find_nn_distance(self.coords,u,d_th)
+            def find_pairs(k,nghs,tree,distance):
+                pair = [(k,n) for n in nghs if tree.get_distance(k,n) < distance]
+                return pair
+
+            def find_nn_distance(coords,tree,distance):
+                res = []
+                for i in trange(coords.shape[0]):
+                    # 100 sets the number of neighbors to find for each node
+                    #  it is set to 100 since we usually will compute neighbors
+                    #  [20,10]
+                    nghs = t.get_nns_by_item(i, 100)
+                    pair = find_pairs(i,nghs,u,distance)
+                    res += pair
+                return res
+            res = find_nn_distance(self.coords,u,d_th)
+
+            with open('Edges-{}Nodes.pkl'.format(self.data.shape[1]), 'wb') as f:
+                pickle.dump(res, f)
+        
+        else:
+            print('Edges file exists, loading...')
+            with open('Edges-{}Nodes.pkl'.format(self.data.shape[1]), "rb") as input_file:
+                res = pickle.load(input_file)
 
         # Add nodes to graph
         G.add_nodes_from((self.cells), test=False, val=False, label=0)
