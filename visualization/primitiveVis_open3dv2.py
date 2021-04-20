@@ -87,11 +87,12 @@ class Window:
 
     def pass_multi_data(self,column):
         r = lambda: random.randint(0,255)
-
+        dic_coords = {}
         for dataframe in self.multi_data:
+            print(dataframe.filename)
             gene_grp = dataframe.data.groupby(column)
             gene_grp = {g[0]:g[1] for g in gene_grp}
-            dic_coords = {}
+            
             offset = np.array([dataframe.z_offset, dataframe.x_offset, dataframe.y_offset])
 
             for gene in gene_grp:
@@ -109,10 +110,13 @@ class Window:
 
                 if str(gene) not in dic_coords:
                     dic_coords[str(gene)] = (coords,col,np.array([dataframe.filename]*coords.shape[0]))
-                    
+
                 else:
                     c1,col1,n1 = dic_coords[str(gene)]
-                    coords,col,name = np.concatenate([c1,coords]),np.concatenate([col1,col]), np.concatenate([n1,np.array([dataframe.filename]*coords.shape[0])])
+                    col = col[:,0,:]
+                    name = np.concatenate([n1,np.array([dataframe.filename]*coords.shape[0])])
+                    coords = np.concatenate([c1,coords])
+                    col = np.concatenate([col1,col])
                     dic_coords[str(gene)] = (coords,col,name)
 
         return dic_coords
@@ -127,7 +131,10 @@ class Visualizer:
         self.dic_pointclouds= dic_pointclouds
         
         self.allgenes = np.concatenate([self.dic_pointclouds[columns[0]][i][0] for i in self.dic_pointclouds[columns[0]].keys()])
+        
         self.allcolors = np.concatenate([self.dic_pointclouds[columns[0]][i][1] for i in self.dic_pointclouds[columns[0]].keys()])
+
+        print(self.allgenes.shape,self.allcolors.shape)
         self.pcd = o3d.geometry.PointCloud()
         self.pcd.points = o3d.utility.Vector3dVector(self.allgenes)
         self.pcd.colors = o3d.utility.Vector3dVector(self.allcolors)   
@@ -179,6 +186,7 @@ class ListWidget(QWidget):
         self.add_items()
 
         self.list_widget.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
+        self.tissue_selected = [x for x in self.vis.dic_pointclouds['File']]
         
         #self.list_widget.itemClicked(self.on_clicked)
         
@@ -197,12 +205,14 @@ class ListWidget(QWidget):
     def selectionChanged(self):
         self.selected = [i.text() for i in self.list_widget.selectedItems()]
         if self.selected[0] in self.vis.dic_pointclouds['File']:
+            print('selecting tissue')
             self.tissue_selected = [x for x in self.selected if x in self.vis.dic_pointclouds['File']]
             tissue_loop = True
         else:
             tissue_loop = False
-            self.tissue_selected = [x for x in self.vis.dic_pointclouds['File']]
+            
 
+        print(self.tissue_selected)
 
         if not tissue_loop:
 
@@ -219,6 +229,7 @@ class ListWidget(QWidget):
             ps,cs = np.concatenate(points), np.concatenate(colors)
             filenames = np.concatenate(filenames)
             tissue_filter = np.isin(filenames,self.tissue_selected)
+            print(tissue_filter.sum(),filenames.shape)
             ps = ps[tissue_filter,:]
             cs = cs[tissue_filter,:]
 
