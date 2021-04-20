@@ -63,7 +63,11 @@ class Window:
         self.collapse.show()
         
         for l in self.widget_lists:
-            l.list_widget.itemSelectionChanged.connect(l.selectionChanged)
+            if l.section == 'File':
+                l.list_widget.itemSelectionChanged.connect(l.selectionChanged)
+                l.list_widget.itemSelectionChanged.connect(self.collapse.possible)
+            else:
+                l.list_widget.itemSelectionChanged.connect(l.selectionChanged)
 
         self.vis.execute()
 
@@ -135,7 +139,6 @@ class Visualizer:
         
         self.allcolors = np.concatenate([self.dic_pointclouds[columns[0]][i][1] for i in self.dic_pointclouds[columns[0]].keys()])
 
-        print(self.allgenes.shape,self.allcolors.shape)
         self.pcd = o3d.geometry.PointCloud()
         self.pcd.points = o3d.utility.Vector3dVector(self.allgenes)
         self.pcd.colors = o3d.utility.Vector3dVector(self.allcolors)   
@@ -188,9 +191,7 @@ class ListWidget(QWidget):
 
         self.list_widget.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
         self.tissue_selected = [x for x in self.vis.dic_pointclouds['File']]
-        
-        #self.list_widget.itemClicked(self.on_clicked)
-        
+
     def add_items(self):
         for e in self.subdic:
             i = QListWidgetItem(str(e)) 
@@ -205,18 +206,14 @@ class ListWidget(QWidget):
         
     def selectionChanged(self):
         self.selected = [i.text() for i in self.list_widget.selectedItems()]
-        if self.selected[0] in self.vis.dic_pointclouds['File']:
-            print('selecting tissue')
+        if self.selected[0] in self.vis.dic_pointclouds['File'] and self.section == 'File':
             self.tissue_selected = [x for x in self.selected if x in self.vis.dic_pointclouds['File']]
             tissue_loop = True
+
         else:
             tissue_loop = False
-            
-
-        print(self.tissue_selected)
 
         if not tissue_loop:
-
             genes = []
             points, colors,filenames = [], [],[]
 
@@ -230,10 +227,8 @@ class ListWidget(QWidget):
             ps,cs = np.concatenate(points), np.concatenate(colors)
             filenames = np.concatenate(filenames)
             tissue_filter = np.isin(filenames,self.tissue_selected)
-            print(tissue_filter.sum(),filenames.shape)
             ps = ps[tissue_filter,:]
             cs = cs[tissue_filter,:]
-
             self.vis.pcd.points = o3d.utility.Vector3dVector(ps)
             self.vis.pcd.colors = o3d.utility.Vector3dVector(cs)
             self.vis.visM.update_geometry(self.vis.pcd)
@@ -267,8 +262,16 @@ class CollapsibleDialog(QDialog):
             self.define_section(x)
             
         self.add_sections()
-        
 
+    def possible(self):
+        for x in self.widget_lists:
+            if x.section == 'File':
+                ts = x.tissue_selected
+        for x in self.widget_lists:
+            if x.section != 'File':
+                x.tissue_selected = ts
+
+        
     def add_sections(self):
         """adds a collapsible sections for every 
         (title, widget) tuple in self.sections
