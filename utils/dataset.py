@@ -307,7 +307,7 @@ class multi_dataset():
             for i, f in enumerate(files):
                 #if self.verbose:
                 #    print(f'Loading dataset ({i}/{len(files)})', end='\r')
-                results.append(PandasDataset(f, x, y, gene_column, other_columns, unique_genes=unique_genes, pixel_size=pixel_size, z_offset=1000*i,verbose=False))
+                results.append(PandasDataset(f, x, y, gene_column, other_columns, unique_genes=unique_genes, pixel_size=pixel_size, x_offset=100000*i,verbose=False))
                 #Get unique genes of first dataset if not defined
                 if not isinstance(unique_genes, np.ndarray):
                     unique_genes = results[0].unique_genes
