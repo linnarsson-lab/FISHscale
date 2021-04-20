@@ -115,8 +115,6 @@ class GraphData:
         G.add_edges_from(res)
         return G
 
-
-
     def cleanGraph(self):
         print('Cleaning graph...')
         for component in tqdm(list(nx.connected_components(self.G))):

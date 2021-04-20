@@ -83,6 +83,7 @@ class TrainerGNN:
 
             total_loss += float(loss) * adjs[-1].size[1]
             
+            print(total_loss)
 
         return total_loss /self.graphdata.dataset.num_nodes, total_rcl/self.graphdata.dataset.num_nodes, total_nl/self.graphdata.dataset.num_nodes
 
@@ -153,4 +154,4 @@ class TrainerGNN:
         return X
 
     def save_model(self):
-        torch.save(self.model.state_dict(), 'SAGEmodel_mode-'+self.mode+datetime.now().strftime("%d-%m-%Y%H:%M:%S"))
+        torch.save(self.model.state_dict(), 'SAGEmodel_mode-'+self.mode+datetime.now().strftime("%Y-%m-%d%H-%M-%S"))
