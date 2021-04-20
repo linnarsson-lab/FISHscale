@@ -12,87 +12,13 @@ from shapely.ops import unary_union
 from skimage.measure import subdivide_polygon
 from sklearn.cluster import AgglomerativeClustering
 from sklearn.neighbors import kneighbors_graph, radius_neighbors_graph
-from numba import jit, njit
-import numba
 from pint import UnitRegistry
+from FISHscale.utils.fast_iteration import Iteration
+from FISHscale.utils.inside_polygon import inside_multi_polygons
 #Mypy types
 from typing import Tuple, Union, Any, List
 
-@jit(nopython=True)
-def _is_inside_sm(polygon: np.ndarray, point: np.ndarray) -> Any:
-    """Test if point is inside a polygon.
-
-    From: https://github.com/sasamil/PointInPolygon_Py/blob/master/pointInside.py
-    From: https://stackoverflow.com/questions/36399381/whats-the-fastest-way-of-checking-if-a-point-is-inside-a-polygon-in-python
-
-    Args:
-        polygon (np.ndarray: Array of polygon coordinates. Polygons should 
-            be closed, meaning that the first and last point are identical.
-        point (np.ndarray): Array with X and Y coordinate of point 
-            to query.
-
-    Returns:
-        [bool]: True if point is inside polygon.
-
-    """
-    length = len(polygon)-1
-    dy2 = point[1] - polygon[0][1]
-    intersections = 0
-    ii = 0
-    jj = 1
-
-    while ii<length:
-        dy  = dy2
-        dy2 = point[1] - polygon[jj][1]
-
-        # consider only lines which are not completely above/bellow/right from the point
-        if dy*dy2 <= 0.0 and (point[0] >= polygon[ii][0] or point[0] >= polygon[jj][0]):
-
-            # non-horizontal line
-            if dy<0 or dy2<0:
-                F = dy*(polygon[jj][0] - polygon[ii][0])/(dy-dy2) + polygon[ii][0]
-
-                if point[0] > F: # if line is left from the point - the ray moving towards left, will intersect it
-                    intersections += 1
-                elif point[0] == F: # point on line
-                    return 2
-
-            # point on upper peak (dy2=dx2=0) or horizontal line (dy=dy2=0 and dx*dx2<=0)
-            elif dy2==0 and (point[0]==polygon[jj][0] or (dy==0 and (point[0]-polygon[ii][0])*(point[0]-polygon[jj][0])<=0)):
-                return 2
-
-        ii = jj
-        jj += 1
-
-    return intersections & 1  
-
-@njit(parallel=True)
-def _is_inside_sm_parallel(polygon: np.ndarray, points: np.ndarray) -> np.ndarray:
-    """Test if array of point is inside a polygon.
-
-    Paralelized the points using numba. 
-
-    From: https://github.com/sasamil/PointInPolygon_Py/blob/master/pointInside.py
-    From: https://stackoverflow.com/questions/36399381/whats-the-fastest-way-of-checking-if-a-point-is-inside-a-polygon-in-python
-
-    Args:
-        polygon (np.ndarray: Array of polygon coordinates. Polygons should 
-            be closed, meaning that the first and last point are identical.
-        point (np.ndarray): Array with X and Y coordinates of points 
-            to query.
-
-    Returns:
-        [np.ndarray]: Boolean array, with True if point falls inside
-            polygon.
-
-    """
-    ln = len(points)
-    D = np.empty(ln, dtype=numba.boolean) 
-    for i in numba.prange(ln):
-        D[i] = _is_inside_sm(polygon, points[i])
-    return D  
-
-class regionalize:
+class regionalize(Iteration):
     """Class for regionalization of multidimensional 2D point data.
 
     """
@@ -175,10 +101,10 @@ class regionalize:
         n_genes = len(self.unique_genes)
             
         #Get canvas size
-        max_x = self.data.loc[:, self.x].max()
-        min_x = self.data.loc[:, self.x].min()
-        max_y = self.data.loc[:, self.y].max()
-        min_y = self.data.loc[:, self.y].min()
+        max_x = self.x.max()
+        min_x = self.x.min()
+        max_y = self.y.max()
+        min_y = self.y.min()
 
         #Determine largest axes and use this to make a hexbin grid with square extent.
         #If it is not square matplotlib will stretch the hexagonal tiles to an asymetric shape.
@@ -232,9 +158,9 @@ class regionalize:
             max_y = max_y + (0.5 * difference_y)
 
         #Perform hexagonal binning for each gene
-        for i,  (g, c) in enumerate(self.data.loc[:, [self.x, self.y, self.gene_column]].groupby(self.gene_column)):
+        for i, (g, x, y) in enumerate(self.xy_groupby_gene_generator()):
             #Make hexagonal binning of the data
-            hb = hexbin(c.loc[:, self.x], c.loc[:, self.y], gridsize=int(n_points), 
+            hb = hexbin(x, y, gridsize=int(n_points), 
                         extent=[min_x, max_x, min_y, max_y], visible=False)
             #For the first iteration initiate the output data
             if i == 0:
@@ -825,28 +751,6 @@ class regionalize:
         gdf = gp.GeoDataFrame(data=data, index=index, columns=columns, geometry=geometry)
         return gdf
 
-    def is_inside_sm_parallel(self, polygon: np.ndarray, points: np.ndarray) -> np.ndarray:
-        """Test if array of point is inside a polygon.
-
-        Paralelized the points using numba. 
-
-        From: https://github.com/sasamil/PointInPolygon_Py/blob/master/pointInside.py
-        From: https://stackoverflow.com/questions/36399381/whats-the-fastest-way-of-checking-if-a-point-is-inside-a-polygon-in-python
-
-        Args:
-            polygon (np.ndarray: Array of polygon coordinates. Polygons should 
-                be closed, meaning that the first and last point are identical.
-            point (np.ndarray): Array with X and Y coordinates of points 
-                to query.
-
-        Returns:
-            [np.ndarray]: Boolean array, with True if point falls inside
-                polygon.
-
-        """
-        #Taken outside of class because Numba can not handle the type of "self".
-        return _is_inside_sm_parallel(polygon, points) 
-
     def get_bounding_box(self, polygon: np.ndarray) -> np.ndarray:
         """Get the bounding box of a single polygon.
 
@@ -927,44 +831,23 @@ class regionalize:
             the geometry column.
 
         """
-        #Make geoseries out of the polygons
+        #Make base geopandas dataframe
         polygons = self.to_Shapely_polygons(polygon_points)
         gs = self.make_geoSeries(polygons)
-        #Make bounding boxes for all polygons
-        bbox = self.make_bounding_box(polygon_points)    
-            
         labels = list(polygon_points.keys())
         gdf = self.make_geoDataFrame(data=np.zeros((len(labels), len(self.unique_genes)), dtype='int64'), index=labels, 
                                             columns=self.unique_genes,  geometry=gs)
 
-        points_of_interest = self.data.loc[:,[self.x, self.y]].to_numpy()
-        #print(type(points_of_interest))
-        
-        #Iterate over all (multi) polygons
-        for l in labels:            
-            point_inside = np.zeros(self.data.shape[0]).astype('bool')
-            
-            #Iterate over every (sub) polygon of the (multi) polygon
-            for p, bb in zip(polygon_points[l], bbox[l]):
-                #Filter points with the bounding box of the polygon
-                filt = self.bbox_filter_points(bb, points_of_interest)
-                #Check which points are inside the polygon
-                #print(type(p), type(points_of_interest[filt]), points_of_interest[filt].shape)
-                is_inside = self.is_inside_sm_parallel(p, points_of_interest[filt])
-                #is_inside = self.is_inside_sm_parallel()#, points_of_interest[filt])
-                #For a point to be inside a multi polygon, it needs to be found inside the sub-polygons an uneven number 
-                #of times. If a point is inside one sub-polygon, it is inside. If it is inside two sub-polygons it 
-                #means that it is outside the multi-poligon because the second polygon has to be inside the first. If it
-                #is in 3 sub-polygons it means there is a large polygon with a hole in it, made by the second polygon,
-                #which has a 3rd polygon inside, that contains the point.
-                point_inside[filt] = np.logical_xor(point_inside[filt], is_inside)
-            
+        #Recount which points fall in which (multi-)polygon
+        df = pd.DataFrame(data = self.gene, columns = ['gene'])
+        for l, filt in inside_multi_polygons(polygon_points, np.column_stack((self.x, self.y))):
             #get the sum of every gene and asign to gene count for that area. 
-            gdf.loc[l, self.unique_genes] = self.data[point_inside].groupby(self.gene_column).size() 
-            
+            gdf.loc[l, self.unique_genes] = df[filt].groupby('gene').size() 
+
+        #Normalize data    
         if normalize:
             area_in_pixels = gdf.area
-            conversion = self.unit_area.to(self.ureg(normalize_unit) ** 2)
+            conversion = self.area_scale.to(self.ureg(normalize_unit) ** 2)
             area_in_desired_unit = area_in_pixels * conversion.magnitude
             gdf.iloc[:,:-1] = gdf.iloc[:,:-1].divide(area_in_desired_unit, axis=0)            
 
@@ -1069,7 +952,7 @@ class regionalize:
 
             if area_normalize:
                 area_in_pixels = new_geoseries.area
-                conversion = self.unit_area.to(self.ureg(area_normalize_unit) ** 2)
+                conversion = self.area_scale.to(self.ureg(area_normalize_unit) ** 2)
                 area_in_desired_unit = area_in_pixels * conversion.magnitude
                 sum_counts = sum_counts.divide(area_in_desired_unit, axis=0)
 
