@@ -23,7 +23,7 @@ import FISHscale
 
 class Window: 
 
-    def __init__(self,pandas_dataset,columns,width=2000,height=2000,show_axis=False,color_dic={}): 
+    def __init__(self,dataset,columns,width=2000,height=2000,show_axis=False,color_dic={}): 
         
         super().__init__() 
         
@@ -34,29 +34,24 @@ class Window:
         color_dic: pass dictionary of desired color in RGB for each unique gene in the parquet_file
         
         """
+        self.dataset = dataset
 
         # setting title 
-        if str(pandas_dataset.__class__) == str(FISHscale.utils.dataset.PandasDataset):
+        if str(self.dataset.__class__) == str(FISHscale.utils.dataset.Dataset):
             print('Single Dataset')
-            self.dataframe = pandas_dataset.data
-            self.x_label,self.y_label = pandas_dataset.x, pandas_dataset.y
-            self.name = pandas_dataset.filename
-            self.offset = np.array([pandas_dataset.z_offset, pandas_dataset.x_offset, pandas_dataset.y_offset])
+            self.offset = np.array([self.dataset.x_offset, self.dataset.y_offset, self.dataset.z_offset])
             self.color_dic = color_dic
-            self.dic_pointclouds ={c:self.pass_data(c) for c in columns}
-            self.dic_pointclouds['File'] = [str(self.name)]
-
+            self.dic_pointclouds ={self.dataset.gene_label:self.pass_data()}
+            self.dic_pointclouds['File'] = [str(self.dataset.filename)]
             print('Data Loaded')
 
-        elif str(pandas_dataset.__class__) == str(FISHscale.utils.dataset.multi_dataset):
+        elif str(self.dataset.__class__) == str(FISHscale.utils.dataset.MultiDataset):
             print('MultiDataset')
-            self.multi_data = pandas_dataset
-            self.x_label,self.y_label = pandas_dataset.x, pandas_dataset.y
-            
+            self.x_label,self.y_label = self.dataset.x_label, self.dataset.y_label
             self.color_dic = color_dic
-            self.dic_pointclouds ={c:self.pass_multi_data(c) for c in columns}
+            self.dic_pointclouds ={self.dataset.gene_label:self.pass_multi_data()}
             self.dic_pointclouds['File'] = []
-            for x in self.multi_data:
+            for x in self.dataset:
                 self.dic_pointclouds['File'].append(str(x.filename))
             print('Data Loaded')
 
@@ -75,14 +70,12 @@ class Window:
 
         self.vis.execute()
 
-    def pass_data(self,column):
+    def pass_data(self):
         r = lambda: random.randint(0,255)
-        gene_grp = self.dataframe.groupby(column)
-        gene_grp = {g[0]:g[1] for g in gene_grp}
+
         dic_coords = {}
-        for gene in gene_grp:
-            coords = gene_grp[gene].loc[:,[self.x_label,self.y_label]].to_numpy()
-            coords = np.vstack([coords[:,0],coords[:,1],np.zeros(coords.shape[0])]).T
+        for gene,x,y in self.dataset.xy_groupby_gene_generator():
+            coords = np.vstack([x,y,np.zeros(x.shape[0])]).T
             coords = coords + self.offset
 
             if self.color_dic[gene]:
@@ -94,24 +87,17 @@ class Window:
             dic_coords[str(gene)] = (coords,col,np.array([self.name]*coords.shape[0]))
         return dic_coords
 
-    def pass_multi_data(self,column):
+
+    def pass_multi_data(self):
         r = lambda: random.randint(0,255)
         dic_coords = {}
-        for dataframe in self.multi_data:
+        for dataframe in self.dataset:
             print(dataframe.filename)
 
-            if column == self.multi_data.gene_column:
-                print(column,dataframe.gene_column)
-                gene_grp = dataframe.data.groupby(dataframe.gene_column)
+            offset = np.array([dataframe.x_offset, dataframe.y_offset, dataframe.z_offset])
+            for gene,x,y in dataframe.xy_groupby_gene_generator():
 
-            gene_grp = {g[0]:g[1] for g in gene_grp}
-            
-            offset = np.array([dataframe.z_offset, dataframe.x_offset, dataframe.y_offset])
-
-            for gene in gene_grp:
-
-                coords = gene_grp[gene].loc[:,[self.x_label,self.y_label]].to_numpy()
-                coords = np.vstack([coords[:,0],coords[:,1],np.zeros(coords.shape[0])]).T
+                coords = np.vstack([x,y,np.zeros(x.shape[0])]).T
                 coords = coords + offset
 
                 if str(gene) in self.color_dic:
@@ -126,7 +112,9 @@ class Window:
 
                 else:
                     c1,col1,n1 = dic_coords[str(gene)]
+                    print('col1',col1.shape,'col',col.shape)
                     col = col[:,0,:]
+
                     name = np.concatenate([n1,np.array([dataframe.filename]*coords.shape[0])])
                     coords = np.concatenate([c1,coords])
                     col = np.concatenate([col1,col])

@@ -196,7 +196,7 @@ class Dataset(regionalize, Iteration):
         else:
             print('QApplication instance already exists: %s' % str(App))
 
-        window = Window(self,[self.gene_column]+columns,width,height,color_dic) 
+        window = Window(self,[self.gene_label]+columns,width,height,color_dic) 
         App.exec_()
         App.quit()
 
@@ -212,7 +212,7 @@ class Dataset(regionalize, Iteration):
         """        
 
         print('Running DBscan segmentation')
-        X = np.array([self.x,self.y])
+        X = np.array([self.x,self.y]).T
         clustering = DBSCAN(eps=eps, min_samples=min_samples).fit(X)
 
         print('Assigning background dots whose cluster has more than {}'.format(cutoff))
@@ -224,8 +224,8 @@ class Dataset(regionalize, Iteration):
         
     def make_molecules_df(self):
         molecules_df = []
-        genes = np.unique(self.data[self.gene_column])
-        for g in self.data[self.gene_column]:
+        
+        for g in self.gene:
             e = np.where(self.unique_genes != g, np.zeros(self.unique_genes.shape[0]),1)
             molecules_df.append(e)
         self.molecules_df = np.stack(molecules_df).T
@@ -370,8 +370,7 @@ class MultiDataset():
         return pd
 
 
-    def load_multi_data(self, filepath: str, x: str, y: str, gene_column: str, 
-        other_columns: list, unique_genes: np.ndarray, pixel_size: str):
+    def load_multi_data(self, filepath: str):
         """
         Load files from folder
 
@@ -434,7 +433,7 @@ class MultiDataset():
         else:
             print('QApplication instance already exists: %s' % str(App))
 
-        window = Window(self,[self.gene_column]+columns,width,height,color_dic) 
+        window = Window(self,[self.gene_label]+columns,width,height,color_dic) 
         App.exec_()
         App.quit()
 
