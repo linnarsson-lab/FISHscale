@@ -1,7 +1,9 @@
+from typing import Union, Any, Optional
 import pandas as pd
 from FISHscale import Window
 #from FISHscale.utils.hex_bin import HexBin
 from FISHscale.utils.hex_regionalization import regionalize
+from FISHscale.utils.fast_iteration import Iteration
 from PyQt5 import QtWidgets
 import sys
 from datetime import datetime
@@ -15,7 +17,7 @@ from pint import UnitRegistry
 import os
 from glob import glob
 
-class PandasDataset(regionalize):
+class Dataset(regionalize, Iteration):
     """
     Base Class for FISHscale, still under development
 
@@ -24,11 +26,12 @@ class PandasDataset(regionalize):
 
     def __init__(self,
         filename: str,
-        x: str = 'r_px_microscope_stitched',
-        y: str ='c_px_microscope_stitched',
-        gene_column: str = 'below3Hdistance_genes',
-        other_columns: list = [],
-        unique_genes: np.ndarray = None,
+        x_label: str = 'r_px_microscope_stitched',
+        y_label: str ='c_px_microscope_stitched',
+        gene_label: str = 'below3Hdistance_genes',
+        other_columns: Optional[list] = None,
+        unique_genes: Optional[np.ndarray] = None,
+        z: float = 0,
         pixel_size: str = '1 micrometer',
         x_offset: float = 0,
         y_offset: float = 0,
@@ -38,15 +41,25 @@ class PandasDataset(regionalize):
         """initiate PandasDataset
 
         Args:
-            filename (str): [description]
-            x (str, optional): [description]. Defaults to 'r_px_microscope_stitched'.
-            y (str, optional): [description]. Defaults to 'c_px_microscope_stitched'.
-            gene_column (str, optional): [description]. Defaults to 'below3Hdistance_genes'.
-            other_columns (list, optional): [description]. Defaults to [].
+            filename (str): Name (and  optionally path) of the saved Pandas 
+                DataFrame to load.
+            x_label (str, optional): Name of the column of the Pandas dataframe
+                that contains the X coordinates of the points. Defaults to 
+                'r_px_microscope_stitched'.
+            y_label (str, optional): Name of the column of the Pandas dataframe
+                that contains the Y coordinates of the points. Defaults to 
+                'c_px_microscope_stitched'.
+            gene_label (str, optional):  Name of the column of the Pandas 
+                dataframe that contains the gene labels of the points. 
+                Defaults to 'below3Hdistance_genes'.
+            other_columns (list, optional): List with labels of other columns 
+                that need to be loaded. Data will stored under "self.other"
+                as Pandas Dataframe. Defaults to None.
             unique_genes (np.ndarray, optional): Array with unique gene names.
                 If not provided it will find the unique genes from the 
-                gene_column. This can however take some time for > 10e6 rows. 
+                gene_column. This is slow for > 10e6 rows. 
                 Defaults to None.
+            z (float, optional): Z coordinate of the dataset. Defaults to zero.
             pixel_size (str, optional): Unit size of the data. Is used to 
                 convert data to micrometer scale. Uses Pint's UnitRegistry.
                 Example: "0.1 micrometer", means that each pixel or unit has 
@@ -64,14 +77,15 @@ class PandasDataset(regionalize):
         #Open file
         self.filename = filename
         self.dataset_name = self.filename.split('/')[-1].split('.')[0]
-        self.x, self.y = x, y
-        self.data = pd.read_parquet(filename) #maybe make a data loading function for other formats? 
-        self.gene_column = gene_column
+        self.x_label = x_label
+        self.y_label = y_label
+        self.gene_label = gene_label
         self.other_columns = other_columns
-
+        self.x, self.y, self.gene, self.other = self.load_data(self.filename, self.x_label, self.y_label, self.gene_label, self.other_columns)
+        self.z = z
         #Get gene list
         if not isinstance(unique_genes, np.ndarray):
-            self.unique_genes = np.unique(self.data[self.gene_column])
+            self.unique_genes = np.unique(self.gene)
         else:
             self.unique_genes = unique_genes
 
@@ -79,9 +93,10 @@ class PandasDataset(regionalize):
         self.ureg = UnitRegistry()
         self.pixel_size = self.ureg(pixel_size)
         self.pixel_area = self.pixel_size ** 2
-        scale_corrected = self.data.loc[:, [self.x, self.y]].to_numpy() * self.pixel_size
-        scale_corrected = scale_corrected.to('micrometer')
-        self.data.loc[:, [self.x, self.y]] = scale_corrected.magnitude
+        self.x = self.x * self.pixel_size
+        self.x = self.x.to('micrometer').magnitude
+        self.y = self.y * self.pixel_size
+        self.y = self.y.to('micrometer').magnitude
         self.unit_scale = self.ureg('1 micrometer')
         self.area_scale = self.unit_scale ** 2
 
@@ -91,6 +106,48 @@ class PandasDataset(regionalize):
         #Verbosity
         self.verbose = verbose
 
+    def load_data(self, filename: str, x_label: str, y_label: str, gene_label: str, 
+        other_columns: Optional[list]) -> Union[np.ndarray, np.ndarray, np.ndarray, Optional[np.ndarray]]:
+        """[summary]
+
+        Args:
+            x_label (str, optional): Name of the column of the Pandas dataframe
+                that contains the X coordinates of the points. Defaults to 
+                'r_px_microscope_stitched'.
+            y_label (str, optional): Name of the column of the Pandas dataframe
+                that contains the Y coordinates of the points. Defaults to 
+                'c_px_microscope_stitched'.
+            gene_label (str, optional):  Name of the column of the Pandas 
+                dataframe that contains the gene labels of the points. 
+                Defaults to 'below3Hdistance_genes'.
+            other_columns (list, optional): List with labels of other columns 
+                that need to be loaded. Data will stored under "self.other"
+                as Pandas Dataframe. Defaults to None.
+
+        Raises:
+            IOError: When filname can not be opened
+
+        Returns:
+            [np.ndarray, np.ndarray, np.ndarray, pd.DataFrame or None]: Arrays
+                with X coordinates, Y coordinates, gene labels and other data.
+                If no other data specified will retun None.
+
+        """
+        #Maybe add more file types?
+        if filename.endswith('.parquet'):
+            data = pd.read_parquet(filename)
+        else:
+            raise IOError (f'Invalid file type: {filename}, should be in ".parquet" format.') 
+
+        x = data.loc[:, x_label].to_numpy()
+        y = data.loc[:, y_label].to_numpy()
+        genes = data.loc[:, gene_label].to_numpy()
+        if other_columns != None:
+            other = data.loc[:, other_columns]
+        else:
+            other = None
+
+        return x, y, genes, other
 
     def vp(self, *args):
         """Function to print output if verbose mode is True
@@ -104,10 +161,10 @@ class PandasDataset(regionalize):
 
         Args:
             x_offset (float): Offset in X axis. 
-            y_offset (float): Offset in X axis.
-            z_offset (float): Offset in X axis.
+            y_offset (float): Offset in Y axis.
+            z_offset (float): Offset in Z axis.
             apply (bool, optional): If True applies the offset to the data. If
-                False only the self.x/y/z_offset gets changed. 
+                False only the self.x_offset/y_offset/z_offset gets changed. 
                 Defaults to True.
 
         """
@@ -115,7 +172,9 @@ class PandasDataset(regionalize):
         self.y_offset = y_offset
         self.z_offset = z_offset
         if apply:
-            self.data = self.data + np.array([self.x_offset, self.y_offset])
+            self.x += self.x_offset
+            self.y += self.y_offset
+            self.z += self.z_offset
 
 
     def visualize(self,columns=[],width=2000,height=2000,show_axis=False,color_dic=None):
@@ -235,7 +294,7 @@ class PandasDataset(regionalize):
             print('Loom File Created')
     
 
-class multi_dataset():
+class multi_Dataset():
     """Load multiple datasets as PandasDataset object.
     """
 
@@ -289,7 +348,9 @@ class multi_dataset():
         
         return pd
 
-    def load_data(self, filepath: str):
+
+    def load_multi_data(self, filepath: str, x: str, y: str, gene_column: str, 
+        other_columns: list, unique_genes: np.ndarray, pixel_size: str):
         """
         Load files from folder
 
@@ -298,7 +359,7 @@ class multi_dataset():
 
         Returns:
             self.dataset (list): list of all PandasDataset contained in filepath. 
-        """        
+        """      
 
         #Correct slashes in path
         if os.name == 'nt': #I guess this would work
@@ -315,7 +376,7 @@ class multi_dataset():
             for i, f in enumerate(files):
                 #if self.verbose:
                 #    print(f'Loading dataset ({i}/{len(files)})', end='\r')
-                results.append(PandasDataset(f, self.x, self.y, self.gene_column, self.other_columns, unique_genes=self.unique_genes, pixel_size=self.pixel_size,verbose=False))
+                results.append(Dataset(f, x, y, gene_column, other_columns, unique_genes=unique_genes, pixel_size=pixel_size, verbose=False))
                 #Get unique genes of first dataset if not defined
                 if not isinstance(self.unique_genes, np.ndarray):
                     self.unique_genes = results[0].unique_genes
