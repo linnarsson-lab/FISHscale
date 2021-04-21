@@ -212,7 +212,7 @@ class Dataset(regionalize, Iteration):
         """        
 
         print('Running DBscan segmentation')
-        X = self.data.loc[:,[self.x,self.y]].values
+        X = np.array([self.x,self.y])
         clustering = DBSCAN(eps=eps, min_samples=min_samples).fit(X)
 
         print('Assigning background dots whose cluster has more than {}'.format(cutoff))
@@ -220,15 +220,13 @@ class Dataset(regionalize, Iteration):
         bg = [x for x in c if c[x] > cutoff]
         self.labels =  np.array([-1 if x in bg else x for x in clustering.labels_]) 
         print('Bockground molecules: {}'.format((self.labels == -1).sum()))
-        #self.labels = np.array([-1 if (clustering.labels_ == x).sum() > 500 else x for x in clustering.labels_])
-        self.data['DBscan'] = self.labels
         print('DBscan found {} clusters'.format(self.labels.max()))
         
     def make_molecules_df(self):
         molecules_df = []
         genes = np.unique(self.data[self.gene_column])
         for g in self.data[self.gene_column]:
-            e = np.where(genes != g, np.zeros(genes.shape[0]),1)
+            e = np.where(self.unique_genes != g, np.zeros(self.unique_genes.shape[0]),1)
             molecules_df.append(e)
         self.molecules_df = np.stack(molecules_df).T
 
@@ -294,45 +292,69 @@ class Dataset(regionalize, Iteration):
             print('Loom File Created')
     
 
-class multi_Dataset():
+class MultiDataset():
     """Load multiple datasets as PandasDataset object.
     """
 
 
     def __init__(self,
-        x: str = 'r_px_microscope_stitched',
-        y: str ='c_px_microscope_stitched',
-        gene_column: str = 'below3Hdistance_genes',
-        other_columns: list = [],
-        unique_genes: np.ndarray = None,
-        pixel_size: str = '1 micrometer'):
-        """Load multiple datasets as PandasDataset object. 
+        x_label: str = 'r_px_microscope_stitched',
+        y_label: str ='c_px_microscope_stitched',
+        gene_label: str = 'below3Hdistance_genes',
+        other_columns: Optional[list] = None,
+        unique_genes: Optional[np.ndarray] = None,
+        z: float = 0,
+        pixel_size: str = '1 micrometer',
+        x_offset: float = 0,
+        y_offset: float = 0,
+        z_offset: float = 0,
+        apply_offset: bool = False,
+        verbose: bool = False):
+        """initiate PandasDataset
 
         Args:
-            x (str, optional): [description]. Defaults to 
+            filename (str): Name (and  optionally path) of the saved Pandas 
+                DataFrame to load.
+            x_label (str, optional): Name of the column of the Pandas dataframe
+                that contains the X coordinates of the points. Defaults to 
                 'r_px_microscope_stitched'.
-            y (str, optional): [description]. Defaults to 
+            y_label (str, optional): Name of the column of the Pandas dataframe
+                that contains the Y coordinates of the points. Defaults to 
                 'c_px_microscope_stitched'.
-            gene_column (str, optional): [description]. Defaults to 
-                'below3Hdistance_genes'.
-            other_columns (list, optional): [description]. Defaults to [].
+            gene_label (str, optional):  Name of the column of the Pandas 
+                dataframe that contains the gene labels of the points. 
+                Defaults to 'below3Hdistance_genes'.
+            other_columns (list, optional): List with labels of other columns 
+                that need to be loaded. Data will stored under "self.other"
+                as Pandas Dataframe. Defaults to None.
             unique_genes (np.ndarray, optional): Array with unique gene names.
                 If not provided it will find the unique genes from the 
-                gene_column. This can however take some time for > 10e6 rows. 
+                gene_column. This is slow for > 10e6 rows. 
                 Defaults to None.
+            z (float, optional): Z coordinate of the dataset. Defaults to zero.
             pixel_size (str, optional): Unit size of the data. Is used to 
                 convert data to micrometer scale. Uses Pint's UnitRegistry.
                 Example: "0.1 micrometer", means that each pixel or unit has 
                 a real size of 0.1 micrometer, and thus the data will be
                 multiplied by 0.1 to make micrometer the unit of the data.
                 Defaults to "1 micrometer".
+            x_offset (float, optional): Offset in X axis. Defaults to 0.
+            y_offset (float, optional): Offset in Y axis. Defaults to 0.
+            z_offset (float, optional): Offset in Z axis. Defaults to 0.
+            apply_offset (bool, optional): Offsets the coordinates of the 
+                points with the provided x and y offsets. Defaults to False.
+            verbose (bool, optional): If True prints additional output.
 
         """
         self.index=0
-        self.x,self.y,self.gene_column,self.other_columns = x,y,gene_column, other_columns
+        self.x_label,self.y_label,self.gene_label,self.other_columns = x_label,y_label,gene_label, other_columns
         self.unique_genes= unique_genes
         self.pixel_size = pixel_size
-        
+        self.z = z
+        self.pixel_size = pixel_size
+        self.x_offset, self.y_offset, self.z_offset = x_offset, y_offset, z_offset
+        self.apply_offset = apply_offset
+        self.verbose =verbose
 
     def __iter__(self):
         return self
@@ -345,7 +367,6 @@ class multi_Dataset():
         index = self.index
         self.index += 1
         pd = self.datasets[index]
-        
         return pd
 
 
@@ -376,7 +397,7 @@ class multi_Dataset():
             for i, f in enumerate(files):
                 #if self.verbose:
                 #    print(f'Loading dataset ({i}/{len(files)})', end='\r')
-                results.append(Dataset(f, x, y, gene_column, other_columns, unique_genes=unique_genes, pixel_size=pixel_size, verbose=False))
+                results.append(Dataset(f, self.x_label, self.y_label, self.gene_label, self.other_columns, unique_genes=self.unique_genes, pixel_size=self.pixel_size, verbose=self.verbose))
                 #Get unique genes of first dataset if not defined
                 if not isinstance(self.unique_genes, np.ndarray):
                     self.unique_genes = results[0].unique_genes
