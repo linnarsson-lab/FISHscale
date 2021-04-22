@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 from typing import Generator, Tuple
+from functools import lru_cache
 
 class Iteration:
 
@@ -19,14 +20,13 @@ class Iteration:
             yield g, c.loc[:, self.x_label].to_numpy(), c.loc[:, self.y_label].to_numpy()
 
 
-
+    @lru_cache(maxsize=None) #Change to functools.cache when supporting python >= 3.9
     def make_gene_coordinates(self) -> None:
-<<<<<<< HEAD
         """Make a dictionary with point coordinates for each gene.
 
-        Output will be in self.gene_coordinates
-        """
-=======
+        Output will be in self.gene_coordinates. Output will be cached so that
+        this function can be called many times but the calculation is only
+        performed the first time.
 
->>>>>>> 7572b93950ca1686ebd5b8d347fc772c8f956a58
+        """
         self.gene_coordinates = {g: np.column_stack((x, y)) for g, x, y in self.xy_groupby_gene_generator()}

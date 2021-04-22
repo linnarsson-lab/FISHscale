@@ -4,6 +4,7 @@ from FISHscale import Window
 #from FISHscale.utils.hex_bin import HexBin
 from FISHscale.utils.hex_regionalization import regionalize
 from FISHscale.utils.fast_iteration import Iteration
+from FISHscale.utils.colors import ManyColors
 from PyQt5 import QtWidgets
 import sys
 from datetime import datetime
@@ -17,7 +18,7 @@ from pint import UnitRegistry
 import os
 from glob import glob
 
-class Dataset(regionalize, Iteration):
+class Dataset(regionalize, Iteration, ManyColors):
     """
     Base Class for FISHscale, still under development
 
@@ -37,6 +38,7 @@ class Dataset(regionalize, Iteration):
         y_offset: float = 0,
         z_offset: float = 0,
         apply_offset: bool = False,
+        color_input: Optional[Union[str, dict]] = None,
         verbose: bool = False):
         """initiate PandasDataset
 
@@ -71,9 +73,21 @@ class Dataset(regionalize, Iteration):
             z_offset (float, optional): Offset in Z axis. Defaults to 0.
             apply_offset (bool, optional): Offsets the coordinates of the 
                 points with the provided x and y offsets. Defaults to False.
+            color_input (Optional[str, dict], optional): If a filename is 
+                specifiedthat endswith "_color_dictionary.pkl" the function 
+                will try to load that dictionary. If "auto" is provided it will
+                try to load an previously generated color dictionary for this 
+                dataset. If "make", is provided it will make a new color 
+                dictionary for this dataset and save it. If a dictionary is 
+                proivided it will use that dictionary. If None is provided the 
+                function will first try to load a previously generated color 
+                dictionary and make a new one if this fails. Defaults to None.
             verbose (bool, optional): If True prints additional output.
 
         """
+        #Verbosity
+        self.verbose = verbose
+
         #Open file
         self.filename = filename
         self.dataset_name = self.filename.split('/')[-1].split('.')[0]
@@ -103,8 +117,8 @@ class Dataset(regionalize, Iteration):
         #Handle offset
         self.offset_data(x_offset, y_offset, z_offset, apply = apply_offset)
 
-        #Verbosity
-        self.verbose = verbose
+        #Handle colors
+        self.auto_handle_color_dict(color_input)
 
     def load_data(self, filename: str, x_label: str, y_label: str, gene_label: str, 
         other_columns: Optional[list]) -> Union[np.ndarray, np.ndarray, np.ndarray, Optional[np.ndarray]]:
@@ -370,12 +384,21 @@ class MultiDataset():
         return pd
 
 
-    def load_multi_data(self, filepath: str):
+    def load_from_files(self, filepath: str, color_input: Optional[Union[str, dict]] = None):
         """
         Load files from folder
 
         Args:
             filepath (str): folder to look for parquet files
+            color_input (Optional[str, dict], optional): If a filename is 
+                specifiedthat endswith "_color_dictionary.pkl" the function 
+                will try to load that dictionary. If "auto" is provided it will
+                try to load an previously generated color dictionary for this 
+                dataset. If "make", is provided it will make a new color 
+                dictionary for this dataset and save it. If a dictionary is 
+                proivided it will use that dictionary. If None is provided the 
+                function will first try to load a previously generated color 
+                dictionary and make a new one if this fails. Defaults to None.
 
         Returns:
             self.dataset (list): list of all PandasDataset contained in filepath. 
@@ -394,12 +417,16 @@ class MultiDataset():
         results = []
         with tqdm(total=len(files)) as pbar:
             for i, f in enumerate(files):
-                #if self.verbose:
-                #    print(f'Loading dataset ({i}/{len(files)})', end='\r')
-                results.append(Dataset(f, self.x_label, self.y_label, self.gene_label, self.other_columns, unique_genes=self.unique_genes, pixel_size=self.pixel_size, verbose=self.verbose))
+                results.append(Dataset(f, self.x_label, self.y_label, self.gene_label, self.other_columns, 
+                                       unique_genes=self.unique_genes, pixel_size=self.pixel_size, 
+                                       color_input=color_input, verbose=self.verbose))
                 #Get unique genes of first dataset if not defined
                 if not isinstance(self.unique_genes, np.ndarray):
                     self.unique_genes = results[0].unique_genes
+                #Make all color dictionarys same to the first
+                if i == 1:
+                    color_input = results[0].color_dict
+
                 pbar.update(1)
             
         self.datasets = results
