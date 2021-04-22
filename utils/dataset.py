@@ -17,6 +17,7 @@ import loompy
 from pint import UnitRegistry
 import os
 from glob import glob
+from time import strftime
 
 class Dataset(regionalize, Iteration, ManyColors):
     """
@@ -306,29 +307,55 @@ class Dataset(regionalize, Iteration, ManyColors):
             print('Loom File Created')
     
 
-class MultiDataset():
-    """Load multiple datasets as PandasDataset object.
+class MultiDataset(ManyColors):
+    """Load multiple datasets as Dataset objects.
     """
 
-
     def __init__(self,
+        data: Union[list, str],
+        unique_genes: Optional[np.ndarray] = None,
+        MultiDataset_name: Optional[str] = None,
+        color_input: Optional[Union[str, dict]] = None,
+        verbose: bool = False,
+
+        #If loading from files define:
         x_label: str = 'r_px_microscope_stitched',
         y_label: str ='c_px_microscope_stitched',
         gene_label: str = 'below3Hdistance_genes',
         other_columns: Optional[list] = None,
-        unique_genes: Optional[np.ndarray] = None,
         z: float = 0,
         pixel_size: str = '1 micrometer',
         x_offset: float = 0,
         y_offset: float = 0,
         z_offset: float = 0,
-        apply_offset: bool = False,
-        verbose: bool = False):
+        apply_offset: bool = False):
         """initiate PandasDataset
 
         Args:
-            filename (str): Name (and  optionally path) of the saved Pandas 
-                DataFrame to load.
+            data (Union[list, str]): List with initiated Dataset objects, or 
+                path to folder with files to load. Unique genes must be 
+                identical for all Datasets.
+            unique_genes (np.ndarray, optional): Array with unique gene names.
+                If not provided it will find the unique genes from the 
+                gene_column. This is slow for > 10e6 rows. 
+                Defaults to None.
+            MultiDataset_name (Optional[str], optional): Name of multi-dataset.
+                This is used to store multi-dataset specific parameters, such
+                as gene colors. If "None" will use a timestamp.
+                Defaults to None.
+            color_input (Optional[str, dict], optional): If a filename is 
+                specifiedthat endswith "_color_dictionary.pkl" the function 
+                will try to load that dictionary. If "auto" is provided it will
+                try to load an previously generated color dictionary for this 
+                MultiDataset, identified by MultiDataset_name. 
+                If "make", is provided it will make a new color dictionary for 
+                this dataset and save it. If a dictionary is proivided it will 
+                use that dictionary. If None is provided the function will 
+                first try to load a previously generated color dictionary and 
+                make a new one if this fails. Defaults to None.
+            verbose (bool, optional): If True prints additional output.
+
+            #Below input only needed if "data" is a path to files. 
             x_label (str, optional): Name of the column of the Pandas dataframe
                 that contains the X coordinates of the points. Defaults to 
                 'r_px_microscope_stitched'.
@@ -341,10 +368,6 @@ class MultiDataset():
             other_columns (list, optional): List with labels of other columns 
                 that need to be loaded. Data will stored under "self.other"
                 as Pandas Dataframe. Defaults to None.
-            unique_genes (np.ndarray, optional): Array with unique gene names.
-                If not provided it will find the unique genes from the 
-                gene_column. This is slow for > 10e6 rows. 
-                Defaults to None.
             z (float, optional): Z coordinate of the dataset. Defaults to zero.
             pixel_size (str, optional): Unit size of the data. Is used to 
                 convert data to micrometer scale. Uses Pint's UnitRegistry.
@@ -357,18 +380,31 @@ class MultiDataset():
             z_offset (float, optional): Offset in Z axis. Defaults to 0.
             apply_offset (bool, optional): Offsets the coordinates of the 
                 points with the provided x and y offsets. Defaults to False.
-            verbose (bool, optional): If True prints additional output.
-
         """
-        self.index=0
-        self.x_label,self.y_label,self.gene_label,self.other_columns = x_label,y_label,gene_label, other_columns
-        self.unique_genes= unique_genes
-        self.pixel_size = pixel_size
-        self.z = z
-        self.pixel_size = pixel_size
-        self.x_offset, self.y_offset, self.z_offset = x_offset, y_offset, z_offset
-        self.apply_offset = apply_offset
+
         self.verbose =verbose
+        self.index=0
+
+        #Name
+        if MultiDataset_name == None:
+            MultiDataset_name = 'MultiDataset_' + strftime("%Y-%m-%d_%H-%M-%S")
+        self.dataset_name = MultiDataset_name
+
+        #Input for loading
+        self.unique_genes= unique_genes
+
+        #Load data
+        if type(data) == list:
+            self.load_Datasets(data)
+        elif type(data) == str:
+            self.load_from_files(data, x_label, y_label, gene_label, other_columns, z, pixel_size, 
+                                x_offset, y_offset, z_offset, apply_offset)
+        else:
+            raise Exception(f'Input for "data" not understood. Should be list with initiated Datasets or valid path to files.')
+
+        #Handle colors
+        self.auto_handle_color_dict(color_input)
+        self.override_color_dict()
 
     def __iter__(self):
         return self
@@ -383,25 +419,56 @@ class MultiDataset():
         pd = self.datasets[index]
         return pd
 
+    def vp(self, *args):
+            """Function to print output if verbose mode is True
+            """
+            if self.verbose:
+                for arg in args:
+                    print('    ' + arg)
 
-    def load_from_files(self, filepath: str, color_input: Optional[Union[str, dict]] = None):
-        """
-        Load files from folder
+    def load_from_files(self, 
+        filepath: str, 
+        x_label: str = 'r_px_microscope_stitched',
+        y_label: str ='c_px_microscope_stitched',
+        gene_label: str = 'below3Hdistance_genes',
+        other_columns: Optional[list] = None,
+        z: float = 0,
+        pixel_size: str = '1 micrometer',
+        x_offset: float = 0,
+        y_offset: float = 0,
+        z_offset: float = 0,
+        apply_offset: bool = False,):
+        """Load files from folder.
+
+        Output can be found in self.dataset.
+        Which is a list of initiated Dataset objects.
 
         Args:
-            filepath (str): folder to look for parquet files
-            color_input (Optional[str, dict], optional): If a filename is 
-                specifiedthat endswith "_color_dictionary.pkl" the function 
-                will try to load that dictionary. If "auto" is provided it will
-                try to load an previously generated color dictionary for this 
-                dataset. If "make", is provided it will make a new color 
-                dictionary for this dataset and save it. If a dictionary is 
-                proivided it will use that dictionary. If None is provided the 
-                function will first try to load a previously generated color 
-                dictionary and make a new one if this fails. Defaults to None.
-
-        Returns:
-            self.dataset (list): list of all PandasDataset contained in filepath. 
+            filepath (str): folder to look for parquet files.
+            x_label (str, optional): Name of the column of the Pandas dataframe
+                that contains the X coordinates of the points. Defaults to 
+                'r_px_microscope_stitched'.
+            y_label (str, optional): Name of the column of the Pandas dataframe
+                that contains the Y coordinates of the points. Defaults to 
+                'c_px_microscope_stitched'.
+            gene_label (str, optional):  Name of the column of the Pandas 
+                dataframe that contains the gene labels of the points. 
+                Defaults to 'below3Hdistance_genes'.
+            other_columns (list, optional): List with labels of other columns 
+                that need to be loaded. Data will stored under "self.other"
+                as Pandas Dataframe. Defaults to None.
+            z (float, optional): Z coordinate of the dataset. Defaults to zero.
+            pixel_size (str, optional): Unit size of the data. Is used to 
+                convert data to micrometer scale. Uses Pint's UnitRegistry.
+                Example: "0.1 micrometer", means that each pixel or unit has 
+                a real size of 0.1 micrometer, and thus the data will be
+                multiplied by 0.1 to make micrometer the unit of the data.
+                Defaults to "1 micrometer".
+            x_offset (float, optional): Offset in X axis. Defaults to 0.
+            y_offset (float, optional): Offset in Y axis. Defaults to 0.
+            z_offset (float, optional): Offset in Z axis. Defaults to 0.
+            apply_offset (bool, optional): Offsets the coordinates of the 
+                points with the provided x and y offsets. Defaults to False.
         """      
 
         #Correct slashes in path
@@ -417,31 +484,49 @@ class MultiDataset():
         results = []
         with tqdm(total=len(files)) as pbar:
             for i, f in enumerate(files):
-                results.append(Dataset(f, self.x_label, self.y_label, self.gene_label, self.other_columns, 
-                                       unique_genes=self.unique_genes, pixel_size=self.pixel_size, 
-                                       color_input=color_input, verbose=self.verbose))
+                results.append(Dataset(f, x_label, y_label, gene_label, other_columns, self.unique_genes, z, pixel_size, 
+                                       x_offset, y_offset, z_offset, apply_offset, color_input=None, 
+                                       verbose=self.verbose))
                 #Get unique genes of first dataset if not defined
                 if not isinstance(self.unique_genes, np.ndarray):
                     self.unique_genes = results[0].unique_genes
-                #Make all color dictionarys same to the first
-                if i == 1:
-                    color_input = results[0].color_dict
-
                 pbar.update(1)
             
         self.datasets = results
 
-    def load_PandasDatasets(self,PD_list:list):
+    def load_Datasets(self, Dataset_list:list):
         """
-        Load PandasDataset 
+        Load Datasets
 
         Args:
-            PD_list (list): list of PandasDatasets
-        """        
-        self.datasets = PD_list
+            Dataset_list (list): list of Dataset objects.
+            override_color_dict (bool, optional): If True sets the color_dicts
+                of all individaal Datasets to the MultiDataset color_dict.
 
+        """        
+        self.datasets = Dataset_list
+
+        #Set unique genes
+        self.unique_genes = self.datasets[0].unique_genes
+        self.check_unique_genes()    
+
+    def override_color_dict(self) -> None:
+        for d in self.datasets:
+                d.color_dict = self.color_dict
+
+
+    def check_unique_genes(self) -> None:
+        """Check if all datasets have same unique genes.
+
+        Raises:
+            Exception: Raises exception if not.
+        """
+        all_ug = [d.unique_genes for d in self.datasets]
+        if not np.all(all_ug == all_ug[0]):
+            raise Exception('Gene lists are not identical for all datasets.')
         
-    def visualize(self,columns=[],width=2000,height=2000,show_axis=False,color_dic=None):
+    #Fix color 
+    def visualize(self, columns=[], width=2000, height=2000, show_axis=False):
         """
         Run open3d visualization on self.data
         Pass to columns a list of strings, each string will be the class of the dots to be colored by. example: color by gene
@@ -450,7 +535,6 @@ class MultiDataset():
             columns (list, optional): List of columns to be plotted with different colors by visualizer. Defaults to [].
             width (int, optional): Frame width. Defaults to 2000.
             height (int, optional): Frame height. Defaults to 2000.
-            color_dic ([type], optional): Dictionary of colors if None it will assign random colors. Defaults to None.
         """        
 
         QtWidgets.QApplication.setStyle('Fusion')
@@ -460,7 +544,7 @@ class MultiDataset():
         else:
             print('QApplication instance already exists: %s' % str(App))
 
-        window = Window(self,[self.gene_label]+columns,width,height,color_dic) 
+        window = Window(self,[self.gene_label]+columns,width,height, self.color_dict) 
         App.exec_()
         App.quit()
 

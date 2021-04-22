@@ -130,6 +130,7 @@ class ManyColors:
         """
         try:
             self.color_dict = pickle.load(open(file, 'rb'))
+            print(self.color_dict['ACTA2'])
             return True
         except FileNotFoundError:
             return False
@@ -176,25 +177,29 @@ class ManyColors:
         if type(color_input) == dict:
             print('using dict')
             self.color_dict = color_input
-
-        elif type(color_input) == str:
-            print('loading specific c dict')
-            if color_input.endswith('_color_dictionary.pkl'):
+        
+        elif type(color_input) == str or color_input == None:
+        
+            if str(color_input).endswith('_color_dictionary.pkl'):
+                print('loading specific c dict')
                 success = self.load_color_dict(color_input)
                 if success == False:
-                    super().vp('Loading specified color dictionary failed, falling back to auto loading.')
-        
-        #Try opening existing color dictionary
-        elif color_input == 'auto' or color_input == None or success == False:
-            success = self.auto_load_color_dict()
-            if success == False:
-                super().vp('Auto loading color dictionary failed, generating new color dictionary.')
-        
-        #Make new color dictionary
-        elif color_input == 'make' or color_input == None or success == False:
-            self.make_color_dict()
-            file_name = self.save_color_dict()
-            super().vp('Generated new color dictionary and saved as: {file_name}')
+                    self.vp('Loading specified color dictionary failed, falling back to auto loading.')
+            
+            #Try opening existing color dictionary
+            if color_input == 'auto' or color_input == None or success == False:
+                print('auto')
+                success = self.auto_load_color_dict()
+                print(success)
+                if success == False:
+                    self.vp('Auto loading color dictionary failed, generating new color dictionary.')
+
+            #Make new color dictionary
+            if color_input == 'make' or (color_input == None and success == False):
+                print('making new')
+                self.make_color_dict()
+                file_name = self.save_color_dict()
+                self.vp(f'Generated new color dictionary and saved as: {file_name}')
         
         else:
             raise Exception(f'Input: {color_input} not understood.')
