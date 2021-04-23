@@ -19,11 +19,11 @@ import numpy as np
 import random
 import time
 import FISHscale
-
+import functools
 
 class Window: 
 
-    def __init__(self,dataset,columns,width=2000,height=2000,show_axis=False,color_dic={}): 
+    def __init__(self,dataset,columns:list=[],width=2000,height=2000,show_axis=False,color_dic={}): 
         
         super().__init__() 
         
@@ -34,11 +34,22 @@ class Window:
         color_dic: pass dictionary of desired color in RGB for each unique gene in the parquet_file
         
         """
+        
+        r = lambda: random.randint(0,255)
+        self.color_dic = color_dic
+        self.columns= columns
         self.dataset = dataset
+        for g in self.dataset.unique_genes:
+            if g in self.color_dic:
+                pass
+            else:
+                col = [(r()/255,r()/255,r()/255)]
+                self.color_dic[g] = col
 
         # setting title 
         if str(self.dataset.__class__) == str(FISHscale.utils.dataset.Dataset):
             print('Single Dataset')
+            self.dataset = [dataset]
             self.offset = np.array([self.dataset.x_offset, self.dataset.y_offset, self.dataset.z_offset])
             self.color_dic = color_dic
             self.dic_pointclouds ={self.dataset.gene_label:self.pass_data()}
@@ -47,16 +58,21 @@ class Window:
 
         elif str(self.dataset.__class__) == str(FISHscale.utils.dataset.MultiDataset):
             print('MultiDataset')
-            self.x_label,self.y_label = self.dataset.x_label, self.dataset.y_label
-            self.color_dic = color_dic
-            self.dic_pointclouds ={self.dataset.gene_label:self.pass_multi_data()}
+            self.dataset = dataset
+            self.gene_label,self.x_label,self.y_label = self.dataset.gene_label,self.dataset.x_label, self.dataset.y_label
+            self.dic_pointclouds ={self.dataset.gene_label:self.dataset.unique_genes}
+
             self.dic_pointclouds['File'] = []
             for x in self.dataset:
                 self.dic_pointclouds['File'].append(str(x.filename))
+
+            self.pass_multi_data()
             print('Data Loaded')
+        
 
         self.show_axis= show_axis
-        self.vis = Visualizer(self.dic_pointclouds, columns, width=2000, height=2000, show_axis=self.show_axis, color_dic=None)
+        self.vis = Visualizer(self.dataset,self.dic_pointclouds, x_label=self.x_label,y_label=self.y_label,gene_label=self.gene_label,
+            color_dic=self.color_dic,width=2000, height=2000, show_axis=self.show_axis)
         self.collapse = CollapsibleDialog(self.dic_pointclouds,vis=self.vis)
         self.widget_lists = self.collapse.widget_lists
         self.collapse.show()
@@ -70,76 +86,60 @@ class Window:
 
         self.vis.execute()
 
-    def pass_data(self):
-        r = lambda: random.randint(0,255)
-
-        dic_coords = {}
-        for gene,x,y in self.dataset.xy_groupby_gene_generator():
-            coords = np.vstack([x,y,np.zeros(x.shape[0])]).T
-            coords = coords + self.offset
-
-            if self.color_dic[gene]:
-                col = np.array([self.color_dic[gene]]*coords.shape[0])/255
-            else:
-                col = [(r(),r(),r())]
-                self.color_dic[gene] = col
-                col = np.array(col*coords.shape[0])/255 
-            dic_coords[str(gene)] = (coords,col,np.array([self.name]*coords.shape[0]))
-        return dic_coords
-
-
+    #@functools.lru_cache
     def pass_multi_data(self):
         r = lambda: random.randint(0,255)
-        dic_coords = {}
+        ds = []
         for dataframe in self.dataset:
             print(dataframe.filename)
+            pd = dataframe.make_pandas()
+            pd['z_label'] = np.array([dataframe.z_offset]*pd.shape[0])
 
-            offset = np.array([dataframe.x_offset, dataframe.y_offset, dataframe.z_offset])
-            for gene,x,y in dataframe.xy_groupby_gene_generator():
+            for c in self.columns:
+                colattr = getattr(dataframe,c)
+                pd[c] = colattr
+                unique_ca = np.unique(colattr)
+                self.dic_pointclouds[c]= unique_ca
+                for ca in unique_ca:
+                    if ca in self.color_dic:
+                        pass
+                    else:
+                        col = [(r()/255,r()/255,r()/255)]
+                        self.color_dic[str(ca)] = col
+            ds.append((pd,dataframe.filename))
 
-                coords = np.vstack([x,y,np.zeros(x.shape[0])]).T
-                coords = coords + offset
+        self.dataset = ds
 
-                if str(gene) in self.color_dic:
-                    col = np.array([self.color_dic[gene]]*coords.shape[0])/255
-                else:
-                    col = [(r(),r(),r())]
-                    self.color_dic[gene] = col
-                    col = np.array(col*coords.shape[0])/255 
-
-                if str(gene) not in dic_coords:
-                    dic_coords[str(gene)] = (coords,col,np.array([dataframe.filename]*coords.shape[0]))
-
-                else:
-                    c1,col1,n1 = dic_coords[str(gene)]
-                    print('col1',col1.shape,'col',col.shape)
-                    col = col[:,0,:]
-
-                    name = np.concatenate([n1,np.array([dataframe.filename]*coords.shape[0])])
-                    coords = np.concatenate([c1,coords])
-                    col = np.concatenate([col1,col])
-                    dic_coords[str(gene)] = (coords,col,name)
-
-        return dic_coords
-
-    
 class Visualizer:
-    def __init__(self,dic_pointclouds,columns,width=2000,height=2000,show_axis=False,color_dic=None):
+    def __init__(self,data,dic_pointclouds,x_label,y_label,gene_label,color_dic,width=2000,height=2000,show_axis=False):
         
+        self.data = data
+        self.x_label,self.y_label,self.gene_label = x_label,y_label,gene_label
+        self.color_dic = color_dic
         self.visM = o3d.visualization.Visualizer()
         self.visM.create_window(height=height,width=width,top=0,left=500)
         
         self.dic_pointclouds= dic_pointclouds
-        
-        self.allgenes = np.concatenate([self.dic_pointclouds[columns[0]][i][0] for i in self.dic_pointclouds[columns[0]].keys()])
-        
-        self.allcolors = np.concatenate([self.dic_pointclouds[columns[0]][i][1] for i in self.dic_pointclouds[columns[0]].keys()])
+
+        points, colors = [], []
+        for d,f in self.data: 
+            ps = d.loc[:,[self.x_label,self.y_label,'z_label']].values
+            gs = d.loc[:,[self.gene_label]].values
+            cs= np.array([self.color_dic[g[0]] for g in gs])
+
+            points.append(ps)
+            colors.append(cs)
+
+        self.allgenes = np.concatenate(points)
+        self.allcolors = np.concatenate(colors)[:,0,:]
 
         self.pcd = o3d.geometry.PointCloud()
         self.pcd.points = o3d.utility.Vector3dVector(self.allgenes)
         self.pcd.colors = o3d.utility.Vector3dVector(self.allcolors)   
+
         self.visM.add_geometry(self.pcd)
         opt = self.visM.get_render_option()
+
         if show_axis:
             opt.show_coordinate_frame = True
         opt.background_color = np.asarray([0, 0, 0])
@@ -147,8 +147,6 @@ class Visualizer:
     def execute(self):
         self.visM.run()
         self.visM.destroy_window()
-        
-        
 
 class SectionExpandButton(QPushButton):
     """a QPushbutton that can expand or collapse its section
@@ -191,10 +189,11 @@ class ListWidget(QWidget):
     def add_items(self):
         for e in self.subdic:
             i = QListWidgetItem(str(e)) 
-            
+ 
             try:
-                i.setBackground(QColor(c[0],c[1],c[2],120))
-                c = self.subdic[e][1][0,:]*255
+                c = self.vis.color_dic[e]
+                i.setBackground(QColor(c[0][0]*255,c[0][1]*255,c[0][2]*255,120))
+
             except:
                 pass
             self.list_widget.addItem(i)
@@ -204,33 +203,28 @@ class ListWidget(QWidget):
         self.selected = [i.text() for i in self.list_widget.selectedItems()]
         if self.selected[0] in self.vis.dic_pointclouds['File'] and self.section == 'File':
             self.tissue_selected = [x for x in self.selected if x in self.vis.dic_pointclouds['File']]
-            tissue_loop = True
-
-        else:
-            tissue_loop = False
-
-        if not tissue_loop:
-            genes = []
-            points, colors,filenames = [], [],[]
-
-            for i in self.selected:
-
-                ps,cs,filename = self.vis.dic_pointclouds[self.section][i]
-                points.append(ps)
-                colors.append(cs)
-                filenames.append(filename)
+        
+        if self.section != 'File':
+            points,colors = [],[]
+        
+            for d,f in self.vis.data:
+                if f in self.tissue_selected:
+                    for g, d in d.groupby(self.section):
+                        if str(g) in self.selected:
+                            g= str(g)
+                            ps = d.loc[:,[self.vis.x_label,self.vis.y_label,'z_label']].values
+                            cs= np.array([self.vis.color_dic[g] for i in range(ps.shape[0])])[:,0,:]
+                            points.append(ps)
+                            colors.append(cs)
 
             ps,cs = np.concatenate(points), np.concatenate(colors)
-            filenames = np.concatenate(filenames)
-            tissue_filter = np.isin(filenames,self.tissue_selected)
-            ps = ps[tissue_filter,:]
-            cs = cs[tissue_filter,:]
+
             self.vis.pcd.points = o3d.utility.Vector3dVector(ps)
             self.vis.pcd.colors = o3d.utility.Vector3dVector(cs)
             self.vis.visM.update_geometry(self.vis.pcd)
             self.vis.visM.poll_events()
             self.vis.visM.update_renderer()
-    
+
 
 class CollapsibleDialog(QDialog):
     """a dialog to which collapsible sections can be added;
