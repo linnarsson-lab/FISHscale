@@ -92,6 +92,8 @@ class Window:
         ds = []
         for dataframe in self.dataset:
             print(dataframe.filename)
+            if dataframe.gene_label != self.gene_label:
+                dataframe.gene_label = self.gene_label
             pd = dataframe.make_pandas()
             pd['z_label'] = np.array([dataframe.z_offset]*pd.shape[0])
 
