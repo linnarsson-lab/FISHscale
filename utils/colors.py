@@ -1,6 +1,8 @@
 import colorsys
 import numpy as np
 
+class 
+
 def make_colors(ncolors, saturation_levels=None, value_levels=None,
                shuffle=False):
     """

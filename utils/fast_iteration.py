@@ -24,5 +24,12 @@ class Iteration:
 
 
     def make_gene_coordinates(self) -> None:
+<<<<<<< HEAD
+        """Make a dictionary with point coordinates for each gene.
 
+        Output will be in self.gene_coordinates
+        """
+=======
+
+>>>>>>> 7572b93950ca1686ebd5b8d347fc772c8f956a58
         self.gene_coordinates = {g: np.column_stack((x, y)) for g, x, y in self.xy_groupby_gene_generator()}
