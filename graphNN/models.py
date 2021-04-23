@@ -6,11 +6,12 @@ from torch import nn
 from typing import Iterable
 from torch.distributions import Normal,Poisson
 from torch.distributions import Normal, kl_divergence as kl
+import pytorch_lightning as pl
 
 def reparameterize_gaussian(mu, var):
     return Normal(mu, var.sqrt()).rsample()
 
-class SAGE(torch.nn.Module):
+class SAGE(pl.LightningModule):
     """
     GraphSAGE based model in combination with scvi variational autoencoder.
 
@@ -44,7 +45,7 @@ class SAGE(torch.nn.Module):
         self.compute_library = compute_library
 
         
-    def forward(self, x, adjs,local_l_mean,local_l_var):
+    def autoencoder_forward(self, x, adjs,local_l_mean,local_l_var):
         target_nodes = adjs[-1].size[1]
         local_l_mean = torch.reshape(torch.ones([target_nodes],dtype=torch.float32)*local_l_mean,[target_nodes,1]).cpu()
         local_l_var = torch.reshape(torch.ones([target_nodes],dtype=torch.float32)*local_l_var,[target_nodes,1]).cpu()
@@ -67,7 +68,7 @@ class SAGE(torch.nn.Module):
 
         return rcl+kl_divergence_z+kl_divergence_l
 
-    def encode_neighborhood(self,x,adjs):
+    def neighborhood_forward(self,x,adjs):
         x = torch.log(x + 1)
         for i, (edge_index, _, size) in enumerate(adjs):
             x_target = x[:size[1]]  # Target nodes are always placed first.
@@ -78,10 +79,10 @@ class SAGE(torch.nn.Module):
                 x = F.dropout(x, p=0.1, training=self.training)
         return x
 
-    def neighborhood_loss(self,x,pos_x,neg_x,adjs):
-        q_m = self.encode_neighborhood(x,adjs)
-        q_m_pos = self.encode_neighborhood(pos_x,adjs)
-        q_m_neg = self.encode_neighborhood(neg_x,adjs)
+    def forward(self,x,pos_x,neg_x,adjs):
+        q_m = self.neighborhood_forward(x,adjs)
+        q_m_pos = self.neighborhood_forward(pos_x,adjs)
+        q_m_neg = self.neighborhood_forward(neg_x,adjs)
     
         pos_loss = F.logsigmoid((q_m * q_m_pos).sum(-1))
         neg_loss = F.logsigmoid(-(q_m * q_m_neg).sum(-1))
@@ -93,6 +94,7 @@ class SAGE(torch.nn.Module):
         n_loss = - pos_loss - neg_loss
         return n_loss,ratio
 
+    ''' 
     def log_nb_positive(self, x, mu, theta, eps=1e-8):
         log_theta_mu_eps = torch.log(theta + mu + eps)
         negative_likelihood = (theta * (torch.log(theta + eps) - log_theta_mu_eps)
@@ -103,7 +105,7 @@ class SAGE(torch.nn.Module):
         )
 
         return negative_likelihood
-
+    '''
     def log_poisson(self, x, mu, eps=1e-8):
         negative_likelihood = Poisson(mu).log_prob(x)
 
@@ -120,11 +122,45 @@ class SAGE(torch.nn.Module):
         q_m = self.mean_encoder(x)
         q_v = torch.exp(self.var_encoder(x)) + 1e-4
         latent = reparameterize_gaussian(q_m, q_v)
-
         return q_m
 
+    def configure_optimizers(self):
+        optimizer = torch.optim.Adam(self.model.parameters(), lr=0.01)
+        optimizer
 
-class FCLayers(nn.Module):
+    def training_step(self, train_batch):
+        print(train_batch)
+        x, y = train_batch
+        logits = self.forward(x)
+        loss = self.cross_entropy_loss(logits, y)
+        self.log('train_loss', loss)
+        return loss
+    
+    '''
+    def validation_step(self, val_batch, batch_idx):
+        x, y = val_batch
+        logits = self.forward(x)
+        loss = self.cross_entropy_loss(logits, y)
+        self.log('val_loss', loss)
+    '''
+    def sample(self, batch,trainer):
+        batch = torch.tensor(batch)
+        row, col, _ = trainer.adj_t.coo()
+
+        # For each node in `batch`, we sample a direct neighbor (as positive
+        # example) and a random node (as negative example):
+        pos_batch = random_walk(row, col, batch, walk_length=1,
+                                coalesced=False)[:, 1]
+
+        neg_batch = torch.randint(0, trainer.adj_t.size(1), (batch.numel(), ),
+                                dtype=torch.long)
+
+        return batch,pos_batch,neg_batch
+
+
+
+
+class FCLayers(pl.LightningModule):
     """
     SCVI hidden layer
     """
@@ -222,7 +258,7 @@ class FCLayers(nn.Module):
                         x = layer(x)
         return x
 
-class Decoder(nn.Module):
+class Decoder(pl.LightningModule):
     def __init__(
         self,
         n_input: int,
@@ -259,7 +295,7 @@ class Decoder(nn.Module):
 
         return px_scale,px_rate,px_r
 
-class Encoder(nn.Module):
+class Encoder(pl.LightningModule):
 
     def __init__(
         self,

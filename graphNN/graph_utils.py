@@ -13,7 +13,7 @@ import random
 from tqdm import trange
 import pickle
 import os
-
+import pytorch_lightning as pl
 
 def compute_library_size(data):
     sum_counts = data.sum(axis=1)
@@ -26,7 +26,7 @@ def compute_library_size(data):
 
     return local_mean, local_var
 
-class GraphData:
+class GraphData(pl.LightningDataModule):
     def __init__(self,
         data, # Data as numpy array of shape (Genes, Cells)
         genes, # List of Genes
@@ -168,7 +168,13 @@ class GraphData:
         self.test_loader = NeighborSampler(data.edge_index, sizes=self.ngh_sizes, batch_size=self.batch_size, shuffle=True,node_idx=self.indices_test,drop_last=True)
         self.validation_loader = NeighborSampler(data.edge_index, sizes=self.ngh_sizes, batch_size=self.batch_size ,shuffle=False,node_idx=self.indices_validation)
 
+    def train_dataloader(self):
+        return self.train_loader
+    def val_dataloader(self):
+        return self.validation_loader
         
+
+    
 
 
         
