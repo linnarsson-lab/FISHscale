@@ -18,9 +18,9 @@ class Iteration:
         for (g,c) in df.groupby(self.gene_label):
             yield g, c.loc[:, self.x_label].to_numpy(), c.loc[:, self.y_label].to_numpy()
 
-    def make_pandas(self,other_columns=None) -> None:
-        pandas_df = pd.DataFrame(data = np.column_stack((self.x, self.y, self.gene)), columns = [self.x_label, self.y_label, self.gene_label])
-
+    def make_pandas(self):
+        pandas_df = pd.DataFrame(data = np.column_stack([self.x, self.y, self.gene]), columns = [self.x_label, self.y_label, self.gene_label])
+        return pandas_df
 
 
     def make_gene_coordinates(self) -> None:

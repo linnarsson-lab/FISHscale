@@ -143,7 +143,9 @@ class Dataset(regionalize, Iteration):
         y = data.loc[:, y_label].to_numpy()
         genes = data.loc[:, gene_label].to_numpy()
         if other_columns != None:
-            other = data.loc[:, other_columns]
+            for o in other_columns:
+                other = data.loc[:, o].values
+                setattr(self,o,other)
         else:
             other = None
 
@@ -396,7 +398,8 @@ class MultiDataset():
             for i, f in enumerate(files):
                 #if self.verbose:
                 #    print(f'Loading dataset ({i}/{len(files)})', end='\r')
-                results.append(Dataset(f, self.x_label, self.y_label, self.gene_label, self.other_columns, unique_genes=self.unique_genes, pixel_size=self.pixel_size, verbose=self.verbose))
+
+                results.append(Dataset(f, self.x_label, self.y_label, self.gene_label, other_columns=self.other_columns, unique_genes=self.unique_genes, pixel_size=self.pixel_size, verbose=self.verbose))
                 #Get unique genes of first dataset if not defined
                 if not isinstance(self.unique_genes, np.ndarray):
                     self.unique_genes = results[0].unique_genes
@@ -404,17 +407,19 @@ class MultiDataset():
             
         self.datasets = results
 
-    def load_PandasDatasets(self,PD_list:list):
+    def load_datasets(self,PD_list:list):
         """
         Load PandasDataset 
 
         Args:
             PD_list (list): list of PandasDatasets
-        """        
+        """ 
+        if self.unique_genes == None:
+            self.unique_genes = PD_list.unique_genes
         self.datasets = PD_list
 
         
-    def visualize(self,columns=[],width=2000,height=2000,show_axis=False,color_dic=None):
+    def visualize(self,columns:list=[],width=2000,height=2000,show_axis=False,color_dic=None):
         """
         Run open3d visualization on self.data
         Pass to columns a list of strings, each string will be the class of the dots to be colored by. example: color by gene
@@ -433,7 +438,7 @@ class MultiDataset():
         else:
             print('QApplication instance already exists: %s' % str(App))
 
-        window = Window(self,[self.gene_label]+columns,width,height,color_dic) 
+        window = Window(self,columns,width,height,color_dic) 
         App.exec_()
         App.quit()
 
