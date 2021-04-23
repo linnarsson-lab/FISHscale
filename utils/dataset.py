@@ -415,7 +415,7 @@ class MultiDataset():
             PD_list (list): list of PandasDatasets
         """ 
         if self.unique_genes == None:
-            self.unique_genes = PD_list.unique_genes
+            self.unique_genes = PD_list[0].unique_genes
         self.datasets = PD_list
 
         
