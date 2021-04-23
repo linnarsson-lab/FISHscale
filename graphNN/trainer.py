@@ -6,6 +6,7 @@ from torch_geometric.data import NeighborSampler
 from torch_geometric.utils import negative_sampling,batched_negative_sampling
 import numpy as np
 from datetime import datetime
+from tqdm import trange
 
 
 class TrainerGNN:
@@ -117,7 +118,7 @@ class TrainerGNN:
     '''
 
     def train(self):
-        for epoch in range(1, self.n_epochs+1):
+        for epoch in trange(1, self.n_epochs+1):
             loss,rcl,nl = self.train_step()
             #val_acc, test_acc = test()
             print(f'Epoch: {epoch:03d}, Loss: {loss:.4f}, RCL: {rcl:.4f}, Neighborhood Loss: {nl:.4f}')
@@ -154,4 +155,4 @@ class TrainerGNN:
         return X
 
     def save_model(self):
-        torch.save(self.model.state_dict(), 'SAGEmodel_mode-'+self.mode+datetime.now().strftime("%Y-%m-%d%H-%M-%S"))
+        torch.save(self.model.state_dict(), 'SAGEmodel_mode-'+self.mode+datetime.now().strftime("%Y-%m-%d-%H-%M-%S"))
