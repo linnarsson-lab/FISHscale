@@ -125,25 +125,27 @@ class ManyColors:
             file (str): Name of file.
 
         Returns:
-            bool: True if loading was successful.
+            bool: True if loading was successful, False if not.
 
         """
         try:
             self.color_dict = pickle.load(open(file, 'rb'))
-            print(self.color_dict['ACTA2'])
             return True
         except FileNotFoundError:
             return False
 
 
-    def auto_load_color_dict(self) -> bool:
+    def auto_load_color_dict(self, main: bool=False) -> bool:
         """Automatically load an previously generated color dictionary.
 
         Looks in the current working dicrectory.
         File should have the name: '<dataset_name>_color_dictionary.pkl'
 
+        Args:
+            main (bool): If True gives warning if it failed.
+
         Returns:
-            bool: True if loading was successful.
+            bool: True if loading was successful, False if not.
 
         """
         file_name = f'{self.dataset_name}_color_dictionary.pkl'
@@ -151,7 +153,8 @@ class ManyColors:
             self.load_color_dict(file_name)
             return True
         else:
-            warnings.warn('"auto_load_colors" failed. No saved color dictionary in working directory.')
+            if main:
+                warnings.warn('"auto_load_colors" failed. No saved color dictionary in working directory.')
             return False
 
     def auto_handle_color_dict(self, color_input: Optional[Union[str, dict]] = None) -> None:
@@ -175,28 +178,23 @@ class ManyColors:
         #Try opening specified color dictionary file
         success = True
         if type(color_input) == dict:
-            print('using dict')
             self.color_dict = color_input
         
         elif type(color_input) == str or color_input == None:
         
             if str(color_input).endswith('_color_dictionary.pkl'):
-                print('loading specific c dict')
                 success = self.load_color_dict(color_input)
                 if success == False:
                     self.vp('Loading specified color dictionary failed, falling back to auto loading.')
             
             #Try opening existing color dictionary
             if color_input == 'auto' or color_input == None or success == False:
-                print('auto')
-                success = self.auto_load_color_dict()
-                print(success)
+                success = self.auto_load_color_dict(main=False)
                 if success == False:
                     self.vp('Auto loading color dictionary failed, generating new color dictionary.')
 
             #Make new color dictionary
             if color_input == 'make' or (color_input == None and success == False):
-                print('making new')
                 self.make_color_dict()
                 file_name = self.save_color_dict()
                 self.vp(f'Generated new color dictionary and saved as: {file_name}')

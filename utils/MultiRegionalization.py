@@ -21,7 +21,7 @@ import numba
 from pint import UnitRegistry
 #Mypy types
 
-class 3D_regionalize:
+class MultiRegionalize:
 
     def merge_norm(hex_bin, normalizer=None):
         """

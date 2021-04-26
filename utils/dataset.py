@@ -2,9 +2,10 @@ from typing import Union, Any, Optional
 import pandas as pd
 from FISHscale import Window
 #from FISHscale.utils.hex_bin import HexBin
-from FISHscale.utils.hex_regionalization import regionalize
+from FISHscale.utils.hex_regionalization import Regionalize
 from FISHscale.utils.fast_iteration import Iteration
 from FISHscale.utils.colors import ManyColors
+from FISHscale.utils.gene_correlation import GeneCorr
 from PyQt5 import QtWidgets
 import sys
 from datetime import datetime
@@ -19,7 +20,7 @@ import os
 from glob import glob
 from time import strftime
 
-class Dataset(regionalize, Iteration, ManyColors):
+class Dataset(Regionalize, Iteration, ManyColors, GeneCorr):
     """
     Base Class for FISHscale, still under development
 
@@ -511,6 +512,8 @@ class MultiDataset(ManyColors):
         self.check_unique_genes()    
 
     def override_color_dict(self) -> None:
+        """Set the color_dict of the sub-datasets the same as the MultiDataset.
+        """
         for d in self.datasets:
                 d.color_dict = self.color_dict
 
