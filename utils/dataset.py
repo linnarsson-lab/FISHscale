@@ -105,6 +105,8 @@ class Dataset(regionalize, Iteration):
 
         #Verbosity
         self.verbose = verbose
+        if self.verbose:
+            print('Loaded')
 
     def load_data(self, filename: str, x_label: str, y_label: str, gene_label: str, 
         other_columns: Optional[list]) -> Union[np.ndarray, np.ndarray, np.ndarray, Optional[np.ndarray]]:

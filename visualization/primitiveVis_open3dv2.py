@@ -247,7 +247,6 @@ class ListWidget(QWidget):
                             colors.append(cs)
 
             ps,cs = np.concatenate(points), np.concatenate(colors)
-            print(ps.shape)
             self.vis.pcd.points = o3d.utility.Vector3dVector(ps)
             self.vis.pcd.colors = o3d.utility.Vector3dVector(cs)
             self.vis.visM.update_geometry(self.vis.pcd)
