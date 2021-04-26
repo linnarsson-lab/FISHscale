@@ -6,7 +6,6 @@ import numpy as np
 import torch_geometric
 import torch
 from tqdm import tqdm
-from ogb.nodeproppred import PygNodePropPredDataset, Evaluator
 from torch_geometric.data import NeighborSampler
 from annoy import AnnoyIndex
 import random
@@ -14,6 +13,9 @@ from tqdm import trange
 import pickle
 import os
 import pytorch_lightning as pl
+from typing import Optional, List, NamedTuple
+from torch import Tensor
+from torch_sparse import SparseTensor
 
 def compute_library_size(data):
     sum_counts = data.sum(axis=1)
@@ -168,10 +170,26 @@ class GraphData(pl.LightningDataModule):
         self.test_loader = NeighborSampler(data.edge_index, sizes=self.ngh_sizes, batch_size=self.batch_size, shuffle=True,node_idx=self.indices_test,drop_last=True)
         self.validation_loader = NeighborSampler(data.edge_index, sizes=self.ngh_sizes, batch_size=self.batch_size ,shuffle=False,node_idx=self.indices_validation)
 
+
     def train_dataloader(self):
-        return self.train_loader
-    def val_dataloader(self):
-        return self.validation_loader
+        return NeighborSampler(self.dataset.edge_index, node_idx=self.indices_train,
+                               sizes=self.ngh_sizes, return_e_id=False,
+                               transform=self.convert_batch, batch_size=1024,
+                               shuffle=True, num_workers=6,
+                               persistent_workers=True)
+
+
+    def convert_batch(self, batch_size, n_id, adjs):
+        return Batch(
+            x=self.data.x[n_id],
+            y=self.data.y[n_id[:batch_size]],
+            adjs_t=[adj_t for adj_t, _, _ in adjs],
+        )
+    
+class Batch(NamedTuple):
+    x: Tensor
+    y: Tensor
+    adjs_t: List[SparseTensor]
         
 
     
