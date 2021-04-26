@@ -9,7 +9,9 @@ from PyQt5 import QtWidgets
 from PyQt5 import QtCore, QtGui 
 from PyQt5.QtGui import * 
 from PyQt5.QtCore import * 
-import sys 
+import sys
+
+from torch_geometric import data 
 try:
     import open3d as o3d
 except:
@@ -108,7 +110,9 @@ class Window:
                     else:
                         col = [(r()/255,r()/255,r()/255)]
                         self.color_dic[str(ca)] = col
-            ds.append((pd,dataframe.filename))
+
+            preloaded = {g:d for g,d in pd.groupby(dataframe.gene_label)}
+            ds.append((pd,dataframe.filename,preloaded))
 
         self.dataset = ds
 
@@ -123,17 +127,36 @@ class Visualizer:
         
         self.dic_pointclouds= dic_pointclouds
 
-        points, colors = [], []
-        for d,f in self.data: 
+        #points, colors = [], []
+        points,maxx,minx,maxy,miny= 0,0,0,0,0
+        for d,f,g in self.data: 
+            points+= d.shape[0]
+            Mx,mx = d.loc[:,[self.x_label]].values.max(),d.loc[:,[self.x_label]].values.max()
+            My,my = d.loc[:,[self.y_label]].values.max(),d.loc[:,[self.x_label]].values.max()
+            if Mx > maxx:
+                maxx = Mx
+            if mx < minx:
+                minx= mx
+
+            if My > maxy:
+                maxy = My
+            if my < miny:
+                miny= my
+
+            '''            
             ps = d.loc[:,[self.x_label,self.y_label,'z_label']].values
             gs = d.loc[:,[self.gene_label]].values
-            cs= np.array([self.color_dic[g[0]] for g in gs])
+            cs= np.array([self.color_dic[g[0]] for g in gs])'''
 
-            points.append(ps)
-            colors.append(cs)
+            #points.append(ps)
+            #colors.append(cs)
 
-        self.allgenes = np.concatenate(points)
-        self.allcolors = np.concatenate(colors)[:,0,:]
+        x= np.random.random_integers(int(minx),int(maxx),points)
+        y = np.random.random_integers(int(miny),int(maxy),points)
+        z = np.zeros(points)
+
+        self.allgenes = np.stack([x,y,z]).T
+        self.allcolors = np.ones([points,3])*0.5#np.concatenate(colors)[:,0,:]
 
         self.pcd = o3d.geometry.PointCloud()
         self.pcd.points = o3d.utility.Vector3dVector(self.allgenes)
@@ -209,9 +232,13 @@ class ListWidget(QWidget):
         if self.section != 'File':
             points,colors = [],[]
         
-            for d,f in self.vis.data:
+            for d,f,grpg in self.vis.data:
                 if f in self.tissue_selected:
-                    for g, d in d.groupby(self.section):
+                    if self.selected == self.vis.gene_label:
+                        grpg = grpg
+                    else:
+                        grpg = d.groupby(self.section)
+                    for g, d in grpg:
                         if str(g) in self.selected:
                             g= str(g)
                             ps = d.loc[:,[self.vis.x_label,self.vis.y_label,'z_label']].values
@@ -220,7 +247,7 @@ class ListWidget(QWidget):
                             colors.append(cs)
 
             ps,cs = np.concatenate(points), np.concatenate(colors)
-
+            print(ps.shape)
             self.vis.pcd.points = o3d.utility.Vector3dVector(ps)
             self.vis.pcd.colors = o3d.utility.Vector3dVector(cs)
             self.vis.visM.update_geometry(self.vis.pcd)
