@@ -7,6 +7,7 @@ import torch_geometric
 import torch
 from tqdm import tqdm
 from torch_geometric.data import NeighborSampler
+from torch_geometric.data import Data
 from annoy import AnnoyIndex
 import random
 from tqdm import trange
@@ -16,6 +17,7 @@ import pytorch_lightning as pl
 from typing import Optional, List, NamedTuple
 from torch import Tensor
 from torch_sparse import SparseTensor
+from torch_cluster import random_walk
 
 def compute_library_size(data):
     sum_counts = data.sum(axis=1)
@@ -161,7 +163,7 @@ class GraphData(pl.LightningDataModule):
     def load_dataset(self):
         print('Loading dataset...')
         self.edges_tensor = torch.tensor(np.array(list(self.G.edges)).T)
-        self.dataset = torch_geometric.data.Data(torch.tensor(self.data.T,dtype=torch.float32),edge_index=self.edges_tensor)
+        self.dataset = Data(torch.tensor(self.data.T,dtype=torch.float32),edge_index=self.edges_tensor)
 
     def load_trainers(self):
         print('Load trainers...')
@@ -174,21 +176,53 @@ class GraphData(pl.LightningDataModule):
     def train_dataloader(self):
         return NeighborSampler(self.dataset.edge_index, node_idx=self.indices_train,
                                sizes=self.ngh_sizes, return_e_id=False,
-                               transform=self.convert_batch, batch_size=1024,
-                               shuffle=True, num_workers=6,
+                               transform=self.convert_batch, batch_size=self.batch_size,
+                               shuffle=True, num_workers=1,
                                persistent_workers=True)
 
 
     def convert_batch(self, batch_size, n_id, adjs):
         return Batch(
-            x=self.data.x[n_id],
-            y=self.data.y[n_id[:batch_size]],
-            adjs_t=[adj_t for adj_t, _, _ in adjs],
+            x=self.dataset.x[n_id],
+            pos=self.dataset.x[self.sample_pos(n_id,self.train_loader)],
+            neg=self.dataset.x[self.sample_pos(n_id,self.train_loader)],
+            adjs_t=adjs,
         )
+
+    def sample_pos(self, batch,trainer):
+        batch = torch.tensor(batch)
+        row, col, _ = trainer.adj_t.coo()
+
+        # For each node in `batch`, we sample a direct neighbor (as positive
+        # example) and a random node (as negative example):
+        pos_batch = random_walk(row, col, batch, walk_length=1,
+                                coalesced=False)[:, 1]
+
+        neg_batch = torch.randint(0, trainer.adj_t.size(1), (batch.numel(), ),
+                                dtype=torch.long)
+
+        return neg_batch
+
+
+    def sample_neg(self, batch,trainer):
+        batch = torch.tensor(batch)
+        row, col, _ = trainer.adj_t.coo()
+
+        # For each node in `batch`, we sample a direct neighbor (as positive
+        # example) and a random node (as negative example):
+        pos_batch = random_walk(row, col, batch, walk_length=1,
+                                coalesced=False)[:, 1]
+
+        neg_batch = torch.randint(0, trainer.adj_t.size(1), (batch.numel(), ),
+                                dtype=torch.long)
+
+        return neg_batch
+
     
 class Batch(NamedTuple):
     x: Tensor
-    y: Tensor
+    pos: Tensor
+    neg: Tensor
     adjs_t: List[SparseTensor]
         
 
