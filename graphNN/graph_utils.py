@@ -167,13 +167,8 @@ class GraphData(pl.LightningDataModule):
     def load_trainers(self):
         print('Load trainers...')
         data = self.dataset
-<<<<<<< HEAD
-        self.train_loader = NeighborSampler(data.edge_index, sizes=self.ngh_sizes, batch_size=self.batch_size, shuffle=True,node_idx=self.indices_train,drop_last=True,num_workers=1)
-        self.test_loader = NeighborSampler(data.edge_index, sizes=self.ngh_sizes, batch_size=self.batch_size, shuffle=True,node_idx=self.indices_test,drop_last=True,num_workers=1)
-=======
         self.train_loader = NeighborSampler(data.edge_index, sizes=self.ngh_sizes, batch_size=self.batch_size, shuffle=True,node_idx=self.indices_train,drop_last=True,num_workers=self.num_workers)
         self.test_loader = NeighborSampler(data.edge_index, sizes=self.ngh_sizes, batch_size=self.batch_size, shuffle=True,node_idx=self.indices_test,drop_last=True)
->>>>>>> 7106efd3aae17844f47d8fce21ba1adc942463d1
         self.validation_loader = NeighborSampler(data.edge_index, sizes=self.ngh_sizes, batch_size=self.batch_size ,shuffle=False,node_idx=self.indices_validation)
 
 
