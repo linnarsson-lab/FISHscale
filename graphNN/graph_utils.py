@@ -165,6 +165,10 @@ class GraphData:
         self.test_loader = NeighborSampler(data.edge_index, sizes=self.ngh_sizes, batch_size=self.batch_size, shuffle=True,node_idx=self.indices_test,drop_last=True,num_workers=1)
         self.validation_loader = NeighborSampler(data.edge_index, sizes=self.ngh_sizes, batch_size=self.batch_size ,shuffle=False,node_idx=self.indices_validation)
 
+    def train_dataloader(self):
+        return self.train_loader
+    def val_dataloader(self):
+        return self.validation_loader
         
 
 
