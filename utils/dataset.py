@@ -3,9 +3,10 @@ import pandas as pd
 from FISHscale import Window
 #from FISHscale.utils.hex_bin import HexBin
 from FISHscale.utils.hex_regionalization import Regionalize
-from FISHscale.utils.fast_iteration import Iteration
+from FISHscale.utils.fast_iteration import Iteration, MultiIteration
 from FISHscale.utils.colors import ManyColors
 from FISHscale.utils.gene_correlation import GeneCorr
+from FISHscale.visualization.gene_scatter import GeneScatter, MultiGeneScatter
 from PyQt5 import QtWidgets
 import sys
 from datetime import datetime
@@ -19,8 +20,10 @@ from pint import UnitRegistry
 import os
 from glob import glob
 from time import strftime
+from math import ceil
+from multiprocessing import cpu_count
 
-class Dataset(Regionalize, Iteration, ManyColors, GeneCorr):
+class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter):
     """
     Base Class for FISHscale, still under development
 
@@ -192,6 +195,26 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr):
             self.y += self.y_offset
             self.z += self.z_offset
 
+        self._set_coordinate_properties()
+
+    def _set_coordinate_properties(self):
+        """Calculate properties of coordinates.
+
+        Calculates XY min, max, extend and center of the points. 
+        """
+        self.x_min = self.x.min()
+        self.y_min = self.y.min()
+        self.x_max = self.x.max()
+        self.y_max = self.y.max()
+        self.x_extend = self.x_max - self.x_min
+        self.y_extend = self.y_max - self.y_min 
+        self.xy_center = (self.x_max - 0.5*self.x_extend, self.y_max - 0.5*self.y_extend)
+
+    def transpose(self):
+        """Transpose data. Switches X and Y.
+        """
+        self.x, self.y = self.y, self.x
+        self._set_coordinate_properties()
 
     def visualize(self,columns=[],width=2000,height=2000,show_axis=False,color_dic=None):
         """
@@ -235,7 +258,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr):
         c =Counter(clustering.labels_)
         bg = [x for x in c if c[x] > cutoff]
         self.labels =  np.array([-1 if x in bg else x for x in clustering.labels_]) 
-        print('Bockground molecules: {}'.format((self.labels == -1).sum()))
+        print('Background molecules: {}'.format((self.labels == -1).sum()))
         print('DBscan found {} clusters'.format(self.labels.max()))
         
     def make_molecules_df(self):
@@ -308,7 +331,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr):
             print('Loom File Created')
     
 
-class MultiDataset(ManyColors):
+class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter):
     """Load multiple datasets as Dataset objects.
     """
 
@@ -318,6 +341,7 @@ class MultiDataset(ManyColors):
         MultiDataset_name: Optional[str] = None,
         color_input: Optional[Union[str, dict]] = None,
         verbose: bool = False,
+        n_cores: int = None,
 
         #If loading from files define:
         x_label: str = 'r_px_microscope_stitched',
@@ -342,10 +366,10 @@ class MultiDataset(ManyColors):
                 Defaults to None.
             MultiDataset_name (Optional[str], optional): Name of multi-dataset.
                 This is used to store multi-dataset specific parameters, such
-                as gene colors. If "None" will use a timestamp.
+                as gene colors. If `None` will use a timestamp.
                 Defaults to None.
             color_input (Optional[str, dict], optional): If a filename is 
-                specifiedthat endswith "_color_dictionary.pkl" the function 
+                specified that endswith `_color_dictionary.pkl` the function 
                 will try to load that dictionary. If "auto" is provided it will
                 try to load an previously generated color dictionary for this 
                 MultiDataset, identified by MultiDataset_name. 
@@ -355,8 +379,11 @@ class MultiDataset(ManyColors):
                 first try to load a previously generated color dictionary and 
                 make a new one if this fails. Defaults to None.
             verbose (bool, optional): If True prints additional output.
+            n_cores (int, optional): Number of cores to use by default for 
+                parallel jobs. If `None` defaults to all cpu cores. Defaults to
+                None.
 
-            #Below input only needed if "data" is a path to files. 
+            #Below input only needed if `data` is a path to files. 
             x_label (str, optional): Name of the column of the Pandas dataframe
                 that contains the X coordinates of the points. Defaults to 
                 'r_px_microscope_stitched'.
@@ -382,9 +409,11 @@ class MultiDataset(ManyColors):
             apply_offset (bool, optional): Offsets the coordinates of the 
                 points with the provided x and y offsets. Defaults to False.
         """
-
+        #Parameters
         self.verbose =verbose
         self.index=0
+        self.cpu_count = cpu_count()
+        self.ureg = UnitRegistry()
 
         #Name
         if MultiDataset_name == None:
@@ -527,8 +556,40 @@ class MultiDataset(ManyColors):
         all_ug = [d.unique_genes for d in self.datasets]
         if not np.all(all_ug == all_ug[0]):
             raise Exception('Gene lists are not identical for all datasets.')
-        
-    #Fix color 
+
+    def arange_grid_offset(self, orderby: str='z'):
+
+        max_x_extend = max([d.x_extend for d in self.datasets])
+        max_y_extend = max([d.y_extend for d in self.datasets])
+        n_datasets = len(self.datasets)
+        grid_size = ceil(np.sqrt(n_datasets))
+        x_extend = (grid_size - 1) * max_x_extend
+        y_extend = (grid_size - 1) * max_y_extend
+        x_spacing = np.linspace(-0.5 * x_extend, 0.5* x_extend, grid_size)
+        y_spacing = np.linspace(-0.5 * y_extend, 0.5* y_extend, grid_size)
+        x, y = np.meshgrid(x_spacing, y_spacing)
+        x, y = x.ravel(), y.ravel()
+
+        if orderby == 'z':
+            sorted = np.argsort([d.z for d in self.datasets])
+        elif orderby == 'name':
+            sorted = np.argsort([d.dataset_name for d in self.datasets])
+        elif orderby == 'x':
+            sorted = np.argsort([d.x_extend for d in self.datasets])
+        elif orderby == 'y':
+            sorted = np.argsort([d.y_extend for d in self.datasets])
+        else:
+            raise Exception(f'"Orderby" key not understood: {orderby}')
+
+        for i, s in enumerate(sorted):
+            offset_x = x[i]
+            offset_y = y[i]
+            dataset_center = self.datasets[s].xy_center
+            offset_x = offset_x - dataset_center[0]
+            offset_y = offset_y - dataset_center[1]
+            self.datasets[s].offset_data(offset_x, offset_y, 0, apply=True)
+
+    #Fix color, genes
     def visualize(self, columns=[], width=2000, height=2000, show_axis=False):
         """
         Run open3d visualization on self.data
