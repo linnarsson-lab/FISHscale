@@ -68,10 +68,7 @@ class SAGE(pl.LightningModule):
         return optimizer
 
     def training_step(self, batch, batch_idx):
-
-
         x,pos,neg,adjs= batch
-
 
         loss= self(x,pos,neg,adjs)
         self.log('train_loss', loss)
