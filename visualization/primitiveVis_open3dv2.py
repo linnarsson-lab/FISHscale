@@ -1,21 +1,24 @@
 import sys
-from PyQt5.QtWidgets import (QPushButton, QDialog, QTreeWidget,
-                             QTreeWidgetItem, QVBoxLayout,
-                             QHBoxLayout, QFrame, QLabel,
-                             QApplication,QListWidget,QScrollBar)
+try:
+    from PyQt5.QtWidgets import (QPushButton, QDialog, QTreeWidget,
+                                QTreeWidgetItem, QVBoxLayout,
+                                QHBoxLayout, QFrame, QLabel,
+                                QApplication,QListWidget,QScrollBar)
 
-from PyQt5.QtWidgets import * 
-from PyQt5 import QtWidgets
-from PyQt5 import QtCore, QtGui 
-from PyQt5.QtGui import * 
-from PyQt5.QtCore import * 
+    from PyQt5.QtWidgets import * 
+    from PyQt5 import QtWidgets
+    from PyQt5 import QtCore, QtGui 
+    from PyQt5.QtGui import * 
+    from PyQt5.QtCore import * 
+except:
+    print('Import Error: PyQt5')
 import sys
 
 from torch_geometric import data 
 try:
     import open3d as o3d
 except:
-    pass
+    print('Import Error: open3d')
 import pandas as pd
 import numpy as np
 import random
