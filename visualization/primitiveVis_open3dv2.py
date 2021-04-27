@@ -1,17 +1,15 @@
 import sys
-try:
-    from PyQt5.QtWidgets import (QPushButton, QDialog, QTreeWidget,
-                                QTreeWidgetItem, QVBoxLayout,
-                                QHBoxLayout, QFrame, QLabel,
-                                QApplication,QListWidget,QScrollBar)
 
-    from PyQt5.QtWidgets import * 
-    from PyQt5 import QtWidgets
-    from PyQt5 import QtCore, QtGui 
-    from PyQt5.QtGui import * 
-    from PyQt5.QtCore import * 
-except:
-    print('Import Error: PyQt5')
+from PyQt5.QtWidgets import (QPushButton, QDialog, QTreeWidget,
+                            QTreeWidgetItem, QVBoxLayout,
+                            QHBoxLayout, QFrame, QLabel,
+                            QApplication,QListWidget,QScrollBar)
+
+from PyQt5.QtWidgets import * 
+from PyQt5 import QtWidgets
+from PyQt5 import QtCore, QtGui 
+from PyQt5.QtGui import * 
+from PyQt5.QtCore import * 
 import sys
 
 from torch_geometric import data 
