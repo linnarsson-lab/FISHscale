@@ -13,7 +13,6 @@ __pycache__/
 *.egg-info
 
 #ipynb
-*.ipynb
 *.ipynb_checkpoints
 
 *.DS_Store
@@ -21,4 +20,3 @@ utils/__pycache__/
 **/__pycache__/
 **/.DS_Store
 FISHscale.code-workspace
-example_notebooks

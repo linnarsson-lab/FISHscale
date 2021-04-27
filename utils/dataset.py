@@ -124,6 +124,10 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter):
 
         #Handle colors
         self.auto_handle_color_dict(color_input)
+        #Verbosity
+        self.verbose = verbose
+        if self.verbose:
+            print('Loaded')
 
     def load_data(self, filename: str, x_label: str, y_label: str, gene_label: str, 
         other_columns: Optional[list]) -> Union[np.ndarray, np.ndarray, np.ndarray, Optional[np.ndarray]]:
@@ -162,7 +166,9 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter):
         y = data.loc[:, y_label].to_numpy()
         genes = data.loc[:, gene_label].to_numpy()
         if other_columns != None:
-            other = data.loc[:, other_columns]
+            for o in other_columns:
+                other = data.loc[:, o].values
+                setattr(self,o,other)
         else:
             other = None
 
@@ -217,6 +223,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter):
         self._set_coordinate_properties()
 
     def visualize(self,columns=[],width=2000,height=2000,show_axis=False,color_dic=None):
+    def visualize(self,columns:list=[],width=2000,height=2000,show_axis=False,color_dic=None):
         """
         Run open3d visualization on self.data
         Pass to columns a list of strings, each string will be the class of the dots to be colored by. example: color by gene
@@ -235,9 +242,12 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter):
         else:
             print('QApplication instance already exists: %s' % str(App))
 
-        window = Window(self,[self.gene_label]+columns,width,height,color_dic) 
+        window = Window(self,columns,width,height,color_dic) 
         App.exec_()
         App.quit()
+
+
+
 
     def DBsegment(self,eps=25,min_samples=5,cutoff=250):
         """
@@ -589,8 +599,8 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter):
             offset_y = offset_y - dataset_center[1]
             self.datasets[s].offset_data(offset_x, offset_y, 0, apply=True)
 
-    #Fix color, genes
-    def visualize(self, columns=[], width=2000, height=2000, show_axis=False):
+
+    def visualize(self,columns:list=[],width=2000,height=2000,show_axis=False,color_dic=None):
         """
         Run open3d visualization on self.data
         Pass to columns a list of strings, each string will be the class of the dots to be colored by. example: color by gene
@@ -608,9 +618,10 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter):
         else:
             print('QApplication instance already exists: %s' % str(App))
 
-        window = Window(self,[self.gene_label]+columns,width,height, self.color_dict) 
+        window = Window(self,columns,width,height,color_dic) 
         App.exec_()
         App.quit()
+  
 
 
 

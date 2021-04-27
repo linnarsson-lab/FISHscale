@@ -26,6 +26,11 @@ class Iteration:
             data = grouped.get_group(g)
             yield g, data.loc[:, self.x_label].to_numpy(), data.loc[:, self.y_label].to_numpy()
 
+    def make_pandas(self):
+
+        pandas_df = pd.DataFrame(data = np.column_stack([self.x, self.y, self.gene]), columns = [self.x_label, self.y_label, self.gene_label])
+        return pandas_df
+
 
     @lru_cache(maxsize=None) #Change to functools.cache when supporting python >= 3.9
     def make_gene_coordinates(self) -> None:
