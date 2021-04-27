@@ -102,21 +102,6 @@ class TrainerGNN:
 
         return batch,pos_batch,neg_batch
 
-
-    '''@torch.no_grad()
-    def test(self):
-        self.model.eval()
-        out = self.model.full_forward(self.x, self.edge_index).cpu()
-
-        clf = LogisticRegression()
-        clf.fit(out[data.train_mask], data.y[data.train_mask])
-
-        val_acc = clf.score(out[data.val_mask], data.y[data.val_mask])
-        test_acc = clf.score(out[data.test_mask], data.y[data.test_mask])
-
-        return val_acc, test_acc
-    '''
-
     def train(self):
         for epoch in trange(1, self.n_epochs+1):
             loss,rcl,nl = self.train_step()
