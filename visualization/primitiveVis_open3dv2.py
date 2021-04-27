@@ -51,11 +51,15 @@ class Window:
         # setting title 
         if str(self.dataset.__class__) == str(FISHscale.utils.dataset.Dataset):
             print('Single Dataset')
+            self.gene_label,self.x_label,self.y_label,self.unique_genes = self.dataset.gene_label,self.dataset.x_label, self.dataset.y_label,self.dataset.unique_genes
             self.dataset = [dataset]
-            self.offset = np.array([self.dataset.x_offset, self.dataset.y_offset, self.dataset.z_offset])
-            self.color_dic = color_dic
-            self.dic_pointclouds ={self.dataset.gene_label:self.pass_data()}
-            self.dic_pointclouds['File'] = [str(self.dataset.filename)]
+
+            self.dic_pointclouds ={self.gene_label:self.unique_genes}
+            self.dic_pointclouds['File'] = []
+            for x in self.dataset:
+                self.dic_pointclouds['File'].append(str(x.filename))
+
+            self.pass_multi_data()
             print('Data Loaded')
 
         elif str(self.dataset.__class__) == str(FISHscale.utils.dataset.MultiDataset):
@@ -156,7 +160,7 @@ class Visualizer:
         z = np.zeros(points)
 
         self.allgenes = np.stack([x,y,z]).T
-        self.allcolors = np.ones([points,3])*0.5#np.concatenate(colors)[:,0,:]
+        self.allcolors = np.ones([points,3])*0#np.concatenate(colors)[:,0,:]
 
         self.pcd = o3d.geometry.PointCloud()
         self.pcd.points = o3d.utility.Vector3dVector(self.allgenes)
@@ -223,7 +227,8 @@ class ListWidget(QWidget):
                 pass
             self.list_widget.addItem(i)
         # adding items to the list widget '''
-        
+    
+    #@functools.lru_cache
     def selectionChanged(self):
         self.selected = [i.text() for i in self.list_widget.selectedItems()]
         if self.selected[0] in self.vis.dic_pointclouds['File'] and self.section == 'File':

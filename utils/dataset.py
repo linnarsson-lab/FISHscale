@@ -180,8 +180,7 @@ class Dataset(regionalize, Iteration):
             self.y += self.y_offset
             self.z += self.z_offset
 
-
-    def visualize(self,columns=[],width=2000,height=2000,show_axis=False,color_dic=None):
+    def visualize(self,columns:list=[],width=2000,height=2000,show_axis=False,color_dic=None):
         """
         Run open3d visualization on self.data
         Pass to columns a list of strings, each string will be the class of the dots to be colored by. example: color by gene
@@ -200,9 +199,12 @@ class Dataset(regionalize, Iteration):
         else:
             print('QApplication instance already exists: %s' % str(App))
 
-        window = Window(self,[self.gene_label]+columns,width,height,color_dic) 
+        window = Window(self,columns,width,height,color_dic) 
         App.exec_()
         App.quit()
+
+
+
 
     def DBsegment(self,eps=25,min_samples=5,cutoff=250):
         """
