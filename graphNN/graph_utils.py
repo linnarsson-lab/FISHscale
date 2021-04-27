@@ -42,6 +42,7 @@ class GraphData(pl.LightningDataModule):
         ngh_sizes = [5, 10],
         train_p = 0.75,
         batch_size= 128,
+        num_workers=1
         ):
 
         self.ngh_sizes = ngh_sizes
@@ -53,6 +54,7 @@ class GraphData(pl.LightningDataModule):
         self.minimum_nodes_connected = minimum_nodes_connected
         self.train_p = train_p
         self.batch_size = batch_size
+        self.num_workers = num_workers
 
         self.local_mean,self.local_var = compute_library_size(self.data.T)
 
@@ -165,8 +167,13 @@ class GraphData(pl.LightningDataModule):
     def load_trainers(self):
         print('Load trainers...')
         data = self.dataset
+<<<<<<< HEAD
         self.train_loader = NeighborSampler(data.edge_index, sizes=self.ngh_sizes, batch_size=self.batch_size, shuffle=True,node_idx=self.indices_train,drop_last=True,num_workers=1)
         self.test_loader = NeighborSampler(data.edge_index, sizes=self.ngh_sizes, batch_size=self.batch_size, shuffle=True,node_idx=self.indices_test,drop_last=True,num_workers=1)
+=======
+        self.train_loader = NeighborSampler(data.edge_index, sizes=self.ngh_sizes, batch_size=self.batch_size, shuffle=True,node_idx=self.indices_train,drop_last=True,num_workers=self.num_workers)
+        self.test_loader = NeighborSampler(data.edge_index, sizes=self.ngh_sizes, batch_size=self.batch_size, shuffle=True,node_idx=self.indices_test,drop_last=True)
+>>>>>>> 7106efd3aae17844f47d8fce21ba1adc942463d1
         self.validation_loader = NeighborSampler(data.edge_index, sizes=self.ngh_sizes, batch_size=self.batch_size ,shuffle=False,node_idx=self.indices_validation)
 
 
@@ -195,21 +202,11 @@ class GraphData(pl.LightningDataModule):
         pos_batch = random_walk(row, col, batch, walk_length=1,
                                 coalesced=False)[:, 1]
 
-        neg_batch = torch.randint(0, trainer.adj_t.size(1), (batch.numel(), ),
-                                dtype=torch.long)
-
-        return neg_batch
+        return pos_batch
 
 
     def sample_neg(self, batch,trainer):
         batch = torch.tensor(batch)
-        row, col, _ = trainer.adj_t.coo()
-
-        # For each node in `batch`, we sample a direct neighbor (as positive
-        # example) and a random node (as negative example):
-        pos_batch = random_walk(row, col, batch, walk_length=1,
-                                coalesced=False)[:, 1]
-
         neg_batch = torch.randint(0, trainer.adj_t.size(1), (batch.numel(), ),
                                 dtype=torch.long)
 
