@@ -229,7 +229,7 @@ class ListWidget(QWidget):
             self.list_widget.addItem(i)
         # adding items to the list widget '''
     
-    #@functools.lru_cache
+
     def selectionChanged(self):
         self.selected = [i.text() for i in self.list_widget.selectedItems()]
         if self.selected[0] in self.vis.dic_pointclouds['File'] and self.section == 'File':
