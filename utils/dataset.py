@@ -420,6 +420,7 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter):
                 points with the provided x and y offsets. Defaults to False.
         """
         #Parameters
+        self.gene_label, self.x_label, self.y_label= gene_label,x_label,y_label
         self.verbose =verbose
         self.index=0
         self.cpu_count = cpu_count()
