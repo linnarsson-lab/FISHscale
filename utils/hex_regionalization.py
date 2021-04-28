@@ -18,7 +18,7 @@ from FISHscale.utils.inside_polygon import inside_multi_polygons
 #Mypy types
 from typing import Tuple, Union, Any, List
 
-class regionalize(Iteration):
+class Regionalize(Iteration):
     """Class for regionalization of multidimensional 2D point data.
 
     """
@@ -75,7 +75,7 @@ class regionalize(Iteration):
             for arg in args:
                 print('    ' + arg)
 
-    def make_hexbin(self, spacing: float, min_count: int) -> Tuple[pd.DataFrame, np.ndarray, Any]:
+    def make_hexbin(self, spacing: float, min_count: int) -> Tuple[Any, np.ndarray, Any]:
         """
         Bin 2D point data with hexagonal bins.
 
@@ -93,8 +93,8 @@ class regionalize(Iteration):
         Returns:
             Tuple[pd.DataFrame, np.ndarray, plt.Path]: 
             Pandas Dataframe with counts for each valid tile.
-            Numpy Array with controid coordinates for the tiles.
-            Matplotlib path object for a single polygon
+            Numpy Array with centroid coordinates for the tiles.
+            Matplotlib path object for a single hexagon.
 
         """
         #Get number of genes
