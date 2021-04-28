@@ -222,7 +222,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter):
         self.x, self.y = self.y, self.x
         self._set_coordinate_properties()
 
-    def visualize(self,columns=[],width=2000,height=2000,show_axis=False,color_dic=None):
+
     def visualize(self,columns:list=[],width=2000,height=2000,show_axis=False,color_dic=None):
         """
         Run open3d visualization on self.data
