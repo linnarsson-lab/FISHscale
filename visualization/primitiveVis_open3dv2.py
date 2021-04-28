@@ -237,7 +237,7 @@ class ListWidget(QWidget):
         
         if self.section != 'File':
             points,colors = [],[]
-        
+
             for d,f,grpg in self.vis.data:
                 if f in self.tissue_selected:
                     if self.selected == self.vis.gene_label:
@@ -246,9 +246,11 @@ class ListWidget(QWidget):
                         grpg = d.groupby(self.section)
                     for g, d in grpg:
                         if str(g) in self.selected:
+
                             g= str(g)
                             ps = d.loc[:,[self.vis.x_label,self.vis.y_label,'z_label']].values
-                            cs= np.array([self.vis.color_dic[g] for i in range(ps.shape[0])])[:,0,:]
+                            cs= np.array([self.vis.color_dic[g] *(ps.shape[0])])[0,:,:]
+                            
                             points.append(ps)
                             colors.append(cs)
 
