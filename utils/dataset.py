@@ -222,7 +222,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter):
         self.x, self.y = self.y, self.x
         self._set_coordinate_properties()
 
-    def visualize(self,columns=[],width=2000,height=2000,show_axis=False,color_dic=None):
+
     def visualize(self,columns:list=[],width=2000,height=2000,show_axis=False,color_dic=None):
         """
         Run open3d visualization on self.data
@@ -420,6 +420,7 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter):
                 points with the provided x and y offsets. Defaults to False.
         """
         #Parameters
+        self.gene_label, self.x_label, self.y_label= gene_label,x_label,y_label
         self.verbose =verbose
         self.index=0
         self.cpu_count = cpu_count()
