@@ -114,7 +114,7 @@ class GraphData(pl.LightningDataModule):
                     # 100 sets the number of neighbors to find for each node
                     #  it is set to 100 since we usually will compute neighbors
                     #  [20,10]
-                    nghs = t.get_nns_by_item(i, 100)
+                    nghs = t.get_nns_by_item(i, self.ngh_sizes[0])
                     pair = find_pairs(i,nghs,u,distance)
                     res += pair
                 return res
@@ -179,15 +179,13 @@ class GraphData(pl.LightningDataModule):
         return NeighborSampler(self.dataset.edge_index, node_idx=self.indices_train,
                                sizes=self.ngh_sizes, return_e_id=False,
                                transform=self.convert_batch, batch_size=self.batch_size,
-                               shuffle=True, num_workers=1,
-                               persistent_workers=True)
+                               shuffle=True, num_workers=self.num_workers)
 
     def validation_dataloader(self):
         return NeighborSampler(self.dataset.edge_index, node_idx=self.indices_validation,
                                sizes=self.ngh_sizes, return_e_id=False,
                                transform=self.convert_batch, batch_size=self.batch_size,
-                               shuffle=True, num_workers=1,
-                               persistent_workers=True)
+                               shuffle=False)
 
 
     def convert_batch(self, batch_size, n_id, adjs):

@@ -175,8 +175,10 @@ class Visualizer:
         opt.background_color = np.asarray([0, 0, 0])
     
     def execute(self):
-        self.visM.run()
-        self.visM.destroy_window()
+        #self.visM.run()
+        #self.visM.destroy_window()
+        self.visM.poll_events()
+        self.visM.update_renderer()
 
 class SectionExpandButton(QPushButton):
     """a QPushbutton that can expand or collapse its section
