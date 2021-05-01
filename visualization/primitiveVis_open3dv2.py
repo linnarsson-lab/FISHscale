@@ -91,7 +91,13 @@ class Window:
             else:
                 l.list_widget.itemSelectionChanged.connect(l.selectionChanged)
 
-        self.vis.execute()
+        self.collapse.qbutton.clicked.connect(self.collapse.quit)
+
+        while self.collapse.break_loop == False:
+            self.vis.execute()
+
+
+        #self.vis.destroy_window()
 
     #@functools.lru_cache
     def pass_multi_data(self):
@@ -180,6 +186,11 @@ class Visualizer:
         self.visM.poll_events()
         self.visM.update_renderer()
 
+    def close(self):
+        self.visM.destroy_window()
+    
+
+
 class SectionExpandButton(QPushButton):
     """a QPushbutton that can expand or collapse its section
     """
@@ -221,7 +232,6 @@ class ListWidget(QWidget):
     def add_items(self):
         for e in self.subdic:
             i = QListWidgetItem(str(e)) 
- 
             try:
                 c = self.vis.color_dic[e]
                 i.setBackground(QColor(c[0][0]*255,c[0][1]*255,c[0][2]*255,120))
@@ -272,8 +282,6 @@ class CollapsibleDialog(QDialog):
     def __init__(self,dic,vis):
         super().__init__()
         self.tree = QTreeWidget()
-        #self.tree.setSelectionMode(QtWidgets.QAbstractItemView.MultiSelection)
-
         self.tree.setHeaderHidden(True)
         self.vis = vis
         layout = QVBoxLayout()
@@ -282,14 +290,22 @@ class CollapsibleDialog(QDialog):
         self.setGeometry(100, 100, 200, 800) 
         self.tree.setIndentation(0)
         self.dic = dic
-        
         self.widget_lists = []
         self.sections = {}
+        self.break_loop = False
 
         for x in self.dic:
-            self.define_section(x)
-            
+            self.define_section(x)  
         self.add_sections()
+
+        self.qbutton = QPushButton('Quit Visualizer')
+        layout.addWidget(self.qbutton)
+
+
+    def quit(self):
+        self.vis.close()
+        self.break_loop = True
+        
 
     def possible(self):
         for x in self.widget_lists:
