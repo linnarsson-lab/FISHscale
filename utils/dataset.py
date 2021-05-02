@@ -620,8 +620,11 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter):
             print('QApplication instance already exists: %s' % str(App))
 
         window = Window(self,columns,width,height,color_dic) 
+        
         App.exec_()
         App.quit()
+
+        
   
 
 

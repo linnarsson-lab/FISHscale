@@ -24,7 +24,7 @@ class SAGE(pl.LightningModule):
         in_channels :int, 
         hidden_channels:int,
         num_layers,
-        batch_size,
+
         ):
 
         super().__init__()
@@ -36,7 +36,6 @@ class SAGE(pl.LightningModule):
             in_channels = in_channels if i == 0 else hidden_channels
             self.convs.append(SAGEConv(in_channels, hidden_channels))
             
-        self.batch_size= batch_size
 
     def neighborhood_forward(self,x,adjs):
         x = torch.log(x + 1)

@@ -102,7 +102,13 @@ class Window:
             else:
                 l.list_widget.itemSelectionChanged.connect(l.selectionChanged)
 
-        self.vis.execute()
+        self.collapse.qbutton.clicked.connect(self.collapse.quit)
+
+        while self.collapse.break_loop == False:
+            self.vis.execute()
+
+
+        #self.vis.destroy_window()
 
     #@functools.lru_cache
     def pass_multi_data(self):
@@ -186,8 +192,15 @@ class Visualizer:
         opt.background_color = np.asarray([0, 0, 0])
     
     def execute(self):
-        self.visM.run()
+        #self.visM.run()
+        #self.visM.destroy_window()
+        self.visM.poll_events()
+        self.visM.update_renderer()
+
+    def close(self):
         self.visM.destroy_window()
+    
+
 
 class SectionExpandButton(QPushButton):
     """a QPushbutton that can expand or collapse its section
@@ -230,7 +243,6 @@ class ListWidget(QWidget):
     def add_items(self):
         for e in self.subdic:
             i = QListWidgetItem(str(e)) 
- 
             try:
                 c = self.vis.color_dic[e]
                 i.setBackground(QColor(c[0][0]*255,c[0][1]*255,c[0][2]*255,120))
@@ -240,7 +252,7 @@ class ListWidget(QWidget):
             self.list_widget.addItem(i)
         # adding items to the list widget '''
     
-    #@functools.lru_cache
+
     def selectionChanged(self):
         self.selected = [i.text() for i in self.list_widget.selectedItems()]
         if self.selected[0] in self.vis.dic_pointclouds['File'] and self.section == 'File':
@@ -248,7 +260,7 @@ class ListWidget(QWidget):
         
         if self.section != 'File':
             points,colors = [],[]
-        
+
             for d,f,grpg in self.vis.data:
                 if f in self.tissue_selected:
                     if self.selected == self.vis.gene_label:
@@ -257,9 +269,11 @@ class ListWidget(QWidget):
                         grpg = d.groupby(self.section)
                     for g, d in grpg:
                         if str(g) in self.selected:
+
                             g= str(g)
                             ps = d.loc[:,[self.vis.x_label,self.vis.y_label,'z_label']].values
-                            cs= np.array([self.vis.color_dic[g] for i in range(ps.shape[0])])[:,0,:]
+                            cs= np.array([self.vis.color_dic[g] *(ps.shape[0])])[0,:,:]
+                            
                             points.append(ps)
                             colors.append(cs)
 
@@ -279,8 +293,6 @@ class CollapsibleDialog(QDialog):
     def __init__(self,dic,vis):
         super().__init__()
         self.tree = QTreeWidget()
-        #self.tree.setSelectionMode(QtWidgets.QAbstractItemView.MultiSelection)
-
         self.tree.setHeaderHidden(True)
         self.vis = vis
         layout = QVBoxLayout()
@@ -289,14 +301,22 @@ class CollapsibleDialog(QDialog):
         self.setGeometry(100, 100, 200, 800) 
         self.tree.setIndentation(0)
         self.dic = dic
-        
         self.widget_lists = []
         self.sections = {}
+        self.break_loop = False
 
         for x in self.dic:
-            self.define_section(x)
-            
+            self.define_section(x)  
         self.add_sections()
+
+        self.qbutton = QPushButton('Quit Visualizer')
+        layout.addWidget(self.qbutton)
+
+
+    def quit(self):
+        self.vis.close()
+        self.break_loop = True
+        
 
     def possible(self):
         for x in self.widget_lists:
