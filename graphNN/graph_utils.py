@@ -53,6 +53,8 @@ class GraphData(pl.LightningDataModule):
         num_workers=1
         ):
 
+        super().__init__()
+        
         self.ngh_sizes = ngh_sizes
         self.data = data
         self.genes = genes
@@ -70,26 +72,10 @@ class GraphData(pl.LightningDataModule):
             self.cells = np.arange(self.data.shape[1])
 
         self.G = self.buildGraph(self.distance_threshold)
+
         self.cleanGraph()
         self.compute_size()
-
-    '''
-    def buildGraph(self, d_th):
-        print('Building graph...')
-        G = nx.Graph()
-
-        kdT = KDTree(self.coords)
-        res = kdT.query_pairs(d_th)
-        res = [(x[0],x[1]) for x in list(res)]
-
-        # Add nodes to graph
-        G.add_nodes_from((self.cells), test=False, val=False, label=0)
-        # Add node features to graph
-        nx.set_node_attributes(G,dict(zip((self.cells), self.data)), 'expression')
-        # Add edges to graph
-        G.add_edges_from(res)
-        return G
-    '''
+        self.setup()
 
     def buildGraph(self, d_th):
         print('Building graph...')
@@ -143,6 +129,11 @@ class GraphData(pl.LightningDataModule):
         G.add_edges_from(res)
         return G
 
+    
+    def prepare_data(self):
+        # do-something
+        pass
+
     def cleanGraph(self):
         print('Cleaning graph...')
         for component in tqdm(list(nx.connected_components(self.G))):
@@ -165,7 +156,7 @@ class GraphData(pl.LightningDataModule):
         #self.indices_validation = np.array([x in indices_validation for x in self.cells])
 
 
-    def setup(self):
+    def setup(self, stage: Optional[str] = None):
         print('Loading dataset...')
         self.edges_tensor = torch.tensor(np.array(list(self.G.edges)).T)
         #self.dataset = Data(torch.tensor(self.data.T,dtype=torch.float32),edge_index=self.edges_tensor)
@@ -176,7 +167,7 @@ class GraphData(pl.LightningDataModule):
         return NeighborSampler2(self.edges_tensor, node_idx=self.indices_train,data=self.dataset,
                                sizes=self.ngh_sizes, return_e_id=False,
                                batch_size=self.batch_size,
-                               shuffle=False, num_workers=self.num_workers)
+                               shuffle=True, num_workers=self.num_workers)
 
     def validation_dataloader(self):
         return NeighborSampler2(self.edges_tensor, node_idx=self.indices_validation,data=self.dataset,
