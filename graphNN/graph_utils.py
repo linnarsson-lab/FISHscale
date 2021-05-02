@@ -25,8 +25,6 @@ from torch import Tensor
 from torch_sparse import SparseTensor
 
 
-
-
 def compute_library_size(data):
     sum_counts = data.sum(axis=1)
     masked_log_sum = np.ma.log(sum_counts)
