@@ -163,7 +163,7 @@ class GraphData(pl.LightningDataModule):
         self.edges_tensor = torch.tensor(np.array(list(self.G.edges)).T)
         self.dataset = Data(torch.tensor(self.data.T,dtype=torch.float32),edge_index=self.edges_tensor)
 
-    '''    
+    '''   
     def load_trainers(self):
         print('Load trainers...')
         data = self.dataset
