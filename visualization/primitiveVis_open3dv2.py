@@ -97,7 +97,9 @@ class Window:
         self.vis.execute()
         
         if sys.platform == 'linux':
-            self.collapse.allow_interaction.clicked.connect(self.interaction)
+            t= threading.Timer(0.1, self.vis.execute())
+            t.start() 
+            #self.collapse.allow_interaction.clicked.connect(self.interaction)
         else:
             t= threading.Timer(0.1, self.vis.execute())
             t.start()         
