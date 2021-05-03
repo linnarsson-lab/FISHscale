@@ -32,10 +32,10 @@ class Iteration:
     
     @lru_cache(maxsize=None)
     def _make_xy_coordinates(self):
-        return {g: np.column_stack((x, y)) for g, x, y in self.xy_groupby_gene_generator()}
+        return {g: np.column_stack((x, y)).astype('float32') for g, x, y in self.xy_groupby_gene_generator()}
     
     def _make_xyz_coordinates(self):
-        return  {g: np.column_stack((xy, np.array([self.z_offset]*xy.shape[0]))) for g, xy in self._make_xy_coordinates().items()}
+        return  {g: np.column_stack((xy, np.array([self.z_offset]*xy.shape[0]))).astype('float32') for g, xy in self._make_xy_coordinates().items()}
 
     #@lru_cache(maxsize=None) #Change to functools.cache when supporting python >= 3.9
     def make_gene_coordinates(self, save_z = False) -> None:
