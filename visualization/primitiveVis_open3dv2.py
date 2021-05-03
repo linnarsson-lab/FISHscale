@@ -20,7 +20,7 @@ except:
 import pandas as pd
 import numpy as np
 import random
-import time
+import time, threading
 import FISHscale
 import functools
 from datetime import datetime, timedelta
@@ -97,14 +97,12 @@ class Window:
         self.vis.execute()
         
         if sys.platform == 'linux':
-            self.collapse.allow_interaction.clicked.connect(self.interaction)
+            t= threading.Timer(0.1, self.vis.execute())
+            t.start() 
+            #self.collapse.allow_interaction.clicked.connect(self.interaction)
         else:
-            while True:
-                self.vis.execute()
-                if True == self.collapse.break_loop:
-                    break
-                time.sleep(0.1)
-
+            t= threading.Timer(0.1, self.vis.execute())
+            t.start()         
 
 
     def interaction(self):
@@ -187,12 +185,14 @@ class Visualizer:
         if show_axis:
             opt.show_coordinate_frame = True
         opt.background_color = np.asarray([0, 0, 0])
+
     
     def execute(self):
         #self.visM.run()
         #self.visM.destroy_window()
         self.visM.poll_events()
         self.visM.update_renderer()
+        
 
     def close(self):
         self.visM.destroy_window()
