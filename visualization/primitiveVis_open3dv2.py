@@ -320,7 +320,6 @@ class CollapsibleDialog(QDialog):
             self.allow_interaction = QPushButton('Allow Interaction 30sec')
             layout.addWidget(self.allow_interaction)
 
-
         self.qbutton = QPushButton('Quit Visualizer')
         layout.addWidget(self.qbutton)
         
