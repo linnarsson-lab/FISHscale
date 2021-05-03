@@ -163,8 +163,8 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
         else:
             raise IOError (f'Invalid file type: {filename}, should be in ".parquet" format.') 
 
-        x = data.loc[:, x_label].to_numpy()
-        y = data.loc[:, y_label].to_numpy()
+        x = data.loc[:, x_label].to_numpy(dtype='float32')
+        y = data.loc[:, y_label].to_numpy(dtype='float32')
         genes = data.loc[:, gene_label].to_numpy()
         if other_columns != None:
             for o in other_columns:
