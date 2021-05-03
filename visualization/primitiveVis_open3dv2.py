@@ -102,7 +102,7 @@ class Window:
         else:
         '''
         self.vis.execute()
-        
+
     '''
     def interaction(self):
         end_time = datetime.now() + timedelta(seconds=30)
@@ -249,12 +249,9 @@ class ListWidget(QWidget):
             self.tissue_selected = [x for x in self.selected if x in self.vis.dic_pointclouds['File']]
         
         if self.section != 'File':
-            points,colors = [],[]
-            
+            points,colors = [],[]  
             for d,f,grpg in self.vis.data:
                 if f in self.tissue_selected:
-                    
-                    print(self.section, self.vis.gene_label)
                     if self.section == self.vis.gene_label:
                         for g in self.selected:
                             #d = grpg[g]
