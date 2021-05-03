@@ -29,9 +29,15 @@ class Iteration:
     def make_pandas(self):
         pandas_df = pd.DataFrame(data = np.column_stack([self.x, self.y, self.gene]), columns = [self.x_label, self.y_label, self.gene_label])
         return pandas_df
+    
+    @lru_cache(maxsize=None)
+    def _make_xy_coordinates(self):
+        return {g: np.column_stack((x, y)) for g, x, y in self.xy_groupby_gene_generator()}
+    
+    def _make_xyz_coordinates(self):
+        return  {g: np.column_stack((xy, np.array([self.z_offset]*xy.shape[0]))) for g, xy in self._make_xy_coordinates().items()}
 
-
-    @lru_cache(maxsize=None) #Change to functools.cache when supporting python >= 3.9
+    #@lru_cache(maxsize=None) #Change to functools.cache when supporting python >= 3.9
     def make_gene_coordinates(self, save_z = False) -> None:
         """Make a dictionary with point coordinates for each gene.
 
@@ -41,9 +47,14 @@ class Iteration:
 
         """
         if save_z:
-            self.gene_coordinates = {g: np.column_stack((x, y,np.array([self.z_offset]*x.shape[0]))) for g, x, y in self.xy_groupby_gene_generator()}
+            self.gene_coordinates = self._make_xyz_coordinates()
+            #self.gene_coordinates = {g: np.column_stack((xy, np.array([self.z_offset]*xy.shape[0]))) for g, xy in self._make_xy_coordinates().items()}
+            
+            #self.gene_coordinates = {g: np.column_stack((x, y,np.array([self.z_offset]*x.shape[0]))) for g, x, y in self.xy_groupby_gene_generator()}
         else:
-            self.gene_coordinates = {g: np.column_stack((x, y)) for g, x, y in self.xy_groupby_gene_generator()}
+            self.gene_coordinates = self._make_xy_coordinates()
+            
+
 
 
 class MultiIteration(Iteration):
