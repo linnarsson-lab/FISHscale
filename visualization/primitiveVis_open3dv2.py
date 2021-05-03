@@ -113,7 +113,7 @@ class Window:
             self.vis.execute()
             if True == self.vis.collapse.break_loop:
                 break
-            time.sleep(0.1)
+            time.sleep(0.01)
             
 
     #@functools.lru_cache
@@ -257,18 +257,19 @@ class ListWidget(QWidget):
         
         if self.section != 'File':
             points,colors = [],[]
-
+            
             for d,f,grpg in self.vis.data:
                 if f in self.tissue_selected:
-                    if self.selected == self.vis.gene_label:
-                        grpg = grpg.gene_coordinates
-                        for g, d in grpg:
-                            if str(g) in self.selected:
-                                g= str(g)
-                                cs= np.array([self.vis.color_dic[g] *(d.shape[0])])[0,:,:]
-                                
-                                points.append(d)
-                                colors.append(cs)
+                    
+                    print(self.section, self.vis.gene_label)
+                    if self.section == self.vis.gene_label:
+                        for g in self.selected:
+                            #d = grpg[g]
+                            g= str(g)
+                            cs= np.array([self.vis.color_dic[g] *(grpg.gene_coordinates[g].shape[0])])[0,:,:]
+                            
+                            points.append(grpg.gene_coordinates[g])
+                            colors.append(cs)   
                     else:
                         grpg = d.groupby(self.section)
                         for g, d in grpg:
