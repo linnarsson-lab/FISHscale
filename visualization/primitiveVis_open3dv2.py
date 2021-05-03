@@ -92,7 +92,7 @@ class Window:
                 l.list_widget.itemSelectionChanged.connect(l.selectionChanged)
 
         self.collapse.qbutton.clicked.connect(self.collapse.quit)
-
+        
         while self.collapse.break_loop == False:
             self.vis.execute()
 
