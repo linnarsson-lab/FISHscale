@@ -81,6 +81,8 @@ class Window:
         self.vis = Visualizer(self.dataset,self.dic_pointclouds, x_label=self.x_label,y_label=self.y_label,gene_label=self.gene_label,
             color_dic=self.color_dic,width=2000, height=2000, show_axis=self.show_axis)
         self.collapse = CollapsibleDialog(self.dic_pointclouds,vis=self.vis)
+        self.vis.collapse = self.collapse
+
         self.widget_lists = self.collapse.widget_lists
         self.collapse.show()
         
@@ -93,8 +95,8 @@ class Window:
 
         self.collapse.qbutton.clicked.connect(self.collapse.quit)
 
-        while self.collapse.break_loop == False:
-            self.vis.execute()
+        
+        self.vis.execute()
 
 
         #self.vis.destroy_window()
@@ -270,8 +272,13 @@ class ListWidget(QWidget):
             self.vis.pcd.points = o3d.utility.Vector3dVector(ps)
             self.vis.pcd.colors = o3d.utility.Vector3dVector(cs)
             self.vis.visM.update_geometry(self.vis.pcd)
-            self.vis.visM.poll_events()
-            self.vis.visM.update_renderer()
+            while True:
+                self.vis.visM.poll_events()
+                self.vis.visM.update_renderer()
+                if True == self.vis.collapse.break_loop:
+                    break
+                time.sleep(0.1)
+
 
 
 class CollapsibleDialog(QDialog):
