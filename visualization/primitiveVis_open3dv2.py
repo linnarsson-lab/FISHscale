@@ -97,10 +97,8 @@ class Window:
         self.vis.execute()
         
         if sys.platform == 'linux':
-            print('linux')
             self.collapse.allow_interaction.clicked.connect(self.interaction)
         else:
-            print('not linux')
             while True:
                 self.vis.execute()
                 if True == self.collapse.break_loop:
