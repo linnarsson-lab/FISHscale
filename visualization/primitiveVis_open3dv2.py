@@ -97,8 +97,7 @@ class Window:
         #self.vis.execute()
         
         if sys.platform == 'linux':
-            t= threading.Timer(0.1, self.vis.execute())
-            t.start() 
+            self.vis.execute()
             #self.collapse.allow_interaction.clicked.connect(self.interaction)
         else:
 
@@ -111,10 +110,8 @@ class Window:
             self.vis.execute()
             if True == self.vis.collapse.break_loop:
                 break
-            time.sleep(0.01)
-            
+            time.sleep(0.01)   
 
-    #@functools.lru_cache
     def pass_multi_data(self):
         r = lambda: random.randint(0,255)
         ds = []
@@ -185,7 +182,6 @@ class Visualizer:
         if show_axis:
             opt.show_coordinate_frame = True
         opt.background_color = np.asarray([0, 0, 0])
-
     
     def execute(self):
         #self.visM.run()
@@ -193,13 +189,10 @@ class Visualizer:
         self.visM.poll_events()
         self.visM.update_renderer()
         threading.Timer(0.2,self.execute()).start()
-        
 
     def close(self):
         self.visM.destroy_window()
     
-
-
 class SectionExpandButton(QPushButton):
     """a QPushbutton that can expand or collapse its section
     """
@@ -250,7 +243,6 @@ class ListWidget(QWidget):
             self.list_widget.addItem(i)
         # adding items to the list widget '''
     
-
     def selectionChanged(self):
         self.selected = [i.text() for i in self.list_widget.selectedItems()]
         if self.selected[0] in self.vis.dic_pointclouds['File'] and self.section == 'File':
@@ -287,10 +279,6 @@ class ListWidget(QWidget):
             self.vis.visM.update_geometry(self.vis.pcd)
             self.vis.visM.poll_events()
             self.vis.visM.update_renderer()
-            
-
-
-
 
 class CollapsibleDialog(QDialog):
     """a dialog to which collapsible sections can be added;
@@ -315,20 +303,19 @@ class CollapsibleDialog(QDialog):
         for x in self.dic:
             self.define_section(x)  
         self.add_sections()
-
+        
+        '''
         if sys.platform == 'linux':
             self.allow_interaction = QPushButton('Allow Interaction 30sec')
             layout.addWidget(self.allow_interaction)
-
+        '''
         self.qbutton = QPushButton('Quit Visualizer')
         layout.addWidget(self.qbutton)
         
-
     def quit(self):
         self.vis.close()
         self.break_loop = True
         
-
     def possible(self):
         for x in self.widget_lists:
             if x.section == 'File':
@@ -337,7 +324,6 @@ class CollapsibleDialog(QDialog):
             if x.section != 'File':
                 x.tissue_selected = ts
 
-        
     def add_sections(self):
         """adds a collapsible sections for every 
         (title, widget) tuple in self.sections
