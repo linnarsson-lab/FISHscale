@@ -94,15 +94,15 @@ class Window:
                 l.list_widget.itemSelectionChanged.connect(l.selectionChanged)
 
         self.collapse.qbutton.clicked.connect(self.collapse.quit)
-        self.vis.execute()
+        #self.vis.execute()
         
         if sys.platform == 'linux':
             t= threading.Timer(0.1, self.vis.execute())
             t.start() 
             #self.collapse.allow_interaction.clicked.connect(self.interaction)
         else:
-            t= threading.Timer(0.1, self.vis.execute())
-            t.start()         
+
+            self.vis.execute()
 
 
     def interaction(self):
@@ -192,6 +192,7 @@ class Visualizer:
         #self.visM.destroy_window()
         self.visM.poll_events()
         self.visM.update_renderer()
+        threading.Timer(0.2,self.execute()).start()
         
 
     def close(self):
