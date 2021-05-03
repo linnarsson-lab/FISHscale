@@ -119,7 +119,7 @@ class Window:
                         self.color_dic[str(ca)] = col
 
             dataframe.make_gene_coordinates(save_z=True)
-            ds.append((pd,dataframe.filename,dataframe.gene_coordinates))
+            ds.append((pd,dataframe.filename,dataframe))
         self.dataset = ds
 
 class Visualizer:
@@ -240,7 +240,7 @@ class ListWidget(QWidget):
             for d,f,grpg in self.vis.data:
                 if f in self.tissue_selected:
                     if self.selected == self.vis.gene_label:
-                        grpg = grpg
+                        grpg = grpg.gene_coordinates
                         for g, d in grpg:
                             if str(g) in self.selected:
                                 g= str(g)
