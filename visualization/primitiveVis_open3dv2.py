@@ -94,12 +94,7 @@ class Window:
                 l.list_widget.itemSelectionChanged.connect(l.selectionChanged)
 
         self.collapse.qbutton.clicked.connect(self.collapse.quit)
-
-        
         self.vis.execute()
-
-
-        #self.vis.destroy_window()
 
     #@functools.lru_cache
     def pass_multi_data(self):
@@ -155,14 +150,6 @@ class Visualizer:
                 maxy = My
             if my < miny:
                 miny= my
-
-            '''            
-            ps = d.loc[:,[self.x_label,self.y_label,'z_label']].values
-            gs = d.loc[:,[self.gene_label]].values
-            cs= np.array([self.color_dic[g[0]] for g in gs])'''
-
-            #points.append(ps)
-            #colors.append(cs)
 
         x= np.random.random_integers(int(minx),int(maxx),points)
         y = np.random.random_integers(int(miny),int(maxy),points)
