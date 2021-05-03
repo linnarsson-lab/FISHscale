@@ -27,13 +27,12 @@ class Iteration:
             yield g, data.loc[:, self.x_label].to_numpy(), data.loc[:, self.y_label].to_numpy()
 
     def make_pandas(self):
-
         pandas_df = pd.DataFrame(data = np.column_stack([self.x, self.y, self.gene]), columns = [self.x_label, self.y_label, self.gene_label])
         return pandas_df
 
 
     @lru_cache(maxsize=None) #Change to functools.cache when supporting python >= 3.9
-    def make_gene_coordinates(self) -> None:
+    def make_gene_coordinates(self, save_z = False) -> None:
         """Make a dictionary with point coordinates for each gene.
 
         Output will be in self.gene_coordinates. Output will be cached so that
@@ -41,7 +40,10 @@ class Iteration:
         performed the first time.
 
         """
-        self.gene_coordinates = {g: np.column_stack((x, y)) for g, x, y in self.xy_groupby_gene_generator()}
+        if save_z:
+            self.gene_coordinates = {g: np.column_stack((x, y,np.array([self.z_offset]*x.shape[0]))) for g, x, y in self.xy_groupby_gene_generator()}
+        else:
+            self.gene_coordinates = {g: np.column_stack((x, y)) for g, x, y in self.xy_groupby_gene_generator()}
 
 
 class MultiIteration(Iteration):

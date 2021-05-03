@@ -82,7 +82,6 @@ class Window:
             color_dic=self.color_dic,width=2000, height=2000, show_axis=self.show_axis)
         self.collapse = CollapsibleDialog(self.dic_pointclouds,vis=self.vis)
         self.vis.collapse = self.collapse
-
         self.widget_lists = self.collapse.widget_lists
         self.collapse.show()
         
@@ -119,9 +118,8 @@ class Window:
                         col = [(r()/255,r()/255,r()/255)]
                         self.color_dic[str(ca)] = col
 
-            preloaded = {g:d for g,d in pd.groupby(dataframe.gene_label)}
-            ds.append((pd,dataframe.filename,preloaded))
-
+            dataframe.make_gene_coordinates(save_z=True)
+            ds.append((pd,dataframe.filename,dataframe.gene_coordinates))
         self.dataset = ds
 
 class Visualizer:
@@ -243,17 +241,22 @@ class ListWidget(QWidget):
                 if f in self.tissue_selected:
                     if self.selected == self.vis.gene_label:
                         grpg = grpg
+                        for g, d in grpg:
+                            if str(g) in self.selected:
+                                g= str(g)
+                                cs= np.array([self.vis.color_dic[g] *(d.shape[0])])[0,:,:]
+                                
+                                points.append(d)
+                                colors.append(cs)
                     else:
                         grpg = d.groupby(self.section)
-                    for g, d in grpg:
-                        if str(g) in self.selected:
-
-                            g= str(g)
-                            ps = d.loc[:,[self.vis.x_label,self.vis.y_label,'z_label']].values
-                            cs= np.array([self.vis.color_dic[g] *(ps.shape[0])])[0,:,:]
-                            
-                            points.append(ps)
-                            colors.append(cs)
+                        for g, d in grpg:
+                            if str(g) in self.selected:
+                                g= str(g)
+                                ps = d.loc[:,[self.vis.x_label,self.vis.y_label,'z_label']].values
+                                cs= np.array([self.vis.color_dic[g] *(ps.shape[0])])[0,:,:]
+                                points.append(ps)
+                                colors.append(cs)
 
             ps,cs = np.concatenate(points), np.concatenate(colors)
             self.vis.pcd.points = o3d.utility.Vector3dVector(ps)
