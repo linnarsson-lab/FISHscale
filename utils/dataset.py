@@ -6,6 +6,7 @@ from FISHscale.utils.hex_regionalization import Regionalize
 from FISHscale.utils.fast_iteration import Iteration, MultiIteration
 from FISHscale.utils.colors import ManyColors
 from FISHscale.utils.gene_correlation import GeneCorr
+from FISHscale.utils.spatial_metrics import SpatialMetrics
 from FISHscale.visualization.gene_scatter import GeneScatter, MultiGeneScatter
 from PyQt5 import QtWidgets
 import sys
@@ -23,7 +24,7 @@ from time import strftime
 from math import ceil
 from multiprocessing import cpu_count
 
-class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter):
+class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, SpatialMetrics):
     """
     Base Class for FISHscale, still under development
 
@@ -90,8 +91,9 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter):
             verbose (bool, optional): If True prints additional output.
 
         """
-        #Verbosity
+        #Parameters
         self.verbose = verbose
+        self.cpu_count = cpu_count()
 
         #Open file
         self.filename = filename
@@ -126,8 +128,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter):
         self.auto_handle_color_dict(color_input)
         #Verbosity
         self.verbose = verbose
-        if self.verbose:
-            print('Loaded')
+        self.vp(f'Loaded: {self.dataset_name}')
 
     def load_data(self, filename: str, x_label: str, y_label: str, gene_label: str, 
         other_columns: Optional[list]) -> Union[np.ndarray, np.ndarray, np.ndarray, Optional[np.ndarray]]:
@@ -221,7 +222,6 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter):
         """
         self.x, self.y = self.y, self.x
         self._set_coordinate_properties()
-
 
     def visualize(self,columns:list=[],width=2000,height=2000,show_axis=False,color_dic=None):
         """
@@ -427,14 +427,12 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter):
         self.ureg = UnitRegistry()
 
         #Name
-        if MultiDataset_name == None:
+        if not MultiDataset_name:
             MultiDataset_name = 'MultiDataset_' + strftime("%Y-%m-%d_%H-%M-%S")
         self.dataset_name = MultiDataset_name
 
-        #Input for loading
-        self.unique_genes= unique_genes
-
         #Load data
+        self.unique_genes = unique_genes
         if type(data) == list:
             self.load_Datasets(data)
         elif type(data) == str:
@@ -443,9 +441,12 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter):
         else:
             raise Exception(f'Input for "data" not understood. Should be list with initiated Datasets or valid path to files.')
 
+        #Handle units
+        self.check_unit()
+
         #Handle colors
         self.auto_handle_color_dict(color_input)
-        self.override_color_dict()
+        self.overwrite_color_dict()
 
     def __iter__(self):
         return self
@@ -541,7 +542,7 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter):
 
         Args:
             Dataset_list (list): list of Dataset objects.
-            override_color_dict (bool, optional): If True sets the color_dicts
+            overwrite_color_dict (bool, optional): If True sets the color_dicts
                 of all individaal Datasets to the MultiDataset color_dict.
 
         """        
@@ -551,12 +552,31 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter):
         self.unique_genes = self.datasets[0].unique_genes
         self.check_unique_genes()    
 
-    def override_color_dict(self) -> None:
+    def overwrite_color_dict(self) -> None:
         """Set the color_dict of the sub-datasets the same as the MultiDataset.
         """
         for d in self.datasets:
                 d.color_dict = self.color_dict
 
+    def check_unit(self) -> None:
+        """Check if all datasets have the same scale unit. 
+
+        Raises:
+            Exception: If `unit_scale` is not identical.
+            Exception: If `unit_area` is not identical.
+        """
+        all_unit = [d.unit_scale for d in self.datasets]
+        all_area = [d.area_scale for d in self.datasets]
+        #if not np.all(all_unit == all_unit[0]):
+        if not np.all([i == all_unit[0] for i in all_unit]):
+            print(all_unit)
+            print(all_area)
+            raise Exception('Unit is not identical for all datasets.')
+        #if not np.all(all_area == all_area[0]):
+        if not np.all(i == all_area[0] for i in all_area):
+            raise Exception('Area unit is not identical for all datasets.')
+        self.unit_scale = all_unit[0]
+        self.unit_area = all_area[0]
 
     def check_unique_genes(self) -> None:
         """Check if all datasets have same unique genes.
@@ -569,6 +589,24 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter):
             raise Exception('Gene lists are not identical for all datasets.')
 
     def arange_grid_offset(self, orderby: str='z'):
+        """Set offset of datasets so that they are in a XY grid side by side.
+
+        Changes the X and Y coordinates so that all datasets are positioned in
+        a grid for side by side plotting. Option to sort by various parameters.
+
+        Use `reset_offset()` to bring centers back to (0,0).
+
+        Args:
+            orderby (str, optional): Sort by parameter:
+                'z' : Sort by Z coordinate.
+                'x' : Sort by width in X.
+                'y' : Sort by width in Y.
+                'name' : Sort by dataset name in alphanumerical order.                
+                 Defaults to 'z'.
+
+        Raises:
+            Exception: If `orderby` is not properly defined.
+        """
 
         max_x_extend = max([d.x_extend for d in self.datasets])
         max_y_extend = max([d.y_extend for d in self.datasets])
@@ -600,7 +638,23 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter):
             offset_y = offset_y - dataset_center[1]
             self.datasets[s].offset_data(offset_x, offset_y, 0, apply=True)
 
+    def reset_offset(self, z: bool=False) -> None: 
+        """Reset the offset so that the center is at (0,0) or (0,0,0).
 
+        Args:
+            z (bool, optional): If True also the Z coordinate is reset to 0.
+                Defaults to False.
+        """
+
+        for d in self.datasets:
+            center_x = -d.xy_center[0]
+            center_y = -d.xy_center[1]
+            if z:
+                offset_z = -d.z
+            else:
+                offset_z = 0
+            d.offset_data(center_x, center_y, offset_z, apply=True)
+        
     def visualize(self,columns:list=[],width=2000,height=2000,show_axis=False,color_dic=None):
         """
         Run open3d visualization on self.data

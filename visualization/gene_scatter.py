@@ -94,11 +94,17 @@ class AxSize:
         #Define linewidth and fontsize
         ax_hight = ax.bbox.transformed(ax.transAxes).height
         lw = ax_hight / 40000
+        if lw > 15:
+            lw = 15
         fs = ax_hight / 8000
+        if fs > 32:
+            fs = 32
+        if fs < 1 : 
+            fs = 1
 
         #Set scale bar
         ax.text(text_center, hight_text, bar_name, color='white', ha='center', fontsize=fs,
-                bbox=dict(facecolor='black', edgecolor=None), zorder=5)
+            bbox=dict(facecolor='black', edgecolor=None), zorder=5)
         ax.hlines(hight_bar, left, right, colors=['white'], linewidth=lw, zorder=10)
 
 
@@ -142,6 +148,10 @@ class GeneScatter(AxSize):
         """
         #Make sure gene coordinate dictionary is present
         self.make_gene_coordinates()
+        
+        #Check input
+        if not isinstance(genes, list) and not isinstance(genes, np.ndarray):
+            genes = [genes]
 
         #Make figure
         fig = plt.figure(figsize=(20,10))
@@ -159,8 +169,6 @@ class GeneScatter(AxSize):
                 x = x[filt]
                 y = y[filt]
             ax.scatter(x, y, s=s, color=self.color_dict[g], zorder=0)
-            
-        
         
         #Rescale
         if isinstance(view, list):
@@ -181,13 +189,10 @@ class GeneScatter(AxSize):
         #Plot layout
         if not show_axes:
             ax.set_axis_off()
+            plt.gca().xaxis.set_major_locator(plt.NullLocator())
+            plt.gca().yaxis.set_major_locator(plt.NullLocator())
         ax.add_patch(plt.Rectangle((0,0), 1, 1, facecolor=(0,0,0),
                                 transform=ax.transAxes, zorder=-1))
-
-
-        #plt.margins(0,0)
-        plt.gca().xaxis.set_major_locator(plt.NullLocator())
-        plt.gca().yaxis.set_major_locator(plt.NullLocator())
 
         if save:
             if save_name == '':
@@ -198,11 +203,16 @@ class GeneScatter(AxSize):
 class MultiGeneScatter(AxSize):
 
     def scatter_plot(self, genes: Union[List, np.ndarray], s: float=0.1, ax_scale_factor: int=10, 
-                    scalebar: bool=True, show_axes: bool=False, 
+                    scalebar: bool=True, show_axes: bool=False, flip_y: bool=False,
                     save: bool=False, save_name: str='', dpi: int=300, file_format: str='.eps'):
         
         #Make sure gene coordinate dictionary is present
         self.make_multi_gene_coordinates()
+        
+        #Check input
+        if not isinstance(genes, list) and not isinstance(genes, np.ndarray):
+            print('made_list')
+            genes = [genes]
 
         #Make figure
         fig = plt.figure(figsize=(20,10))
@@ -235,6 +245,8 @@ class MultiGeneScatter(AxSize):
         x_scale = self.to_inch(x_extend * ax_scale_factor)
         y_scale = self.to_inch(y_extend * ax_scale_factor)
         self.set_size(x_scale, y_scale)
+        if flip_y:
+            ax.invert_yaxis()            
 
         #Add scale bar
         if scalebar:   
@@ -245,9 +257,6 @@ class MultiGeneScatter(AxSize):
             ax.set_axis_off()
         ax.add_patch(plt.Rectangle((0,0), 1, 1, facecolor=(0,0,0),
                                 transform=ax.transAxes, zorder=-1))
-
-
-        #plt.margins(0,0)
         plt.gca().xaxis.set_major_locator(plt.NullLocator())
         plt.gca().yaxis.set_major_locator(plt.NullLocator())
 
