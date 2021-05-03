@@ -113,7 +113,7 @@ class Window:
 
 
     def interaction(self):
-        end_time = datetime.now() + timedelta(seconds=3)
+        end_time = datetime.now() + timedelta(seconds=30)
         while datetime.now() < end_time:
             self.vis.execute()
             if True == self.vis.collapse.break_loop:
