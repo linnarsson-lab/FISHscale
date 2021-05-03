@@ -95,15 +95,15 @@ class Window:
 
         self.collapse.qbutton.clicked.connect(self.collapse.quit)
         #self.vis.execute()
-        
+        '''
         if sys.platform == 'linux':
             self.vis.execute()
             #self.collapse.allow_interaction.clicked.connect(self.interaction)
         else:
-
-            self.vis.execute()
-
-
+        '''
+        self.vis.execute()
+        
+    '''
     def interaction(self):
         end_time = datetime.now() + timedelta(seconds=30)
         while datetime.now() < end_time:
@@ -111,7 +111,7 @@ class Window:
             if True == self.vis.collapse.break_loop:
                 break
             time.sleep(0.01)   
-
+    '''
     def pass_multi_data(self):
         r = lambda: random.randint(0,255)
         ds = []
