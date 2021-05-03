@@ -11,7 +11,7 @@ from PyQt5 import QtCore, QtGui
 from PyQt5.QtGui import * 
 from PyQt5.QtCore import * 
 import sys
-
+import os
 from torch_geometric import data 
 try:
     import open3d as o3d
@@ -23,6 +23,7 @@ import random
 import time
 import FISHscale
 import functools
+from datetime import datetime, timedelta
 
 class Window: 
 
@@ -94,6 +95,28 @@ class Window:
 
         self.collapse.qbutton.clicked.connect(self.collapse.quit)
         self.vis.execute()
+        
+        if sys.platform == 'linux':
+            print('linux')
+            self.collapse.allow_interaction.clicked.connect(self.interaction)
+        else:
+            print('not linux')
+            while True:
+                self.vis.execute()
+                if True == self.collapse.break_loop:
+                    break
+                time.sleep(0.1)
+
+
+
+    def interaction(self):
+        end_time = datetime.now() + timedelta(seconds=30)
+        while datetime.now() < end_time:
+            self.vis.execute()
+            if True == self.vis.collapse.break_loop:
+                break
+            time.sleep(0.1)
+            
 
     #@functools.lru_cache
     def pass_multi_data(self):
@@ -262,12 +285,10 @@ class ListWidget(QWidget):
             self.vis.pcd.points = o3d.utility.Vector3dVector(ps)
             self.vis.pcd.colors = o3d.utility.Vector3dVector(cs)
             self.vis.visM.update_geometry(self.vis.pcd)
-            while True:
-                self.vis.visM.poll_events()
-                self.vis.visM.update_renderer()
-                if True == self.vis.collapse.break_loop:
-                    break
-                time.sleep(0.1)
+            self.vis.visM.poll_events()
+            self.vis.visM.update_renderer()
+            
+
 
 
 
@@ -295,9 +316,14 @@ class CollapsibleDialog(QDialog):
             self.define_section(x)  
         self.add_sections()
 
+        if sys.platform == 'linux':
+            self.allow_interaction = QPushButton('Allow Interaction 30sec')
+            layout.addWidget(self.allow_interaction)
+
+
         self.qbutton = QPushButton('Quit Visualizer')
         layout.addWidget(self.qbutton)
-
+        
 
     def quit(self):
         self.vis.close()
