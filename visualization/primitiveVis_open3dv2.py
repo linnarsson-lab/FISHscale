@@ -94,12 +94,11 @@ class Window:
                 l.list_widget.itemSelectionChanged.connect(l.selectionChanged)
 
         self.collapse.qbutton.clicked.connect(self.collapse.quit)
-        self.vis.execute()
+        #self.vis.execute()
         
         if sys.platform == 'linux':
-            t= threading.Timer(0.1, self.vis.execute())
-            t.start() 
-            #self.collapse.allow_interaction.clicked.connect(self.interaction)
+
+            self.collapse.allow_interaction.clicked.connect(self.interaction)
         else:
             t= threading.Timer(0.1, self.vis.execute())
             t.start()         
@@ -190,6 +189,8 @@ class Visualizer:
     def execute(self):
         #self.visM.run()
         #self.visM.destroy_window()
+        print('execute')
+
         self.visM.poll_events()
         self.visM.update_renderer()
         
@@ -260,8 +261,7 @@ class ListWidget(QWidget):
             
             for d,f,grpg in self.vis.data:
                 if f in self.tissue_selected:
-                    
-                    print(self.section, self.vis.gene_label)
+
                     if self.section == self.vis.gene_label:
                         for g in self.selected:
                             #d = grpg[g]
