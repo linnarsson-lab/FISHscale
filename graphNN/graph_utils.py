@@ -1,15 +1,9 @@
 import networkx as nx
-import loompy
-from scipy.spatial import cKDTree as KDTree
 import torch
 import numpy as np
-import torch_geometric
 import torch
 from tqdm import tqdm
-from torch_geometric.data import NeighborSampler
-from torch_geometric.data import Data
 from annoy import AnnoyIndex
-import random
 from tqdm import trange
 import pickle
 import os
@@ -18,8 +12,6 @@ from typing import Optional, List, NamedTuple
 from torch import Tensor
 from torch_sparse import SparseTensor
 from torch_cluster import random_walk
-import timeit
-import copy
 from typing import List, Optional, Tuple, NamedTuple, Union, Callable
 from torch import Tensor
 from torch_sparse import SparseTensor
@@ -78,8 +70,6 @@ class GraphData(pl.LightningDataModule):
     def buildGraph(self, d_th):
         print('Building graph...')
         G = nx.Graph()
-
-
         if not os.path.isfile('Edges-{}Nodes.pkl'.format(self.data.shape[1])):
             t = AnnoyIndex(2, 'euclidean')  # Length of item vector that will be indexed
             for i in trange(self.coords.shape[0]):
