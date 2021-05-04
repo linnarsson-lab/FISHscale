@@ -85,7 +85,6 @@ class Window:
         self.collapse = CollapsibleDialog(self.dic_pointclouds,vis=self.vis)
         self.vis.collapse = self.collapse
         self.widget_lists = self.collapse.widget_lists
-        self.app = app
         self.collapse.show()
         
         for l in self.widget_lists:
@@ -104,7 +103,6 @@ class Window:
         else:
         '''
         
-        print('run')
         self.vis.t.run()
 
     def close(self):
@@ -131,8 +129,12 @@ class Window:
             print(dataframe.filename)
             if dataframe.gene_label != self.gene_label:
                 dataframe.gene_label = self.gene_label
-            pd = dataframe.make_pandas()
-            pd['z_label'] = np.array([dataframe.z_offset]*pd.shape[0])
+            
+            if len(self.columns) > 0:
+                pd = dataframe.make_pandas()
+                pd['z_label'] = np.array([dataframe.z_offset]*pd.shape[0])
+            else:
+                pd = 0
 
             for c in self.columns:
                 colattr = getattr(dataframe,c)
@@ -163,10 +165,11 @@ class Visualizer:
 
         #points, colors = [], []
         points,maxx,minx,maxy,miny= 0,0,0,0,0
-        for d,f,g in self.data: 
-            points+= d.shape[0]
-            Mx,mx = d.loc[:,[self.x_label]].values.max(),d.loc[:,[self.x_label]].values.max()
-            My,my = d.loc[:,[self.y_label]].values.max(),d.loc[:,[self.x_label]].values.max()
+        for d,f,g in self.data:
+            points+= g.x.shape[0]
+            Mx,mx = g.x.max(),g.x.min()
+            My,my = g.y.max(),g.y.min()
+            
             if Mx > maxx:
                 maxx = Mx
             if mx < minx:
@@ -207,10 +210,6 @@ class Visualizer:
             self.visM.poll_events()
             self.visM.update_renderer()
             time.sleep(0.1)
-
-
-
-
     
 class SectionExpandButton(QPushButton):
     """a QPushbutton that can expand or collapse its section
@@ -276,7 +275,6 @@ class ListWidget(QWidget):
                             #d = grpg[g]
                             g= str(g)
                             cs= np.array([self.vis.color_dic[g] *(grpg.gene_coordinates[g].shape[0])])[0,:,:]
-                            
                             points.append(grpg.gene_coordinates[g])
                             colors.append(cs)   
                     else:
