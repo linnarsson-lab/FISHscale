@@ -150,7 +150,6 @@ class GraphData(pl.LightningDataModule):
         #self.dataset = Data(torch.tensor(self.data.T,dtype=torch.float32),edge_index=self.edges_tensor)
         self.dataset = torch.tensor(self.data.T,dtype=torch.float32)
 
-
     def train_dataloader(self):
         return NeighborSampler2(self.edges_tensor, node_idx=self.indices_train,data=self.dataset,
                                sizes=self.ngh_sizes, return_e_id=False,
