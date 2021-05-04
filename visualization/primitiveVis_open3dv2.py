@@ -12,6 +12,7 @@ from PyQt5.QtGui import *
 from PyQt5.QtCore import * 
 import sys
 import os
+
 from torch_geometric import data 
 try:
     import open3d as o3d
@@ -84,6 +85,7 @@ class Window:
         self.collapse = CollapsibleDialog(self.dic_pointclouds,vis=self.vis)
         self.vis.collapse = self.collapse
         self.widget_lists = self.collapse.widget_lists
+        self.app = app
         self.collapse.show()
         
         for l in self.widget_lists:
@@ -93,7 +95,7 @@ class Window:
             else:
                 l.list_widget.itemSelectionChanged.connect(l.selectionChanged)
 
-        self.collapse.qbutton.clicked.connect(self.collapse.quit)
+        self.collapse.qbutton.clicked.connect(self.quit)
         #self.vis.execute()
         '''
         if sys.platform == 'linux':
@@ -101,7 +103,17 @@ class Window:
             #self.collapse.allow_interaction.clicked.connect(self.interaction)
         else:
         '''
-        self.vis.execute()
+        
+        print('run')
+        self.vis.t.run()
+
+    def close(self):
+        self.vis.visM.destroy_window()
+        self.vis.cancel_timer = True
+        
+    def quit(self):
+        self.close()
+        self.collapse.break_loop = True
 
     '''
     def interaction(self):
@@ -182,16 +194,23 @@ class Visualizer:
         if show_axis:
             opt.show_coordinate_frame = True
         opt.background_color = np.asarray([0, 0, 0])
-    
+        self.cancel_timer = False
+
+        self.t = threading.Thread(target=self.execute)
+
     def execute(self):
+        while True:
         #self.visM.run()
         #self.visM.destroy_window()
-        self.visM.poll_events()
-        self.visM.update_renderer()
-        threading.Timer(0.2,self.execute()).start()
+            if self.cancel_timer:
+                break
+            self.visM.poll_events()
+            self.visM.update_renderer()
+            time.sleep(0.1)
 
-    def close(self):
-        self.visM.destroy_window()
+
+
+
     
 class SectionExpandButton(QPushButton):
     """a QPushbutton that can expand or collapse its section
@@ -309,9 +328,6 @@ class CollapsibleDialog(QDialog):
         self.qbutton = QPushButton('Quit Visualizer')
         layout.addWidget(self.qbutton)
         
-    def quit(self):
-        self.vis.close()
-        self.break_loop = True
         
     def possible(self):
         for x in self.widget_lists:
