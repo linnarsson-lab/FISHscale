@@ -107,9 +107,6 @@ class Window:
         while self.collapse.break_loop == False:
             self.vis.execute()
 
-
-        #self.vis.destroy_window()
-
     #@functools.lru_cache
     def pass_multi_data(self):
         r = lambda: random.randint(0,255)
@@ -199,8 +196,6 @@ class Visualizer:
 
     def close(self):
         self.visM.destroy_window()
-    
-
 
 class SectionExpandButton(QPushButton):
     """a QPushbutton that can expand or collapse its section
