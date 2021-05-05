@@ -103,15 +103,13 @@ class Window:
         else:
         '''
         
-        self.vis.t.run()
-
-    def close(self):
-        self.vis.visM.destroy_window()
-        self.vis.cancel_timer = True
+        self.vis.execute()
         
     def quit(self):
-        self.close()
         self.collapse.break_loop = True
+        self.vis.t.cancel()
+        self.vis.visM.destroy_window()
+        
 
     '''
     def interaction(self):
@@ -169,7 +167,7 @@ class Visualizer:
             points+= g.x.shape[0]
             Mx,mx = g.x.max(),g.x.min()
             My,my = g.y.max(),g.y.min()
-            
+
             if Mx > maxx:
                 maxx = Mx
             if mx < minx:
@@ -199,17 +197,20 @@ class Visualizer:
         opt.background_color = np.asarray([0, 0, 0])
         self.cancel_timer = False
 
-        self.t = threading.Thread(target=self.execute)
+        #self.t = threading.Thread(target=self.execute)
+        self.t = threading.Timer(0.1,self.execute)
 
     def execute(self):
-        while True:
+        #while True:
         #self.visM.run()
         #self.visM.destroy_window()
-            if self.cancel_timer:
-                break
-            self.visM.poll_events()
-            self.visM.update_renderer()
-            time.sleep(0.1)
+        self.visM.poll_events()
+        self.visM.update_renderer()
+        if self.cancel_timer == False:
+            self.t.run()
+        #if self.cancel_timer:
+        #    self.t.cancel()
+
     
 class SectionExpandButton(QPushButton):
     """a QPushbutton that can expand or collapse its section
