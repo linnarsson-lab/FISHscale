@@ -77,22 +77,13 @@ class Window:
 
             self.pass_multi_data()
             print('Data Loaded')
-        
 
         self.show_axis= show_axis
         self.vis = Visualizer(self.dataset,self.dic_pointclouds, x_label=self.x_label,y_label=self.y_label,gene_label=self.gene_label,
             color_dic=self.color_dic,width=2000, height=2000, show_axis=self.show_axis)
 
-
         self.collapse = CollapsibleDialog(self.dic_pointclouds,vis=self.vis)
         self.widget_lists = self.collapse.widget_lists
-       
-        self.thread = QThread()
-        # Step 3: Create a worker object
-        # Step 4: Move worker to the thread
-        self.collapse.moveToThread(self.thread)
-        self.thread.start()
-        # Step 5: Connect signals and slots
         self.collapse.show()
         self.vis.collapse = self.collapse
     
@@ -104,32 +95,13 @@ class Window:
                 l.list_widget.itemSelectionChanged.connect(l.selectionChanged)
 
         self.collapse.qbutton.clicked.connect(self.quit)
-
-        
-        '''
-        if sys.platform == 'linux':
-            self.vis.execute()
-            #self.collapse.allow_interaction.clicked.connect(self.interaction)
-        else:
-        '''
-        
         self.vis.execute()
-            
             
     def quit(self):
         self.collapse.break_loop = True
+        self.vis.break_loop = True
         self.vis.visM.destroy_window()
-        
 
-    '''
-    def interaction(self):
-        end_time = datetime.now() + timedelta(seconds=30)
-        while datetime.now() < end_time:
-            self.vis.execute()
-            if True == self.vis.collapse.break_loop:
-                break
-            time.sleep(0.01)   
-    '''
     def pass_multi_data(self):
         r = lambda: random.randint(0,255)
         ds = []
@@ -177,12 +149,10 @@ class Visualizer:
             points+= g.x.shape[0]
             Mx,mx = g.x.max(),g.x.min()
             My,my = g.y.max(),g.y.min()
-
             if Mx > maxx:
                 maxx = Mx
             if mx < minx:
                 minx= mx
-
             if My > maxy:
                 maxy = My
             if my < miny:
@@ -206,23 +176,19 @@ class Visualizer:
             opt.show_coordinate_frame = True
         opt.background_color = np.asarray([0, 0, 0])
         self.break_loop = False
-        #self.t = threading.Thread(target=self.execute)
-        
+
 
     def execute(self):
         self.visM.poll_events()
         self.visM.update_renderer()
-        QCoreApplication.processEvents()
+        if sys.platform == 'linux':
+            QCoreApplication.processEvents()
 
     def loop_execute(self):
-        
         while True:
-            if self.break_loop == True:
-                print('true')
+            if self.break_loop:
                 break
             self.execute()
-        self.break_loop = False
-    
 
 class SectionExpandButton(QPushButton):
     """a QPushbutton that can expand or collapse its section
@@ -303,7 +269,6 @@ class ListWidget(QWidget):
             self.vis.pcd.points = o3d.utility.Vector3dVector(ps)
             self.vis.pcd.colors = o3d.utility.Vector3dVector(cs)
             self.vis.visM.update_geometry(self.vis.pcd)
-
             self.vis.loop_execute()
 
 class CollapsibleDialog(QDialog,QObject):
@@ -326,21 +291,12 @@ class CollapsibleDialog(QDialog,QObject):
         self.sections = {}
         self.break_loop = False
 
-        #finished = pyqtSignal()
-        #progress = pyqtSignal(int)
-
         for x in self.dic:
             self.define_section(x)  
         self.add_sections()
-        
-        '''
-        if sys.platform == 'linux':
-            self.allow_interaction = QPushButton('Allow Interaction 30sec')
-            layout.addWidget(self.allow_interaction)
-        '''
+
         self.qbutton = QPushButton('Quit Visualizer')
         layout.addWidget(self.qbutton)
-        
         
     def possible(self):
         for x in self.widget_lists:
