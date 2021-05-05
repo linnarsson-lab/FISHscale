@@ -85,6 +85,13 @@ class Window:
         self.collapse = CollapsibleDialog(self.dic_pointclouds,vis=self.vis)
         self.vis.collapse = self.collapse
         self.widget_lists = self.collapse.widget_lists
+       
+        self.thread = QThread()
+        # Step 3: Create a worker object
+        # Step 4: Move worker to the thread
+        self.collapse.moveToThread(self.thread)
+        self.thread.start()
+        # Step 5: Connect signals and slots
         self.collapse.show()
         
         for l in self.widget_lists:
@@ -295,7 +302,7 @@ class ListWidget(QWidget):
             self.vis.visM.poll_events()
             self.vis.visM.update_renderer()
 
-class CollapsibleDialog(QDialog):
+class CollapsibleDialog(QDialog,QObject):
     """a dialog to which collapsible sections can be added;
     subclass and reimplement define_section() to define sections and
         add them as (title, widget) tuples to self.sections
@@ -314,6 +321,9 @@ class CollapsibleDialog(QDialog):
         self.widget_lists = []
         self.sections = {}
         self.break_loop = False
+
+        #finished = pyqtSignal()
+        #progress = pyqtSignal(int)
 
         for x in self.dic:
             self.define_section(x)  
