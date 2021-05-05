@@ -82,8 +82,9 @@ class Window:
         self.show_axis= show_axis
         self.vis = Visualizer(self.dataset,self.dic_pointclouds, x_label=self.x_label,y_label=self.y_label,gene_label=self.gene_label,
             color_dic=self.color_dic,width=2000, height=2000, show_axis=self.show_axis)
+
+
         self.collapse = CollapsibleDialog(self.dic_pointclouds,vis=self.vis)
-        self.vis.collapse = self.collapse
         self.widget_lists = self.collapse.widget_lists
        
         self.thread = QThread()
@@ -93,7 +94,8 @@ class Window:
         self.thread.start()
         # Step 5: Connect signals and slots
         self.collapse.show()
-        
+        self.vis.collapse = self.collapse
+    
         for l in self.widget_lists:
             if l.section == 'File':
                 l.list_widget.itemSelectionChanged.connect(l.selectionChanged)
@@ -102,7 +104,8 @@ class Window:
                 l.list_widget.itemSelectionChanged.connect(l.selectionChanged)
 
         self.collapse.qbutton.clicked.connect(self.quit)
-        #self.vis.execute()
+
+        
         '''
         if sys.platform == 'linux':
             self.vis.execute()
@@ -111,10 +114,10 @@ class Window:
         '''
         
         self.vis.execute()
-        
+            
+            
     def quit(self):
         self.collapse.break_loop = True
-        self.vis.t.cancel()
         self.vis.visM.destroy_window()
         
 
@@ -202,23 +205,25 @@ class Visualizer:
         if show_axis:
             opt.show_coordinate_frame = True
         opt.background_color = np.asarray([0, 0, 0])
-        self.cancel_timer = False
-
+        self.break_loop = False
         #self.t = threading.Thread(target=self.execute)
-        self.t = threading.Timer(0.1,self.execute)
+        
 
     def execute(self):
-        #while True:
-        #self.visM.run()
-        #self.visM.destroy_window()
         self.visM.poll_events()
         self.visM.update_renderer()
-        if self.cancel_timer == False:
-            self.t.run()
-        #if self.cancel_timer:
-        #    self.t.cancel()
+        QCoreApplication.processEvents()
 
+    def loop_execute(self):
+        
+        while True:
+            if self.break_loop == True:
+                print('true')
+                break
+            self.execute()
+        self.break_loop = False
     
+
 class SectionExpandButton(QPushButton):
     """a QPushbutton that can expand or collapse its section
     """
@@ -263,7 +268,6 @@ class ListWidget(QWidget):
             try:
                 c = self.vis.color_dic[e]
                 i.setBackground(QColor(c[0][0]*255,c[0][1]*255,c[0][2]*255,120))
-
             except:
                 pass
             self.list_widget.addItem(i)
@@ -299,8 +303,8 @@ class ListWidget(QWidget):
             self.vis.pcd.points = o3d.utility.Vector3dVector(ps)
             self.vis.pcd.colors = o3d.utility.Vector3dVector(cs)
             self.vis.visM.update_geometry(self.vis.pcd)
-            self.vis.visM.poll_events()
-            self.vis.visM.update_renderer()
+
+            self.vis.loop_execute()
 
 class CollapsibleDialog(QDialog,QObject):
     """a dialog to which collapsible sections can be added;
