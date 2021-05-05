@@ -103,7 +103,7 @@ class Window:
         else:
         '''
         
-        self.vis.t.run()
+        self.vis.t.start()
 
     def close(self):
         self.vis.visM.destroy_window()
