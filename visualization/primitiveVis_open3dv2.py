@@ -42,11 +42,12 @@ class Window:
         
         r = lambda: random.randint(0,255)
         self.color_dic = color_dic
+
         self.columns= columns
         self.dataset = dataset
         for g in self.dataset.unique_genes:
             if g in self.color_dic:
-                pass
+                self.color_dic[g] = [self.color_dic[g]]
             else:
                 col = [(r()/255,r()/255,r()/255)]
                 self.color_dic[g] = col

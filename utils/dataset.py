@@ -243,7 +243,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
             print('QApplication instance already exists: %s' % str(App))
         if self.color_dict:
             color_dic = self.color_dict
-        window = Window(self,columns,width,height,color_dic) 
+        window = Window(self,columns,width,height,color_dic=color_dic) 
         App.exec_()
         App.quit()
 
