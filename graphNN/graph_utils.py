@@ -40,7 +40,8 @@ class GraphData(pl.LightningDataModule):
         ngh_sizes = [5, 10],
         train_p = 0.75,
         batch_size= 128,
-        num_workers=1
+        num_workers=1,
+        save_to=''
         ):
 
         super().__init__()
@@ -55,6 +56,7 @@ class GraphData(pl.LightningDataModule):
         self.train_p = train_p
         self.batch_size = batch_size
         self.num_workers = num_workers
+        self.save_to = save_to
 
         self.local_mean,self.local_var = compute_library_size(self.data.T)
 
@@ -70,7 +72,11 @@ class GraphData(pl.LightningDataModule):
     def buildGraph(self, d_th):
         print('Building graph...')
         G = nx.Graph()
-        if not os.path.isfile('Edges-{}Nodes.pkl'.format(self.data.shape[1])):
+
+        node_file = os.path.join(self.save_to,'Edges-{}Nodes-Ngh{}-{}-dst{}.pkl'.format(self.data.shape[1],self.ngh_sizes[0],self.ngh_sizes[1],self.distance_threshold))
+        tree_file = os.path.join(self.save_to,'Tree-{}Nodes-Ngh{}-{}-dst{}.ann'.format(self.data.shape[1],self.ngh_sizes[0],self.ngh_sizes[1],self.distance_threshold))
+
+        if not os.path.isfile(node_file):
             t = AnnoyIndex(2, 'euclidean')  # Length of item vector that will be indexed
             for i in trange(self.coords.shape[0]):
                 v = self.coords[i,:]
@@ -79,10 +85,10 @@ class GraphData(pl.LightningDataModule):
             print('Building tree...')
             t.build(10) # 10 trees
             print('Built tree.')
-            t.save('test.ann')
+            t.save(tree_file)
 
             u = AnnoyIndex(2, 'euclidean')
-            u.load('test.ann') # super fast, will just mmap the file
+            u.load(tree_file) # super fast, will just mmap the file
             print('Find neighbors below distance: {}'.format(d_th))
 
             def find_pairs(k,nghs,tree,distance):
@@ -101,12 +107,12 @@ class GraphData(pl.LightningDataModule):
                 return res
             res = find_nn_distance(self.coords,u,d_th)
 
-            with open('Edges-{}Nodes.pkl'.format(self.data.shape[1]), 'wb') as f:
+            with open(node_file, 'wb') as f:
                 pickle.dump(res, f)
         
         else:
             print('Edges file exists, loading...')
-            with open('Edges-{}Nodes.pkl'.format(self.data.shape[1]), "rb") as input_file:
+            with open(node_file, "rb") as input_file:
                 res = pickle.load(input_file)
 
         # Add nodes to graph
@@ -159,7 +165,7 @@ class GraphData(pl.LightningDataModule):
     def validation_dataloader(self):
         return NeighborSampler2(self.edges_tensor, node_idx=self.indices_validation,data=self.dataset,
                                sizes=self.ngh_sizes, return_e_id=False,
-                               batch_size=self.batch_size,
+                               batch_size=self.data.shape[1],
                                shuffle=False)
 
 
