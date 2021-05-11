@@ -28,9 +28,7 @@ from datetime import datetime, timedelta
 
 class Window: 
 
-    def __init__(self,dataset,columns:list=[],width=2000,height=2000,show_axis=False,color_dic={}): 
-        
-        super().__init__() 
+    def __init__(self,dataset,columns:list=[],width=2000,height=2000,show_axis=False): 
         
         """
         GUI for Open3D Make Plots Fast Again
@@ -41,15 +39,15 @@ class Window:
         """
         
         r = lambda: random.randint(0,255)
-        self.color_dic = color_dic
-
         self.columns= columns
         self.dataset = dataset
+
+        self.color_dic = self.dataset.color_dict
         for g in self.dataset.unique_genes:
             if g in self.color_dic:
-                self.color_dic[g] = [self.color_dic[g]]
+                pass
             else:
-                col = [(r()/255,r()/255,r()/255)]
+                col = (r()/255,r()/255,r()/255)
                 self.color_dic[g] = col
 
         # setting title 
@@ -57,12 +55,10 @@ class Window:
             print('Single Dataset')
             self.gene_label,self.x_label,self.y_label,self.unique_genes = self.dataset.gene_label,self.dataset.x_label, self.dataset.y_label,self.dataset.unique_genes
             self.dataset = [dataset]
-
             self.dic_pointclouds ={self.gene_label:self.unique_genes}
             self.dic_pointclouds['File'] = []
             for x in self.dataset:
                 self.dic_pointclouds['File'].append(str(x.filename))
-
             self.pass_multi_data()
             print('Data Loaded')
 
@@ -71,11 +67,9 @@ class Window:
             self.dataset = dataset
             self.gene_label,self.x_label,self.y_label = self.dataset.gene_label,self.dataset.x_label, self.dataset.y_label
             self.dic_pointclouds ={self.dataset.gene_label:self.dataset.unique_genes}
-
             self.dic_pointclouds['File'] = []
             for x in self.dataset:
                 self.dic_pointclouds['File'].append(str(x.filename))
-
             self.pass_multi_data()
             print('Data Loaded')
 
@@ -126,7 +120,7 @@ class Window:
                     if ca in self.color_dic:
                         pass
                     else:
-                        col = [(r()/255,r()/255,r()/255)]
+                        col = (r()/255,r()/255,r()/255)
                         self.color_dic[str(ca)] = col
 
             dataframe.make_gene_coordinates(save_z=True)
@@ -234,7 +228,7 @@ class ListWidget(QWidget):
             i = QListWidgetItem(str(e)) 
             try:
                 c = self.vis.color_dic[e]
-                i.setBackground(QColor(c[0][0]*255,c[0][1]*255,c[0][2]*255,120))
+                i.setBackground(QColor(c[0]*255,c[1]*255,c[2]*255,120))
             except:
                 pass
             self.list_widget.addItem(i)
@@ -253,7 +247,7 @@ class ListWidget(QWidget):
                         for g in self.selected:
                             #d = grpg[g]
                             g= str(g)
-                            cs= np.array([self.vis.color_dic[g] *(grpg.gene_coordinates[g].shape[0])])[0,:,:]
+                            cs= np.array([[self.vis.color_dic[g]] *(grpg.gene_coordinates[g].shape[0])])[0,:,:]
                             points.append(grpg.gene_coordinates[g])
                             colors.append(cs)   
                     else:
@@ -262,7 +256,7 @@ class ListWidget(QWidget):
                             if str(g) in self.selected:
                                 g= str(g)
                                 ps = d.loc[:,[self.vis.x_label,self.vis.y_label,'z_label']].values
-                                cs= np.array([self.vis.color_dic[g] *(ps.shape[0])])[0,:,:]
+                                cs= np.array([[self.vis.color_dic[g] ]*(ps.shape[0])])[0,:,:]
                                 points.append(ps)
                                 colors.append(cs)
 

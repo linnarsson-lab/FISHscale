@@ -223,7 +223,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
         self.x, self.y = self.y, self.x
         self._set_coordinate_properties()
 
-    def visualize(self,columns:list=[],width=2000,height=2000,show_axis=False,color_dic=None):
+    def visualize(self,columns:list=[],width=2000,height=2000,show_axis=False):
         """
         Run open3d visualization on self.data
         Pass to columns a list of strings, each string will be the class of the dots to be colored by. example: color by gene
@@ -241,14 +241,10 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
             App = QtWidgets.QApplication(sys.argv)
         else:
             print('QApplication instance already exists: %s' % str(App))
-        if self.color_dict:
-            color_dic = self.color_dict
-        window = Window(self,columns,width,height,color_dic=color_dic) 
+
+        window = Window(self,columns,width,height) 
         App.exec_()
         App.quit()
-
-
-
 
     def DBsegment(self,eps=25,min_samples=5,cutoff=250):
         """
