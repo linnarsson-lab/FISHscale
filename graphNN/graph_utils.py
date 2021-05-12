@@ -28,27 +28,39 @@ def compute_library_size(data):
     return local_mean, local_var
 
 class GraphData(pl.LightningDataModule):
+    """
+    Class to prepare the data for GraphSAGE
+
+    """    
     def __init__(self,
         data, # Data as numpy array of shape (Genes, Cells)
-        genes, # List of Genes
-        coords, # Array of shape (Cells, 2), coordinates for the cells
         cells=None, # Array with cell_ids of shape (Cells)
-        with_background=False,
         distance_threshold = 250,
-        minimum_nodes_connected = 3,
-        ngh_sizes = [5, 10],
-        train_p = 0.75,
-        batch_size= 128,
+        minimum_nodes_connected = 5,
+        ngh_sizes = [20, 10],
+        train_p = 0.25,
+        batch_size= 1024,
         num_workers=1,
-        save_to=''
+        save_to = ''
         ):
+        """
+        Initialize GraphData class
+
+        Args:
+            data (FISHscale.utils.dataset.Dataset): Dataset object
+            distance_threshold (int, optional): Maximum distance to consider to molecules neighbors. Defaults to 250um.
+            minimum_nodes_connected (int, optional): Nodes with less will be eliminated. Defaults to 5.
+            ngh_sizes (list, optional): Neighborhood sizes that will be aggregated. Defaults to [20, 10].
+            train_p (float, optional): Training size, as percentage. Defaults to 0.75.
+            batch_size (int, optional): Batch size. Defaults to 1024.
+            num_workers (int, optional): Workers for sampling. Defaults to 1.
+            num_workers (str, optional): Path to save network edges and nn tree. Defaults to current path.
+        """        
 
         super().__init__()
         
         self.ngh_sizes = ngh_sizes
         self.data = data
-        self.genes = genes
-        self.coords = coords
         self.cells = cells
         self.distance_threshold = distance_threshold
         self.minimum_nodes_connected = minimum_nodes_connected
@@ -57,7 +69,7 @@ class GraphData(pl.LightningDataModule):
         self.num_workers = num_workers
         self.save_to = save_to
 
-        self.local_mean,self.local_var = compute_library_size(self.data.T)
+        #self.local_mean,self.local_var = compute_library_size(self.data.T)
 
         if type(self.cells) == type(None):
             self.cells = np.arange(self.data.shape[1])
@@ -68,6 +80,22 @@ class GraphData(pl.LightningDataModule):
         self.compute_size()
         self.setup()
 
+    def molecules_df(self):
+        rows,cols = [],[]
+        for r in trange(self.data.unique_genes.shape[0]):
+            g = self.data.unique_genes[r]
+            expressed = np.where(self.data.gene == g)[0].tolist()
+            cols += expressed
+            rows += len(expressed)*[r]
+        rows = np.array(rows)
+        cols = np.array(cols)
+        data= np.ones_like(cols)
+
+        #sm = coo_matrix((data,(rows,cols)),shape=(self.data.unique_genes.shape[0],self.data.x.shape[0]))
+        sm = torch.sparse_coo_tensor([cols.tolist(),rows.tolist()],[1]*cols.shape[0],dtype=torch.float32)
+        return sm
+        #self.molecules_df = sm
+
     def buildGraph(self, d_th):
         print('Building graph...')
         G = nx.Graph()
@@ -77,8 +105,8 @@ class GraphData(pl.LightningDataModule):
 
         if not os.path.isfile(node_file):
             t = AnnoyIndex(2, 'euclidean')  # Length of item vector that will be indexed
-            for i in trange(self.coords.shape[0]):
-                v = self.coords[i,:]
+            for i in trange(coords.shape[0]):
+                v = coords[i,:]
                 t.add_item(i, v)
 
             print('Building tree...')
@@ -104,7 +132,7 @@ class GraphData(pl.LightningDataModule):
                     pair = find_pairs(i,nghs,u,distance)
                     res += pair
                 return res
-            res = find_nn_distance(self.coords,u,d_th)
+            res = find_nn_distance(coords,u,d_th)
 
             with open(node_file, 'wb') as f:
                 pickle.dump(res, f)
@@ -121,7 +149,6 @@ class GraphData(pl.LightningDataModule):
         # Add edges to graph
         G.add_edges_from(res)
         return G
-
     
     def prepare_data(self):
         # do-something
@@ -136,33 +163,27 @@ class GraphData(pl.LightningDataModule):
     
     def compute_size(self):
         self.train_size = int(self.cells.max()*self.train_p)
-        self.test_size = self.cells.max()-int(self.cells.max()*self.train_p)
-        
+        self.test_size = self.cells.max()-int(self.cells.max()*self.train_p)  
         random_state = np.random.RandomState(seed=0)
         permutation = random_state.permutation(self.cells.max())
-        
         self.indices_test = torch.tensor(permutation[:self.test_size])
-        #self.indices_test = np.array([x in indices_test for x in self.cells])
         self.indices_train = torch.tensor(permutation[self.test_size : (self.test_size + self.train_size)])
-        #self.indices_train = np.array([x in indices_train for x in self.cells])    
         self.indices_validation = torch.tensor(np.arange(self.cells.max()))
-        #self.indices_validation = np.array([x in indices_validation for x in self.cells])
-
 
     def setup(self, stage: Optional[str] = None):
         print('Loading dataset...')
         self.edges_tensor = torch.tensor(np.array(list(self.G.edges)).T)
-        #self.dataset = Data(torch.tensor(self.data.T,dtype=torch.float32),edge_index=self.edges_tensor)
-        self.dataset = torch.tensor(self.data.T,dtype=torch.float32)
+        self.d = self.molecules_df()
 
     def train_dataloader(self):
-        return NeighborSampler2(self.edges_tensor, node_idx=self.indices_train,data=self.dataset,
+        return NeighborSampler2(self.edges_tensor, node_idx=self.indices_train,data=self.d,
                                sizes=self.ngh_sizes, return_e_id=False,
                                batch_size=self.batch_size,
                                shuffle=True, num_workers=self.num_workers)
 
     def validation_dataloader(self):
-        return NeighborSampler2(self.edges_tensor, node_idx=self.indices_validation,data=self.dataset,
+        # set a big batch size, not all will be loaded in memory but it will loop relatively fast through large dataset
+        return NeighborSampler2(self.edges_tensor, node_idx=self.indices_validation,data=self.d,
                                sizes=self.ngh_sizes, return_e_id=False,
                                batch_size=102400,
                                shuffle=False)
@@ -341,8 +362,6 @@ class NeighborSampler2(torch.utils.data.DataLoader):
                                 dtype=torch.long)
 
         return batch,pos_batch,neg_batch
-
-
 
     def __repr__(self):
         return '{}(sizes={})'.format(self.__class__.__name__, self.sizes)

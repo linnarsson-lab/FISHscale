@@ -39,9 +39,7 @@ from datetime import datetime, timedelta
 
 class Window: 
 
-    def __init__(self,dataset,columns:list=[],width=2000,height=2000,show_axis=False,color_dic={}): 
-        
-        super().__init__() 
+    def __init__(self,dataset,columns:list=[],width=2000,height=2000,show_axis=False): 
         
         """
         GUI for Open3D Make Plots Fast Again
@@ -52,14 +50,15 @@ class Window:
         """
         
         r = lambda: random.randint(0,255)
-        self.color_dic = color_dic
         self.columns= columns
         self.dataset = dataset
+
+        self.color_dic = self.dataset.color_dict
         for g in self.dataset.unique_genes:
             if g in self.color_dic:
                 pass
             else:
-                col = [(r()/255,r()/255,r()/255)]
+                col = (r()/255,r()/255,r()/255)
                 self.color_dic[g] = col
 
         # setting title 
@@ -67,12 +66,10 @@ class Window:
             print('Single Dataset')
             self.gene_label,self.x_label,self.y_label,self.unique_genes = self.dataset.gene_label,self.dataset.x_label, self.dataset.y_label,self.dataset.unique_genes
             self.dataset = [dataset]
-
             self.dic_pointclouds ={self.gene_label:self.unique_genes}
             self.dic_pointclouds['File'] = []
             for x in self.dataset:
                 self.dic_pointclouds['File'].append(str(x.filename))
-
             self.pass_multi_data()
             print('Data Loaded')
 
@@ -81,23 +78,21 @@ class Window:
             self.dataset = dataset
             self.gene_label,self.x_label,self.y_label = self.dataset.gene_label,self.dataset.x_label, self.dataset.y_label
             self.dic_pointclouds ={self.dataset.gene_label:self.dataset.unique_genes}
-
             self.dic_pointclouds['File'] = []
             for x in self.dataset:
                 self.dic_pointclouds['File'].append(str(x.filename))
-
             self.pass_multi_data()
             print('Data Loaded')
-        
 
         self.show_axis= show_axis
         self.vis = Visualizer(self.dataset,self.dic_pointclouds, x_label=self.x_label,y_label=self.y_label,gene_label=self.gene_label,
             color_dic=self.color_dic,width=2000, height=2000, show_axis=self.show_axis)
+
         self.collapse = CollapsibleDialog(self.dic_pointclouds,vis=self.vis)
-        self.vis.collapse = self.collapse
         self.widget_lists = self.collapse.widget_lists
         self.collapse.show()
-        
+        self.vis.collapse = self.collapse
+    
         for l in self.widget_lists:
             if l.section == 'File':
                 l.list_widget.itemSelectionChanged.connect(l.selectionChanged)
@@ -106,33 +101,13 @@ class Window:
                 l.list_widget.itemSelectionChanged.connect(l.selectionChanged)
 
         self.collapse.qbutton.clicked.connect(self.quit)
-        #self.vis.execute()
-        '''
-        if sys.platform == 'linux':
-            self.vis.execute()
-            #self.collapse.allow_interaction.clicked.connect(self.interaction)
-        else:
-        '''
-        
-        self.vis.t.run()
-
-    def close(self):
-        self.vis.visM.destroy_window()
-        self.vis.cancel_timer = True
-        
+        self.vis.execute()
+            
     def quit(self):
-        self.close()
         self.collapse.break_loop = True
+        self.vis.break_loop = True
+        self.vis.visM.destroy_window()
 
-    '''
-    def interaction(self):
-        end_time = datetime.now() + timedelta(seconds=30)
-        while datetime.now() < end_time:
-            self.vis.execute()
-            if True == self.vis.collapse.break_loop:
-                break
-            time.sleep(0.01)   
-    '''
     def pass_multi_data(self):
         r = lambda: random.randint(0,255)
         ds = []
@@ -156,7 +131,7 @@ class Window:
                     if ca in self.color_dic:
                         pass
                     else:
-                        col = [(r()/255,r()/255,r()/255)]
+                        col = (r()/255,r()/255,r()/255)
                         self.color_dic[str(ca)] = col
 
             dataframe.make_gene_coordinates(save_z=True)
@@ -180,12 +155,10 @@ class Visualizer:
             points+= g.x.shape[0]
             Mx,mx = g.x.max(),g.x.min()
             My,my = g.y.max(),g.y.min()
-            
             if Mx > maxx:
                 maxx = Mx
             if mx < minx:
                 minx= mx
-
             if My > maxy:
                 maxy = My
             if my < miny:
@@ -208,20 +181,21 @@ class Visualizer:
         if show_axis:
             opt.show_coordinate_frame = True
         opt.background_color = np.asarray([0, 0, 0])
-        self.cancel_timer = False
+        self.break_loop = False
 
-        self.t = threading.Thread(target=self.execute)
 
     def execute(self):
+        self.visM.poll_events()
+        self.visM.update_renderer()
+        if sys.platform == 'linux':
+            QCoreApplication.processEvents()
+
+    def loop_execute(self):
         while True:
-        #self.visM.run()
-        #self.visM.destroy_window()
-            if self.cancel_timer:
+            if self.break_loop:
                 break
-            self.visM.poll_events()
-            self.visM.update_renderer()
-            time.sleep(0.1)
-    
+            self.execute()
+
 class SectionExpandButton(QPushButton):
     """a QPushbutton that can expand or collapse its section
     """
@@ -265,8 +239,7 @@ class ListWidget(QWidget):
             i = QListWidgetItem(str(e)) 
             try:
                 c = self.vis.color_dic[e]
-                i.setBackground(QColor(c[0][0]*255,c[0][1]*255,c[0][2]*255,120))
-
+                i.setBackground(QColor(c[0]*255,c[1]*255,c[2]*255,120))
             except:
                 pass
             self.list_widget.addItem(i)
@@ -285,7 +258,7 @@ class ListWidget(QWidget):
                         for g in self.selected:
                             #d = grpg[g]
                             g= str(g)
-                            cs= np.array([self.vis.color_dic[g] *(grpg.gene_coordinates[g].shape[0])])[0,:,:]
+                            cs= np.array([[self.vis.color_dic[g]] *(grpg.gene_coordinates[g].shape[0])])[0,:,:]
                             points.append(grpg.gene_coordinates[g])
                             colors.append(cs)   
                     else:
@@ -294,7 +267,7 @@ class ListWidget(QWidget):
                             if str(g) in self.selected:
                                 g= str(g)
                                 ps = d.loc[:,[self.vis.x_label,self.vis.y_label,'z_label']].values
-                                cs= np.array([self.vis.color_dic[g] *(ps.shape[0])])[0,:,:]
+                                cs= np.array([[self.vis.color_dic[g] ]*(ps.shape[0])])[0,:,:]
                                 points.append(ps)
                                 colors.append(cs)
 
@@ -302,10 +275,9 @@ class ListWidget(QWidget):
             self.vis.pcd.points = o3d.utility.Vector3dVector(ps)
             self.vis.pcd.colors = o3d.utility.Vector3dVector(cs)
             self.vis.visM.update_geometry(self.vis.pcd)
-            self.vis.visM.poll_events()
-            self.vis.visM.update_renderer()
+            self.vis.loop_execute()
 
-class CollapsibleDialog(QDialog):
+class CollapsibleDialog(QDialog,QObject):
     """a dialog to which collapsible sections can be added;
     subclass and reimplement define_section() to define sections and
         add them as (title, widget) tuples to self.sections
@@ -328,15 +300,9 @@ class CollapsibleDialog(QDialog):
         for x in self.dic:
             self.define_section(x)  
         self.add_sections()
-        
-        '''
-        if sys.platform == 'linux':
-            self.allow_interaction = QPushButton('Allow Interaction 30sec')
-            layout.addWidget(self.allow_interaction)
-        '''
+
         self.qbutton = QPushButton('Quit Visualizer')
         layout.addWidget(self.qbutton)
-        
         
     def possible(self):
         for x in self.widget_lists:

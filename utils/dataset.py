@@ -223,7 +223,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
         self.x, self.y = self.y, self.x
         self._set_coordinate_properties()
 
-    def visualize(self,columns:list=[],width=2000,height=2000,show_axis=False,color_dic=None):
+    def visualize(self,columns:list=[],width=2000,height=2000,show_axis=False):
         """
         Run open3d visualization on self.data
         Pass to columns a list of strings, each string will be the class of the dots to be colored by. example: color by gene
@@ -242,12 +242,9 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
         else:
             print('QApplication instance already exists: %s' % str(App))
 
-        window = Window(self,columns,width,height,color_dic) 
+        window = Window(self,columns,width,height) 
         App.exec_()
         App.quit()
-
-
-
 
     def DBsegment(self,eps=25,min_samples=5,cutoff=250):
         """
@@ -271,14 +268,6 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
         print('Background molecules: {}'.format((self.labels == -1).sum()))
         print('DBscan found {} clusters'.format(self.labels.max()))
         
-    def make_molecules_df(self):
-        molecules_df = []
-        
-        for g in self.gene:
-            e = np.where(self.unique_genes != g, np.zeros(self.unique_genes.shape[0]),1)
-            molecules_df.append(e)
-        self.molecules_df = np.stack(molecules_df).T
-
     def make_loom(self,
         filename:str,
         cell_column:str,
@@ -672,7 +661,8 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter):
             App = QtWidgets.QApplication(sys.argv)
         else:
             print('QApplication instance already exists: %s' % str(App))
-
+        if self.color_dict:
+            color_dic = self.color_dict
         window = Window(self,columns,width,height,color_dic) 
         
         App.exec_()
