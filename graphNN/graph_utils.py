@@ -54,7 +54,7 @@ class GraphData(pl.LightningDataModule):
             train_p (float, optional): Training size, as percentage. Defaults to 0.75.
             batch_size (int, optional): Batch size. Defaults to 1024.
             num_workers (int, optional): Workers for sampling. Defaults to 1.
-            num_workers (str, optional): Path to save network edges and nn tree. Defaults to current path.
+            save_to (str, optional): Path to save network edges and nn tree. Defaults to current path.
         """        
 
         super().__init__()
