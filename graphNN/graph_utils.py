@@ -29,23 +29,37 @@ def compute_library_size(data):
     return local_mean, local_var
 
 class GraphData(pl.LightningDataModule):
+    """
+    Class to prepare the data for GraphSAGE
+
+    """    
     def __init__(self,
         data, # Data as numpy array of shape (Genes, Cells)
         cells=None, # Array with cell_ids of shape (Cells)
-        with_background=False,
         distance_threshold = 250,
         minimum_nodes_connected = 5,
-        ngh_sizes = [5, 10],
-        train_p = 0.75,
-        batch_size= 128,
-        num_workers=1
+        ngh_sizes = [20, 10],
+        train_p = 0.25,
+        batch_size= 1024,
+        num_workers=1,
         ):
+        """
+        Initialize GraphData class
+
+        Args:
+            data (FISHscale.utils.dataset.Dataset): Dataset object
+            distance_threshold (int, optional): Maximum distance to consider to molecules neighbors. Defaults to 250um.
+            minimum_nodes_connected (int, optional): Nodes with less will be eliminated. Defaults to 5.
+            ngh_sizes (list, optional): Neighborhood sizes that will be aggregated. Defaults to [20, 10].
+            train_p (float, optional): Training size, as percentage. Defaults to 0.75.
+            batch_size (int, optional): Batch size. Defaults to 1024.
+            num_workers (int, optional): Workers for sampling. Defaults to 1.
+        """        
 
         super().__init__()
         
         self.ngh_sizes = ngh_sizes
         self.data = data
-
         self.cells = cells
         self.distance_threshold = distance_threshold
         self.minimum_nodes_connected = minimum_nodes_connected
@@ -154,17 +168,16 @@ class GraphData(pl.LightningDataModule):
     def setup(self, stage: Optional[str] = None):
         print('Loading dataset...')
         self.edges_tensor = torch.tensor(np.array(list(self.G.edges)).T)
-        #self.dataset = Data(torch.tensor(self.data.T,dtype=torch.float32),edge_index=self.edges_tensor)
-        self.dataset = self.molecules_df()
+        self.d = self.molecules_df()
 
     def train_dataloader(self):
-        return NeighborSampler2(self.edges_tensor, node_idx=self.indices_train,data=self.dataset,
+        return NeighborSampler2(self.edges_tensor, node_idx=self.indices_train,data=self.d,
                                sizes=self.ngh_sizes, return_e_id=False,
                                batch_size=self.batch_size,
                                shuffle=True, num_workers=self.num_workers)
 
     def validation_dataloader(self):
-        return NeighborSampler2(self.edges_tensor, node_idx=self.indices_validation,data=self.dataset,
+        return NeighborSampler2(self.edges_tensor, node_idx=self.indices_validation,data=self.d,
                                sizes=self.ngh_sizes, return_e_id=False,
                                batch_size=self.batch_size,
                                shuffle=False)
