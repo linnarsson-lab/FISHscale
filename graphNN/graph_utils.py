@@ -16,7 +16,6 @@ from typing import List, Optional, Tuple, NamedTuple, Union, Callable
 from torch import Tensor
 from torch_sparse import SparseTensor
 
-
 def compute_library_size(data):
     sum_counts = data.sum(axis=1)
     masked_log_sum = np.ma.log(sum_counts)
@@ -165,7 +164,7 @@ class GraphData(pl.LightningDataModule):
     def validation_dataloader(self):
         return NeighborSampler2(self.edges_tensor, node_idx=self.indices_validation,data=self.dataset,
                                sizes=self.ngh_sizes, return_e_id=False,
-                               batch_size=self.data.shape[1],
+                               batch_size=102400,
                                shuffle=False)
 
 
@@ -330,7 +329,7 @@ class NeighborSampler2(torch.utils.data.DataLoader):
         return out
 
     def sample_pos_neg(self, batch):
-        batch = torch.tensor(batch)
+        #batch = torch.tensor(batch)
         row, col, _ = self.adj_t.coo()
 
         # For each node in `batch`, we sample a direct neighbor (as positive
