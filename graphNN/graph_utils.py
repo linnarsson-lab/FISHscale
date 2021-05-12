@@ -16,16 +16,6 @@ from typing import List, Optional, Tuple, NamedTuple, Union, Callable
 from torch import Tensor
 from torch_sparse import SparseTensor
 
-def compute_library_size(data):
-    sum_counts = data.sum(axis=1)
-    masked_log_sum = np.ma.log(sum_counts)
-    
-    log_counts = masked_log_sum.filled(0)
-    
-    local_mean = np.mean(log_counts).astype(np.float32)
-    local_var = np.var(log_counts).astype(np.float32)
-
-    return local_mean, local_var
 
 class GraphData(pl.LightningDataModule):
     """
@@ -187,6 +177,17 @@ class GraphData(pl.LightningDataModule):
                                sizes=self.ngh_sizes, return_e_id=False,
                                batch_size=102400,
                                shuffle=False)
+
+def compute_library_size(data):
+    sum_counts = data.sum(axis=1)
+    masked_log_sum = np.ma.log(sum_counts)
+    
+    log_counts = masked_log_sum.filled(0)
+    
+    local_mean = np.mean(log_counts).astype(np.float32)
+    local_var = np.var(log_counts).astype(np.float32)
+
+    return local_mean, local_var
 
 
 class NeighborSampler2(torch.utils.data.DataLoader):
