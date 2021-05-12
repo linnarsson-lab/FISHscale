@@ -268,14 +268,6 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
         print('Background molecules: {}'.format((self.labels == -1).sum()))
         print('DBscan found {} clusters'.format(self.labels.max()))
         
-    def make_molecules_df(self):
-        molecules_df = []
-        
-        for g in self.gene:
-            e = np.where(self.unique_genes != g, np.zeros(self.unique_genes.shape[0]),1)
-            molecules_df.append(e)
-        self.molecules_df = np.stack(molecules_df).T
-
     def make_loom(self,
         filename:str,
         cell_column:str,
