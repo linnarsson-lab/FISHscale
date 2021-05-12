@@ -177,9 +177,10 @@ class GraphData(pl.LightningDataModule):
                                shuffle=True, num_workers=self.num_workers)
 
     def validation_dataloader(self):
+        # set a big batch size, not all will be loaded in memory but it will loop relatively fast through large dataset
         return NeighborSampler2(self.edges_tensor, node_idx=self.indices_validation,data=self.d,
                                sizes=self.ngh_sizes, return_e_id=False,
-                               batch_size=self.batch_size,
+                               batch_size=102400,
                                shuffle=False)
 
 
