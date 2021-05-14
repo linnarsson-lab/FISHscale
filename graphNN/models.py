@@ -34,9 +34,8 @@ class SAGE(pl.LightningModule):
 
         for i in range(num_layers):
             in_channels = in_channels if i == 0 else hidden_channels
-            self.convs.append(SAGEConv(in_channels, hidden_channels))
+            self.convs.append(SAGEConv(in_channels, hidden_channels,normalize=True))
             
-
     def neighborhood_forward(self,x,adjs):
         x = torch.log(x + 1)
         for i, (edge_index, _, size) in enumerate(adjs):
@@ -46,6 +45,7 @@ class SAGE(pl.LightningModule):
             if i != self.num_layers - 1:
                 x = x.relu()
                 x = F.dropout(x, p=0.1, training=self.training)
+
         return x
 
     def forward(self,x,pos_x,neg_x,adjs):
@@ -70,7 +70,6 @@ class SAGE(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         x,pos,neg,adjs= batch
-
         loss= self(x,pos,neg,adjs)
         self.log('train_loss', loss)
         return loss

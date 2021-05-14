@@ -15,7 +15,7 @@ from torch_cluster import random_walk
 from typing import List, Optional, Tuple, NamedTuple, Union, Callable
 from torch import Tensor
 from torch_sparse import SparseTensor
-
+from scipy import sparse
 
 class GraphData(pl.LightningDataModule):
     """
@@ -31,7 +31,8 @@ class GraphData(pl.LightningDataModule):
         train_p = 0.25,
         batch_size= 1024,
         num_workers=1,
-        save_to = ''
+        save_to = '',
+        subsample=1,
         ):
         """
         Initialize GraphData class
@@ -60,10 +61,11 @@ class GraphData(pl.LightningDataModule):
         self.save_to = save_to
 
         #self.local_mean,self.local_var = compute_library_size(self.data.T)
-
         if type(self.cells) == type(None):
-            self.cells = np.arange(self.data.shape[1])
+            self.cells = np.arange(self.data.x.shape[0])
 
+        if subsample: 
+            self.cells = np.random.randint(0,self.data.x.shape[0], int(subsample*self.data.x.shape[0]))
         self.G = self.buildGraph(self.distance_threshold)
 
         self.cleanGraph()
@@ -74,24 +76,31 @@ class GraphData(pl.LightningDataModule):
         rows,cols = [],[]
         for r in trange(self.data.unique_genes.shape[0]):
             g = self.data.unique_genes[r]
-            expressed = np.where(self.data.gene == g)[0].tolist()
+            filt = self.data.gene[self.cells]
+            expressed = np.where(filt == g)[0].tolist()
             cols += expressed
             rows += len(expressed)*[r]
         rows = np.array(rows)
         cols = np.array(cols)
         data= np.ones_like(cols)
-
+        
         #sm = coo_matrix((data,(rows,cols)),shape=(self.data.unique_genes.shape[0],self.data.x.shape[0]))
-        sm = torch.sparse_coo_tensor([cols.tolist(),rows.tolist()],[1]*cols.shape[0],dtype=torch.float32)
+        #sm = torch.sparse_coo_tensor([cols.tolist(),rows.tolist()],[1]*cols.shape[0],dtype=torch.float16,device='cuda')
+        sm = sparse.csr_matrix((data,(rows,cols))).T
+        print(sm.shape)
+        
+        #works: return sm.toarray() 
         return sm
-        #self.molecules_df = sm
 
     def buildGraph(self, d_th):
         print('Building graph...')
         G = nx.Graph()
 
-        node_file = os.path.join(self.save_to,'Edges-{}Nodes-Ngh{}-{}-dst{}.pkl'.format(self.data.shape[1],self.ngh_sizes[0],self.ngh_sizes[1],self.distance_threshold))
-        tree_file = os.path.join(self.save_to,'Tree-{}Nodes-Ngh{}-{}-dst{}.ann'.format(self.data.shape[1],self.ngh_sizes[0],self.ngh_sizes[1],self.distance_threshold))
+        node_file = os.path.join(self.save_to,'Edges-{}Nodes-Ngh{}-{}-dst{}.pkl'.format(self.cells.shape[0],self.ngh_sizes[0],self.ngh_sizes[1],self.distance_threshold))
+        tree_file = os.path.join(self.save_to,'Tree-{}Nodes-Ngh{}-{}-dst{}.ann'.format(self.cells.shape[0],self.ngh_sizes[0],self.ngh_sizes[1],self.distance_threshold))
+
+        coords = np.array([self.data.x[self.cells],self.data.y[self.cells]]).T
+        print(coords.shape)
 
         if not os.path.isfile(node_file):
             t = AnnoyIndex(2, 'euclidean')  # Length of item vector that will be indexed
@@ -135,7 +144,7 @@ class GraphData(pl.LightningDataModule):
         # Add nodes to graph
         G.add_nodes_from((self.cells), test=False, val=False, label=0)
         # Add node features to graph
-        nx.set_node_attributes(G,dict(zip((self.cells), self.data)), 'expression')
+        #nx.set_node_attributes(G,dict(zip((self.cells), self.data)), 'expression')
         # Add edges to graph
         G.add_edges_from(res)
         return G
@@ -152,19 +161,21 @@ class GraphData(pl.LightningDataModule):
                     self.G.remove_node(node)
     
     def compute_size(self):
-        self.train_size = int(self.cells.max()*self.train_p)
-        self.test_size = self.cells.max()-int(self.cells.max()*self.train_p)  
+        self.train_size = int(self.cells.shape[0]*self.train_p)
+        self.test_size = self.cells.shape[0]-int(self.cells.shape[0]*self.train_p)  
         random_state = np.random.RandomState(seed=0)
-        permutation = random_state.permutation(self.cells.max())
+        permutation = random_state.permutation(self.cells.shape[0])
         self.indices_test = torch.tensor(permutation[:self.test_size])
         self.indices_train = torch.tensor(permutation[self.test_size : (self.test_size + self.train_size)])
-        self.indices_validation = torch.tensor(np.arange(self.cells.max()))
+        self.indices_validation = torch.tensor(np.arange(self.cells.shape[0]))
 
     def setup(self, stage: Optional[str] = None):
         print('Loading dataset...')
         self.edges_tensor = torch.tensor(np.array(list(self.G.edges)).T)
+        #self.d = torch.tensor(self.molecules_df(),dtype=torch.float32) #works
         self.d = self.molecules_df()
-
+        
+        print('tensor',self.d.shape)
     def train_dataloader(self):
         return NeighborSampler2(self.edges_tensor, node_idx=self.indices_train,data=self.d,
                                sizes=self.ngh_sizes, return_e_id=False,
@@ -346,7 +357,15 @@ class NeighborSampler2(torch.utils.data.DataLoader):
         adjs = adjs[0] if len(adjs) == 1 else adjs[::-1]
         out = (batch_size, n_id, adjs)
         n_id,pos,neg = self.sample_pos_neg(n_id)
-        out = (self.data[n_id],self.data[pos],self.data[neg],adjs)
+
+        #out = (self.data[n_id],self.data[pos],self.data[neg], adjs) #v1 no sparse tensor
+
+        #out v2 using sparse tensor
+        out = (torch.tensor(self.data[n_id].toarray(),dtype=torch.float32),
+                torch.tensor(self.data[pos].toarray(),dtype=torch.float32),
+                torch.tensor(self.data[neg].toarray(),dtype=torch.float32),adjs)
+
+
         out = self.transform(*out) if self.transform is not None else out
         return out
 
