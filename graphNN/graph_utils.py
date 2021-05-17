@@ -16,6 +16,10 @@ from typing import List, Optional, Tuple, NamedTuple, Union, Callable
 from torch import Tensor
 from torch_sparse import SparseTensor
 from scipy import sparse
+from datetime import datetime
+from pytorch_lightning.callbacks import ModelCheckpoint
+import pytorch_lightning as pl
+
 
 class GraphData(pl.LightningDataModule):
     """
@@ -24,6 +28,8 @@ class GraphData(pl.LightningDataModule):
     """    
     def __init__(self,
         data, # Data as numpy array of shape (Genes, Cells)
+        model, # GraphSAGE model
+        analysis_name:str,
         cells=None, # Array with cell_ids of shape (Cells)
         distance_threshold = 250,
         minimum_nodes_connected = 5,
@@ -38,7 +44,9 @@ class GraphData(pl.LightningDataModule):
         Initialize GraphData class
 
         Args:
-            data (FISHscale.utils.dataset.Dataset): Dataset object
+            data (FISHscale.utils.dataset.Dataset): Dataset object.
+            model (FISHscale.graphNN.models.SAGE): GraphSAGE model.
+            analysis_name (str): Filename for data and analysis.
             distance_threshold (int, optional): Maximum distance to consider to molecules neighbors. Defaults to 250um.
             minimum_nodes_connected (int, optional): Nodes with less will be eliminated. Defaults to 5.
             ngh_sizes (list, optional): Neighborhood sizes that will be aggregated. Defaults to [20, 10].
@@ -49,7 +57,9 @@ class GraphData(pl.LightningDataModule):
         """        
 
         super().__init__()
-        
+
+        self.model = model
+        self.analysis_name = analysis_name
         self.ngh_sizes = ngh_sizes
         self.data = data
         self.cells = cells
@@ -60,17 +70,29 @@ class GraphData(pl.LightningDataModule):
         self.num_workers = num_workers
         self.save_to = save_to
 
-        #self.local_mean,self.local_var = compute_library_size(self.data.T)
+        self.folder = self.analysis_name+ '_' +datetime.now().strftime("%Y-%m-%d-%H:%M:%S")
+        os.mkdir(self.folder)
+
         if type(self.cells) == type(None):
             self.cells = np.arange(self.data.x.shape[0])
 
-        if subsample: 
-            self.cells = np.random.randint(0,self.data.x.shape[0], int(subsample*self.data.x.shape[0]))
+        self.cells = np.random.randint(0,self.data.x.shape[0], int(subsample*self.data.x.shape[0]))
+        
+        # Save random cell selection
+        np.save(self.folder +'/random_cells_{}.npy'.format(),self.cells)
+        
         self.G = self.buildGraph(self.distance_threshold)
-
         self.cleanGraph()
         self.compute_size()
         self.setup()
+
+        self.checkpoint_callback = ModelCheckpoint(
+            monitor='train_loss',
+            dirpath='',
+            filename='-{epoch:02d}-{train_loss:.2f}',
+            save_top_k=2,
+            mode='min',
+            )
 
     def molecules_df(self):
         rows,cols = [],[]
@@ -84,12 +106,8 @@ class GraphData(pl.LightningDataModule):
         cols = np.array(cols)
         data= np.ones_like(cols)
         
-        #sm = coo_matrix((data,(rows,cols)),shape=(self.data.unique_genes.shape[0],self.data.x.shape[0]))
-        #sm = torch.sparse_coo_tensor([cols.tolist(),rows.tolist()],[1]*cols.shape[0],dtype=torch.float16,device='cuda')
         sm = sparse.csr_matrix((data,(rows,cols))).T
         print(sm.shape)
-        
-        #works: return sm.toarray() 
         return sm
 
     def buildGraph(self, d_th):
@@ -98,7 +116,6 @@ class GraphData(pl.LightningDataModule):
 
         node_file = os.path.join(self.save_to,'Edges-{}Nodes-Ngh{}-{}-dst{}.pkl'.format(self.cells.shape[0],self.ngh_sizes[0],self.ngh_sizes[1],self.distance_threshold))
         tree_file = os.path.join(self.save_to,'Tree-{}Nodes-Ngh{}-{}-dst{}.ann'.format(self.cells.shape[0],self.ngh_sizes[0],self.ngh_sizes[1],self.distance_threshold))
-
         coords = np.array([self.data.x[self.cells],self.data.y[self.cells]]).T
         print(coords.shape)
 
@@ -142,10 +159,12 @@ class GraphData(pl.LightningDataModule):
                 res = pickle.load(input_file)
 
         # Add nodes to graph
-        G.add_nodes_from((self.cells), test=False, val=False, label=0)
+        print('Add nodes')
+        G.add_nodes_from((np.arange(self.cells.shape[0]).tolist()), test=False, val=False, label=0)
         # Add node features to graph
         #nx.set_node_attributes(G,dict(zip((self.cells), self.data)), 'expression')
         # Add edges to graph
+        print('Add edges')
         G.add_edges_from(res)
         return G
     
@@ -189,12 +208,39 @@ class GraphData(pl.LightningDataModule):
                                batch_size=102400,
                                shuffle=False)
 
+    def train(self,max_epochs=5):
+        trainer = pl.Trainer(gpus=-1,callbacks=self.checkpoint_callback,max_epochs=max_epochs)
+        trainer.fit(self.model, self.train_dataloader())
+
+    def get_latent(self):
+        print('Training done, generating embedding...')
+        embedding = []
+        for x,pos,neg,adjs in self.validation_dataloader():
+            embedding.append(self.model.neighborhood_forward(x,adjs).detach().numpy())
+        self.embedding = np.concatenate(embedding)
+        np.save(self.folder+'/loadings.npy',embedding)
+
+    def make_umap(self):
+        import umap
+        reducer = umap.UMAP(
+            n_neighbors=15,
+            n_components=3,
+            n_epochs=250,
+            init='spectral',
+            min_dist=0.1,
+            spread=1,
+            random_state=1,
+            verbose=True,
+            n_jobs=-1
+        )
+        umap_embedding = reducer.fit_transform(self.embedding)
+        np.save(self.folder+'umap.npy',umap_embedding)
+
+
 def compute_library_size(data):
     sum_counts = data.sum(axis=1)
     masked_log_sum = np.ma.log(sum_counts)
-    
     log_counts = masked_log_sum.filled(0)
-    
     local_mean = np.mean(log_counts).astype(np.float32)
     local_var = np.var(log_counts).astype(np.float32)
 

@@ -23,18 +23,24 @@ class SAGE(pl.LightningModule):
     def __init__(self, 
         in_channels :int, 
         hidden_channels:int,
-        num_layers,
-
+        num_layers:int=2,
+        normalize:bool=False
         ):
 
         super().__init__()
-        
+        self.save_hyperparameters()
+
         self.num_layers = num_layers
+        self.normalize = normalize
         self.convs = torch.nn.ModuleList()
 
         for i in range(num_layers):
             in_channels = in_channels if i == 0 else hidden_channels
-            self.convs.append(SAGEConv(in_channels, hidden_channels,normalize=True))
+            # L2 regularization only on last layer
+            if i == num_layers-1:
+                self.convs.append(SAGEConv(in_channels, hidden_channels,normalize=self.normalize))
+            else:
+                self.convs.append(SAGEConv(in_channels, hidden_channels,normalize=False))
             
     def neighborhood_forward(self,x,adjs):
         x = torch.log(x + 1)
@@ -62,7 +68,6 @@ class SAGE(pl.LightningModule):
         
         n_loss = - pos_loss - neg_loss
         return n_loss
-
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=0.01)
