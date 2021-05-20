@@ -37,7 +37,6 @@ class Iteration:
     def _make_xyz_coordinates(self):
         return  {g: np.column_stack((xy, np.array([self.z_offset]*xy.shape[0]))).astype('float32') for g, xy in self._make_xy_coordinates().items()}
 
-    #@lru_cache(maxsize=None) #Change to functools.cache when supporting python >= 3.9
     def make_gene_coordinates(self, save_z = False) -> None:
         """Make a dictionary with point coordinates for each gene.
 
@@ -48,9 +47,6 @@ class Iteration:
         """
         if save_z:
             self.gene_coordinates = self._make_xyz_coordinates()
-            #self.gene_coordinates = {g: np.column_stack((xy, np.array([self.z_offset]*xy.shape[0]))) for g, xy in self._make_xy_coordinates().items()}
-            
-            #self.gene_coordinates = {g: np.column_stack((x, y,np.array([self.z_offset]*x.shape[0]))) for g, x, y in self.xy_groupby_gene_generator()}
         else:
             self.gene_coordinates = self._make_xy_coordinates()
             

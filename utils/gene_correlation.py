@@ -186,7 +186,7 @@ class GeneCorr:
         return self.CBC_matrix(radius, self.gene_coordinates, self.gene_KDTree, workers)
 
 
-    def gene_corr_hex(self, method: str='spearman', df_hex: Any=None, spacing: float=None, min_count: int=None) -> Any:
+    def gene_corr_hex(self, method: str='spearman', df_hex: Any=None, spacing: float=None, min_count: int=1) -> Any:
         """Correlate gene expression over hexagonally binned data.
 
         Args:
@@ -212,7 +212,7 @@ class GeneCorr:
         """
 
         if df_hex == None:
-            if spacing == None or min_count == None:
+            if spacing == None and min_count == None:
                 raise Exception('If "df_hex" is not defined, both "spacing" and "min_count" need to be defined.')
             df_hex, hex_coord, hexbin_hexagon_shape = self.make_hexbin(spacing, min_count)
 
