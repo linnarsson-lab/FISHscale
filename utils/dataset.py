@@ -1,3 +1,4 @@
+import re
 from typing import Union, Any, Optional
 import pandas as pd
 from FISHscale import Window
@@ -29,6 +30,8 @@ try:
     from pyarrow.parquet import ParquetFile
 except ModuleNotFoundError as e:
     print(f'Please install "pyarrow" to load ".parquet" files. Without only .csv files are supported which are memory inefficient. Error: {e}')
+from dask import dataframe as dd
+import dask
 
 class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, SpatialMetrics):
     """
@@ -42,7 +45,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
         x_label: str = 'r_px_microscope_stitched',
         y_label: str ='c_px_microscope_stitched',
         gene_label: str = 'below3Hdistance_genes',
-        other_columns: Optional[list] = None,
+        other_columns: Optional[list] = [],
         unique_genes: Optional[np.ndarray] = None,
         z: float = 0,
         pixel_size: str = '1 micrometer',
@@ -108,26 +111,23 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
         #Open file
         self.filename = filename
         self.dataset_name = self.filename.split('/')[-1].split('.')[0]
-        self.x_label = x_label
-        self.y_label = y_label
-        self.gene_label = gene_label
         self.other_columns = other_columns
-        self.x, self.y, self.gene = self.load_data(self.filename, self.x_label, self.y_label, self.gene_label, self.other_columns)
+        self.df = self.load_data(self.filename, x_label, y_label, gene_label, self.other_columns)
         self.z = z
+
         #Get gene list
         if not isinstance(unique_genes, np.ndarray):
-            self.unique_genes = np.unique(self.gene)
+            self.unique_genes = self.df.g.drop_duplicates().compute().to_numpy()
         else:
             self.unique_genes = unique_genes
 
         #Handle scale
         self.ureg = UnitRegistry()
         self.pixel_size = self.ureg(pixel_size)
+        self.pixel_size = self.pixel_size.to('micrometer')
         self.pixel_area = self.pixel_size ** 2
-        self.x = self.x * self.pixel_size
-        self.x = self.x.to('micrometer').magnitude
-        self.y = self.y * self.pixel_size
-        self.y = self.y.to('micrometer').magnitude
+        self.df.x = self.df.x * self.pixel_size.magnitude
+        self.df.y = self.df.y * self.pixel_size.magnitude
         self.unit_scale = self.ureg('1 micrometer')
         self.area_scale = self.unit_scale ** 2
 
@@ -138,36 +138,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
         self.auto_handle_color_dict(color_input)
         #Verbosity
         self.verbose = verbose
-        self.vp(f'Loaded: {self.dataset_name}')
-        
-    def memmap_make(self, data: np.ndarray, dtype: Any = None) -> np.memmap:
-        """Make numpy memmap object and fill with data.
-        
-        Best practice is to give the data yielding function as input for 
-        "data". Otherwise manually delete the input after the memmap array
-        has been generated.
-
-        Args:
-            data (np.ndarray): Input data to write to memmap array.
-            dtype (Any): Explicity set dtype of memmap array. If not given will
-                take dtype of data.
-
-        Returns:
-            [np.memmap]: Memory mapped array. 
-        """
-        #get data shape and type
-        shape = data.shape
-        if dtype == None:
-            dtype = data.dtype
-        
-        #Generate memmap array with same shape
-        with tempfile.NamedTemporaryFile() as ntf:           
-            arr = np.memmap(ntf, mode='w+', shape=shape, dtype=dtype)
-        #Write data to memmap array
-        arr[:] = data[:]
-        #Return array
-        return arr
-        
+        self.vp(f'Loaded: {self.dataset_name}')      
 
     def load_data(self, filename: str, x_label: str, y_label: str, gene_label: str, 
         other_columns: Optional[list]) -> Union[np.ndarray, np.ndarray, np.ndarray, Optional[np.ndarray]]:
@@ -196,52 +167,26 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
                 If no other data specified will retun None.
 
         """
+        
         if filename.endswith('.parquet') or filename.endswith('.csv'):
             
             if filename.endswith('.parquet'):
-                #Open function
-                open_f = lambda f, c: pd.read_parquet(f, columns = c)
-                #Get number of rows
-                pfile = ParquetFile(filename)
-                n_rows = pfile.metadata.num_rows
+                open_f = lambda f, c: dd.read_parquet(f, columns = c)
             else:
-                #Open function
-                open_f = lambda f, c: pd.read_csv(f, usecols = c)
-                print('Warning: Consider using ".parquet" files instead of ".csv" for more efficient memory handling')
-                #Get number of rows
-                with open(filename) as fp:
-                    n_rows = 0
-                    for _ in fp:
-                        n_rows += 1
+                open_f = lambda f, c: dd.read_csv(f, usecols = c)
             
-            if (n_rows > 10000 or self.part_of_multidataset == True) and os.name != 'nt':
-                #make memmap file
-                x = self.memmap_make(open_f(filename, [x_label]).to_numpy(dtype=np.float32), np.float32,)
-                y = self.memmap_make(open_f(filename, [y_label]).to_numpy(dtype=np.float32), np.float32)
-                genes = self.memmap_make( open_f(filename, [gene_label]).to_numpy())
-                if other_columns != None:
-                    print('found other columns')
-                    for o in other_columns:
-                        setattr(self, o, self.memmap_make(open_f(filename, columns = [o]).to_numpy()))
-                
-            else:
-                if os.name == 'nt':
-                    print('Warning: opening huge or multiple data files on Windows can lead to problems with RAM.')
-                    #Aparently Windows is not good at handling tempfiles with np.memmap.
-                    #See: https://stackoverflow.com/a/24219413/3903368
-                x = open_f(filename, [x_label]).to_numpy(dtype=np.float32)
-                y = open_f(filename, [y_label]).to_numpy(dtype=np.float32)
-                genes = open_f(filename, [gene_label]).to_numpy()
-                if other_columns != None:
-                    print('found other columns')
-                    for o in other_columns:
-                        setattr(self, o, open_f(filename, columns = [o]).to_numpy())
-                
+            col_to_open = [[self.x_label, self.y_label, self.gene_label], other_columns]
+            col_to_open = list(itertools.chain.from_iterable(col_to_open))
+            rename_col = dict(zip([self.x_label, self.y_label, self.gene_label], ['x', 'y', 'g']))
+            
+            data = open_f(filename, col_to_open)
+            data = data.rename(columns = rename_col)
+            
         else:
             raise IOError (f'Invalid file type: {filename}, should be in ".parquet" or ".csv" format.') 
         
-        return x, y, genes
-
+        return data
+            
     def vp(self, *args):
         """Function to print output if verbose mode is True
         """
@@ -265,10 +210,9 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
         self.y_offset = y_offset
         self.z_offset = z_offset
         if apply:
-            self.x += self.x_offset
-            self.y += self.y_offset
+            self.df.x += self.x_offset
+            self.df.y += self.y_offset
             self.z += self.z_offset
-
         self._set_coordinate_properties()
 
     def _set_coordinate_properties(self):
@@ -276,10 +220,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
 
         Calculates XY min, max, extend and center of the points. 
         """
-        self.x_min = self.x.min()
-        self.y_min = self.y.min()
-        self.x_max = self.x.max()
-        self.y_max = self.y.max()
+        self.x_min, self.y_min, self.x_max, self.y_max = dask.compute(self.df.x.min(), self.df.y.max(), self.df.x.max(), self.df.y.max())
         self.x_extend = self.x_max - self.x_min
         self.y_extend = self.y_max - self.y_min 
         self.xy_center = (self.x_max - 0.5*self.x_extend, self.y_max - 0.5*self.y_extend)
@@ -413,7 +354,7 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter):
         x_label: str = 'r_px_microscope_stitched',
         y_label: str ='c_px_microscope_stitched',
         gene_label: str = 'below3Hdistance_genes',
-        other_columns: Optional[list] = None,
+        other_columns: Optional[list] = [],
         z: float = 0,
         pixel_size: str = '1 micrometer',
         x_offset: float = 0,
