@@ -132,6 +132,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
         self.area_scale = self.unit_scale ** 2
 
         #Handle offset
+        self._offset_flag = False
         self.offset_data(x_offset, y_offset, z_offset, apply = apply_offset)
 
         #Handle colors
@@ -175,9 +176,9 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
             else:
                 open_f = lambda f, c: dd.read_csv(f, usecols = c)
             
-            col_to_open = [[self.x_label, self.y_label, self.gene_label], other_columns]
+            col_to_open = [[x_label, y_label, gene_label], other_columns]
             col_to_open = list(itertools.chain.from_iterable(col_to_open))
-            rename_col = dict(zip([self.x_label, self.y_label, self.gene_label], ['x', 'y', 'g']))
+            rename_col = dict(zip([x_label, y_label, gene_label], ['x', 'y', 'g']))
             
             data = open_f(filename, col_to_open)
             data = data.rename(columns = rename_col)
@@ -214,6 +215,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
             self.df.y += self.y_offset
             self.z += self.z_offset
         self._set_coordinate_properties()
+        self._offset_flag = True
 
     def _set_coordinate_properties(self):
         """Calculate properties of coordinates.
@@ -228,8 +230,13 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
     def transpose(self):
         """Transpose data. Switches X and Y.
         """
-        self.x, self.y = self.y, self.x
-        self._set_coordinate_properties()
+        rename_col = {'x': 'y', 'y': 'x'}
+        self.df = self.df.rename(columns = rename_col)
+        self.x_min, self.y_min, self.x_max, self.y_max = self.y_min, self.x_min, self.y_max, self.x_max
+        self.x_extend = self.x_max - self.x_min
+        self.y_extend = self.y_max - self.y_min 
+        self.xy_center = (self.x_max - 0.5*self.x_extend, self.y_max - 0.5*self.y_extend)
+        self._offset_flag = True
 
     def visualize(self,columns:list=[],width=2000,height=2000,show_axis=False):
         """

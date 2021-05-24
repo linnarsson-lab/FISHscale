@@ -5,6 +5,37 @@ from functools import lru_cache
 from joblib import Parallel, delayed
 
 class Iteration:
+    
+    def group_by(self, by='g'):
+        return self.df.groupby(by).apply(lambda g: np.array([g.x, g.y]).T, meta=('float64')).compute()
+    
+    
+    def make_gene_coordinates(self, save_z = False) -> None:
+        """Make a dictionary with point coordinates for each gene.
+
+        Output will be in self.gene_coordinates. Output will be cached so that
+        this function can be called many times but the calculation is only
+        performed the first time.
+
+        """
+        if self._offset_flag == True:
+                   
+            if save_z:
+                self.gene_coordinates = {g: np.column_stack((xy, np.array([self.z_offset]*xy.shape[0]))).astype('float64') for g, xy in self._group_by_gene().to_dict().items()}
+                
+            else:
+                self.gene_coordinates = self._group_by_gene().to_dict()
+                
+            self._offset_flag = False
+            
+        else:
+            print('Gene coodinates already calculated. skipping')
+            pass
+    
+    
+    
+    
+class _old_stuff:
 
     def xy_groupby_gene_generator(self, gene_order: np.ndarray = None) -> Generator[Tuple[str, np.ndarray, np.ndarray], None, None]:
         """Generator function that groups XY coordinates by gene.
