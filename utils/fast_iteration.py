@@ -6,7 +6,7 @@ from joblib import Parallel, delayed
 
 class Iteration:
     
-    def group_by(self, by='g'):
+    def _group_by(self, by='g'):
         return self.df.groupby(by).apply(lambda g: np.array([g.x, g.y]).T, meta=('float64')).compute()
     
     
@@ -21,10 +21,10 @@ class Iteration:
         if self._offset_flag == True:
                    
             if save_z:
-                self.gene_coordinates = {g: np.column_stack((xy, np.array([self.z_offset]*xy.shape[0]))).astype('float64') for g, xy in self._group_by_gene().to_dict().items()}
+                self.gene_coordinates = {g: np.column_stack((xy, np.array([self.z_offset]*xy.shape[0]))).astype('float64') for g, xy in self._group_by().to_dict().items()}
                 
             else:
-                self.gene_coordinates = self._group_by_gene().to_dict()
+                self.gene_coordinates = self._group_by().to_dict()
                 
             self._offset_flag = False
             
