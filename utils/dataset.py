@@ -23,6 +23,12 @@ from glob import glob
 from time import strftime
 from math import ceil
 from multiprocessing import cpu_count
+import itertools
+import tempfile
+try:
+    from pyarrow.parquet import ParquetFile
+except ModuleNotFoundError as e:
+    print(f'Please install "pyarrow" to load ".parquet" files. Without only .csv files are supported which are memory inefficient. Error: {e}')
 
 class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, SpatialMetrics):
     """
@@ -45,7 +51,8 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
         z_offset: float = 0,
         apply_offset: bool = False,
         color_input: Optional[Union[str, dict]] = None,
-        verbose: bool = False):
+        verbose: bool = False,
+        part_of_multidataset: bool = False):
         """initiate PandasDataset
 
         Args:
@@ -89,10 +96,13 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
                 function will first try to load a previously generated color 
                 dictionary and make a new one if this fails. Defaults to None.
             verbose (bool, optional): If True prints additional output.
+            part_of_multidataset (bool, optional): True if dataset is part of
+                a multidataset. 
 
         """
         #Parameters
         self.verbose = verbose
+        self.part_of_multidataset = part_of_multidataset
         self.cpu_count = cpu_count()
 
         #Open file
@@ -102,7 +112,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
         self.y_label = y_label
         self.gene_label = gene_label
         self.other_columns = other_columns
-        self.x, self.y, self.gene, self.other = self.load_data(self.filename, self.x_label, self.y_label, self.gene_label, self.other_columns)
+        self.x, self.y, self.gene = self.load_data(self.filename, self.x_label, self.y_label, self.gene_label, self.other_columns)
         self.z = z
         #Get gene list
         if not isinstance(unique_genes, np.ndarray):
@@ -129,6 +139,35 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
         #Verbosity
         self.verbose = verbose
         self.vp(f'Loaded: {self.dataset_name}')
+        
+    def memmap_make(self, data: np.ndarray, dtype: Any = None) -> np.memmap:
+        """Make numpy memmap object and fill with data.
+        
+        Best practice is to give the data yielding function as input for 
+        "data". Otherwise manually delete the input after the memmap array
+        has been generated.
+
+        Args:
+            data (np.ndarray): Input data to write to memmap array.
+            dtype (Any): Explicity set dtype of memmap array. If not given will
+                take dtype of data.
+
+        Returns:
+            [np.memmap]: Memory mapped array. 
+        """
+        #get data shape and type
+        shape = data.shape
+        if dtype == None:
+            dtype = data.dtype
+        
+        #Generate memmap array with same shape
+        with tempfile.NamedTemporaryFile() as ntf:           
+            arr = np.memmap(ntf, mode='w+', shape=shape, dtype=dtype)
+        #Write data to memmap array
+        arr[:] = data[:]
+        #Return array
+        return arr
+        
 
     def load_data(self, filename: str, x_label: str, y_label: str, gene_label: str, 
         other_columns: Optional[list]) -> Union[np.ndarray, np.ndarray, np.ndarray, Optional[np.ndarray]]:
@@ -157,23 +196,51 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
                 If no other data specified will retun None.
 
         """
-        #Maybe add more file types?
-        if filename.endswith('.parquet'):
-            data = pd.read_parquet(filename)
+        if filename.endswith('.parquet') or filename.endswith('.csv'):
+            
+            if filename.endswith('.parquet'):
+                #Open function
+                open_f = lambda f, c: pd.read_parquet(f, columns = c)
+                #Get number of rows
+                pfile = ParquetFile(filename)
+                n_rows = pfile.metadata.num_rows
+            else:
+                #Open function
+                open_f = lambda f, c: pd.read_csv(f, usecols = c)
+                print('Warning: Consider using ".parquet" files instead of ".csv" for more efficient memory handling')
+                #Get number of rows
+                with open(filename) as fp:
+                    n_rows = 0
+                    for _ in fp:
+                        n_rows += 1
+            
+            if (n_rows > 10000 or self.part_of_multidataset == True) and os.name != 'nt':
+                #make memmap file
+                x = self.memmap_make(open_f(filename, [x_label]).to_numpy(dtype=np.float32), np.float32,)
+                y = self.memmap_make(open_f(filename, [y_label]).to_numpy(dtype=np.float32), np.float32)
+                genes = self.memmap_make( open_f(filename, [gene_label]).to_numpy())
+                if other_columns != None:
+                    print('found other columns')
+                    for o in other_columns:
+                        setattr(self, o, self.memmap_make(open_f(filename, columns = [o]).to_numpy()))
+                
+            else:
+                if os.name == 'nt':
+                    print('Warning: opening huge or multiple data files on Windows can lead to problems with RAM.')
+                    #Aparently Windows is not good at handling tempfiles with np.memmap.
+                    #See: https://stackoverflow.com/a/24219413/3903368
+                x = open_f(filename, [x_label]).to_numpy(dtype=np.float32)
+                y = open_f(filename, [y_label]).to_numpy(dtype=np.float32)
+                genes = open_f(filename, [gene_label]).to_numpy()
+                if other_columns != None:
+                    print('found other columns')
+                    for o in other_columns:
+                        setattr(self, o, open_f(filename, columns = [o]).to_numpy())
+                
         else:
-            raise IOError (f'Invalid file type: {filename}, should be in ".parquet" format.') 
-
-        x = data.loc[:, x_label].to_numpy(dtype='float32')
-        y = data.loc[:, y_label].to_numpy(dtype='float32')
-        genes = data.loc[:, gene_label].to_numpy()
-        if other_columns != None:
-            for o in other_columns:
-                other = data.loc[:, o].values
-                setattr(self,o,other)
-        else:
-            other = None
-
-        return x, y, genes, other
+            raise IOError (f'Invalid file type: {filename}, should be in ".parquet" or ".csv" format.') 
+        
+        return x, y, genes
 
     def vp(self, *args):
         """Function to print output if verbose mode is True
@@ -242,7 +309,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
         else:
             print('QApplication instance already exists: %s' % str(App))
 
-        window = Window(self,columns,width,height) 
+        window = Window(self,columns,width,height)
         App.exec_()
         App.quit()
 
@@ -468,7 +535,7 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter):
         x_offset: float = 0,
         y_offset: float = 0,
         z_offset: float = 0,
-        apply_offset: bool = False,):
+        apply_offset: bool = False):
         """Load files from folder.
 
         Output can be found in self.dataset.
@@ -517,7 +584,7 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter):
             for i, f in enumerate(files):
                 results.append(Dataset(f, x_label, y_label, gene_label, other_columns, self.unique_genes, z, pixel_size, 
                                        x_offset, y_offset, z_offset, apply_offset, color_input=None, 
-                                       verbose=self.verbose))
+                                       verbose=self.verbose, part_of_multidataset = True))
                 #Get unique genes of first dataset if not defined
                 if not isinstance(self.unique_genes, np.ndarray):
                     self.unique_genes = results[0].unique_genes

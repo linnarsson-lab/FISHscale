@@ -220,6 +220,8 @@ class ListWidget(QWidget):
         # creating a QListWidget 
         self.list_widget = QListWidget()
         
+        print('sdfs')
+        
         # scroll bar 
         self.subdic = subdic
         self.section = section
@@ -234,7 +236,7 @@ class ListWidget(QWidget):
 
         self.list_widget.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
         self.tissue_selected = [x for x in self.vis.dic_pointclouds['File']]
-
+        
     def add_items(self):
         for e in self.subdic:
             i = QListWidgetItem(str(e)) 
@@ -304,6 +306,10 @@ class CollapsibleDialog(QDialog,QObject):
 
         self.qbutton = QPushButton('Quit Visualizer')
         layout.addWidget(self.qbutton)
+        
+        app_icon = QtGui.QIcon()
+        app_icon.addFile('Images/test16x16.png', QtCore.QSize(16,16))
+        self.setWindowIcon(app_icon)
         
     def possible(self):
         for x in self.widget_lists:
