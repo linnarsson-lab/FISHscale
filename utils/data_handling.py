@@ -82,7 +82,7 @@ class data_loader():
                 raise IOError (f'Invalid file type: {filename}, should be in ".parquet" or ".csv" format.') 
             
         #Load Dask Dataframe from the parsed gene dataframes
-        return dd.read_parquet(self.FISHscale_data_folder)
+        return dd.read_parquet(path.join(self.FISHscale_data_folder, '*.parquet'))
     
     def _get_gene_n_points(self):
         
