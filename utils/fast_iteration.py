@@ -2,9 +2,63 @@ import pandas as pd
 import numpy as np
 from typing import Generator, Tuple
 from functools import lru_cache
-from joblib import Parallel, delayed
 
 class Iteration:
+
+    def get_gene(self, gene: str):
+        """Get the xyz coordinates of points of a queried gene.
+        
+        This causes the data to get loaded in RAM.
+
+        Args:
+            gene (str): Name of gene.
+
+        Returns:
+            [pd.DataFrame]: Pandas Dataframe with coordinates.
+        """
+        gene_i= self.gene_index[gene]
+        return self.df.get_partition(gene_i).loc[:,['x', 'y', 'z']].compute()
+    
+    def get_gene_sample(self, gene: str, frac: float=0.1, minimum: int=None, 
+                        random_state: int=None):
+        """Get the xyz coordinates of a sample of points of a queried gene.
+        
+        This causes the data to get loaded in RAM.
+
+        Args:
+            gene (str): Name of gene.
+            frac (float, optional): Fraction of the points to load. 
+                Defaults to 0.1 which is 10% of the data.
+            minimum (int, optional): If minimum is given the fraction will be 
+                adapted to return at least the minimum number of points. if 
+                there are less points than the minimum it returns all. 
+                Defaults to None.
+            random_state (int, optional): Random state for the sampling to 
+                return the same points over multiple iterations.
+                Defaults to None.
+
+        Returns:
+            [type]: [description]
+        """
+        if minimum != None:
+            n_points = self.gene_n_points[gene]
+            if n_points < minimum:
+                frac = 1
+            elif frac * n_points < minimum:
+                frac = minimum / n_points
+        
+        gene_i= self.gene_index[gene]
+        return self.df.get_partition(gene_i).loc[:, ['x', 'y', 'z']].sample(frac=frac, random_state=random_state).compute()
+    
+    
+    
+    
+
+    
+    
+    
+    
+class _old_stuff:
     
     def _group_by(self, by='g'):
         return self.df.groupby(by).apply(lambda g: np.array([g.x, g.y]).T, meta=('float64')).compute()
@@ -32,10 +86,6 @@ class Iteration:
             print('Gene coodinates already calculated. skipping')
             pass
     
-    
-    
-    
-class _old_stuff:
 
     def xy_groupby_gene_generator(self, gene_order: np.ndarray = None) -> Generator[Tuple[str, np.ndarray, np.ndarray], None, None]:
         """Generator function that groups XY coordinates by gene.

@@ -9,6 +9,7 @@ from FISHscale.utils.colors import ManyColors
 from FISHscale.utils.gene_correlation import GeneCorr
 from FISHscale.utils.spatial_metrics import SpatialMetrics
 from FISHscale.visualization.gene_scatter import GeneScatter, MultiGeneScatter
+from FISHscale.utils.data_handling import data_loader
 from PyQt5 import QtWidgets
 import sys
 from datetime import datetime
@@ -33,7 +34,7 @@ except ModuleNotFoundError as e:
 from dask import dataframe as dd
 import dask
 
-class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, SpatialMetrics):
+class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, SpatialMetrics, data_loader):
     """
     Base Class for FISHscale, still under development
 
@@ -52,6 +53,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
         x_offset: float = 0,
         y_offset: float = 0,
         z_offset: float = 0,
+        reparse: bool = False,
         apply_offset: bool = False,
         color_input: Optional[Union[str, dict]] = None,
         verbose: bool = False,
@@ -111,15 +113,19 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
         #Open file
         self.filename = filename
         self.dataset_name = self.filename.split('/')[-1].split('.')[0]
+        self.dataset_folder = os.path.dirname(os.path.abspath(filename))
+        self.FISHscale_data_folder = os.path.join(self.dataset_folder, f'{self.dataset_name}_FISHscale_Data')
         self.other_columns = other_columns
-        self.df = self.load_data(self.filename, x_label, y_label, gene_label, self.other_columns)
         self.z = z
+        self.df = self.load_data(self.filename, x_label, y_label, gene_label, self.other_columns, reparse=reparse)
 
         #Get gene list
         if not isinstance(unique_genes, np.ndarray):
             self.unique_genes = self.df.g.drop_duplicates().compute().to_numpy()
         else:
             self.unique_genes = unique_genes
+        self.gene_index = dict(zip(self.unique_genes, range(self.unique_genes.shape[0])))
+        self.gene_n_points = self._get_gene_n_points()
 
         #Handle scale
         self.ureg = UnitRegistry()
@@ -139,9 +145,9 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
         self.auto_handle_color_dict(color_input)
         #Verbosity
         self.verbose = verbose
-        self.vp(f'Loaded: {self.dataset_name}')      
-
-    def load_data(self, filename: str, x_label: str, y_label: str, gene_label: str, 
+        self.vp(f'Loaded: {self.dataset_name}')
+        
+    def _load_data_old(self, filename: str, x_label: str, y_label: str, gene_label: str, 
         other_columns: Optional[list]) -> Union[np.ndarray, np.ndarray, np.ndarray, Optional[np.ndarray]]:
         """[summary]
 
@@ -213,6 +219,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
         if apply:
             self.df.x += self.x_offset
             self.df.y += self.y_offset
+            self.df.z += self.z_offset
             self.z += self.z_offset
         self._set_coordinate_properties()
         self._offset_flag = True

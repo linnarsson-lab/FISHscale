@@ -1,7 +1,7 @@
 import colorsys
 import numpy as np
 import pickle
-from os.path import isfile
+from os import path
 import warnings
 from typing import Optional, Union
 
@@ -114,7 +114,7 @@ class ManyColors:
         if not hasattr(self, 'color_dict'):
             raise AttributeError('Can not save "color_dict" because it does not exist. Generate a color dictionary with the "make_color_dict()" function.')
         
-        file_name = f'{self.dataset_name}_color_dictionary.pkl'
+        file_name = path.join(self.FISHscale_data_folder, f'{self.dataset_name}_color_dictionary.pkl')
         pickle.dump(self.color_dict, open(file_name, 'wb'))
         return file_name
 
@@ -148,8 +148,8 @@ class ManyColors:
             bool: True if loading was successful, False if not.
 
         """
-        file_name = f'{self.dataset_name}_color_dictionary.pkl'
-        if isfile(file_name):
+        file_name = path.join(self.FISHscale_data_folder, f'{self.dataset_name}_color_dictionary.pkl')
+        if path.isfile(file_name):
             self.load_color_dict(file_name)
             return True
         else:
