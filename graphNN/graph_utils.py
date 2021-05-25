@@ -73,7 +73,7 @@ class GraphData(pl.LightningDataModule):
         self.num_workers = num_workers
         self.save_to = save_to
 
-        self.folder = self.analysis_name+ '_' +datetime.now().strftime("%Y-%m-%d-%H:%M:%S")
+        self.folder = self.analysis_name+ '_' +datetime.now().strftime("%Y-%m-%d-%H%M%S")
         os.mkdir(self.folder)
 
         if type(self.cells) == type(None):
@@ -211,7 +211,7 @@ class GraphData(pl.LightningDataModule):
         for x,pos,neg,adjs in self.validation_dataloader():
             embedding.append(self.model.neighborhood_forward(x,adjs).detach().numpy())
         self.embedding = np.concatenate(embedding)
-        np.save(self.folder+'/loadings.npy',embedding)
+        np.save(self.folder+'/loadings.npy',self.embedding)
 
     def make_umap(self):
         import umap
@@ -227,7 +227,7 @@ class GraphData(pl.LightningDataModule):
             n_jobs=-1
         )
         umap_embedding = reducer.fit_transform(self.embedding)
-        np.save(self.folder+'umap.npy',umap_embedding)
+        np.save(self.folder+'/umap.npy',umap_embedding)
 
 def compute_library_size(data):
     sum_counts = data.sum(axis=1)
