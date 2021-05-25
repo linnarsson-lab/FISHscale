@@ -64,9 +64,9 @@ class Window:
         # setting title 
         if str(self.dataset.__class__) == str(FISHscale.utils.dataset.Dataset):
             print('Single Dataset')
-            self.gene_label,self.x_label,self.y_label,self.unique_genes = self.dataset.gene_label,self.dataset.x_label, self.dataset.y_label,self.dataset.unique_genes
+            self.unique_genes = self.dataset.unique_genes
             self.dataset = [dataset]
-            self.dic_pointclouds ={self.gene_label:self.unique_genes}
+            self.dic_pointclouds ={'g':self.unique_genes}
             self.dic_pointclouds['File'] = []
             for x in self.dataset:
                 self.dic_pointclouds['File'].append(str(x.filename))
@@ -76,8 +76,7 @@ class Window:
         elif str(self.dataset.__class__) == str(FISHscale.utils.dataset.MultiDataset):
             print('MultiDataset')
             self.dataset = dataset
-            self.gene_label,self.x_label,self.y_label = self.dataset.gene_label,self.dataset.x_label, self.dataset.y_label
-            self.dic_pointclouds ={self.dataset.gene_label:self.dataset.unique_genes}
+            self.dic_pointclouds ={'g':self.dataset.unique_genes}
             self.dic_pointclouds['File'] = []
             for x in self.dataset:
                 self.dic_pointclouds['File'].append(str(x.filename))
@@ -85,9 +84,7 @@ class Window:
             print('Data Loaded')
 
         self.show_axis= show_axis
-        self.vis = Visualizer(self.dataset,self.dic_pointclouds, x_label=self.x_label,y_label=self.y_label,gene_label=self.gene_label,
-            color_dic=self.color_dic,width=2000, height=2000, show_axis=self.show_axis)
-
+        self.vis = Visualizer(self.dataset,self.dic_pointclouds, color_dic=self.color_dic,width=2000, height=2000, show_axis=self.show_axis)
         self.collapse = CollapsibleDialog(self.dic_pointclouds,vis=self.vis)
         self.widget_lists = self.collapse.widget_lists
         self.collapse.show()
@@ -113,9 +110,7 @@ class Window:
         ds = []
         for dataframe in self.dataset:
             print(dataframe.filename)
-            if dataframe.gene_label != self.gene_label:
-                dataframe.gene_label = self.gene_label
-            
+
             if len(self.columns) > 0:
                 pd = dataframe.make_pandas()
                 pd['z_label'] = np.array([dataframe.z_offset]*pd.shape[0])
@@ -139,10 +134,9 @@ class Window:
         self.dataset = ds
 
 class Visualizer:
-    def __init__(self,data,dic_pointclouds,x_label,y_label,gene_label,color_dic,width=2000,height=2000,show_axis=False):
+    def __init__(self,data,dic_pointclouds,color_dic,width=2000,height=2000,show_axis=False):
         
         self.data = data
-        self.x_label,self.y_label,self.gene_label = x_label,y_label,gene_label
         self.color_dic = color_dic
         self.visM = o3d.visualization.Visualizer()
         self.visM.create_window(height=height,width=width,top=0,left=500)
@@ -257,7 +251,7 @@ class ListWidget(QWidget):
             points,colors = [],[]  
             for d,f,grpg in self.vis.data:
                 if f in self.tissue_selected:
-                    if self.section == self.vis.gene_label:
+                    if self.section == 'g':
                         for g in self.selected:
                             #d = grpg[g]
                             g= str(g)
@@ -269,7 +263,7 @@ class ListWidget(QWidget):
                         for g, d in grpg:
                             if str(g) in self.selected:
                                 g= str(g)
-                                ps = d.loc[:,[self.vis.x_label,self.vis.y_label,'z_label']].values
+                                ps = d.loc[:,['x','y','z']].values
                                 cs= np.array([[self.vis.color_dic[g] ]*(ps.shape[0])])[0,:,:]
                                 points.append(ps)
                                 colors.append(cs)
