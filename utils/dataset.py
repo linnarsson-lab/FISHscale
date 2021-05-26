@@ -32,7 +32,10 @@ try:
 except ModuleNotFoundError as e:
     print(f'Please install "pyarrow" to load ".parquet" files. Without only .csv files are supported which are memory inefficient. Error: {e}')
 from dask import dataframe as dd
-import dask
+
+
+from memory_profiler import profile
+
 
 class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, SpatialMetrics, data_loader):
     """
@@ -54,7 +57,6 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
         y_offset: float = 0,
         z_offset: float = 0,
         reparse: bool = False,
-        apply_offset: bool = False,
         color_input: Optional[Union[str, dict]] = None,
         verbose: bool = False,
         part_of_multidataset: bool = False):
@@ -89,8 +91,9 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
             x_offset (float, optional): Offset in X axis. Defaults to 0.
             y_offset (float, optional): Offset in Y axis. Defaults to 0.
             z_offset (float, optional): Offset in Z axis. Defaults to 0.
-            apply_offset (bool, optional): Offsets the coordinates of the 
-                points with the provided x and y offsets. Defaults to False.
+            
+            reparse (bool, optional); XXXXXXXXXXXXXXXXXXXXX
+            
             color_input (Optional[str, dict], optional): If a filename is 
                 specifiedthat endswith "_color_dictionary.pkl" the function 
                 will try to load that dictionary. If "auto" is provided it will
@@ -109,15 +112,30 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
         self.verbose = verbose
         self.part_of_multidataset = part_of_multidataset
         self.cpu_count = cpu_count()
+        self.z = z
+        self.z += z_offset
+        self.x_offset = x_offset
+        self.y_offset = y_offset
+        self.z_offset = z_offset
+        self.other_columns = other_columns
 
-        #Open file
+        #Files and folders
         self.filename = filename
         self.dataset_name = self.filename.split('/')[-1].split('.')[0]
         self.dataset_folder = os.path.dirname(os.path.abspath(filename))
         self.FISHscale_data_folder = os.path.join(self.dataset_folder, f'{self.dataset_name}_FISHscale_Data')
-        self.other_columns = other_columns
-        self.z = z
-        self.df = self.load_data(self.filename, x_label, y_label, gene_label, self.other_columns, reparse=reparse)
+        
+        #Handle scale
+        self.ureg = UnitRegistry()
+        self.pixel_size = self.ureg(pixel_size)
+        self.pixel_size = self.pixel_size.to('micrometer')
+        self.pixel_area = self.pixel_size ** 2
+        self.unit_scale = self.ureg('1 micrometer')
+        self.area_scale = self.unit_scale ** 2
+        
+        #Load data
+        self.df = self. load_data(self.filename, x_label, y_label, gene_label, self.other_columns, x_offset, y_offset, 
+                                  z_offset, self.pixel_size.magnitude, reparse=reparse)
 
         #Get gene list
         if not isinstance(unique_genes, np.ndarray):
@@ -127,72 +145,12 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
         self.gene_index = dict(zip(self.unique_genes, range(self.unique_genes.shape[0])))
         self.gene_n_points = self._get_gene_n_points()
 
-        #Handle scale
-        self.ureg = UnitRegistry()
-        self.pixel_size = self.ureg(pixel_size)
-        self.pixel_size = self.pixel_size.to('micrometer')
-        self.pixel_area = self.pixel_size ** 2
-        self.df.x = self.df.x * self.pixel_size.magnitude
-        self.df.y = self.df.y * self.pixel_size.magnitude
-        self.unit_scale = self.ureg('1 micrometer')
-        self.area_scale = self.unit_scale ** 2
-
-        #Handle offset
-        self._offset_flag = False
-        self.offset_data(x_offset, y_offset, z_offset, apply = apply_offset)
 
         #Handle colors
         self.auto_handle_color_dict(color_input)
         #Verbosity
         self.verbose = verbose
         self.vp(f'Loaded: {self.dataset_name}')
-        
-    def _load_data_old(self, filename: str, x_label: str, y_label: str, gene_label: str, 
-        other_columns: Optional[list]) -> Union[np.ndarray, np.ndarray, np.ndarray, Optional[np.ndarray]]:
-        """[summary]
-
-        Args:
-            x_label (str, optional): Name of the column of the Pandas dataframe
-                that contains the X coordinates of the points. Defaults to 
-                'r_px_microscope_stitched'.
-            y_label (str, optional): Name of the column of the Pandas dataframe
-                that contains the Y coordinates of the points. Defaults to 
-                'c_px_microscope_stitched'.
-            gene_label (str, optional):  Name of the column of the Pandas 
-                dataframe that contains the gene labels of the points. 
-                Defaults to 'below3Hdistance_genes'.
-            other_columns (list, optional): List with labels of other columns 
-                that need to be loaded. Data will stored under "self.other"
-                as Pandas Dataframe. Defaults to None.
-
-        Raises:
-            IOError: When filname can not be opened
-
-        Returns:
-            [np.ndarray, np.ndarray, np.ndarray, pd.DataFrame or None]: Arrays
-                with X coordinates, Y coordinates, gene labels and other data.
-                If no other data specified will retun None.
-
-        """
-        
-        if filename.endswith('.parquet') or filename.endswith('.csv'):
-            
-            if filename.endswith('.parquet'):
-                open_f = lambda f, c: dd.read_parquet(f, columns = c)
-            else:
-                open_f = lambda f, c: dd.read_csv(f, usecols = c)
-            
-            col_to_open = [[x_label, y_label, gene_label], other_columns]
-            col_to_open = list(itertools.chain.from_iterable(col_to_open))
-            rename_col = dict(zip([x_label, y_label, gene_label], ['x', 'y', 'g']))
-            
-            data = open_f(filename, col_to_open)
-            data = data.rename(columns = rename_col)
-            
-        else:
-            raise IOError (f'Invalid file type: {filename}, should be in ".parquet" or ".csv" format.') 
-        
-        return data
             
     def vp(self, *args):
         """Function to print output if verbose mode is True
@@ -201,50 +159,6 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
             for arg in args:
                 print('    ' + arg)
     
-    def offset_data(self, x_offset: float, y_offset: float, z_offset: float, apply:bool = True):
-        """Offset the data with the given offset values.
-
-        Args:
-            x_offset (float): Offset in X axis. 
-            y_offset (float): Offset in Y axis.
-            z_offset (float): Offset in Z axis.
-            apply (bool, optional): If True applies the offset to the data. If
-                False only the self.x_offset/y_offset/z_offset gets changed. 
-                Defaults to True.
-
-        """
-        self.x_offset = x_offset
-        self.y_offset = y_offset
-        self.z_offset = z_offset
-        if apply:
-            self.df.x += self.x_offset
-            self.df.y += self.y_offset
-            self.df.z += self.z_offset
-            self.z += self.z_offset
-        self._set_coordinate_properties()
-        self._offset_flag = True
-
-    def _set_coordinate_properties(self):
-        """Calculate properties of coordinates.
-
-        Calculates XY min, max, extend and center of the points. 
-        """
-        self.x_min, self.y_min, self.x_max, self.y_max = dask.compute(self.df.x.min(), self.df.y.max(), self.df.x.max(), self.df.y.max())
-        self.x_extend = self.x_max - self.x_min
-        self.y_extend = self.y_max - self.y_min 
-        self.xy_center = (self.x_max - 0.5*self.x_extend, self.y_max - 0.5*self.y_extend)
-
-    def transpose(self):
-        """Transpose data. Switches X and Y.
-        """
-        rename_col = {'x': 'y', 'y': 'x'}
-        self.df = self.df.rename(columns = rename_col)
-        self.x_min, self.y_min, self.x_max, self.y_max = self.y_min, self.x_min, self.y_max, self.x_max
-        self.x_extend = self.x_max - self.x_min
-        self.y_extend = self.y_max - self.y_min 
-        self.xy_center = (self.x_max - 0.5*self.x_extend, self.y_max - 0.5*self.y_extend)
-        self._offset_flag = True
-
     def visualize(self,columns:list=[],width=2000,height=2000,show_axis=False):
         """
         Run open3d visualization on self.data
