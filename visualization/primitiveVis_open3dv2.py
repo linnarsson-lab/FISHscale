@@ -111,6 +111,7 @@ class Window:
         for dataframe in self.dataset:
             print(dataframe.filename)
 
+            '''
             for c in self.columns:
                 colattr = getattr(dataframe,c)
                 pd[c] = colattr
@@ -122,9 +123,9 @@ class Window:
                     else:
                         col = (r()/255,r()/255,r()/255)
                         self.color_dic[str(ca)] = col
+            '''
 
-            dataframe.make_gene_coordinates(save_z=True)
-            ds.append((pd,dataframe.filename,dataframe))
+            ds.append(dataframe)
         self.dataset = ds
 
 class Visualizer:
@@ -139,10 +140,10 @@ class Visualizer:
 
         #points, colors = [], []
         points,maxx,minx,maxy,miny= 0,0,0,0,0
-        for d,f,g in self.data:
-            points+= g.x.shape[0]
-            Mx,mx = g.x.max(),g.x.min()
-            My,my = g.y.max(),g.y.min()
+        for d in self.data:
+            points+= d.df.compute().shape[0]
+            Mx,mx = d.df.x.max().compute(),d.df.x.min().compute()
+            My,my = d.df.y.max().compute(),d.df.y.min().compute()
             if Mx > maxx:
                 maxx = Mx
             if mx < minx:
@@ -243,14 +244,15 @@ class ListWidget(QWidget):
         
         if self.section != 'File':
             points,colors = [],[]  
-            for d,f,grpg in self.vis.data:
-                if f in self.tissue_selected:
+            for d in self.vis.data:
+                if d.filename in self.tissue_selected:
                     if self.section == 'g':
                         for g in self.selected:
                             #d = grpg[g]
                             g= str(g)
-                            cs= np.array([[self.vis.color_dic[g]] *(grpg.gene_coordinates[g].shape[0])])[0,:,:]
-                            points.append(grpg.gene_coordinates[g])
+                            ps = d.get_gene_sample(g,frac=1)
+                            points.append(ps)
+                            cs= np.array([[self.vis.color_dic[g]] *(ps.shape[0])])[0,:,:]
                             colors.append(cs)   
                     else:
                         grpg = d.groupby(self.section)
