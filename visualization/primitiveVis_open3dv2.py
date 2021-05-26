@@ -111,12 +111,6 @@ class Window:
         for dataframe in self.dataset:
             print(dataframe.filename)
 
-            if len(self.columns) > 0:
-                pd = dataframe.make_pandas()
-                pd['z_label'] = np.array([dataframe.z_offset]*pd.shape[0])
-            else:
-                pd = 0
-
             for c in self.columns:
                 colattr = getattr(dataframe,c)
                 pd[c] = colattr
