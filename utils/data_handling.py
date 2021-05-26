@@ -69,7 +69,7 @@ class data_loader():
                 col_to_open = [[x_label, y_label, gene_label], other_columns]
                 col_to_open = list(itertools.chain.from_iterable(col_to_open))
                 rename_col = dict(zip([x_label, y_label, gene_label], ['x', 'y', 'g']))
-                
+
                 #Read the data file
                 data = open_f(filename, col_to_open)
                 data = data.rename(columns = rename_col)
