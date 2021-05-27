@@ -1,8 +1,7 @@
-import re
-from typing import Union, Any, Optional
+
+from typing import Union, Optional
 import pandas as pd
 from FISHscale import Window
-#from FISHscale.utils.hex_bin import HexBin
 from FISHscale.utils.hex_regionalization import Regionalize
 from FISHscale.utils.fast_iteration import Iteration, MultiIteration
 from FISHscale.utils.colors import ManyColors
@@ -13,28 +12,19 @@ from FISHscale.utils.data_handling import data_loader
 from PyQt5 import QtWidgets
 import sys
 from datetime import datetime
-from sklearn.cluster import DBSCAN, MiniBatchKMeans, Birch, SpectralClustering
+from sklearn.cluster import DBSCAN
 import pandas as pd
 from tqdm import tqdm
 from collections import Counter
 import numpy as np
 import loompy
 from pint import UnitRegistry
-import os
+from os import name as os_name
+from os import path, makedirs
 from glob import glob
 from time import strftime
 from math import ceil
 from multiprocessing import cpu_count
-import itertools
-import tempfile
-try:
-    from pyarrow.parquet import ParquetFile
-except ModuleNotFoundError as e:
-    print(f'Please install "pyarrow" to load ".parquet" files. Without only .csv files are supported which are memory inefficient. Error: {e}')
-from dask import dataframe as dd
-
-
-from memory_profiler import profile
 
 
 class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, SpatialMetrics, data_loader):
@@ -91,9 +81,9 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
             x_offset (float, optional): Offset in X axis. Defaults to 0.
             y_offset (float, optional): Offset in Y axis. Defaults to 0.
             z_offset (float, optional): Offset in Z axis. Defaults to 0.
-            
-            reparse (bool, optional); XXXXXXXXXXXXXXXXXXXXX
-            
+            reparse (bool, optional): True if you want to reparse the data,
+                if False, it will repeat the parsing. Parsing will apply the
+                offset. Defaults to False.
             color_input (Optional[str, dict], optional): If a filename is 
                 specifiedthat endswith "_color_dictionary.pkl" the function 
                 will try to load that dictionary. If "auto" is provided it will
@@ -121,9 +111,10 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
 
         #Files and folders
         self.filename = filename
-        self.dataset_name = self.filename.split('/')[-1].split('.')[0]
-        self.dataset_folder = os.path.dirname(os.path.abspath(filename))
-        self.FISHscale_data_folder = os.path.join(self.dataset_folder, f'{self.dataset_name}_FISHscale_Data')
+        self.dataset_name = path.splitext(path.basename(self.filename))[0]
+        self.dataset_folder = path.dirname(path.abspath(filename))
+        self.FISHscale_data_folder = path.join(self.dataset_folder, f'{self.dataset_name}_FISHscale_Data')
+        makedirs(self.FISHscale_data_folder, exist_ok=True)
         
         #Handle scale
         self.ureg = UnitRegistry()
@@ -134,20 +125,22 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
         self.area_scale = self.unit_scale ** 2
         
         #Load data
-        self.df = self. load_data(self.filename, x_label, y_label, gene_label, self.other_columns, x_offset, y_offset, 
-                                  z_offset, self.pixel_size.magnitude, reparse=reparse)
+        self.load_data(self.filename, x_label, y_label, gene_label, self.other_columns, x_offset, y_offset, z_offset, 
+                       self.pixel_size.magnitude, unique_genes, reparse=reparse)
 
-        #Get gene list
-        if not isinstance(unique_genes, np.ndarray):
-            self.unique_genes = self.df.g.drop_duplicates().compute().to_numpy()
-        else:
-            self.unique_genes = unique_genes
+        #Get unique genes
+        #if not isinstance(unique_genes, np.ndarray):
+        #    self.unique_genes = self.df.g.drop_duplicates().compute().to_numpy()
+        #else:
+        #    self.unique_genes = unique_genes
+        
+        #Gene metadata
         self.gene_index = dict(zip(self.unique_genes, range(self.unique_genes.shape[0])))
         self.gene_n_points = self._get_gene_n_points()
 
-
         #Handle colors
         self.auto_handle_color_dict(color_input)
+        
         #Verbosity
         self.verbose = verbose
         self.vp(f'Loaded: {self.dataset_name}')
@@ -439,10 +432,10 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter):
         """      
 
         #Correct slashes in path
-        if os.name == 'nt': #I guess this would work
+        if os_name == 'nt': #I guess this would work
             if not filepath.endswith('\\'):
                 filepath = filepath + '\\'
-        if os.name == 'posix':
+        if os_name == 'posix':
             if not filepath.endswith('/'):
                 filepath = filepath + '/'
 
