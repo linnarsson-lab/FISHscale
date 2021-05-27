@@ -314,7 +314,7 @@ class data_loader():
         self.y_extend = self.y_max - self.y_min 
         self.xy_center = (self.x_max - 0.5*self.x_extend, self.y_max - 0.5*self.y_extend)
     
-    def get_rows(self,l:list):
+    def get_dask_attrs_rows(self,l:list):
         """
         Get rows by index
 
