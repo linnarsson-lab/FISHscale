@@ -142,7 +142,7 @@ class Visualizer:
         points,maxx,minx,maxy,miny= 0,0,0,0,0
         for d in self.data:
             points += d.df.compute().shape[0]
-            Mx,mx = d.x_max,d.df.x_min
+            Mx,mx = d.x_max,d.x_min
             My,my = d.y_max,d.y_min
             if Mx > maxx:
                 maxx = Mx
