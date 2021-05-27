@@ -201,15 +201,16 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
         """        
 
         print('Running DBscan segmentation')
-        X = np.array([self.x,self.y]).T
+        X = np.array([self.df.x.values.compute(),self.df.y.values.compute()]).T
         clustering = DBSCAN(eps=eps, min_samples=min_samples).fit(X)
 
         print('Assigning background dots whose cluster has more than {}'.format(cutoff))
         c =Counter(clustering.labels_)
         bg = [x for x in c if c[x] > cutoff]
-        self.labels =  np.array([-1 if x in bg else x for x in clustering.labels_]) 
-        print('Background molecules: {}'.format((self.labels == -1).sum()))
-        print('DBscan found {} clusters'.format(self.labels.max()))
+        labels =  np.array([-1 if x in bg else x for x in clustering.labels_])
+        self.add_dask_attribute('labels',labels)
+        print('Background molecules: {}'.format((labels == -1).sum()))
+        print('DBscan found {} clusters'.format(labels.max()))
         
 
 class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter):
