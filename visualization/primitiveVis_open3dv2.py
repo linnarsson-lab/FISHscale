@@ -195,6 +195,7 @@ class Visualizer:
             if self.break_loop:
                 break
             self.execute()
+            time.sleep(0.05)
 
 class SectionExpandButton(QPushButton):
     """a QPushbutton that can expand or collapse its section

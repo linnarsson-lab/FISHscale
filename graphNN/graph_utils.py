@@ -1,4 +1,5 @@
 import networkx as nx
+from networkx.algorithms.traversal import edgedfs
 import torch
 import numpy as np
 import torch
@@ -18,7 +19,9 @@ from torch_sparse import SparseTensor
 from scipy import sparse
 from datetime import datetime
 from pytorch_lightning.callbacks import ModelCheckpoint
+from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 import pytorch_lightning as pl
+import h5py
 
 
 class GraphData(pl.LightningDataModule):
@@ -70,28 +73,33 @@ class GraphData(pl.LightningDataModule):
         self.num_workers = num_workers
         self.save_to = save_to
 
-        self.folder = self.analysis_name+ '_' +datetime.now().strftime("%Y-%m-%d-%H:%M:%S")
+        self.folder = self.analysis_name+ '_' +datetime.now().strftime("%Y-%m-%d-%H%M%S")
         os.mkdir(self.folder)
 
         if type(self.cells) == type(None):
             self.cells = np.arange(self.data.x.shape[0])
-
-        self.cells = np.random.randint(0,self.data.x.shape[0], int(subsample*self.data.x.shape[0]))
+        
+        if subsample < 1:
+            self.cells = np.random.randint(0,self.data.x.shape[0], int(subsample*self.data.x.shape[0]))
         
         # Save random cell selection
-        np.save(self.folder +'/random_cells_{}.npy'.format(),self.cells)
-        
-        self.G = self.buildGraph(self.distance_threshold)
-        self.cleanGraph()
+        self.buildGraph(self.distance_threshold)
         self.compute_size()
         self.setup()
 
         self.checkpoint_callback = ModelCheckpoint(
             monitor='train_loss',
-            dirpath='',
-            filename='-{epoch:02d}-{train_loss:.2f}',
+            dirpath=self.folder,
+            filename=self.analysis_name+'-{epoch:02d}-{train_loss:.2f}',
             save_top_k=2,
             mode='min',
+            )
+        self.early_stop_callback = EarlyStopping(
+            monitor='train_loss',
+            min_delta=0.01,
+            patience=10,
+            verbose=False,
+            mode='min'
             )
 
     def molecules_df(self):
@@ -105,21 +113,16 @@ class GraphData(pl.LightningDataModule):
         rows = np.array(rows)
         cols = np.array(cols)
         data= np.ones_like(cols)
-        
         sm = sparse.csr_matrix((data,(rows,cols))).T
-        print(sm.shape)
         return sm
 
     def buildGraph(self, d_th):
         print('Building graph...')
-        G = nx.Graph()
-
-        node_file = os.path.join(self.save_to,'Edges-{}Nodes-Ngh{}-{}-dst{}.pkl'.format(self.cells.shape[0],self.ngh_sizes[0],self.ngh_sizes[1],self.distance_threshold))
+        edge_file = os.path.join(self.save_to,'Edges-{}Nodes-Ngh{}-{}-dst{}'.format(self.cells.shape[0],self.ngh_sizes[0],self.ngh_sizes[1],self.distance_threshold))
         tree_file = os.path.join(self.save_to,'Tree-{}Nodes-Ngh{}-{}-dst{}.ann'.format(self.cells.shape[0],self.ngh_sizes[0],self.ngh_sizes[1],self.distance_threshold))
         coords = np.array([self.data.x[self.cells],self.data.y[self.cells]]).T
-        print(coords.shape)
 
-        if not os.path.isfile(node_file):
+        if not os.path.isfile(edge_file):
             t = AnnoyIndex(2, 'euclidean')  # Length of item vector that will be indexed
             for i in trange(coords.shape[0]):
                 v = coords[i,:]
@@ -129,56 +132,44 @@ class GraphData(pl.LightningDataModule):
             t.build(10) # 10 trees
             print('Built tree.')
             t.save(tree_file)
-
-            u = AnnoyIndex(2, 'euclidean')
-            u.load(tree_file) # super fast, will just mmap the file
-            print('Find neighbors below distance: {}'.format(d_th))
-
-            def find_pairs(k,nghs,tree,distance):
-                pair = [(k,n) for n in nghs if tree.get_distance(k,n) < distance]
-                return pair
-
+        
             def find_nn_distance(coords,tree,distance):
+                print('Find neighbors below distance: {}'.format(d_th))
                 res = []
                 for i in trange(coords.shape[0]):
                     # 100 sets the number of neighbors to find for each node
                     #  it is set to 100 since we usually will compute neighbors
                     #  [20,10]
-                    nghs = t.get_nns_by_item(i, self.ngh_sizes[0])
-                    pair = find_pairs(i,nghs,u,distance)
-                    res += pair
+                    search = tree.get_nns_by_item(i,self.ngh_sizes[0],include_distances=True)
+                    pair = [(i,n) for n,d in zip(search[0],search[1]) if d < distance]
+                    if len(pair) > self.minimum_nodes_connected:
+                        res += pair
+                res= np.array(res)
                 return res
-            res = find_nn_distance(coords,u,d_th)
+            res = find_nn_distance(coords,t,d_th)
 
-            with open(node_file, 'wb') as f:
-                pickle.dump(res, f)
-        
+            with h5py.File(edge_file, 'w') as hf:
+                hf.create_dataset("edges",  data=res)
+
         else:
             print('Edges file exists, loading...')
-            with open(node_file, "rb") as input_file:
-                res = pickle.load(input_file)
-
-        # Add nodes to graph
-        print('Add nodes')
-        G.add_nodes_from((np.arange(self.cells.shape[0]).tolist()), test=False, val=False, label=0)
-        # Add node features to graph
-        #nx.set_node_attributes(G,dict(zip((self.cells), self.data)), 'expression')
-        # Add edges to graph
-        print('Add edges')
-        G.add_edges_from(res)
-        return G
+            with h5py.File(edge_file, 'r+') as hf:
+                res = hf['edges'][:]
+        print('Edges',res.shape)
+        self.edges_tensor = torch.tensor(res.T)
     
     def prepare_data(self):
         # do-something
         pass
-
+    
+    '''
     def cleanGraph(self):
         print('Cleaning graph...')
         for component in tqdm(list(nx.connected_components(self.G))):
             if len(component)< self.minimum_nodes_connected:
                 for node in component:
                     self.G.remove_node(node)
-    
+    '''
     def compute_size(self):
         self.train_size = int(self.cells.shape[0]*self.train_p)
         self.test_size = self.cells.shape[0]-int(self.cells.shape[0]*self.train_p)  
@@ -190,7 +181,6 @@ class GraphData(pl.LightningDataModule):
 
     def setup(self, stage: Optional[str] = None):
         print('Loading dataset...')
-        self.edges_tensor = torch.tensor(np.array(list(self.G.edges)).T)
         #self.d = torch.tensor(self.molecules_df(),dtype=torch.float32) #works
         self.d = self.molecules_df()
         
@@ -209,7 +199,10 @@ class GraphData(pl.LightningDataModule):
                                shuffle=False)
 
     def train(self,max_epochs=5):
-        trainer = pl.Trainer(gpus=-1,callbacks=self.checkpoint_callback,max_epochs=max_epochs)
+        print('Saving random cells used during training...')
+        np.save(self.folder +'/random_cells.npy',self.cells)
+        
+        trainer = pl.Trainer(gpus=-1,callbacks=[self.checkpoint_callback,self.early_stop_callback],max_epochs=max_epochs)
         trainer.fit(self.model, self.train_dataloader())
 
     def get_latent(self):
@@ -218,7 +211,7 @@ class GraphData(pl.LightningDataModule):
         for x,pos,neg,adjs in self.validation_dataloader():
             embedding.append(self.model.neighborhood_forward(x,adjs).detach().numpy())
         self.embedding = np.concatenate(embedding)
-        np.save(self.folder+'/loadings.npy',embedding)
+        np.save(self.folder+'/loadings.npy',self.embedding)
 
     def make_umap(self):
         import umap
@@ -234,8 +227,7 @@ class GraphData(pl.LightningDataModule):
             n_jobs=-1
         )
         umap_embedding = reducer.fit_transform(self.embedding)
-        np.save(self.folder+'umap.npy',umap_embedding)
-
+        np.save(self.folder+'/umap.npy',umap_embedding)
 
 def compute_library_size(data):
     sum_counts = data.sum(axis=1)
