@@ -327,6 +327,13 @@ class data_loader():
         return self.df.map_partitions(lambda x: x[x.index.isin(l)])
 
     def add_dask_attribute(self,name:str,l:list):
+        """
+        Add column to dask_attrs
+
+        Args:
+            name (str): column name
+            l (list): features to add
+        """        
         self.dask_attrs = self.dask_attrs.merge(pd.DataFrame({name:l}))
         
         
