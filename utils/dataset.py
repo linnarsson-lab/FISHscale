@@ -25,6 +25,16 @@ from glob import glob
 from time import strftime
 from math import ceil
 from multiprocessing import cpu_count
+import itertools
+#import tempfilex
+try:
+    from pyarrow.parquet import ParquetFile
+except ModuleNotFoundError as e:
+    print(f'Please install "pyarrow" to load ".parquet" files. Without only .csv files are supported which are memory inefficient. Error: {e}')
+from dask import dataframe as dd
+
+
+from memory_profiler import profile
 
 
 class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, SpatialMetrics, data_loader):
