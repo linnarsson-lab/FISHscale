@@ -111,11 +111,8 @@ class Window:
         for dataframe in self.dataset:
             print(dataframe.filename)
 
-            '''
             for c in self.columns:
-                colattr = getattr(dataframe,c)
-                pd[c] = colattr
-                unique_ca = np.unique(colattr)
+                unique_ca = dataframe.dask_attrs[c].unique().values.tolist().compute()
                 self.dic_pointclouds[c]= unique_ca
                 for ca in unique_ca:
                     if ca in self.color_dic:
@@ -123,7 +120,6 @@ class Window:
                     else:
                         col = (r()/255,r()/255,r()/255)
                         self.color_dic[str(ca)] = col
-            '''
 
             ds.append(dataframe)
         self.dataset = ds
@@ -135,10 +131,8 @@ class Visualizer:
         self.color_dic = color_dic
         self.visM = o3d.visualization.Visualizer()
         self.visM.create_window(height=height,width=width,top=0,left=500)
-        
         self.dic_pointclouds= dic_pointclouds
 
-        #points, colors = [], []
         points,maxx,minx,maxy,miny= 0,0,0,0,0
         for d in self.data:
             points += d.df.compute().shape[0]
@@ -171,7 +165,6 @@ class Visualizer:
             opt.show_coordinate_frame = True
         opt.background_color = np.asarray([0, 0, 0])
         self.break_loop = False
-
 
     def execute(self):
         self.visM.poll_events()
@@ -208,8 +201,6 @@ class ListWidget(QWidget):
         
         # creating a QListWidget 
         self.list_widget = QListWidget()
-        
-        print('sdfs')
         
         # scroll bar 
         self.subdic = subdic
@@ -255,7 +246,7 @@ class ListWidget(QWidget):
                             cs= np.array([[self.vis.color_dic[g]] *(ps.shape[0])])[0,:,:]
                             colors.append(cs)   
                     else:
-                        grpg = d.groupby(self.section)
+                        grpg = d.df.groupby(self.section)
                         for g, d in grpg:
                             if str(g) in self.selected:
                                 g= str(g)
