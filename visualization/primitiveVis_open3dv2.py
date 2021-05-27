@@ -141,9 +141,9 @@ class Visualizer:
         #points, colors = [], []
         points,maxx,minx,maxy,miny= 0,0,0,0,0
         for d in self.data:
-            points+= d.df.compute().shape[0]
-            Mx,mx = d.df.x.max().compute(),d.df.x.min().compute()
-            My,my = d.df.y.max().compute(),d.df.y.min().compute()
+            points += d.df.compute().shape[0]
+            Mx,mx = d.x_max,d.df.x_min
+            My,my = d.y_max,d.y_min
             if Mx > maxx:
                 maxx = Mx
             if mx < minx:
