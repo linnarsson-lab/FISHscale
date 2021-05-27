@@ -5,7 +5,7 @@ from functools import lru_cache
 
 class Iteration:
 
-    def get_gene(self, gene: str):
+    def get_gene(self, gene: str, include_z = False):
         """Get the xyz coordinates of points of a queried gene.
         
         This causes the data to get loaded in RAM.
@@ -17,9 +17,14 @@ class Iteration:
             [pd.DataFrame]: Pandas Dataframe with coordinates.
         """
         gene_i= self.gene_index[gene]
-        return self.df.get_partition(gene_i).loc[:,['x', 'y', 'z']].compute()
+        if include_z:
+            columns = ['x', 'y', 'z']
+        else:
+            columns = ['x', 'y']
+        
+        return self.df.get_partition(gene_i).loc[:, columns].compute()
     
-    def get_gene_sample(self, gene: str, frac: float=0.1, minimum: int=None, 
+    def get_gene_sample(self, gene: str, include_z = False, frac: float=0.1, minimum: int=None, 
                         random_state: int=None):
         """Get the xyz coordinates of a sample of points of a queried gene.
         
@@ -48,7 +53,13 @@ class Iteration:
                 frac = minimum / n_points
         
         gene_i= self.gene_index[gene]
-        return self.df.get_partition(gene_i).loc[:, ['x', 'y', 'z']].sample(frac=frac, random_state=random_state).compute()
+        
+        if include_z:
+            columns = ['x', 'y', 'z']
+        else:
+            columns = ['x', 'y']
+            
+        return self.df.get_partition(gene_i).loc[:, columns].sample(frac=frac, random_state=random_state).compute()
     
     
     
