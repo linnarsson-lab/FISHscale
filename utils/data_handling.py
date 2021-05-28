@@ -313,3 +313,28 @@ class data_loader():
         self.x_extend = self.x_max - self.x_min
         self.y_extend = self.y_max - self.y_min 
         self.xy_center = (self.x_max - 0.5*self.x_extend, self.y_max - 0.5*self.y_extend)
+    
+    def get_dask_attrs_rows(self,l:list):
+        """
+        Get rows by index
+
+        Args:
+            l (list): list of indexes to get from self.df
+
+        Returns:
+            dask.dataframe: filtered dask dataframe
+        """        
+        return self.df.map_partitions(lambda x: x[x.index.isin(l)])
+
+    def add_dask_attribute(self,name:str,l:list):
+        """
+        [summary]
+
+        Args:
+            name (str): column name
+            l (list): list of features
+        """        
+        self.dask_attrs = self.dask_attrs.merge(pd.DataFrame({name:l}))
+        
+        
+        
