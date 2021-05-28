@@ -208,9 +208,7 @@ class ListWidget(QWidget):
         
         # creating a QListWidget 
         self.list_widget = QListWidget()
-        
-        print('sdfs')
-        
+
         # scroll bar 
         self.subdic = subdic
         self.section = section

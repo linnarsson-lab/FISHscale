@@ -199,7 +199,7 @@ def inside_multi_polygons(polygon_points: dict, points: np.ndarray) -> Generator
     labels = list(polygon_points.keys())
 
     #Iterate over all (multi) polygons
-    for l in labels:            
+    for l in labels:    
         point_inside = np.zeros(points.shape[0]).astype('bool')
         
         #Iterate over every (sub) polygon of the (multi) polygon

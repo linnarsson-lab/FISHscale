@@ -11,7 +11,7 @@ try:
 except ModuleNotFoundError as e:
     print(f'Please install "pyarrow" to load ".parquet" files. Without only .csv files are supported which are memory inefficient. Error: {e}')
 
-class data_loader():
+class DataLoader():
            
     def _check_parsed(self, filename: str, reparse: bool) -> bool:
         """Check if data has already been parsed
@@ -129,7 +129,7 @@ class data_loader():
 
         Calculates XY min, max, extend and center of the points. 
         """
-        self.x_min, self.y_min, self.x_max, self.y_max = data.x.min(), data.y.max(), data.x.max(), data.y.max()
+        self.x_min, self.x_max, self.y_min, self.y_max = data.x.min(), data.x.max(), data.y.min(), data.y.max()
         self.x_extend = self.x_max - self.x_min
         self.y_extend = self.y_max - self.y_min 
         self.xy_center = (self.x_max - 0.5*self.x_extend, self.y_max - 0.5*self.y_extend)
@@ -274,13 +274,18 @@ class data_loader():
         self.df = dd.read_parquet(path.join(self.FISHscale_data_folder, '*.parquet'))
         
         if new_parse == False:
+            #Get coordinate properties from metadata
             self._get_coordinate_properties()
             #Unique genes
-            ug = self._metadatafile_get('unique_genes')
-            if isinstance(ug, bool) and isinstance(unique_genes, np.ndarray): #ug can only be false if it is a bool.
+            unique_genes_metadata = self._metadatafile_get('unique_genes')
+            #Check if unique_genes are given by user
+            if isinstance(unique_genes, np.ndarray):
                 self.unique_genes = unique_genes
-            elif isinstance(ug, np.ndarray):
-                self.unique_genes = ug
+                self._metadatafile_add({'unique_genes': self.unique_genes})
+            #Check if unique genes could be found in metadata
+            elif isinstance(unique_genes_metadata, np.ndarray): 
+                self.unique_genes = unique_genes_metadata
+            #Calcualte the unique genes, slow
             else:
                 self.unique_genes = self.df.g.drop_duplicates().compute().to_numpy()
                 self._metadatafile_add({'unique_genes': self.unique_genes})

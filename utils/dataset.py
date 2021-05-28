@@ -7,8 +7,9 @@ from FISHscale.utils.fast_iteration import Iteration, MultiIteration
 from FISHscale.utils.colors import ManyColors
 from FISHscale.utils.gene_correlation import GeneCorr
 from FISHscale.utils.spatial_metrics import SpatialMetrics
+from FISHscale.utils.normalization import Normalization
 from FISHscale.visualization.gene_scatter import GeneScatter, MultiGeneScatter
-from FISHscale.utils.data_handling import data_loader
+from FISHscale.utils.data_handling import DataLoader
 from PyQt5 import QtWidgets
 import sys
 from datetime import datetime
@@ -27,7 +28,7 @@ from math import ceil
 from multiprocessing import cpu_count
 from dask import dataframe as dd
 
-class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, SpatialMetrics, data_loader):
+class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, SpatialMetrics, DataLoader, Normalization):
     """
     Base Class for FISHscale, still under development
 
@@ -130,12 +131,6 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
 
         self.dask_attrs = dd.from_pandas(pd.DataFrame(index=self.df.index),npartitions=self.df.npartitions,sort=False)
 
-        #Get unique genes
-        #if not isinstance(unique_genes, np.ndarray):
-        #    self.unique_genes = self.df.g.drop_duplicates().compute().to_numpy()
-        #else:
-        #    self.unique_genes = unique_genes
-        
         #Gene metadata
         self.gene_index = dict(zip(self.unique_genes, range(self.unique_genes.shape[0])))
         self.gene_n_points = self._get_gene_n_points()
@@ -147,7 +142,6 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
         self.verbose = verbose
         self.vp(f'Loaded: {self.dataset_name}')
             
-    
     def vp(self, *args):
         """Function to print output if verbose mode is True
         """
@@ -155,7 +149,6 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
             for arg in args:
                 print('    ' + arg)
 
-    
     def visualize(self,columns:list=[],width=2000,height=2000,show_axis=False):
         """
         Run open3d visualization on self.data
