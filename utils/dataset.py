@@ -25,17 +25,6 @@ from glob import glob
 from time import strftime
 from math import ceil
 from multiprocessing import cpu_count
-import itertools
-#import tempfilex
-try:
-    from pyarrow.parquet import ParquetFile
-except ModuleNotFoundError as e:
-    print(f'Please install "pyarrow" to load ".parquet" files. Without only .csv files are supported which are memory inefficient. Error: {e}')
-from dask import dataframe as dd
-
-
-from memory_profiler import profile
-
 
 class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, SpatialMetrics, data_loader):
     """
@@ -94,7 +83,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
             reparse (bool, optional): True if you want to reparse the data,
                 if False, it will repeat the parsing. Parsing will apply the
                 offset. Defaults to False.
-            color_input (Optional[str, dict], optional): If a filename is 
+            color_input (Optional[st`r, dict], optional): If a filename is 
                 specifiedthat endswith "_color_dictionary.pkl" the function 
                 will try to load that dictionary. If "auto" is provided it will
                 try to load an previously generated color dictionary for this 
@@ -138,12 +127,6 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
         self.load_data(self.filename, x_label, y_label, gene_label, self.other_columns, x_offset, y_offset, z_offset, 
                        self.pixel_size.magnitude, unique_genes, reparse=reparse)
 
-        #Get unique genes
-        #if not isinstance(unique_genes, np.ndarray):
-        #    self.unique_genes = self.df.g.drop_duplicates().compute().to_numpy()
-        #else:
-        #    self.unique_genes = unique_genes
-        
         #Gene metadata
         self.gene_index = dict(zip(self.unique_genes, range(self.unique_genes.shape[0])))
         self.gene_n_points = self._get_gene_n_points()
