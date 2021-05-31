@@ -4,12 +4,13 @@ from typing import Union, Any, List
 from joblib import Parallel, delayed
 import matplotlib.pyplot as plt
 import math
+import dask
 
 
 def _ripleyk_calc(r, s, xy, bc, csr):
 
-    x = xy[:, 0]
-    y = xy[:, 1]
+    x = xy.x
+    y = xy.y
     k = rk.calculate_ripley(r, s, x, y, boundary_correct=bc, CSR_Normalise=csr)
     return k
 
@@ -54,9 +55,6 @@ class SpatialMetrics:
                     sample_shape: str='circle', boundary_correct: bool=False, CSR_Normalise: bool=False,
                     re_calculate: bool=False, n_jobs: int=-1):
 
-        #make sure gene coordinates are made
-        self.make_gene_coordinates()
-        
         #Check input
         if isinstance(r, int) or isinstance(r, float):
             r = [r]
@@ -91,9 +89,15 @@ class SpatialMetrics:
                 
         if n_jobs == -1:
             n_jobs = self.cpu_count
+            
+        result = []
+        for g in genes:
+            lazy_result = dask.delayed(_ripleyk_calc) (r, sample_size, self.get_gene(g), boundary_correct, CSR_Normalise)
+            result.append(lazy_result)
+        dask.compute(*result)
 
-        with Parallel(n_jobs=n_jobs, backend='loky') as parallel:
-            result = parallel(delayed(_ripleyk_calc)(r, sample_size, self.gene_coordinates[g], boundary_correct, CSR_Normalise) for g in genes)
+        #with Parallel(n_jobs=n_jobs, backend='loky') as parallel:
+        #    result = parallel(delayed(_ripleyk_calc)(r, sample_size, self.get_gene(g), boundary_correct, CSR_Normalise) for g in genes)
 
         if len(r) > 1:
             for g, res in zip(genes, result):
@@ -108,10 +112,9 @@ class SpatialMetrics:
         
         plt.figure(figsize=(10,10))
         
-        print(self.x.shape[0])
-        interval = math.ceil(self.x.shape[0] / 1e5)
-        print(interval)
-        plt.scatter(self.x[0:-1:interval], self.y[0:-1:interval], s=0.02, c='gray')
+        data = self.df.loc[:,['x', 'y']].sample(frac=0.05).compute()
+        data = data.to_numpy()
+        plt.scatter(data[:,0], data[:,1], s=0.02, c='gray')
         
         y_positions = np.linspace(self.y_min, self.y_max, len(r))
         center = self.xy_center[0]

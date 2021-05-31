@@ -240,6 +240,9 @@ class DataLoader():
                 data = open_f(filename, col_to_open)
                 data = data.rename(columns = rename_col)
                 
+                #Get data shape
+                self.shape = data.shape
+                
                 #Offset data
                 if x_offset !=0 and y_offset != 0:
                     data.loc[:, ['x', 'y']] += [x_offset, y_offset]
@@ -253,9 +256,8 @@ class DataLoader():
                     data.loc[:, ['x', 'y']] = data.loc[:, ['x', 'y']] * pixel_size
                 
                 #Find data extend and make metadata file
-                
                 self._coordinate_properties(data)
-                
+
                 #unique genes
                 if not isinstance(unique_genes, np.ndarray):
                     self.unique_genes = np.unique(data.g)

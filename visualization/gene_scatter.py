@@ -145,10 +145,7 @@ class GeneScatter(AxSize):
             file_format (str, optional): Format of the plot including the 
                 point. Even if vector format is given the points will be 
                 rasterized. Defaults to '.eps'.
-        """
-        #Make sure gene coordinate dictionary is present
-        self.make_gene_coordinates()
-        
+        """        
         #Check input
         if not isinstance(genes, list) and not isinstance(genes, np.ndarray):
             genes = [genes]
@@ -160,8 +157,9 @@ class GeneScatter(AxSize):
 
         #Plot points
         for g in genes:
-            x = self.gene_coordinates[g][:, 0]
-            y = self.gene_coordinates[g][:, 1]
+            data = self.get_gene(g)
+            x = data.x
+            y = data.y
             if isinstance(view, list):
                 filt_x = (x > view[0][0]) & (x < view[1][0])
                 filt_y = (y > view[0][1] )& (y < view[1][1])
@@ -169,6 +167,7 @@ class GeneScatter(AxSize):
                 x = x[filt]
                 y = y[filt]
             ax.scatter(x, y, s=s, color=self.color_dict[g], zorder=0)
+            del data
         
         #Rescale
         if isinstance(view, list):
