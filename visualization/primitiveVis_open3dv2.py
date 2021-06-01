@@ -111,11 +111,8 @@ class Window:
         for dataframe in self.dataset:
             print(dataframe.filename)
 
-            '''
             for c in self.columns:
-                colattr = getattr(dataframe,c)
-                pd[c] = colattr
-                unique_ca = np.unique(colattr)
+                unique_ca = dataframe.dask_attrs[c].unique().values.compute()
                 self.dic_pointclouds[c]= unique_ca
                 for ca in unique_ca:
                     if ca in self.color_dic:
@@ -123,7 +120,6 @@ class Window:
                     else:
                         col = (r()/255,r()/255,r()/255)
                         self.color_dic[str(ca)] = col
-            '''
 
             ds.append(dataframe)
         self.dataset = ds
@@ -135,10 +131,8 @@ class Visualizer:
         self.color_dic = color_dic
         self.visM = o3d.visualization.Visualizer()
         self.visM.create_window(height=height,width=width,top=0,left=500)
-        
         self.dic_pointclouds= dic_pointclouds
 
-        #points, colors = [], []
         points,maxx,minx,maxy,miny= 0,0,0,0,0
         for d in self.data:
             points += d.df.compute().shape[0]
@@ -171,7 +165,6 @@ class Visualizer:
             opt.show_coordinate_frame = True
         opt.background_color = np.asarray([0, 0, 0])
         self.break_loop = False
-
 
     def execute(self):
         self.visM.poll_events()
@@ -208,7 +201,6 @@ class ListWidget(QWidget):
         
         # creating a QListWidget 
         self.list_widget = QListWidget()
-
         # scroll bar 
         self.subdic = subdic
         self.section = section
@@ -228,7 +220,7 @@ class ListWidget(QWidget):
         for e in self.subdic:
             i = QListWidgetItem(str(e)) 
             try:
-                c = self.vis.color_dic[e]
+                c = self.vis.color_dic[str(e)]
                 i.setBackground(QColor(c[0]*255,c[1]*255,c[2]*255,120))
             except:
                 pass
@@ -253,14 +245,22 @@ class ListWidget(QWidget):
                             cs= np.array([[self.vis.color_dic[g]] *(ps.shape[0])])[0,:,:]
                             colors.append(cs)   
                     else:
-                        grpg = d.groupby(self.section)
+                        #selected_indices = d.dask_attrs[d.dask_attrs['labels'].isin(self.selected)].index.compute() #.index.compute()
+                        selected_features = d.dask_attrs[d.dask_attrs[self.section].isin(self.selected)].compute()
+                        ps = d.df.loc[lambda x: x.index.isin(selected_features.index)].loc[:,['x','y','z']].values.compute()
+                        cs = np.array([x for x in selected_features[self.section].apply(lambda x: d.color_dict[str(x)])])
+
+                        points.append(ps)
+                        colors.append(cs)
+                        '''
+                        grpg = d.df.groupby(self.section)
                         for g, d in grpg:
                             if str(g) in self.selected:
                                 g= str(g)
                                 ps = d.loc[:,['x','y','z']].values
-                                cs= np.array([[self.vis.color_dic[g] ]*(ps.shape[0])])[0,:,:]
-                                points.append(ps)
-                                colors.append(cs)
+                                
+                                
+                        '''
 
             ps,cs = np.concatenate(points), np.concatenate(colors)
             self.vis.pcd.points = o3d.utility.Vector3dVector(ps)
