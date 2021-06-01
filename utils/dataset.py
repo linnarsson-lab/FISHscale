@@ -7,8 +7,9 @@ from FISHscale.utils.fast_iteration import Iteration, MultiIteration
 from FISHscale.utils.colors import ManyColors
 from FISHscale.utils.gene_correlation import GeneCorr
 from FISHscale.utils.spatial_metrics import SpatialMetrics
+from FISHscale.utils.normalization import Normalization
 from FISHscale.visualization.gene_scatter import GeneScatter, MultiGeneScatter
-from FISHscale.utils.data_handling import data_loader
+from FISHscale.utils.data_handling import DataLoader, DataLoader_base
 from PyQt5 import QtWidgets
 import sys
 from datetime import datetime
@@ -25,17 +26,14 @@ from glob import glob
 from time import strftime
 from math import ceil
 from multiprocessing import cpu_count
-import itertools
-#import tempfilex
+from dask import dataframe as dd
+import dask
 try:
     from pyarrow.parquet import ParquetFile
 except ModuleNotFoundError as e:
     print(f'Please install "pyarrow" to load ".parquet" files. Without only .csv files are supported which are memory inefficient. Error: {e}')
-from dask import dataframe as dd
-from memory_profiler import profile
 
-
-class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, SpatialMetrics, data_loader):
+class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, SpatialMetrics, DataLoader, Normalization):
     """
     Base Class for FISHscale, still under development
 
@@ -92,7 +90,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
             reparse (bool, optional): True if you want to reparse the data,
                 if False, it will repeat the parsing. Parsing will apply the
                 offset. Defaults to False.
-            color_input (Optional[str, dict], optional): If a filename is 
+            color_input (Optional[st`r, dict], optional): If a filename is 
                 specifiedthat endswith "_color_dictionary.pkl" the function 
                 will try to load that dictionary. If "auto" is provided it will
                 try to load an previously generated color dictionary for this 
@@ -138,12 +136,6 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
 
         self.dask_attrs = dd.from_pandas(pd.DataFrame(index=self.df.index),npartitions=self.df.npartitions,sort=False)
 
-        #Get unique genes
-        #if not isinstance(unique_genes, np.ndarray):
-        #    self.unique_genes = self.df.g.drop_duplicates().compute().to_numpy()
-        #else:
-        #    self.unique_genes = unique_genes
-        
         #Gene metadata
         self.gene_index = dict(zip(self.unique_genes, range(self.unique_genes.shape[0])))
         self.gene_n_points = self._get_gene_n_points()
@@ -155,7 +147,6 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
         self.verbose = verbose
         self.vp(f'Loaded: {self.dataset_name}')
             
-    
     def vp(self, *args):
         """Function to print output if verbose mode is True
         """
@@ -163,7 +154,6 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
             for arg in args:
                 print('    ' + arg)
 
-    
     def visualize(self,columns:list=[],width=2000,height=2000,show_axis=False):
         """
         Run open3d visualization on self.data
@@ -211,17 +201,17 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
         print('DBscan found {} clusters'.format(labels.max()))
         
 
-class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter):
+class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base):
     """Load multiple datasets as Dataset objects.
     """
 
     def __init__(self,
         data: Union[list, str],
+        data_folder: str = '',
         unique_genes: Optional[np.ndarray] = None,
         MultiDataset_name: Optional[str] = None,
         color_input: Optional[Union[str, dict]] = None,
         verbose: bool = False,
-        n_cores: int = None,
 
         #If loading from files define:
         x_label: str = 'r_px_microscope_stitched',
@@ -233,13 +223,18 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter):
         x_offset: float = 0,
         y_offset: float = 0,
         z_offset: float = 0,
-        apply_offset: bool = False):
+        reparse: bool = False,
+        parse_num_workers: int = -1):
         """initiate PandasDataset
 
         Args:
             data (Union[list, str]): List with initiated Dataset objects, or 
                 path to folder with files to load. Unique genes must be 
                 identical for all Datasets.
+            data_folder (Optional, str): Path to folder with data when "data" 
+                is a list of already initiated Datasets. This folder will be 
+                used to save MultiDataset metadata. If not provided it will
+                save in the current working directory. Defaults to ''.                
             unique_genes (np.ndarray, optional): Array with unique gene names.
                 If not provided it will find the unique genes from the 
                 gene_column. This is slow for > 10e6 rows. 
@@ -259,9 +254,6 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter):
                 first try to load a previously generated color dictionary and 
                 make a new one if this fails. Defaults to None.
             verbose (bool, optional): If True prints additional output.
-            n_cores (int, optional): Number of cores to use by default for 
-                parallel jobs. If `None` defaults to all cpu cores. Defaults to
-                None.
 
             #Below input only needed if `data` is a path to files. 
             x_label (str, optional): Name of the column of the Pandas dataframe
@@ -286,8 +278,12 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter):
             x_offset (float, optional): Offset in X axis. Defaults to 0.
             y_offset (float, optional): Offset in Y axis. Defaults to 0.
             z_offset (float, optional): Offset in Z axis. Defaults to 0.
-            apply_offset (bool, optional): Offsets the coordinates of the 
-                points with the provided x and y offsets. Defaults to False.
+            
+            parse_num_workers (int, optional): Number of workers for opening
+                and parsing the datafiles. Datafiles need to be loaded in 
+                memory to be parsed, which could cause problems with RAM. Use
+                less workers if this happends. Set to 1, to process the files 
+                sequentially. 
         """
         #Parameters
         self.gene_label, self.x_label, self.y_label= gene_label,x_label,y_label
@@ -295,19 +291,24 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter):
         self.index=0
         self.cpu_count = cpu_count()
         self.ureg = UnitRegistry()
-
-        #Name
+        self.unique_genes = unique_genes
+        
+        #Name and folders
         if not MultiDataset_name:
             MultiDataset_name = 'MultiDataset_' + strftime("%Y-%m-%d_%H-%M-%S")
         self.dataset_name = MultiDataset_name
-
+        self.dataset_folder = data_folder
+        self.FISHscale_data_folder = path.join(self.dataset_folder, 'MultiDataset', f'{self.dataset_name}_FISHscale_MultiData')
+        makedirs(self.FISHscale_data_folder, exist_ok=True)
+        
         #Load data
-        self.unique_genes = unique_genes
         if type(data) == list:
             self.load_Datasets(data)
         elif type(data) == str:
+            if parse_num_workers == -1 or parse_num_workers > self.cpu_count:
+                parse_num_workers = self.cpu_count
             self.load_from_files(data, x_label, y_label, gene_label, other_columns, z, pixel_size, 
-                                x_offset, y_offset, z_offset, apply_offset)
+                                x_offset, y_offset, z_offset, reparse, num_workers=parse_num_workers)
         else:
             raise Exception(f'Input for "data" not understood. Should be list with initiated Datasets or valid path to files.')
 
@@ -317,6 +318,8 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter):
         #Handle colors
         self.auto_handle_color_dict(color_input)
         self.overwrite_color_dict()
+        
+        
 
     def __iter__(self):
         return self
@@ -349,7 +352,8 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter):
         x_offset: float = 0,
         y_offset: float = 0,
         z_offset: float = 0,
-        apply_offset: bool = False):
+        reparse: bool = False,
+        num_workers: int = -1):
         """Load files from folder.
 
         Output can be found in self.dataset.
@@ -379,8 +383,17 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter):
             x_offset (float, optional): Offset in X axis. Defaults to 0.
             y_offset (float, optional): Offset in Y axis. Defaults to 0.
             z_offset (float, optional): Offset in Z axis. Defaults to 0.
-            apply_offset (bool, optional): Offsets the coordinates of the 
-                points with the provided x and y offsets. Defaults to False.
+            unique_genes (np.ndarray, optional): Array with unique genes for
+                dataset. If not given can take some type to compute for large
+                datasets.
+            reparse (bool, optional): True if you want to reparse the data,
+                if False, it will repeat the parsing. Parsing will apply the
+                offset. Defaults to False.
+            num_workers (int, optional): Number of workers for opening and
+                parsing the datafiles. Datafiles need to be loaded in memory to
+                be parsed, which could cause problems with RAM. Use less
+                workers if this happends. Set to 1, to process the files 
+                sequentially. 
         """      
 
         #Correct slashes in path
@@ -393,19 +406,33 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter):
 
         #Load data
         files = glob(filepath + '*' + '.parquet')
-        results = []
-        with tqdm(total=len(files)) as pbar:
-            for i, f in enumerate(files):
-                results.append(Dataset(f, x_label, y_label, gene_label, other_columns, self.unique_genes, z, pixel_size, 
-                                       x_offset, y_offset, z_offset, apply_offset, color_input=None, 
-                                       verbose=self.verbose, part_of_multidataset = True))
-                #Get unique genes of first dataset if not defined
-                if not isinstance(self.unique_genes, np.ndarray):
-                    self.unique_genes = results[0].unique_genes
-                pbar.update(1)
-            
-        self.datasets = results
-
+        n_files = len(files)
+        if not isinstance(z, (list, np.ndarray)):
+            z = [z] * n_files
+        if not isinstance(x_offset, (list, np.ndarray)):
+            x_offset = [x_offset] * n_files
+        if not isinstance(y_offset, (list, np.ndarray)):
+            y_offset = [y_offset] * n_files
+        if not isinstance(z_offset, (list, np.ndarray)):
+            z_offset = [z_offset] * n_files
+        if not isinstance(pixel_size, (list, np.ndarray)):
+            pixel_size = [pixel_size] * n_files
+        
+        #Get unique genes of first dataset if not defined
+        if not isinstance(self.unique_genes, np.ndarray):
+            print('making unique')       
+            open_f = self._open_data_function(files[0])
+            all_genes = open_f(files[0], [gene_label])
+            self.unique_genes = np.unique(all_genes)                
+        
+        lazy_result = []
+        for f, zz, pxs, xo, yo, zo in zip(files, z, pixel_size, x_offset, y_offset, z_offset):
+            lr = dask.delayed(Dataset) (f, x_label, y_label, gene_label, other_columns, self.unique_genes, zz, pxs,
+                                    xo, yo, zo, reparse, verbose = self.verbose, part_of_multidataset=True)
+            lazy_result.append(lr)
+        futures = dask.persist(*lazy_result, num_workers=num_workers)#, num_threads=2)#self.cpu_count)
+        self.datasets =  dask.compute(*futures)
+        
     def load_Datasets(self, Dataset_list:list):
         """
         Load Datasets
@@ -413,14 +440,15 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter):
         Args:
             Dataset_list (list): list of Dataset objects.
             overwrite_color_dict (bool, optional): If True sets the color_dicts
-                of all individaal Datasets to the MultiDataset color_dict.
+                of all individal Datasets to the MultiDataset color_dict.
 
         """        
         self.datasets = Dataset_list
 
         #Set unique genes
         self.unique_genes = self.datasets[0].unique_genes
-        self.check_unique_genes()    
+        self.check_unique_genes() 
+        self.set_multidataset_true()
 
     def overwrite_color_dict(self) -> None:
         """Set the color_dict of the sub-datasets the same as the MultiDataset.
@@ -437,7 +465,6 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter):
         """
         all_unit = [d.unit_scale for d in self.datasets]
         all_area = [d.area_scale for d in self.datasets]
-        #if not np.all(all_unit == all_unit[0]):
         if not np.all([i == all_unit[0] for i in all_unit]):
             print(all_unit)
             print(all_area)
@@ -457,6 +484,12 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter):
         all_ug = [d.unique_genes for d in self.datasets]
         if not np.all(all_ug == all_ug[0]):
             raise Exception('Gene lists are not identical for all datasets.')
+        
+    def set_multidataset_true(self):
+        """Set self.part_of_mutidataset to True.
+        """
+        for d in self.datasets:
+                d.part_of_multidataset = True
 
     def arange_grid_offset(self, orderby: str='z'):
         """Set offset of datasets so that they are in a XY grid side by side.
@@ -548,14 +581,3 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter):
         
         App.exec_()
         App.quit()
-
-        
-  
-
-
-
-
-
-
-
-

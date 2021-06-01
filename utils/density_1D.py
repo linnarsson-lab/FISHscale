@@ -3,13 +3,21 @@ import matplotlib.pyplot as plt
 import math
 from matplotlib.patches import Polygon
 from sklearn.neighbors import KernelDensity
-import pandas as pd
+from typing import Tuple
 
-def rotate(p, origin=(0, 0), angle=0, degrees=None):
-    """
-    Angle in radians between -pi and pi
-    If degree is given it will ignore angle
-    Adapted from https://stackoverflow.com/questions/34372480/rotate-point-about-another-point-in-degrees-python
+def rotate(p: np.ndarray, origin: tuple=(0, 0), angle: float=0, degrees: bool=None) -> np.ndarray:
+    """Rotate points around an origin with a certain angle.
+
+    Args:
+        p (np.ndarray): Array with xy coordinates
+        origin (tuple, optional): Point to rotate around. Defaults to (0, 0).
+        angle (float, optional): Angle in radians between -pi and pi.
+            Defaults to 0.
+        degrees (bool, optional): Angle to rotate in degree, if this is given 
+            the function will ignore any "angle" input. Defaults to None.
+
+    Returns:
+        np.ndarray: Rotated points. 
     """
     if degrees != None:
         angle = np.deg2rad(degrees)
@@ -19,11 +27,17 @@ def rotate(p, origin=(0, 0), angle=0, degrees=None):
     p = np.atleast_2d(p)
     return np.squeeze((R @ (p.T-o.T) + o.T).T)
 
-def get_rotation(x1, y1, x2, y2):
-    """
-    Calculates rotation of vector between 2 points.
-    Return the angle in radians.
-    
+def get_rotation_rad(x1: float, y1: float, x2: float, y2: float) -> float:
+    """Calculates angle of vector between 2 points.
+
+    Args:
+        x1 (float): x coordinate first point.
+        y1 (float): y coordinate first point.
+        x2 (float): x coordinate second point.
+        y2 (float): y coordinate second point.
+
+    Returns:
+        float: Angle in radians. 
     """
     dx = x2 - x1
     dy = y2 - y1
@@ -32,22 +46,39 @@ def get_rotation(x1, y1, x2, y2):
 
     return angle
 
-def to_rotate(angle):
-    "Calculate angle to rotate to turn objec straigt from origin to y max, in radians "
+def to_rotate(angle: float) -> float:
+    """Calculate angle to rotate object straight from origin to y max.
+
+    Args:
+        angle ([type]): Input angle in radians.
+
+    Returns:
+        [type]: Output angle in radians.
+    """
     return 0.5*np.pi - angle
 
-def density(points, bandwidth=1, kernel='gaussian',start=None, stop=None, resolution=50):
-    """
-    Calculates the kernel density estimate over a set of 1D points.
-    Input:
-    `points`(np.array): 1D Array of points over which to calculate the KDE.
-    `bandwidth`(float): Bandwidth for KDE. 
-    `kernel`(str): Kernel for KDE.
-    `start`(float): Start of the sampling. If None takes points.min().
-    `stop`(float): Stop of the sampling. In None takes points.max()
-    `resolution`(int): Number of points between start and stop.
-    See scipy.KernelDensity for details.
+def density(points: np.ndarray, bandwidth: float=1, kernel: str='gaussian',start: float=None, stop: float=None, 
+            resolution: int=50) -> Tuple[np.ndarray, np.ndarray]:
+    """Calculates the kernel density estimate over a set of 1D points.
     
+    See Sklearn.neighbours.KernelDensity for documentation on KDE.
+
+    Args:
+        points (np.ndarray): 1D Array of points over which to calculate the 
+            KDE.
+        bandwidth (float, optional): Bandwidth for KDE. Defaults to 1.
+        kernel (str, optional): Kernel for KDE. Defaults to 'gaussian'.
+        start (float, optional): Start of the sampling. If None takes 
+            points.min(). Defaults to None.
+        stop (float, optional): Stop of the sampling. In None takes 
+            points.max(). Defaults to None.
+        resolution (int, optional):  Number of points between start and stop.
+            Defaults to 50.
+
+    Returns:
+        Tuple[np.ndarray, np.ndarray]: 
+            Array with probabilities along the sampling space. 
+            Array with locations of sampling points.
     """
     kde = KernelDensity(bandwidth=bandwidth, kernel=kernel)
     if start == None:    
@@ -64,40 +95,52 @@ def density(points, bandwidth=1, kernel='gaussian',start=None, stop=None, resolu
     
     return probability, sample_space
 
-def calc_density(points, line, width, bandwidth=1, kernel='gaussian', resolution=50, plot=False, bandwidth_extention=False, s=2):
+def calc_density(points: np.ndarray, line: list, width: float, bandwidth: float=1, kernel: str='gaussian', 
+                 resolution: int=50, plot: bool=False, bandwidth_extention: bool=False, s: float=2) -> Tuple[np.ndarray,
+                                                                                                             np.ndarray,
+                                                                                                             np.ndarray]:
+    """Calculate density of points along a line with a certain width.
+    
+    Calculates the kernel density estimate (KDE) in 1 dimension over a line. 
+    Use the width to determine how close point need to be to be included in the 
+    sampling. Use the plot function to visualize the chosen area and the 
+    density estimate.
+    The KDE will normaly have a edge effect, especially if the bandwidth is
+    large. To partially circumvent this the points at the start and finish can
+    can be mirrored by setting "bandwidth_extention" to True.
+    
+    See Sklearn.neighbours.KernelDensity for documentation on KDE.
+
+    Args:
+        points (np.ndarray): Numpy array with X and Y coordinates as columns.
+        line (list): Begin and end coordinates of the line over which to 
+            calculate the density. Format: [x1, y1, x2, y2].
+        width (float): Width over which the density is sampled. Same units as
+            the points coordinates.
+        bandwidth (float, optional): Bandwidth for KDE. Defaults to 1.
+        kernel (str, optional): Kernel for KDE, see sklearn documentation for
+            options. Defaults to 'gaussian'.
+        resolution (int, optional): Number of points for KDE sampling.
+            Defaults to 50.
+        plot (bool, optional): If True it plots the points, line and area over
+            which it calculated the density. Defaults to False.
+        bandwidth_extention (bool, optional): If True, it elongates the line on
+            both sides for making the KDE, so that the KDE does show less edge 
+            effects. The elongation is 3 bandwidths on either side. 
+            Defaults to False.
+        s (float, optional): Size of dots for plotting. Defaults to 2.
+
+    Returns:
+        Tuple[np.ndarray, np.ndarray, np.ndarray]: 
+            Array with probabilities along the sampling space. 
+            Array with locations of sampling points.
+            Boolean array for all points that fall within the selected
+            rectangle.
     """
-    Function to calcualted probablity of a kernel density estimate over a line
-    with a certain width. 
-    Input:
-    `points`(np.array): Numpy array with X and Y coordinates in the columns.
-    `line`(list): Begin and end coordinates of the line over which to calculate 
-        the density. Format: [x1, y1, x2, y2].
-    `width`(float): Width over which the density is sampled. Same units as the 
-        points coordinates.
-    
-    `bandwidth`(float): Bandwidth for KDE. 
-    `kernel`(str): Kernel for KDE.
-    `resolution`(int): Number of points for KDE sampling.
-    `plot`(bool): If True it plots the points, line and area over which it 
-        calculated the density. 
-    `bandwidth_extention`(bool): If True, it elongates the line on both sides
-        for making the KDE, so that the KDE does show less edge effects. 
-        The elongation is 3 bandwidths on either side.
-    `s`(float): Size of dots for plotting
-    
-    Output:
-    `probability`(np.array): Probability under the KDE at the sampling points.
-        Area under curve is 1 if bandwidth_extention is False.
-    `sampling_points`(np.array): Points where the KDE has been sampled.
-    `filter`(np.array): Boolean array for the selected points.
-    
-    """
-    
     x1, y1, x2, y2 = line
     
-    
     #get angle of line
-    angle = get_rotation(x1, y1, x2, y2)
+    angle = get_rotation_rad(x1, y1, x2, y2)
 
     #Get angle to rotate to turn line straight
     angle_to_rotate = to_rotate(angle)
@@ -120,7 +163,7 @@ def calc_density(points, line, width, bandwidth=1, kernel='gaussian', resolution
     #Select points
     if bandwidth_extention:
         factor = 3
-        filt = ((rotated >= [x_min, y_min- factor*bandwidth]) & (rotated <= [x_max, y_max+ factor*bandwidth])).all(axis=1)
+        filt = ((rotated >= [x_min, y_min - factor*bandwidth]) & (rotated <= [x_max, y_max+ factor*bandwidth])).all(axis=1)
     else:
         filt = ((rotated >= [x_min, y_min]) & (rotated <= [x_max, y_max])).all(axis=1)
     rotated_select = rotated[filt,:]

@@ -1,7 +1,7 @@
 from os import path, makedirs
 from glob import glob
 from dask import dataframe as dd
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Callable
 import numpy as np
 import itertools
 import pandas as pd
@@ -10,33 +10,36 @@ try:
     from pyarrow.parquet import ParquetFile
 except ModuleNotFoundError as e:
     print(f'Please install "pyarrow" to load ".parquet" files. Without only .csv files are supported which are memory inefficient. Error: {e}')
-
-class data_loader():
-           
-    def _check_parsed(self, filename: str, reparse: bool) -> bool:
-        """Check if data has already been parsed
+    
+class DataLoader_base():
+      
+    def _open_data_function(self, filename: str) -> Callable:
+        """Returns lambda function that can open a specific datafile.
+        
+        The returned function will take 2 arguments: filename and columns.
+        filename = Full name of file.
+        columns = List of columns to open
+        
+        Currently supports: .parquet and .csv
 
         Args:
-            filename (str): path to data file.
-            reparse (bool): True if data needs to be reparsed
+            filename (str): Full name of file. 
 
         Returns:
-            bool: True if folder with name <dataset_name>_FISHscale_Data is 
-                present and contains at least one ".parquet" file.
+            [Callable]: lambda fucntion to open target file.
         """
-        if path.exists(self.FISHscale_data_folder):
-            fn = path.join(self.FISHscale_data_folder, '*.parquet')
-            file_list = glob(fn)
-            if len(file_list) > 0:
-                if not reparse:
-                    self.vp(f'Found {len(file_list)} already parsed files. Skipping parsing.')
-                return True
-            else:
-                return False          
-
+        # .parquet files
+        if filename.endswith('.parquet'):
+            #Dask Dataframe
+            #open_f = lambda f, c: dd.read_parquet(f, columns = c)
+            #Pandas Dataframe, This turned out to be faster and more RAM effcient.
+            open_f = lambda f, c: pd.read_parquet(f, columns = c)
+        # .csv files
         else:
-            return False
-        
+            open_f = lambda f, c: dd.read_csv(f, usecols = c)
+            
+        return open_f
+    
     def _metadatafile_make(self, data_dict: Dict):
         """Make a metadata file. This is a pickled dictionary.
 
@@ -123,13 +126,53 @@ class data_loader():
                 print(f'Key {item} not present in metadata.')
                 print(f'Existing keys: {existing_dict.keys()}')
             return False
+        
+    def _dump_to_parquet(self, data, name, folder_name:str):
+        """Save groupby results as .parquet files.
+
+        Args:
+            x ([type]): groupby result.
+            name ([type]): Dataset name.
+            folder_name (str): Folder path.
+            z (float): Z coordinate.
+        """
+        fn_out = path.join(folder_name, f'{name}_{data.name}.parquet')
+        #write data
+        data.to_parquet(fn_out)
+
+
+class DataLoader(DataLoader_base):
+           
+    def _check_parsed(self, filename: str, reparse: bool) -> bool:
+        """Check if data has already been parsed
+
+        Args:
+            filename (str): path to data file.
+            reparse (bool): True if data needs to be reparsed
+
+        Returns:
+            bool: True if folder with name <dataset_name>_FISHscale_Data is 
+                present and contains at least one ".parquet" file.
+        """
+        if path.exists(self.FISHscale_data_folder):
+            fn = path.join(self.FISHscale_data_folder, '*.parquet')
+            file_list = glob(fn)
+            if len(file_list) > 0:
+                if not reparse:
+                    self.vp(f'Found {len(file_list)} already parsed files. Skipping parsing.')
+                return True
+            else:
+                return False          
+
+        else:
+            return False
 
     def _coordinate_properties(self, data):
         """Calculate properties of coordinates.
 
         Calculates XY min, max, extend and center of the points. 
         """
-        self.x_min, self.y_min, self.x_max, self.y_max = data.x.min(), data.y.max(), data.x.max(), data.y.max()
+        self.x_min, self.x_max, self.y_min, self.y_max = data.x.min(), data.x.max(), data.y.min(), data.y.max()
         self.x_extend = self.x_max - self.x_min
         self.y_extend = self.y_max - self.y_min 
         self.xy_center = (self.x_max - 0.5*self.x_extend, self.y_max - 0.5*self.y_extend)
@@ -153,19 +196,6 @@ class data_loader():
         self.x_extend = self.x_max - self.x_min
         self.y_extend = self.y_max - self.y_min 
         self.xy_center = (self.x_max - 0.5*self.x_extend, self.y_max - 0.5*self.y_extend)
-
-    def _gb_dump(self, data, name, folder_name:str):
-        """Save groupby results as .parquet files.
-
-        Args:
-            x ([type]): groupby result.
-            name ([type]): Dataset name.
-            folder_name (str): Folder path.
-            z (float): Z coordinate.
-        """
-        fn_out = path.join(folder_name, f'{name}_{data.name}.parquet')
-        #write data
-        data.to_parquet(fn_out)
 
     def load_data(self, filename: str, x_label: str, y_label: str, gene_label: str, other_columns: Optional[list], 
                   x_offset: float, y_offset: float, z_offset: float, pixel_size: str, unique_genes: Optional[np.ndarray],
@@ -203,6 +233,9 @@ class data_loader():
             y_offset (float, optional): Offset in Y axis.
             z_offset (float, optional): Offset in Z axis.
             pixel_size (str, optional): Size of the pixels in micrometer.
+            unique_genes (np.ndarray, optional): Array with unique genes for
+                dataset. If not given can take some type to compute for large
+                datasets.
             reparse (bool, optional): True if you want to reparse the data,
                 if False, it will repeat the parsing. Parsing will apply the
                 offset. Defaults to False.
@@ -219,17 +252,10 @@ class data_loader():
             new_parse = True
             
             #Data parsing
-            if filename.endswith('.parquet') or filename.endswith('.csv'):
+            if filename.endswith(('.parquet', '.csv')):
                 
-                # .parquet files
-                if filename.endswith('.parquet'):
-                    #Dask Dataframe
-                    #open_f = lambda f, c: dd.read_parquet(f, columns = c)
-                    #Pandas Dataframe, This turned out to be faster and more RAM effcient.
-                    open_f = lambda f, c: pd.read_parquet(f, columns = c)
-                # .csv files
-                else:
-                    open_f = lambda f, c: dd.read_csv(f, usecols = c)
+                #Get function to open file
+                open_f = self._open_data_function(filename)
                 
                 #Get columns to open
                 col_to_open = [[gene_label, x_label, y_label], other_columns]
@@ -239,6 +265,9 @@ class data_loader():
                 #Read the data file
                 data = open_f(filename, col_to_open)
                 data = data.rename(columns = rename_col)
+                
+                #Get data shape
+                self.shape = data.shape
                 
                 #Offset data
                 if x_offset !=0 and y_offset != 0:
@@ -253,9 +282,8 @@ class data_loader():
                     data.loc[:, ['x', 'y']] = data.loc[:, ['x', 'y']] * pixel_size
                 
                 #Find data extend and make metadata file
-                
                 self._coordinate_properties(data)
-                
+
                 #unique genes
                 if not isinstance(unique_genes, np.ndarray):
                     self.unique_genes = np.unique(data.g)
@@ -264,7 +292,7 @@ class data_loader():
                 self._metadatafile_add({'unique_genes': self.unique_genes})
 
                 #Group the data by gene and save
-                data.groupby('g').apply(lambda x: self._gb_dump(x, self.dataset_name, self.FISHscale_data_folder))#, meta=('float64')).compute()
+                data.groupby('g').apply(lambda x: self._dump_to_parquet(x, self.dataset_name, self.FISHscale_data_folder))#, meta=('float64')).compute()
                 
             else:
                 raise IOError (f'Invalid file type: {filename}, should be in ".parquet" or ".csv" format.') 
@@ -274,13 +302,18 @@ class data_loader():
         self.df = dd.read_parquet(path.join(self.FISHscale_data_folder, '*.parquet'))
         
         if new_parse == False:
+            #Get coordinate properties from metadata
             self._get_coordinate_properties()
             #Unique genes
-            ug = self._metadatafile_get('unique_genes')
-            if isinstance(ug, bool) and isinstance(unique_genes, np.ndarray): #ug can only be false if it is a bool.
+            unique_genes_metadata = self._metadatafile_get('unique_genes')
+            #Check if unique_genes are given by user
+            if isinstance(unique_genes, np.ndarray):
                 self.unique_genes = unique_genes
-            elif isinstance(ug, np.ndarray):
-                self.unique_genes = ug
+                self._metadatafile_add({'unique_genes': self.unique_genes})
+            #Check if unique genes could be found in metadata
+            elif isinstance(unique_genes_metadata, np.ndarray): 
+                self.unique_genes = unique_genes_metadata
+            #Calcualte the unique genes, slow
             else:
                 self.unique_genes = self.df.g.drop_duplicates().compute().to_numpy()
                 self._metadatafile_add({'unique_genes': self.unique_genes})
