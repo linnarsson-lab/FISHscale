@@ -153,6 +153,33 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
         if self.verbose:
             for arg in args:
                 print('    ' + arg)
+                
+    def offset_data_temp(self, x_offset: float = 0, y_offset: float = 0, z_offset: float = 0):
+        """Offset the data with the given offset values.
+        
+        This will not permanently affect the parsed data. 
+        
+        Args:
+            x_offset (float): Offset in X axis. 
+            y_offset (float): Offset in Y axis.
+            z_offset (float): Offset in Z axis.
+        """
+        if x_offset != 0:
+            self.df.x += self.x_offset
+        if y_offset != 0:
+            self.df.y += self.y_offset
+        if z_offset != 0:
+            self.df.z += self.z_offset
+            
+            
+        self.x_min = prop['x_min']
+        self.x_max = prop['x_max']
+        self.y_min = prop['y_min']
+        self.y_max = prop['y_max']
+        self.x_extend = self.x_max - self.x_min
+        self.y_extend = self.y_max - self.y_min 
+        self.xy_center = (self.x_max - 0.5*self.x_extend, self.y_max - 0.5*self.y_extend)
+
 
     def visualize(self,columns:list=[],width=2000,height=2000,show_axis=False):
         """
@@ -424,12 +451,13 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
             all_genes = open_f(files[0], [gene_label])
             self.unique_genes = np.unique(all_genes)                
         
+        #Open the files with the option to do this in paralell.
         lazy_result = []
         for f, zz, pxs, xo, yo, zo in zip(files, z, pixel_size, x_offset, y_offset, z_offset):
             lr = dask.delayed(Dataset) (f, x_label, y_label, gene_label, other_columns, self.unique_genes, zz, pxs,
                                     xo, yo, zo, reparse, verbose = self.verbose, part_of_multidataset=True)
             lazy_result.append(lr)
-        futures = dask.persist(*lazy_result, num_workers=num_workers)#, num_threads=2)#self.cpu_count)
+        futures = dask.persist(*lazy_result, num_workers=num_workers)
         self.datasets =  dask.compute(*futures)
         
     def load_Datasets(self, Dataset_list:list):
