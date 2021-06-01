@@ -54,7 +54,7 @@ class SpatialMetrics:
 
     def ripleyk_calc(self, r: Union[float, List], genes: Union[np.ndarray, List, str] = [],
                     sample_shape: str='circle', boundary_correct: bool=False, CSR_Normalise: bool=False,
-                    re_calculate: bool=False, n_jobs: int=-1):
+                    re_calculate: bool=False):
 
         #Check input
         if isinstance(r, int) or isinstance(r, float):
@@ -84,24 +84,13 @@ class SpatialMetrics:
             for g in genes:
                 if g not in self.ripleyk:
                     self.ripleyk[g] = {}
-                
-        print(f'\nMain r: {r}')
-        print(f'Main genes: {genes}\n')
-                
-        if n_jobs == -1:
-            n_jobs = self.cpu_count
-            
+
         lazy_result = []
         for g in genes:
             lr = dask.delayed(_ripleyk_calc) (r, sample_size, self.get_gene(g), boundary_correct, CSR_Normalise)
             lazy_result.append(lr)
         futures = dask.persist(*lazy_result, num_workers=1, num_threads=self.cpu_count)
         result = dask.compute(*futures)
-            
-        #dask.compute(*result)
-
-        #with Parallel(n_jobs=n_jobs, backend='loky') as parallel:
-        #    result = parallel(delayed(_ripleyk_calc)(r, sample_size, self.get_gene(g), boundary_correct, CSR_Normalise) for g in genes)
 
         if len(r) > 1:
             for g, res in zip(genes, result):
