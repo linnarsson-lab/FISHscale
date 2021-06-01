@@ -279,7 +279,7 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter):
         self.index=0
         self.cpu_count = cpu_count()
         self.ureg = UnitRegistry()
-
+        
         #Name
         if not MultiDataset_name:
             MultiDataset_name = 'MultiDataset_' + strftime("%Y-%m-%d_%H-%M-%S")
