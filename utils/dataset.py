@@ -32,8 +32,6 @@ try:
 except ModuleNotFoundError as e:
     print(f'Please install "pyarrow" to load ".parquet" files. Without only .csv files are supported which are memory inefficient. Error: {e}')
 from dask import dataframe as dd
-
-
 from memory_profiler import profile
 
 
