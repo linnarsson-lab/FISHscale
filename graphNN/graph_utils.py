@@ -104,9 +104,9 @@ class GraphData(pl.LightningDataModule):
 
     def molecules_df(self):
         rows,cols = [],[]
-        for r in trange(self.data.unique_genes.shape[0]):
-            g = self.data.unique_genes[r]
-            filt = self.data.gene[self.cells]
+        filt = self.df.map_partitions(lambda x: x[x.index.isin(cells)]).compute()
+        for r in trange(self.unique_genes.shape[0]):
+            g = self.unique_genes[r]
             expressed = np.where(filt == g)[0].tolist()
             cols += expressed
             rows += len(expressed)*[r]
@@ -114,6 +114,7 @@ class GraphData(pl.LightningDataModule):
         cols = np.array(cols)
         data= np.ones_like(cols)
         sm = sparse.csr_matrix((data,(rows,cols))).T
+
         return sm
 
     def buildGraph(self, d_th):
