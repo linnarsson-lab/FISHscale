@@ -104,7 +104,7 @@ class GraphData(pl.LightningDataModule):
 
     def molecules_df(self):
         rows,cols = [],[]
-        filt = self.data.df.map_partitions(lambda x: x[x.index.isin(self.cells)]).compute()
+        filt = self.data.df.map_partitions(lambda x: x[x.index.isin(self.cells)]).g.values.compute()
         for r in trange(self.data.unique_genes.shape[0]):
             g = self.data.unique_genes[r]
             expressed = np.where(filt == g)[0].tolist()
