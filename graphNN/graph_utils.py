@@ -73,7 +73,7 @@ class GraphData(pl.LightningDataModule):
         self.num_workers = num_workers
         self.save_to = save_to
 
-        self.folder = self.analysis_name+ '_' +datetime.now().strftime("%Y-%m-%d-%H:%M:%S")
+        self.folder = self.analysis_name+ '_' +datetime.now().strftime("%Y-%m-%d-%H%M%S")
         os.mkdir(self.folder)
 
         if type(self.cells) == type(None):
