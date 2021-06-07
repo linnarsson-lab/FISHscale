@@ -77,10 +77,10 @@ class GraphData(pl.LightningDataModule):
         os.mkdir(self.folder)
 
         if type(self.cells) == type(None):
-            self.cells = np.arange(self.data.x.shape[0])
+            self.cells = np.arange(self.data.shape[0])
         
         if subsample < 1:
-            self.cells = np.random.randint(0,self.data.x.shape[0], int(subsample*self.data.x.shape[0]))
+            self.cells = np.random.randint(0,self.data.shape[0], int(subsample*self.data.shape[0]))
         
         # Save random cell selection
         self.buildGraph(self.distance_threshold)
@@ -104,9 +104,9 @@ class GraphData(pl.LightningDataModule):
 
     def molecules_df(self):
         rows,cols = [],[]
-        filt = self.df.map_partitions(lambda x: x[x.index.isin(cells)]).compute()
-        for r in trange(self.unique_genes.shape[0]):
-            g = self.unique_genes[r]
+        filt = self.data.df.map_partitions(lambda x: x[x.index.isin(cells)]).compute()
+        for r in trange(self.data.unique_genes.shape[0]):
+            g = self.data.unique_genes[r]
             expressed = np.where(filt == g)[0].tolist()
             cols += expressed
             rows += len(expressed)*[r]
@@ -114,14 +114,14 @@ class GraphData(pl.LightningDataModule):
         cols = np.array(cols)
         data= np.ones_like(cols)
         sm = sparse.csr_matrix((data,(rows,cols))).T
-
         return sm
 
     def buildGraph(self, d_th):
         print('Building graph...')
         edge_file = os.path.join(self.save_to,'Edges-{}Nodes-Ngh{}-{}-dst{}'.format(self.cells.shape[0],self.ngh_sizes[0],self.ngh_sizes[1],self.distance_threshold))
         tree_file = os.path.join(self.save_to,'Tree-{}Nodes-Ngh{}-{}-dst{}.ann'.format(self.cells.shape[0],self.ngh_sizes[0],self.ngh_sizes[1],self.distance_threshold))
-        coords = np.array([self.data.x[self.cells],self.data.y[self.cells]]).T
+        
+        coords = np.array([self.data.df.x.compute()[cells].values, self.data.df.x.compute()[cells].values]).T
 
         if not os.path.isfile(edge_file):
             t = AnnoyIndex(2, 'euclidean')  # Length of item vector that will be indexed
