@@ -172,7 +172,7 @@ class GraphData(pl.LightningDataModule):
                     self.G.remove_node(node)
     '''
     def compute_size(self):
-        self.train_size = int(self.cells.shape[0]*self.train_p)
+        self.train_size = int((self.cells.shape[0]-1)*self.train_p)
         self.test_size = self.cells.shape[0]-int(self.cells.shape[0]*self.train_p)  
         random_state = np.random.RandomState(seed=0)
         permutation = random_state.permutation(self.cells.shape[0])
