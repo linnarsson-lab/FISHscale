@@ -258,8 +258,7 @@ class ListWidget(QWidget):
                             if str(g) in self.selected:
                                 g= str(g)
                                 ps = d.loc[:,['x','y','z']].values
-                                
-                                
+                                       
                         '''
 
             ps,cs = np.concatenate(points), np.concatenate(colors)

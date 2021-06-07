@@ -100,7 +100,36 @@ class SAGE(pl.LightningModule):
         self.log('train_loss', loss)
         return loss
     
+# Decoder
+class DecoderSCVI(nn.Module):
 
+    def __init__(
+        self,
+        n_input: int,
+        n_output: int,
+        n_cat_list: Iterable[int] = None,
+        n_layers: int = 1,
+        n_hidden: int = 128,
+    ):
+        super().__init__()
+        self.px_decoder = FCLayers(
+            n_in=n_input,
+            n_out=n_hidden,
+            n_cat_list=n_cat_list,
+            n_layers=n_layers,
+            n_hidden=n_hidden,
+            dropout_rate=0,
+        )
 
+        self.px_scale_decoder = nn.Sequential(nn.Linear(n_hidden, n_output), nn.Softmax(dim=-1))
+
+    def forward(
+        self, z: torch.Tensor
+    ):
+
+        # The decoder returns values for the parameters of the ZINB distribution
+        px = self.px_decoder(z)
+        px= self.px_scale_decoder(px)
+        return px
 
 
