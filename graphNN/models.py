@@ -24,7 +24,8 @@ class SAGE(pl.LightningModule):
         in_channels :int, 
         hidden_channels:int,
         num_layers:int=2,
-        normalize:bool=False
+        normalize:bool=False,
+        apply_normal_latent:bool=False,
         ):
 
         super().__init__()
@@ -33,6 +34,7 @@ class SAGE(pl.LightningModule):
         self.num_layers = num_layers
         self.normalize = normalize
         self.convs = torch.nn.ModuleList()
+        self.apply_normal_latent = apply_normal_latent
 
         for i in range(num_layers):
             in_channels = in_channels if i == 0 else hidden_channels
@@ -41,6 +43,10 @@ class SAGE(pl.LightningModule):
                 self.convs.append(SAGEConv(in_channels, hidden_channels,normalize=self.normalize))
             else:
                 self.convs.append(SAGEConv(in_channels, hidden_channels,normalize=False))
+
+        if self.apply_normal_latent:
+            self.mean_encoder = nn.Linear(hidden_channels, hidden_channels)
+            self.var_encoder = nn.Linear(hidden_channels, hidden_channels)
             
     def neighborhood_forward(self,x,adjs):
         x = torch.log(x + 1)
@@ -52,21 +58,36 @@ class SAGE(pl.LightningModule):
                 x = x.relu()
                 x = F.dropout(x, p=0.1, training=self.training)
 
-        return x
+        if self.apply_normal_latent:
+            q_m = self.mean_encoder(x)
+            q_v = torch.exp(self.var_encoder(x)) + 1e-4
+            x = reparameterize_gaussian(q_m, q_v)
+        else:
+            q_m = 0
+            q_v = 0
+
+        return x, q_m, q_v
 
     def forward(self,x,pos_x,neg_x,adjs):
-        q_m = self.neighborhood_forward(x,adjs)
-        q_m_pos = self.neighborhood_forward(pos_x,adjs)
-        q_m_neg = self.neighborhood_forward(neg_x,adjs)
-    
-        pos_loss = F.logsigmoid((q_m * q_m_pos).sum(-1))
-        neg_loss = F.logsigmoid(-(q_m * q_m_neg).sum(-1))
+        z, q_m, q_v = self.neighborhood_forward(x,adjs)
+        z_pos, q_m_pos, q_v_pos = self.neighborhood_forward(pos_x,adjs)
+        z_neg, q_m_pos, q_v_pos = self.neighborhood_forward(neg_x,adjs)
+
+        pos_loss = F.logsigmoid((z * z_pos).sum(-1))
+        neg_loss = F.logsigmoid(-(z * z_neg).sum(-1))
         ratio = pos_loss/neg_loss + 1e-8
 
         pos_loss = pos_loss.mean()
         neg_loss = neg_loss.mean()
-        
         n_loss = - pos_loss - neg_loss
+
+        # KL Divergence
+        if self.apply_normal_latent:
+            mean = torch.zeros_like(q_m)
+            scale = torch.ones_like(q_v)
+            kl_divergence_z = kl(Normal(q_m, torch.sqrt(q_v)), Normal(mean, scale)).sum(dim=1)
+            n_loss = n_loss + kl_divergence_z.mean()
+
         return n_loss
 
     def configure_optimizers(self):
@@ -79,6 +100,7 @@ class SAGE(pl.LightningModule):
         self.log('train_loss', loss)
         return loss
     
+
 
 
 

@@ -104,7 +104,7 @@ class GraphData(pl.LightningDataModule):
 
     def molecules_df(self):
         rows,cols = [],[]
-        filt = self.data.df.map_partitions(lambda x: x[x.index.isin(cells)]).compute()
+        filt = self.data.df.map_partitions(lambda x: x[x.index.isin(self.cells)]).compute()
         for r in trange(self.data.unique_genes.shape[0]):
             g = self.data.unique_genes[r]
             expressed = np.where(filt == g)[0].tolist()
@@ -121,7 +121,7 @@ class GraphData(pl.LightningDataModule):
         edge_file = os.path.join(self.save_to,'Edges-{}Nodes-Ngh{}-{}-dst{}'.format(self.cells.shape[0],self.ngh_sizes[0],self.ngh_sizes[1],self.distance_threshold))
         tree_file = os.path.join(self.save_to,'Tree-{}Nodes-Ngh{}-{}-dst{}.ann'.format(self.cells.shape[0],self.ngh_sizes[0],self.ngh_sizes[1],self.distance_threshold))
         
-        coords = np.array([self.data.df.x.compute()[cells].values, self.data.df.x.compute()[cells].values]).T
+        coords = np.array([self.data.df.x.compute()[self.cells].values, self.data.df.x.compute()[self.cells].values]).T
 
         if not os.path.isfile(edge_file):
             t = AnnoyIndex(2, 'euclidean')  # Length of item vector that will be indexed
