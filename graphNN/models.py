@@ -102,7 +102,6 @@ class SAGE(pl.LightningModule):
     
 # Decoder
 class DecoderSCVI(nn.Module):
-
     def __init__(
         self,
         n_input: int,
@@ -110,16 +109,18 @@ class DecoderSCVI(nn.Module):
         n_cat_list: Iterable[int] = None,
         n_layers: int = 1,
         n_hidden: int = 128,
+        use_batch_norm: bool=True,
+        use_relu:bool=True,
+        dropout_rate: float=0.1,
+        bias: bool=True,
     ):
         super().__init__()
-        self.px_decoder = FCLayers(
-            n_in=n_input,
-            n_out=n_hidden,
-            n_cat_list=n_cat_list,
-            n_layers=n_layers,
-            n_hidden=n_hidden,
-            dropout_rate=0,
-        )
+
+        self.px_decoder = nn.Sequential(
+                            nn.Linear(n_input , n_hidden, bias=bias),
+                            nn.BatchNorm1d(n_hidden, momentum=0.01, eps=0.001) if use_batch_norm else None,
+                            nn.ReLU() if use_relu else None,
+                            nn.Dropout(p=dropout_rate) if dropout_rate > 0 else None)
 
         self.px_scale_decoder = nn.Sequential(nn.Linear(n_hidden, n_output), nn.Softmax(dim=-1))
 
@@ -131,9 +132,3 @@ class DecoderSCVI(nn.Module):
         px = self.px_decoder(z)
         px= self.px_scale_decoder(px)
         return px
-
-
-
-
-
-
