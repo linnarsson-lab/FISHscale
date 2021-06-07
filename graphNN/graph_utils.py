@@ -210,7 +210,8 @@ class GraphData(pl.LightningDataModule):
         print('Training done, generating embedding...')
         embedding = []
         for x,pos,neg,adjs in self.validation_dataloader():
-            embedding.append(self.model.neighborhood_forward(x,adjs).detach().numpy())
+            z,qm,_ = self.model.neighborhood_forward(x,adjs)
+            embedding.append(qm.detach().numpy())
         self.embedding = np.concatenate(embedding)
         np.save(self.folder+'/loadings.npy',embedding)
 
