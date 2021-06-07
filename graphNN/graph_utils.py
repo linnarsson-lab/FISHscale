@@ -199,11 +199,11 @@ class GraphData(pl.LightningDataModule):
                                batch_size=102400,
                                shuffle=False)
 
-    def train(self,max_epochs=5):
+    def train(self,max_epochs=5,gpus=-1):
         print('Saving random cells used during training...')
         np.save(self.folder +'/random_cells.npy',self.cells)
         
-        trainer = pl.Trainer(gpus=-1,callbacks=[self.checkpoint_callback,self.early_stop_callback],max_epochs=max_epochs)
+        trainer = pl.Trainer(gpus=gpus,callbacks=[self.checkpoint_callback,self.early_stop_callback],max_epochs=max_epochs)
         trainer.fit(self.model, self.train_dataloader())
 
     def get_latent(self):
