@@ -26,6 +26,8 @@ class SAGE(pl.LightningModule):
         num_layers:int=2,
         normalize:bool=False,
         apply_normal_latent:bool=False,
+        supervised_decoder:bool=False,
+        output_channels:int=448,
         ):
 
         super().__init__()
@@ -35,6 +37,7 @@ class SAGE(pl.LightningModule):
         self.normalize = normalize
         self.convs = torch.nn.ModuleList()
         self.apply_normal_latent = apply_normal_latent
+        self.supervised_decoder = supervised_decoder
 
         for i in range(num_layers):
             in_channels = in_channels if i == 0 else hidden_channels
@@ -47,6 +50,10 @@ class SAGE(pl.LightningModule):
         if self.apply_normal_latent:
             self.mean_encoder = nn.Linear(hidden_channels, hidden_channels)
             self.var_encoder = nn.Linear(hidden_channels, hidden_channels)
+
+        if self.supervised_decoder:
+            self.decoder = DecoderSCVI(hidden_channels,output_channels)
+        
             
     def neighborhood_forward(self,x,adjs):
         x = torch.log(x + 1)
@@ -68,7 +75,7 @@ class SAGE(pl.LightningModule):
 
         return x, q_m, q_v
 
-    def forward(self,x,pos_x,neg_x,adjs):
+    def forward(self,x,pos_x,neg_x,adjs,ref):
         z, q_m, q_v = self.neighborhood_forward(x,adjs)
         z_pos, q_m_pos, q_v_pos = self.neighborhood_forward(pos_x,adjs)
         z_neg, q_m_pos, q_v_pos = self.neighborhood_forward(neg_x,adjs)
@@ -87,16 +94,22 @@ class SAGE(pl.LightningModule):
             scale = torch.ones_like(q_v)
             kl_divergence_z = kl(Normal(q_m, torch.sqrt(q_v)), Normal(mean, scale)).sum(dim=1)
             n_loss = n_loss + kl_divergence_z.mean()
-
+        
+        if self.supervised_decoder:
+            px =  self.decoder(z)
+            supervised_loss = - F.softmax(torch.matmul(px,ref),dim=1).sum(dim=-1).mean()
+            self.log('Autoencoder Loss',supervised_loss)
+            
         return n_loss
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=0.01)
         return optimizer
 
+
     def training_step(self, batch, batch_idx):
-        x,pos,neg,adjs= batch
-        loss= self(x,pos,neg,adjs)
+        x,pos,neg,adjs,c = batch
+        loss= self(x,pos,neg,adjs,c)
         self.log('train_loss', loss)
         return loss
     
@@ -106,9 +119,7 @@ class DecoderSCVI(nn.Module):
         self,
         n_input: int,
         n_output: int,
-        n_cat_list: Iterable[int] = None,
-        n_layers: int = 1,
-        n_hidden: int = 128,
+        n_hidden: int = 48,
         use_batch_norm: bool=True,
         use_relu:bool=True,
         dropout_rate: float=0.1,
@@ -127,7 +138,6 @@ class DecoderSCVI(nn.Module):
     def forward(
         self, z: torch.Tensor
     ):
-
         # The decoder returns values for the parameters of the ZINB distribution
         px = self.px_decoder(z)
         px= self.px_scale_decoder(px)
