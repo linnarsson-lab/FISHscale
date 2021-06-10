@@ -97,7 +97,10 @@ class SAGE(pl.LightningModule):
         
         if self.supervised_decoder:
             px =  self.decoder(z)
-            supervised_loss = - F.softmax(torch.matmul(px,ref),dim=1).sum(dim=-1).mean()
+            supervised_loss = - F.log_softmax(torch.matmul(px,ref),dim=1).sum(dim=-1).mean()/1000
+            n_loss += supervised_loss
+            
+            #print(supervised_loss)
             self.log('Autoencoder Loss',supervised_loss)
             
         return n_loss
