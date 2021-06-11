@@ -221,7 +221,7 @@ class GraphData(pl.LightningDataModule):
             z,qm,_ = self.model.neighborhood_forward(x,adjs)
             embedding.append(qm.detach().numpy())
         self.embedding = np.concatenate(embedding)
-        np.save(self.folder+'/loadings.npy',embedding)
+        np.save(self.folder+'/loadings.npy',self.embedding)
 
     def make_umap(self):
         import umap
