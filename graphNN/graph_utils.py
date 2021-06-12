@@ -226,6 +226,7 @@ class GraphData(pl.LightningDataModule):
         np.save(self.folder+'/loadings.npy',self.embedding)
 
     def make_umap(self):
+        print('Embedding done, generating umap...')
         import umap
         reducer = umap.UMAP(
             n_neighbors=15,
@@ -241,7 +242,7 @@ class GraphData(pl.LightningDataModule):
         umap_embedding = reducer.fit_transform(self.embedding)
         np.save(self.folder+'umap.npy',umap_embedding)
 
-def compute_library_size(data):
+def compute_library_size(data):   
     sum_counts = data.sum(axis=1)
     masked_log_sum = np.ma.log(sum_counts)
     log_counts = masked_log_sum.filled(0)
