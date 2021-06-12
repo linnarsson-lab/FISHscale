@@ -112,6 +112,8 @@ class GraphData(pl.LightningDataModule):
             )
 
     def molecules_df(self):
+
+     
         rows,cols = [],[]
         filt = self.data.df.map_partitions(lambda x: x[x.index.isin(self.cells)]).g.values.compute()
         for r in trange(self.data.unique_genes.shape[0]):
@@ -207,7 +209,7 @@ class GraphData(pl.LightningDataModule):
                                batch_size=102400,
                                shuffle=False,supervised_data=self.ref_celltypes)
 
-    def train(self,max_epochs=5,gpus=-1):
+    def train(self,max_epochs=5,gpus=-1):     
         print('Saving random cells used during training...')
         np.save(self.folder +'/random_cells.npy',self.cells)
         
