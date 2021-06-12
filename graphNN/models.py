@@ -108,6 +108,7 @@ class SAGE(pl.LightningModule):
         # Add loss if trying to reconstruct cell types
         if self.supervised_decoder:
             px =  self.decoder(z)
+
             if self.supervised_loss == 'kl-poisson':
                 supervised_loss = 0
                 #supervised_loss = kl(Poisson(px),Poisson(torch.log(ref+1))).sum(dim=1).mean()
@@ -157,8 +158,11 @@ class DecoderSCVI(nn.Module):
                             nn.ReLU() if use_relu else None,
                             nn.Dropout(p=dropout_rate) if dropout_rate > 0 else None)
 
-        self.px_scale_decoder = nn.Sequential(nn.Linear(n_hidden, n_output), 
-            nn.Softmax(dim=-1) if softmax else None)
+        if softmax:
+            self.px_scale_decoder = nn.Sequential(nn.Linear(n_hidden, n_output))
+        else:
+            self.px_scale_decoder = nn.Sequential(nn.Linear(n_hidden, n_output),
+                nn.Softmax(dim=-1))
 
     def forward(
         self, z: torch.Tensor
