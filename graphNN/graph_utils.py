@@ -173,14 +173,6 @@ class GraphData(pl.LightningDataModule):
         # do-something
         pass
     
-    '''
-    def cleanGraph(self):
-        print('Cleaning graph...')
-        for component in tqdm(list(nx.connected_components(self.G))):
-            if len(component)< self.minimum_nodes_connected:
-                for node in component:
-                    self.G.remove_node(node)
-    '''
     def compute_size(self):
         self.train_size = int((self.cells.shape[0])*self.train_p)
         self.test_size = self.cells.shape[0]-int(self.cells.shape[0]*self.train_p)  
