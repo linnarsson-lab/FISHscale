@@ -18,8 +18,9 @@ class SAGE(pl.LightningModule):
     SAGE will learn to encode neighbors to allow either the reconstruction of the original nodes data helped by neighbor data or 
     to generate similar embedding for closeby nodes (i.e. regionalization).
 
+ 
+    """ 
 
-    """    
     def __init__(self, 
         in_channels :int, 
         hidden_channels:int,
@@ -28,7 +29,9 @@ class SAGE(pl.LightningModule):
         apply_normal_latent:bool=False,
         supervised_decoder:bool=False,
         output_channels:int=448,
+        supervised_loss:str= 'matmul', # choose 
         ):
+
 
         super().__init__()
         self.save_hyperparameters()
@@ -38,6 +41,7 @@ class SAGE(pl.LightningModule):
         self.convs = torch.nn.ModuleList()
         self.apply_normal_latent = apply_normal_latent
         self.supervised_decoder = supervised_decoder
+        self.supervised_loss = supervised_loss
 
         for i in range(num_layers):
             in_channels = in_channels if i == 0 else hidden_channels
@@ -52,9 +56,12 @@ class SAGE(pl.LightningModule):
             self.var_encoder = nn.Linear(hidden_channels, hidden_channels)
 
         if self.supervised_decoder:
-            self.decoder = DecoderSCVI(hidden_channels,output_channels)
+            if self.supervised_loss != 'kl-poisson':
+                self.decoder = DecoderSCVI(hidden_channels,output_channels,softmax=False)   
+            else:
+                self.decoder = DecoderSCVI(hidden_channels,output_channels,softmax=False)
+                
         
-            
     def neighborhood_forward(self,x,adjs):
         x = torch.log(x + 1)
         for i, (edge_index, _, size) in enumerate(adjs):
@@ -76,13 +83,16 @@ class SAGE(pl.LightningModule):
         return x, q_m, q_v
 
     def forward(self,x,pos_x,neg_x,adjs,ref):
+        # Embedding sampled nodes
         z, q_m, q_v = self.neighborhood_forward(x,adjs)
+        # Embedding for neighbor nodes of sample nodes
         z_pos, q_m_pos, q_v_pos = self.neighborhood_forward(pos_x,adjs)
+        # Ebedding for random nodes
         z_neg, q_m_pos, q_v_pos = self.neighborhood_forward(neg_x,adjs)
 
         pos_loss = F.logsigmoid((z * z_pos).sum(-1))
         neg_loss = F.logsigmoid(-(z * z_neg).sum(-1))
-        ratio = pos_loss/neg_loss + 1e-8
+        #ratio = pos_loss/neg_loss + 1e-8
 
         pos_loss = pos_loss.mean()
         neg_loss = neg_loss.mean()
@@ -95,11 +105,22 @@ class SAGE(pl.LightningModule):
             kl_divergence_z = kl(Normal(q_m, torch.sqrt(q_v)), Normal(mean, scale)).sum(dim=1)
             n_loss = n_loss + kl_divergence_z.mean()
         
+        # Add loss if trying to reconstruct cell types
         if self.supervised_decoder:
             px =  self.decoder(z)
-            supervised_loss = - F.log_softmax(torch.matmul(px,ref),dim=1).sum(dim=-1).mean()/1000
+            if self.supervised_loss == 'kl-poisson':
+                supervised_loss = 0
+                #supervised_loss = kl(Poisson(px),Poisson(torch.log(ref+1))).sum(dim=1).mean()
+            elif self.supervised_loss == 'cosine-similarity':
+                cos= 0
+                for c in range(px.shape[0]):
+                    cos += torch.nn.functional.cosine_similarity(px[c:c+1,:],ref.T).mean()
+                cos = cos/px.shape[0]
+                supervised_loss = cos
+            elif self.supervised_loss == 'matmul':
+                supervised_loss = - F.log_softmax(torch.matmul(px,ref),dim=1).sum(dim=-1).mean()/1000
+
             n_loss += supervised_loss
-            
             #print(supervised_loss)
             self.log('Autoencoder Loss',supervised_loss)
             
@@ -126,6 +147,7 @@ class DecoderSCVI(nn.Module):
         use_relu:bool=True,
         dropout_rate: float=0.1,
         bias: bool=True,
+        softmax:bool = True,
     ):
         super().__init__()
 
@@ -135,7 +157,8 @@ class DecoderSCVI(nn.Module):
                             nn.ReLU() if use_relu else None,
                             nn.Dropout(p=dropout_rate) if dropout_rate > 0 else None)
 
-        self.px_scale_decoder = nn.Sequential(nn.Linear(n_hidden, n_output), nn.Softmax(dim=-1))
+        self.px_scale_decoder = nn.Sequential(nn.Linear(n_hidden, n_output), 
+            nn.Softmax(dim=-1) if softmax else None)
 
     def forward(
         self, z: torch.Tensor
