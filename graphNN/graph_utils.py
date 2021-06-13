@@ -213,7 +213,7 @@ class GraphData(pl.LightningDataModule):
         embedding = []
         for x,pos,neg,adjs,ref in self.validation_dataloader():
             z,qm,_ = self.model.neighborhood_forward(x,adjs)
-            embedding.append(qm.detach().numpy())
+            embedding.append(z.detach().numpy())
         self.embedding = np.concatenate(embedding)
         np.save(self.folder+'/loadings.npy',self.embedding)
 
