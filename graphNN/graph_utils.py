@@ -142,7 +142,7 @@ class GraphData(pl.LightningDataModule):
         # set a big batch size, not all will be loaded in memory but it will loop relatively fast through large dataset
         return NeighborSampler2(self.edges_tensor, node_idx=self.indices_validation,data=self.d,
                                sizes=self.ngh_sizes, return_e_id=False,
-                               batch_size=10240,
+                               batch_size=self.batch_size*10,
                                shuffle=False,supervised_data=self.ref_celltypes)
 
     def train(self,max_epochs=5,gpus=-1):     
@@ -150,7 +150,7 @@ class GraphData(pl.LightningDataModule):
         np.save(self.folder +'/random_cells.npy',self.cells)
         
         trainer = pl.Trainer(gpus=gpus,callbacks=[self.checkpoint_callback,self.early_stop_callback],max_epochs=max_epochs)
-        trainer.fit(self.model, train_dataloader=self.train_dataloader())#,val_dataloaders=self.validation_dataloader())
+        trainer.fit(self.model, train_dataloader=self.train_dataloader(),val_dataloaders=self.validation_dataloader())
 
     def get_latent(self, deterministic=True):
         print('Training done, generating embedding...')
