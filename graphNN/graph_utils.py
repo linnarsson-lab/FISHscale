@@ -107,8 +107,8 @@ class GraphData(pl.LightningDataModule):
             monitor='val_loss',
             min_delta=0.2,
             patience=2,
-            verbose=True
-            mode='min'
+            verbose=True,
+            mode='min',
             )
     
     def prepare_data(self):
@@ -156,7 +156,7 @@ class GraphData(pl.LightningDataModule):
         embedding = []
         for x,pos,neg,adjs,ref in self.validation_dataloader():
             z,qm,_ = self.model.neighborhood_forward(x,adjs)
-            if deterministic:
+            if deterministic and self.model.apply_normal_latent:
                 z = qm
             embedding.append(z.detach().numpy())
             
