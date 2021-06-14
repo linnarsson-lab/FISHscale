@@ -69,7 +69,7 @@ class Regionalize(Iteration):
         self.pixel_size = self.ureg(pixel_size)
         self.pixel_area = self.pixel_size ** 2
 
-    def make_hexbin(self, spacing: float, min_count: int) -> Tuple[Any, np.ndarray, Any]:
+    def hexbin_make(self, spacing: float, min_count: int) -> Tuple[Any, np.ndarray, Any]:
         """
         Bin 2D point data with hexagonal bins.
 
@@ -926,7 +926,7 @@ class Regionalize(Iteration):
 
         """
         #Bin the data with a hexagonal grid
-        df_hex, hex_coord, hexagon_shape = self.make_hexbin(spacing, min_count)
+        df_hex, hex_coord, hexagon_shape = self.hexbin_make(spacing, min_count)
         #Normalize data
         df_hex_norm = self.hexbin_normalize(df_hex, mode=normalization_mode)
         #Calculate PCA
