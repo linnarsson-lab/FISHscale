@@ -25,7 +25,7 @@ class SAGE(pl.LightningModule):
         in_channels :int, 
         hidden_channels:int,
         num_layers:int=2,
-        normalize:bool=False,
+        normalize:bool=True,
         apply_normal_latent:bool=False,
         supervised_decoder:bool=False,
         output_channels:int=448,
@@ -135,6 +135,12 @@ class SAGE(pl.LightningModule):
         x,pos,neg,adjs,c = batch
         loss= self(x,pos,neg,adjs,c)
         self.log('train_loss', loss)
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+        x,pos,neg,adjs,c = batch
+        loss= self(x,pos,neg,adjs,c)
+        self.log('val_loss', loss)
         return loss
     
 # Decoder
