@@ -119,7 +119,6 @@ class GraphData(pl.LightningDataModule):
         print('Loading dataset...')
         #self.d = torch.tensor(self.molecules_df(),dtype=torch.float32) #works
         self.d = self.molecules_df()
-        
         print('tensor',self.d.shape)
 
     def compute_size(self):
