@@ -108,7 +108,6 @@ class SAGE(pl.LightningModule):
         # Add loss if trying to reconstruct cell types
         if self.supervised_decoder:
             px =  self.decoder(z)
-
             if self.supervised_loss == 'kl-poisson':
                 supervised_loss = 0
                 #supervised_loss = kl(Poisson(px),Poisson(torch.log(ref+1))).sum(dim=1).mean()
