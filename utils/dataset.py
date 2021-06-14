@@ -7,6 +7,7 @@ from FISHscale.utils.fast_iteration import Iteration, MultiIteration
 from FISHscale.utils.colors import ManyColors
 from FISHscale.utils.gene_correlation import GeneCorr
 from FISHscale.utils.spatial_metrics import SpatialMetrics
+from FISHscale.utils.density_1D import Density1D
 from FISHscale.utils.normalization import Normalization
 from FISHscale.visualization.gene_scatter import GeneScatter, MultiGeneScatter
 from FISHscale.utils.data_handling import DataLoader, DataLoader_base
@@ -28,12 +29,14 @@ from math import ceil
 from multiprocessing import cpu_count
 from dask import dataframe as dd
 import dask
+from dask.distributed import Client, LocalCluster
 try:
     from pyarrow.parquet import ParquetFile
 except ModuleNotFoundError as e:
     print(f'Please install "pyarrow" to load ".parquet" files. Without only .csv files are supported which are memory inefficient. Error: {e}')
 
-class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, SpatialMetrics, DataLoader, Normalization):
+class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, SpatialMetrics, DataLoader, Normalization, 
+              Density1D):
     """
     Base Class for FISHscale, still under development
 
@@ -109,11 +112,16 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
         self.part_of_multidataset = part_of_multidataset
         self.cpu_count = cpu_count()
         self.z = z
-        self.z += z_offset
         self.x_offset = x_offset
         self.y_offset = y_offset
         self.z_offset = z_offset
         self.other_columns = other_columns
+        
+        #Dask
+        #if not self.part_of_multidataset:
+        #    self.cluster = LocalCluster()
+        #    self.client = Client(self.cluster)
+        #    print(f'Dask dashboard link: {self.client.dashboard_link}')
 
         #Files and folders
         self.filename = filename
@@ -165,17 +173,19 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
             z_offset (float): Offset in Z axis.
         """
         if x_offset != 0:
-            self.df.x += self.x_offset
+            self.x_offset += x_offset
+            self.df.x += x_offset
+            self.x_min += x_offset
+            self.x_max += x_offset
         if y_offset != 0:
-            self.df.y += self.y_offset
+            self.y_offset += y_offset
+            self.df.y += y_offset
+            self.y_min += y_offset
+            self.y_max += y_offset
         if z_offset != 0:
-            self.df.z += self.z_offset
-            
-            
-        self.x_min = prop['x_min']
-        self.x_max = prop['x_max']
-        self.y_min = prop['y_min']
-        self.y_max = prop['y_max']
+            self.z_offset += z_offset
+            self.df.z += z_offset
+
         self.x_extend = self.x_max - self.x_min
         self.y_extend = self.y_max - self.y_min 
         self.xy_center = (self.x_max - 0.5*self.x_extend, self.y_max - 0.5*self.y_extend)
@@ -251,7 +261,7 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
         y_offset: float = 0,
         z_offset: float = 0,
         reparse: bool = False,
-        parse_num_workers: int = -1):
+        parse_num_threads: int = -1):
         """initiate PandasDataset
 
         Args:
@@ -306,7 +316,7 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
             y_offset (float, optional): Offset in Y axis. Defaults to 0.
             z_offset (float, optional): Offset in Z axis. Defaults to 0.
             
-            parse_num_workers (int, optional): Number of workers for opening
+            parse_num_threads (int, optional): Number of workers for opening
                 and parsing the datafiles. Datafiles need to be loaded in 
                 memory to be parsed, which could cause problems with RAM. Use
                 less workers if this happends. Set to 1, to process the files 
@@ -320,6 +330,11 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
         self.ureg = UnitRegistry()
         self.unique_genes = unique_genes
         
+        #Dask
+        #self.cluster = LocalCluster()
+        #self.client = Client(self.cluster)
+        #print(f'Dask dashboard link: {self.client.dashboard_link}')
+        
         #Name and folders
         if not MultiDataset_name:
             MultiDataset_name = 'MultiDataset_' + strftime("%Y-%m-%d_%H-%M-%S")
@@ -332,10 +347,10 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
         if type(data) == list:
             self.load_Datasets(data)
         elif type(data) == str:
-            if parse_num_workers == -1 or parse_num_workers > self.cpu_count:
-                parse_num_workers = self.cpu_count
+            if parse_num_threads == -1 or parse_num_threads > self.cpu_count:
+                parse_num_threads = self.cpu_count
             self.load_from_files(data, x_label, y_label, gene_label, other_columns, z, pixel_size, 
-                                x_offset, y_offset, z_offset, reparse, num_workers=parse_num_workers)
+                                x_offset, y_offset, z_offset, reparse, num_threads=parse_num_threads)
         else:
             raise Exception(f'Input for "data" not understood. Should be list with initiated Datasets or valid path to files.')
 
@@ -346,8 +361,6 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
         self.auto_handle_color_dict(color_input)
         self.overwrite_color_dict()
         
-        
-
     def __iter__(self):
         return self
 
@@ -380,7 +393,7 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
         y_offset: float = 0,
         z_offset: float = 0,
         reparse: bool = False,
-        num_workers: int = -1):
+        num_threads: int = -1):
         """Load files from folder.
 
         Output can be found in self.dataset.
@@ -416,7 +429,7 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
             reparse (bool, optional): True if you want to reparse the data,
                 if False, it will repeat the parsing. Parsing will apply the
                 offset. Defaults to False.
-            num_workers (int, optional): Number of workers for opening and
+            num_threads (int, optional): Number of workers for opening and
                 parsing the datafiles. Datafiles need to be loaded in memory to
                 be parsed, which could cause problems with RAM. Use less
                 workers if this happends. Set to 1, to process the files 
@@ -446,8 +459,7 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
             pixel_size = [pixel_size] * n_files
         
         #Get unique genes of first dataset if not defined
-        if not isinstance(self.unique_genes, np.ndarray):
-            print('making unique')       
+        if not isinstance(self.unique_genes, np.ndarray):   
             open_f = self._open_data_function(files[0])
             all_genes = open_f(files[0], [gene_label])
             self.unique_genes = np.unique(all_genes)                
@@ -458,7 +470,7 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
             lr = dask.delayed(Dataset) (f, x_label, y_label, gene_label, other_columns, self.unique_genes, zz, pxs,
                                     xo, yo, zo, reparse, verbose = self.verbose, part_of_multidataset=True)
             lazy_result.append(lr)
-        futures = dask.persist(*lazy_result, num_workers=num_workers)
+        futures = dask.persist(*lazy_result, num_workers=1, num_threads = num_threads)
         self.datasets =  dask.compute(*futures)
         
     def load_Datasets(self, Dataset_list:list):
@@ -567,7 +579,7 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
             dataset_center = self.datasets[s].xy_center
             offset_x = offset_x - dataset_center[0]
             offset_y = offset_y - dataset_center[1]
-            self.datasets[s].offset_data(offset_x, offset_y, 0, apply=True)
+            self.datasets[s].offset_data_temp(offset_x, offset_y, 0)
 
     def reset_offset(self, z: bool=False) -> None: 
         """Reset the offset so that the center is at (0,0) or (0,0,0).
@@ -578,13 +590,13 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
         """
 
         for d in self.datasets:
-            center_x = -d.xy_center[0]
-            center_y = -d.xy_center[1]
+            x_offset = -d.xy_center[0]
+            y_offset = -d.xy_center[1]
             if z:
-                offset_z = -d.z
+                z_offset = d.z
             else:
-                offset_z = 0
-            d.offset_data(center_x, center_y, offset_z, apply=True)
+                z_offset = 0
+            d.offset_data_temp(x_offset, y_offset, z_offset)
         
     def visualize(self,columns:list=[],width=2000,height=2000,show_axis=False,color_dic=None):
         """
