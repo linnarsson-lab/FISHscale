@@ -1,15 +1,19 @@
 from os import path, makedirs
 from glob import glob
+import re
 from dask import dataframe as dd
 from typing import Optional, Dict, Any, Callable
 import numpy as np
 import itertools
 import pandas as pd
 import pickle
+
+from pandas.io.parquet import read_parquet
 try:
     from pyarrow.parquet import ParquetFile
+    from pyarrow import ArrowInvalid
 except ModuleNotFoundError as e:
-    print(f'Please install "pyarrow" to load ".parquet" files. Without only .csv files are supported which are memory inefficient. Error: {e}')
+    print(f'Please install "pyarrow" to load ".parquet" files. Without, only .csv files are supported which are memory inefficient. Error: {e}')
     
 class DataLoader_base():
       
@@ -34,6 +38,14 @@ class DataLoader_base():
             #open_f = lambda f, c: dd.read_parquet(f, columns = c)
             #Pandas Dataframe, This turned out to be faster and more RAM effcient.
             open_f = lambda f, c: pd.read_parquet(f, columns = c)
+            
+            def open_f(f, columns):
+                try:
+                    return pd.read_parquet(f, columns = columns)
+                except ArrowInvalid as e:
+                    p = ParquetFile(f)
+                    raise Exception(f'Columns not found, choose from: {p.schema.names}. Error message: {e}')
+                    
         # .csv files
         else:
             open_f = lambda f, c: dd.read_csv(f, usecols = c)
@@ -172,7 +184,8 @@ class DataLoader(DataLoader_base):
 
         Calculates XY min, max, extend and center of the points. 
         """
-        self.x_min, self.x_max, self.y_min, self.y_max = data.x.min(), data.x.max(), data.y.min(), data.y.max()
+        self.x_min, self.x_max = data.x.min(), data.x.max()
+        self.y_min, self.y_max = data.y.min(), data.y.max()
         self.x_extend = self.x_max - self.x_min
         self.y_extend = self.y_max - self.y_min 
         self.xy_center = (self.x_max - 0.5*self.x_extend, self.y_max - 0.5*self.y_extend)
@@ -263,19 +276,22 @@ class DataLoader(DataLoader_base):
                 rename_col = dict(zip([gene_label, x_label, y_label], ['g', 'x', 'y']))
                 
                 #Read the data file
-                data = open_f(filename, col_to_open)
+                data = open_f(filename, col_to_open) 
                 data = data.rename(columns = rename_col)
                 
                 #Get data shape
                 self.shape = data.shape
                 
                 #Offset data
-                if x_offset !=0 and y_offset != 0:
+                if x_offset !=0 or y_offset != 0:
                     data.loc[:, ['x', 'y']] += [x_offset, y_offset]
+                    self.x_offset = 0
+                    self.y_offset = 0
                     
                 #Add z_offset
                 self.z += z_offset
                 data['z'] = self.z
+                self.z_offset = 0
                 
                 #Scale the data
                 if pixel_size != 1:

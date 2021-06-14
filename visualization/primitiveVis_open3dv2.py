@@ -240,7 +240,8 @@ class ListWidget(QWidget):
                         for g in self.selected:
                             #d = grpg[g]
                             g= str(g)
-                            ps = d.get_gene_sample(g,frac=1,include_z=True)
+                            #ps = d.get_gene_sample(g, include_z=True, frac=0.1, minimum=1000000) #Changse to this when datasets get large
+                            ps = d.get_gene(g, include_z=True)
                             points.append(ps)
                             cs= np.array([[self.vis.color_dic[g]] *(ps.shape[0])])[0,:,:]
                             colors.append(cs)   

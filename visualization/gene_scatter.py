@@ -37,7 +37,7 @@ class AxSize:
 
         return inch.magnitude
 
-    def set_size(self, w:float, h:float, ax: Any=None):
+    def set_ax_size(self, w:float, h:float, ax: Any=None):
         """Set size of axis, will drive figure size.
 
         From: https://stackoverflow.com/questions/44970010/axes-class-set-explicitly-size-width-height-of-axes-in-given-units
@@ -111,8 +111,9 @@ class AxSize:
 class GeneScatter(AxSize):
 
     def scatter_plot(self, genes: Union[List, np.ndarray], s: float=0.1, ax_scale_factor: int=10, 
-                    view: Union[Any, List] = None, scalebar: bool=True, show_axes: bool=False, 
-                    save: bool=False, save_name: str='', dpi: int=300, file_format: str='.eps') -> None:
+                    view: Union[Any, List] = None, scalebar: bool=True, show_axes: bool=False,
+                    show_legend: bool = True, save: bool=False, save_name: str='', dpi: int=300, 
+                    file_format: str='.eps') -> None:
         """Make a scatter plot of the data.
 
         Uses a black background. Plots in real size if `ax_scale_factor` is 1. 
@@ -136,6 +137,11 @@ class GeneScatter(AxSize):
                 Defaults to True.
             show_axes (bool, optional): If True adds the axes to the plot.
                 Defaults to False.
+            show_legend (bool, optional): 
+            
+            
+            XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+            
             save (bool, optional): If True saves the plot. Defaults to False.
             save_name (str, optional): Name of the plot. If not given will have
                 the format: "Scatter_plot_<dataset_name>_<timestamp>"
@@ -166,7 +172,7 @@ class GeneScatter(AxSize):
                 filt = filt_x & filt_y
                 x = x[filt]
                 y = y[filt]
-            ax.scatter(x, y, s=s, color=self.color_dict[g], zorder=0)
+            ax.scatter(x, y, s=s, color=self.color_dict[g], zorder=0, label=g)
             del data
         
         #Rescale
@@ -179,7 +185,7 @@ class GeneScatter(AxSize):
 
         x_scale = self.to_inch(x_extend * ax_scale_factor)
         y_scale = self.to_inch(y_extend * ax_scale_factor)
-        self.set_size(x_scale, y_scale)
+        self.set_ax_size(x_scale, y_scale)
 
         #Add scale bar
         if scalebar:   
@@ -192,6 +198,15 @@ class GeneScatter(AxSize):
             plt.gca().yaxis.set_major_locator(plt.NullLocator())
         ax.add_patch(plt.Rectangle((0,0), 1, 1, facecolor=(0,0,0),
                                 transform=ax.transAxes, zorder=-1))
+        
+        if show_legend:
+            if len(genes) > 10:
+                print('Can not add the legend for more than 10 genes. Please see self.color_dict for gene colors.')
+            else:
+                lgnd = plt.legend(loc = 2, frameon=False)
+                for handle in lgnd.legendHandles:
+                    handle.set_sizes([20])
+                    plt.setp(lgnd.get_texts(), color='w')                       
 
         if save:
             if save_name == '':
@@ -243,7 +258,7 @@ class MultiGeneScatter(AxSize):
         y_extend = y_max - y_min
         x_scale = self.to_inch(x_extend * ax_scale_factor)
         y_scale = self.to_inch(y_extend * ax_scale_factor)
-        self.set_size(x_scale, y_scale)
+        self.set_ax_size(x_scale, y_scale)
         if flip_y:
             ax.invert_yaxis()            
 

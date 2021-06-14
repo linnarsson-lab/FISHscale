@@ -66,7 +66,7 @@ class SpatialMetrics:
         if sample_shape == 'circle':
             sample_size = self.largest_extend()
         elif sample_shape == 'rectangle':
-            sample_size = self.x_extend * self.y_extend
+            sample_size = [self.x_extend, self.y_extend]
         else:
             raise Exception('Sample_shape not valid: {sample_shape}, Choose either "circle" or "rectangle".')
 
@@ -140,7 +140,7 @@ class SpatialMetrics:
             mode (str): Plotting mode:
                 "k" = Ripley's K.
                 "l" = Ripley's L.
-                "r-l" = Radius minus the L value at that radius.
+                "l-r" = L value minus radius at which the L was calculated.
                 "k-a" = Ripley's K minus the area at that radius.
 
         Raises:
@@ -169,10 +169,10 @@ class SpatialMetrics:
         if mode == 'l':
             data = np.sqrt(k / np.pi)
             label = "Ripley's l"
-        elif mode == 'r-l':
+        elif mode == 'l-r':
             data = np.sqrt(k / np.pi)
-            data = r - data
-            label = "Radius - Ripley's l"
+            data = data - r
+            label = "Ripley's l - radius  "
         elif mode == 'k-a':
             data = k - np.pi * r ** 2
             label = "Ripley's k - area"            

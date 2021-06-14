@@ -5,33 +5,47 @@ from functools import lru_cache
 
 class Iteration:
 
-    def get_gene(self, gene: str, include_z = False):
+    def get_gene(self, gene: str, include_z:bool = False, include_other:list = []):
         """Get the xyz coordinates of points of a queried gene.
         
         This causes the data to get loaded in RAM.
 
         Args:
             gene (str): Name of gene.
+            include_z (bool, optional): True if Z coordinate should be 
+                returned. Defaults to False
+            include_other (list, optional): List of other column headers to 
+                return. Defaults to [].
 
         Returns:
             [pd.DataFrame]: Pandas Dataframe with coordinates.
         """
         gene_i= self.gene_index[gene]
+        
+        if isinstance(include_other, str):
+            include_other = [include_other]
+
+        columns = ['x', 'y']
         if include_z:
-            columns = ['x', 'y', 'z']
-        else:
-            columns = ['x', 'y']
+            columns.append('z')
+        for c in include_other:
+            columns.append(c)
         
         return self.df.get_partition(gene_i).loc[:, columns].compute()
     
-    def get_gene_sample(self, gene: str, include_z = False, frac: float=0.1, minimum: int=None, 
-                        random_state: int=None):
+    def get_gene_sample(self, gene: str, include_z = False, 
+                        include_other:list = [], frac: float=0.1, 
+                        minimum: int=None, random_state: int=None):
         """Get the xyz coordinates of a sample of points of a queried gene.
         
         This causes the data to get loaded in RAM.
 
         Args:
             gene (str): Name of gene.
+            include_z (bool, optional): True if Z coordinate should be 
+                returned. Defaults to False
+            include_other (list, optional): List of other column headers to 
+                return. Defaults to [].
             frac (float, optional): Fraction of the points to load. 
                 Defaults to 0.1 which is 10% of the data.
             minimum (int, optional): If minimum is given the fraction will be 
@@ -41,9 +55,9 @@ class Iteration:
             random_state (int, optional): Random state for the sampling to 
                 return the same points over multiple iterations.
                 Defaults to None.
-
+                
         Returns:
-            [type]: [description]
+            [pd.DataFrame]: Pandas Dataframe with coordinates.
         """
         if minimum != None:
             n_points = self.gene_n_points[gene]
@@ -54,10 +68,11 @@ class Iteration:
         
         gene_i= self.gene_index[gene]
         
+        columns = ['x', 'y']
         if include_z:
-            columns = ['x', 'y', 'z']
-        else:
-            columns = ['x', 'y']
+            columns.append('z')
+        for c in include_other:
+            columns.append(c)
             
         return self.df.get_partition(gene_i).loc[:, columns].sample(frac=frac, random_state=random_state).compute()
     
