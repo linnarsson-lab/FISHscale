@@ -200,7 +200,7 @@ class GraphData(pl.LightningDataModule):
         print('Building graph...')
         edge_file = os.path.join(self.save_to,'Edges-{}Nodes-Ngh{}-{}-dst{}'.format(self.cells.shape[0],self.ngh_sizes[0],self.ngh_sizes[1],self.distance_threshold))
         tree_file = os.path.join(self.save_to,'Tree-{}Nodes-Ngh{}-{}-dst{}.ann'.format(self.cells.shape[0],self.ngh_sizes[0],self.ngh_sizes[1],self.distance_threshold))
-        coords = np.array([self.data.df.x.values.compute()[self.cells], self.data.df.x.values.compute()[self.cells]]).T
+        coords = np.array([self.data.df.x.values.compute()[self.cells], self.data.df.y.values.compute()[self.cells]]).T
 
         if not os.path.isfile(edge_file):
             t = AnnoyIndex(2, 'euclidean')  # Length of item vector that will be indexed
