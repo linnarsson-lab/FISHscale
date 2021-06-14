@@ -110,6 +110,75 @@ class GraphData(pl.LightningDataModule):
             verbose=True
             mode='min'
             )
+    
+    def prepare_data(self):
+        # do-something
+        pass
+
+    def setup(self, stage: Optional[str] = None):
+        print('Loading dataset...')
+        #self.d = torch.tensor(self.molecules_df(),dtype=torch.float32) #works
+        self.d = self.molecules_df()
+        
+        print('tensor',self.d.shape)
+
+    def compute_size(self):
+        self.train_size = int((self.cells.shape[0])*self.train_p)
+        self.test_size = self.cells.shape[0]-int(self.cells.shape[0]*self.train_p)  
+        random_state = np.random.RandomState(seed=0)
+        permutation = random_state.permutation(self.cells.shape[0])
+        self.indices_test = torch.tensor(permutation[:self.test_size])
+        self.indices_train = torch.tensor(permutation[self.test_size : (self.test_size + self.train_size)])
+        self.indices_validation = torch.tensor(np.arange(self.cells.shape[0]))
+
+    def train_dataloader(self):
+        return NeighborSampler2(self.edges_tensor, node_idx=self.indices_train,data=self.d,
+                               sizes=self.ngh_sizes, return_e_id=False,
+                               batch_size=self.batch_size,
+                               shuffle=True, num_workers=self.num_workers,supervised_data=self.ref_celltypes)
+
+    def validation_dataloader(self):
+        # set a big batch size, not all will be loaded in memory but it will loop relatively fast through large dataset
+        return NeighborSampler2(self.edges_tensor, node_idx=self.indices_validation,data=self.d,
+                               sizes=self.ngh_sizes, return_e_id=False,
+                               batch_size=102400,
+                               shuffle=False,supervised_data=self.ref_celltypes)
+
+    def train(self,max_epochs=5,gpus=-1):     
+        print('Saving random cells used during training...')
+        np.save(self.folder +'/random_cells.npy',self.cells)
+        
+        trainer = pl.Trainer(gpus=gpus,callbacks=[self.checkpoint_callback,self.early_stop_callback],max_epochs=max_epochs)
+        trainer.fit(self.model, self.train_dataloader())
+
+    def get_latent(self, deterministic=True):
+        print('Training done, generating embedding...')
+        embedding = []
+        for x,pos,neg,adjs,ref in self.validation_dataloader():
+            z,qm,_ = self.model.neighborhood_forward(x,adjs)
+            if deterministic:
+                z = qm
+            embedding.append(z.detach().numpy())
+            
+        self.embedding = np.concatenate(embedding)
+        np.save(self.folder+'/loadings.npy',self.embedding)
+
+    def make_umap(self):
+        print('Embedding done, generating umap...')
+        import umap
+        reducer = umap.UMAP(
+            n_neighbors=15,
+            n_components=3,
+            n_epochs=250,
+            init='spectral',
+            min_dist=0.1,
+            spread=1,
+            random_state=1,
+            verbose=True,
+            n_jobs=-1
+        )
+        umap_embedding = reducer.fit_transform(self.embedding)
+        np.save(self.folder+'/umap.npy',umap_embedding)
 
     def molecules_df(self):
         rows,cols = [],[]
@@ -166,74 +235,7 @@ class GraphData(pl.LightningDataModule):
                 res = hf['edges'][:]
         print('Edges',res.shape)
         self.edges_tensor = torch.tensor(res.T)
-    
-    def prepare_data(self):
-        # do-something
-        pass
-    
-    def compute_size(self):
-        self.train_size = int((self.cells.shape[0])*self.train_p)
-        self.test_size = self.cells.shape[0]-int(self.cells.shape[0]*self.train_p)  
-        random_state = np.random.RandomState(seed=0)
-        permutation = random_state.permutation(self.cells.shape[0])
-        self.indices_test = torch.tensor(permutation[:self.test_size])
-        self.indices_train = torch.tensor(permutation[self.test_size : (self.test_size + self.train_size)])
-        self.indices_validation = torch.tensor(np.arange(self.cells.shape[0]))
 
-    def setup(self, stage: Optional[str] = None):
-        print('Loading dataset...')
-        #self.d = torch.tensor(self.molecules_df(),dtype=torch.float32) #works
-        self.d = self.molecules_df()
-        
-        print('tensor',self.d.shape)
-    def train_dataloader(self):
-        return NeighborSampler2(self.edges_tensor, node_idx=self.indices_train,data=self.d,
-                               sizes=self.ngh_sizes, return_e_id=False,
-                               batch_size=self.batch_size,
-                               shuffle=True, num_workers=self.num_workers,supervised_data=self.ref_celltypes)
-
-    def validation_dataloader(self):
-        # set a big batch size, not all will be loaded in memory but it will loop relatively fast through large dataset
-        return NeighborSampler2(self.edges_tensor, node_idx=self.indices_validation,data=self.d,
-                               sizes=self.ngh_sizes, return_e_id=False,
-                               batch_size=102400,
-                               shuffle=False,supervised_data=self.ref_celltypes)
-
-    def train(self,max_epochs=5,gpus=-1):     
-        print('Saving random cells used during training...')
-        np.save(self.folder +'/random_cells.npy',self.cells)
-        
-        trainer = pl.Trainer(gpus=gpus,callbacks=[self.checkpoint_callback,self.early_stop_callback],max_epochs=max_epochs)
-        trainer.fit(self.model, self.train_dataloader())
-
-    def get_latent(self, deterministic=True):
-        print('Training done, generating embedding...')
-        embedding = []
-        for x,pos,neg,adjs,ref in self.validation_dataloader():
-            z,qm,_ = self.model.neighborhood_forward(x,adjs)
-            if deterministic:
-                z = qm
-            embedding.append(z.detach().numpy())
-            
-        self.embedding = np.concatenate(embedding)
-        np.save(self.folder+'/loadings.npy',self.embedding)
-
-    def make_umap(self):
-        print('Embedding done, generating umap...')
-        import umap
-        reducer = umap.UMAP(
-            n_neighbors=15,
-            n_components=3,
-            n_epochs=250,
-            init='spectral',
-            min_dist=0.1,
-            spread=1,
-            random_state=1,
-            verbose=True,
-            n_jobs=-1
-        )
-        umap_embedding = reducer.fit_transform(self.embedding)
-        np.save(self.folder+'/umap.npy',umap_embedding)
 '''
 def compute_library_size(data):   
     sum_counts = data.sum(axis=1)
