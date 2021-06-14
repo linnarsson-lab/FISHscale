@@ -149,7 +149,7 @@ class GraphData(pl.LightningDataModule):
         np.save(self.folder +'/random_cells.npy',self.cells)
         
         trainer = pl.Trainer(gpus=gpus,callbacks=[self.checkpoint_callback,self.early_stop_callback],max_epochs=max_epochs)
-        trainer.fit(self.model, self.train_dataloader())
+        trainer.fit(self.model, train_dataloader=self.train_dataloader(),val_dataloaders=self.validation_dataloader())
 
     def get_latent(self, deterministic=True):
         print('Training done, generating embedding...')
