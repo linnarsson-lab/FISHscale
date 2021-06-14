@@ -104,16 +104,14 @@ class GraphData(pl.LightningDataModule):
             mode='min',
             )
         self.early_stop_callback = EarlyStopping(
-            monitor='train_loss',
-            min_delta=0.01,
-            patience=10,
-            verbose=False,
+            monitor='val_loss',
+            min_delta=0.2,
+            patience=2,
+            verbose=True
             mode='min'
             )
 
     def molecules_df(self):
-
-     
         rows,cols = [],[]
         filt = self.data.df.map_partitions(lambda x: x[x.index.isin(self.cells)]).g.values.compute()
         for r in trange(self.data.unique_genes.shape[0]):
@@ -208,12 +206,15 @@ class GraphData(pl.LightningDataModule):
         trainer = pl.Trainer(gpus=gpus,callbacks=[self.checkpoint_callback,self.early_stop_callback],max_epochs=max_epochs)
         trainer.fit(self.model, self.train_dataloader())
 
-    def get_latent(self):
+    def get_latent(self, deterministic=True):
         print('Training done, generating embedding...')
         embedding = []
         for x,pos,neg,adjs,ref in self.validation_dataloader():
             z,qm,_ = self.model.neighborhood_forward(x,adjs)
+            if deterministic:
+                z = qm
             embedding.append(z.detach().numpy())
+            
         self.embedding = np.concatenate(embedding)
         np.save(self.folder+'/loadings.npy',self.embedding)
 
@@ -232,17 +233,16 @@ class GraphData(pl.LightningDataModule):
             n_jobs=-1
         )
         umap_embedding = reducer.fit_transform(self.embedding)
-        np.save(self.folder+'umap.npy',umap_embedding)
-
+        np.save(self.folder+'/umap.npy',umap_embedding)
+'''
 def compute_library_size(data):   
     sum_counts = data.sum(axis=1)
     masked_log_sum = np.ma.log(sum_counts)
     log_counts = masked_log_sum.filled(0)
     local_mean = np.mean(log_counts).astype(np.float32)
     local_var = np.var(log_counts).astype(np.float32)
-
     return local_mean, local_var
-
+'''
 
 class NeighborSampler2(torch.utils.data.DataLoader):
     r"""The neighbor sampler from the `"Inductive Representation Learning on
