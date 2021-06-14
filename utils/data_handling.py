@@ -384,6 +384,8 @@ class DataLoader(DataLoader_base):
             l (list): list of features
         """        
         self.dask_attrs = self.dask_attrs.merge(pd.DataFrame({name:l}))
+        self.dask_attrs.to_parquet(path.join(self.dataset_folder,self.FISHscale_data_folder,'attributes'))
+
         
         
         

@@ -11,6 +11,7 @@ from FISHscale.utils.density_1D import Density1D
 from FISHscale.utils.normalization import Normalization
 from FISHscale.visualization.gene_scatter import GeneScatter, MultiGeneScatter
 from FISHscale.utils.data_handling import DataLoader, DataLoader_base
+from FISHscale.utils.clustering import Clustering
 from PyQt5 import QtWidgets
 import sys
 from datetime import datetime
@@ -36,7 +37,7 @@ except ModuleNotFoundError as e:
     print(f'Please install "pyarrow" to load ".parquet" files. Without only .csv files are supported which are memory inefficient. Error: {e}')
 
 class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, SpatialMetrics, DataLoader, Normalization, 
-              Density1D):
+              Density1D, Clustering):
     """
     Base Class for FISHscale, still under development
 
@@ -143,6 +144,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
                        self.pixel_size.magnitude, unique_genes, reparse=reparse)
 
         self.dask_attrs = dd.from_pandas(pd.DataFrame(index=self.df.index),npartitions=self.df.npartitions,sort=False)
+        self.dask_attrs.to_parquet(path.join(self.dataset_folder,self.FISHscale_data_folder,'attributes'))
 
         #Gene metadata
         self.gene_index = dict(zip(self.unique_genes, range(self.unique_genes.shape[0])))

@@ -42,6 +42,7 @@ class GraphData(pl.LightningDataModule):
         num_workers=1,
         save_to = '',
         subsample=1,
+        ref_celltypes=None,
         ):
         """
         Initialize GraphData class
@@ -57,6 +58,8 @@ class GraphData(pl.LightningDataModule):
             batch_size (int, optional): Batch size. Defaults to 1024.
             num_workers (int, optional): Workers for sampling. Defaults to 1.
             save_to (str, optional): Path to save network edges and nn tree. Defaults to current path.
+            subsample (int,optional): Subsample part of the input data if it is to large.
+            ref_celltypes (np.array, optional): Cell types for decoder. Shape (genes,cell types)       
         """        
 
         super().__init__()
@@ -73,14 +76,20 @@ class GraphData(pl.LightningDataModule):
         self.num_workers = num_workers
         self.save_to = save_to
 
-        self.folder = self.analysis_name+ '_' +datetime.now().strftime("%Y-%m-%d-%H:%M:%S")
+        self.folder = self.analysis_name+ '_' +datetime.now().strftime("%Y-%m-%d-%H%M%S")
         os.mkdir(self.folder)
 
         if type(self.cells) == type(None):
-            self.cells = np.arange(self.data.x.shape[0])
+            self.cells = self.data.df.index.compute()
         
         if subsample < 1:
-            self.cells = np.random.randint(0,self.data.x.shape[0], int(subsample*self.data.x.shape[0]))
+            #self.cells = np.random.randint(0,self.data.shape[0], int(subsample*self.data.shape[0]))
+            self.cells = np.random.choice(self.data.df.index.compute(),size=int(subsample*self.data.shape[0]),replace=False)
+
+        if type(ref_celltypes) != type(None):
+            self.ref_celltypes = torch.tensor(ref_celltypes,dtype=torch.float32)
+        else:
+            self.ref_celltypes = None
         
         # Save random cell selection
         self.buildGraph(self.distance_threshold)
@@ -95,18 +104,18 @@ class GraphData(pl.LightningDataModule):
             mode='min',
             )
         self.early_stop_callback = EarlyStopping(
-            monitor='train_loss',
-            min_delta=0.01,
-            patience=10,
-            verbose=False,
+            monitor='val_loss',
+            min_delta=0.2,
+            patience=2,
+            verbose=True
             mode='min'
             )
 
     def molecules_df(self):
         rows,cols = [],[]
+        filt = self.data.df.map_partitions(lambda x: x[x.index.isin(self.cells)]).g.values.compute()
         for r in trange(self.data.unique_genes.shape[0]):
             g = self.data.unique_genes[r]
-            filt = self.data.gene[self.cells]
             expressed = np.where(filt == g)[0].tolist()
             cols += expressed
             rows += len(expressed)*[r]
@@ -120,7 +129,7 @@ class GraphData(pl.LightningDataModule):
         print('Building graph...')
         edge_file = os.path.join(self.save_to,'Edges-{}Nodes-Ngh{}-{}-dst{}'.format(self.cells.shape[0],self.ngh_sizes[0],self.ngh_sizes[1],self.distance_threshold))
         tree_file = os.path.join(self.save_to,'Tree-{}Nodes-Ngh{}-{}-dst{}.ann'.format(self.cells.shape[0],self.ngh_sizes[0],self.ngh_sizes[1],self.distance_threshold))
-        coords = np.array([self.data.x[self.cells],self.data.y[self.cells]]).T
+        coords = np.array([self.data.df.x.compute()[self.cells].values, self.data.df.x.compute()[self.cells].values]).T
 
         if not os.path.isfile(edge_file):
             t = AnnoyIndex(2, 'euclidean')  # Length of item vector that will be indexed
@@ -162,16 +171,8 @@ class GraphData(pl.LightningDataModule):
         # do-something
         pass
     
-    '''
-    def cleanGraph(self):
-        print('Cleaning graph...')
-        for component in tqdm(list(nx.connected_components(self.G))):
-            if len(component)< self.minimum_nodes_connected:
-                for node in component:
-                    self.G.remove_node(node)
-    '''
     def compute_size(self):
-        self.train_size = int(self.cells.shape[0]*self.train_p)
+        self.train_size = int((self.cells.shape[0])*self.train_p)
         self.test_size = self.cells.shape[0]-int(self.cells.shape[0]*self.train_p)  
         random_state = np.random.RandomState(seed=0)
         permutation = random_state.permutation(self.cells.shape[0])
@@ -189,31 +190,36 @@ class GraphData(pl.LightningDataModule):
         return NeighborSampler2(self.edges_tensor, node_idx=self.indices_train,data=self.d,
                                sizes=self.ngh_sizes, return_e_id=False,
                                batch_size=self.batch_size,
-                               shuffle=True, num_workers=self.num_workers)
+                               shuffle=True, num_workers=self.num_workers,supervised_data=self.ref_celltypes)
 
     def validation_dataloader(self):
         # set a big batch size, not all will be loaded in memory but it will loop relatively fast through large dataset
         return NeighborSampler2(self.edges_tensor, node_idx=self.indices_validation,data=self.d,
                                sizes=self.ngh_sizes, return_e_id=False,
                                batch_size=102400,
-                               shuffle=False)
+                               shuffle=False,supervised_data=self.ref_celltypes)
 
-    def train(self,max_epochs=5):
+    def train(self,max_epochs=5,gpus=-1):     
         print('Saving random cells used during training...')
         np.save(self.folder +'/random_cells.npy',self.cells)
         
-        trainer = pl.Trainer(gpus=-1,callbacks=[self.checkpoint_callback,self.early_stop_callback],max_epochs=max_epochs)
+        trainer = pl.Trainer(gpus=gpus,callbacks=[self.checkpoint_callback,self.early_stop_callback],max_epochs=max_epochs)
         trainer.fit(self.model, self.train_dataloader())
 
-    def get_latent(self):
+    def get_latent(self, deterministic=True):
         print('Training done, generating embedding...')
         embedding = []
-        for x,pos,neg,adjs in self.validation_dataloader():
-            embedding.append(self.model.neighborhood_forward(x,adjs).detach().numpy())
+        for x,pos,neg,adjs,ref in self.validation_dataloader():
+            z,qm,_ = self.model.neighborhood_forward(x,adjs)
+            if deterministic:
+                z = qm
+            embedding.append(z.detach().numpy())
+            
         self.embedding = np.concatenate(embedding)
-        np.save(self.folder+'/loadings.npy',embedding)
+        np.save(self.folder+'/loadings.npy',self.embedding)
 
     def make_umap(self):
+        print('Embedding done, generating umap...')
         import umap
         reducer = umap.UMAP(
             n_neighbors=15,
@@ -227,17 +233,16 @@ class GraphData(pl.LightningDataModule):
             n_jobs=-1
         )
         umap_embedding = reducer.fit_transform(self.embedding)
-        np.save(self.folder+'umap.npy',umap_embedding)
-
-def compute_library_size(data):
+        np.save(self.folder+'/umap.npy',umap_embedding)
+'''
+def compute_library_size(data):   
     sum_counts = data.sum(axis=1)
     masked_log_sum = np.ma.log(sum_counts)
     log_counts = masked_log_sum.filled(0)
     local_mean = np.mean(log_counts).astype(np.float32)
     local_var = np.var(log_counts).astype(np.float32)
-
     return local_mean, local_var
-
+'''
 
 class NeighborSampler2(torch.utils.data.DataLoader):
     r"""The neighbor sampler from the `"Inductive Representation Learning on
@@ -318,7 +323,7 @@ class NeighborSampler2(torch.utils.data.DataLoader):
     def __init__(self, edge_index: Union[Tensor, SparseTensor], data,
                  sizes: List[int], node_idx: Optional[Tensor] = None,
                  num_nodes: Optional[int] = None, return_e_id: bool = True,
-                 transform: Callable = None, **kwargs):
+                 transform: Callable = None, supervised_data:Optional[Tensor]=None,**kwargs):
 
         edge_index = edge_index.to('cpu')
 
@@ -336,6 +341,7 @@ class NeighborSampler2(torch.utils.data.DataLoader):
         self.is_sparse_tensor = isinstance(edge_index, SparseTensor)
         self.__val__ = None
         self.data = data
+        self.supervised_data = supervised_data
 
         # Obtain a *transposed* `SparseTensor` instance.
         if not self.is_sparse_tensor:
@@ -401,7 +407,9 @@ class NeighborSampler2(torch.utils.data.DataLoader):
         #out v2 using sparse tensor
         out = (torch.tensor(self.data[n_id].toarray(),dtype=torch.float32),
                 torch.tensor(self.data[pos].toarray(),dtype=torch.float32),
-                torch.tensor(self.data[neg].toarray(),dtype=torch.float32),adjs)
+                torch.tensor(self.data[neg].toarray(),dtype=torch.float32),
+                adjs,
+                self.supervised_data)
 
 
         out = self.transform(*out) if self.transform is not None else out
