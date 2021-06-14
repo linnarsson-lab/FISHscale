@@ -143,9 +143,6 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
         self.load_data(self.filename, x_label, y_label, gene_label, self.other_columns, x_offset, y_offset, z_offset, 
                        self.pixel_size.magnitude, unique_genes, reparse=reparse)
 
-        self.dask_attrs = dd.from_pandas(pd.DataFrame(index=self.df.index),npartitions=self.df.npartitions,sort=False)
-        self.dask_attrs.to_parquet(path.join(self.dataset_folder,self.FISHscale_data_folder,'attributes'))
-
         #Gene metadata
         self.gene_index = dict(zip(self.unique_genes, range(self.unique_genes.shape[0])))
         self.gene_n_points = self._get_gene_n_points()

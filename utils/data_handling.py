@@ -316,6 +316,12 @@ class DataLoader(DataLoader_base):
         #Load Dask Dataframe from the parsed gene dataframes
         makedirs(self.FISHscale_data_folder, exist_ok=True)
         self.df = dd.read_parquet(path.join(self.FISHscale_data_folder, '*.parquet'))
+
+        if reparse:
+            self.dask_attrs = dd.from_pandas(pd.DataFrame(index=self.df.index),npartitions=self.df.npartitions,sort=False)
+            self.dask_attrs.to_parquet(path.join(self.dataset_folder,self.FISHscale_data_folder,'attributes'))
+        else:
+            self.dask_attrs = dd.read_parquet(path.join(self.dataset_folder,self.FISHscale_data_folder,'attributes','*.parquet'))
         
         if new_parse == False:
             #Get coordinate properties from metadata
