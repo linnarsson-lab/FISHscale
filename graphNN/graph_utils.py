@@ -80,11 +80,12 @@ class GraphData(pl.LightningDataModule):
         os.mkdir(self.folder)
 
         if type(self.cells) == type(None):
-            self.cells = self.data.df.index.compute()
+            #self.cells = self.data.df.index.compute()
+            self.cells = np.arange(self.data.shape[0])
         
         if subsample < 1:
-            #self.cells = np.random.randint(0,self.data.shape[0], int(subsample*self.data.shape[0]))
-            self.cells = np.random.choice(self.data.df.index.compute(),size=int(subsample*self.data.shape[0]),replace=False)
+            self.cells = np.random.randint(0,self.data.shape[0], int(subsample*self.data.shape[0]))
+            #self.cells = np.random.choice(self.data.df.index.compute(),size=int(subsample*self.data.shape[0]),replace=False)
 
         if type(ref_celltypes) != type(None):
             self.ref_celltypes = torch.tensor(ref_celltypes,dtype=torch.float32)
@@ -105,8 +106,8 @@ class GraphData(pl.LightningDataModule):
             )
         self.early_stop_callback = EarlyStopping(
             monitor='val_loss',
-            min_delta=0.2,
-            patience=2,
+            min_delta=0.1,
+            patience=3,
             verbose=True,
             mode='min',
             )
@@ -119,6 +120,7 @@ class GraphData(pl.LightningDataModule):
         print('Loading dataset...')
         #self.d = torch.tensor(self.molecules_df(),dtype=torch.float32) #works
         self.d = self.molecules_df()
+        
         print('tensor',self.d.shape)
 
     def compute_size(self):
@@ -140,7 +142,7 @@ class GraphData(pl.LightningDataModule):
         # set a big batch size, not all will be loaded in memory but it will loop relatively fast through large dataset
         return NeighborSampler2(self.edges_tensor, node_idx=self.indices_validation,data=self.d,
                                sizes=self.ngh_sizes, return_e_id=False,
-                               batch_size=102400,
+                               batch_size=self.batch_size*10,
                                shuffle=False,supervised_data=self.ref_celltypes)
 
     def train(self,max_epochs=5,gpus=-1):     
@@ -181,7 +183,8 @@ class GraphData(pl.LightningDataModule):
 
     def molecules_df(self):
         rows,cols = [],[]
-        filt = self.data.df.map_partitions(lambda x: x[x.index.isin(self.cells)]).g.values.compute()
+        #filt = self.data.df.map_partitions(lambda x: x[x.index.isin(self.cells)]).g.values.compute()
+        filt = self.data.df.g.values.compute()[self.cells]
         for r in trange(self.data.unique_genes.shape[0]):
             g = self.data.unique_genes[r]
             expressed = np.where(filt == g)[0].tolist()
@@ -197,7 +200,7 @@ class GraphData(pl.LightningDataModule):
         print('Building graph...')
         edge_file = os.path.join(self.save_to,'Edges-{}Nodes-Ngh{}-{}-dst{}'.format(self.cells.shape[0],self.ngh_sizes[0],self.ngh_sizes[1],self.distance_threshold))
         tree_file = os.path.join(self.save_to,'Tree-{}Nodes-Ngh{}-{}-dst{}.ann'.format(self.cells.shape[0],self.ngh_sizes[0],self.ngh_sizes[1],self.distance_threshold))
-        coords = np.array([self.data.df.x.compute()[self.cells].values, self.data.df.x.compute()[self.cells].values]).T
+        coords = np.array([self.data.df.x.values.compute()[self.cells], self.data.df.y.values.compute()[self.cells]]).T
 
         if not os.path.isfile(edge_file):
             t = AnnoyIndex(2, 'euclidean')  # Length of item vector that will be indexed
