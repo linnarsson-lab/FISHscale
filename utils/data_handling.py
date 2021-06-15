@@ -316,6 +316,8 @@ class DataLoader(DataLoader_base):
         #Load Dask Dataframe from the parsed gene dataframes
         makedirs(self.FISHscale_data_folder, exist_ok=True)
         self.df = dd.read_parquet(path.join(self.FISHscale_data_folder, '*.parquet'))
+        #Temporary shape when reparse=False
+        self.shape = self.df.compute().shape
 
         if reparse:
             self.dask_attrs = dd.from_pandas(pd.DataFrame(index=self.df.index),npartitions=self.df.npartitions,sort=False)
