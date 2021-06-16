@@ -114,7 +114,7 @@ class SAGE(pl.LightningModule):
             elif self.supervised_loss == 'cosine-similarity':
                 cos= 0
                 for c in range(px.shape[0]):
-                    cos += torch.nn.functional.cosine_similarity(px[c:c+1,:],ref.T).mean()
+                    cos += -torch.nn.functional.cosine_similarity(px[c:c+1,:],ref.T).max()
                 cos = cos/px.shape[0]
                 supervised_loss = cos
             elif self.supervised_loss == 'matmul':
@@ -127,7 +127,7 @@ class SAGE(pl.LightningModule):
         return n_loss
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=0.01)
+        optimizer = torch.optim.Adam(self.parameters(), lr=0.001)
         return optimizer
 
     def training_step(self, batch, batch_idx):
