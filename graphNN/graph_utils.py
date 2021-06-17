@@ -78,7 +78,8 @@ class GraphData(pl.LightningDataModule):
 
         self.folder = self.analysis_name+ '_' +datetime.now().strftime("%Y-%m-%d-%H%M%S")
         os.mkdir(self.folder)
-        subsample= self.subsample
+
+        self.subsample = subsample
         self.subsample_xy()
 
         if type(ref_celltypes) != type(None):
@@ -145,8 +146,9 @@ class GraphData(pl.LightningDataModule):
         trainer = pl.Trainer(gpus=gpus,callbacks=[self.checkpoint_callback,self.early_stop_callback],max_epochs=max_epochs)
         trainer.fit(self.model, train_dataloader=self.train_dataloader(),val_dataloaders=self.validation_dataloader())
 
-    def get_latent(self, deterministic=True):
+    def get_latent(self, deterministic=True,run_clustering=True,make_plot=True):
         print('Training done, generating embedding...')
+        import matplotlib.pyplot as plt
         embedding = []
         for x,pos,neg,adjs,ref in self.validation_dataloader():
             z,qm,_ = self.model.neighborhood_forward(x,adjs)
@@ -157,9 +159,26 @@ class GraphData(pl.LightningDataModule):
         self.embedding = np.concatenate(embedding)
         np.save(self.folder+'/loadings.npy',self.embedding)
 
-    def make_umap(self):
-        print('Embedding done, generating umap...')
+        if run_clustering:
+            self.data.clustering_scanpy(self.embedding)
+    
+        if make_plot:
+            ### Plot spatial dots with assigned cluster
+            fig=plt.figure(figsize=(6,6),dpi=1000)
+            ax = fig.add_subplot(1, 1, 1)
+            ax.set_facecolor("black")
+            width_cutoff = 1640 # um
+            plt.scatter(self.data.df.x.compute(), self.data.df.y.compute(), c=self.data.dask_attrs['leiden'].compute().astype('int64'), s=0.2,marker='.',linewidths=0, edgecolors=None, cmap='rainbow')
+            plt.xticks(fontsize=4)
+            plt.yticks(fontsize=4)
+            plt.axis('scaled')
+            plt.savefig("{}/spatial_umap_embedding.png".format(self.folder), bbox_inches='tight', dpi=500)
+
+    def make_umap(self,make_plot=True):
+        print('Embedding done, generating umap and plots...')
+        import matplotlib.pyplot as plt
         import umap
+
         reducer = umap.UMAP(
             n_neighbors=15,
             n_components=3,
@@ -173,6 +192,22 @@ class GraphData(pl.LightningDataModule):
         )
         umap_embedding = reducer.fit_transform(self.embedding)
         np.save(self.folder+'/umap.npy',umap_embedding)
+
+        if make_plot:
+            Y_umap = umap_embedding
+            Y_umap -= np.min(Y_umap, axis=0)
+            Y_umap /= np.max(Y_umap, axis=0)
+            Y_umap.shape
+
+            fig=plt.figure(figsize=(7,4),dpi=500)
+            cycled = [0,1,2,0]
+            for i in range(3):
+                plt.subplot(1,3,i+1)
+                plt.scatter(Y_umap[:,cycled[i]], Y_umap[:,cycled[i+1]], c=Y_umap,  s=5, marker='.', linewidths=0, edgecolors=None)
+                plt.xlabel("Y"+str(cycled[i]))
+                plt.ylabel("Y"+str(cycled[i+1]))
+            plt.tight_layout()
+            plt.savefig("{}/umap_embedding.png".format(GD.folder), bbox_inches='tight', dpi=500)
 
     def molecules_df(self):
         rows,cols = [],[]

@@ -114,7 +114,9 @@ class SAGE(pl.LightningModule):
             elif self.supervised_loss == 'cosine-similarity':
                 cos= 0
                 for c in range(px.shape[0]):
-                    cos += -torch.nn.functional.cosine_similarity(px[c:c+1,:],ref.T).max()
+                    cos = torch.nn.functional.cosine_similarity(px[c:c+1,:],ref.T)
+                    cos = - cos.max() - cos.var()
+                    cos += cos
                 cos = cos/px.shape[0]
                 supervised_loss = cos
             elif self.supervised_loss == 'matmul':
