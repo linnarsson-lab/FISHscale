@@ -78,17 +78,8 @@ class GraphData(pl.LightningDataModule):
 
         self.folder = self.analysis_name+ '_' +datetime.now().strftime("%Y-%m-%d-%H%M%S")
         os.mkdir(self.folder)
-
-        if type(self.cells) == type(None):
-            #self.cells = self.data.df.index.compute()
-
-        if type(subsample) == int and subsample < 1:
-            self.cells = np.random.randint(0,self.data.shape[0], int(subsample*self.data.shape[0]))
-        elif type(subsample) == dict:
-            filt_x =  ((self.data.df.x > subsample['x'][0]) & (self.data.df.x < subsample['x'][1])).values.compute()
-            filt_y =  ((self.data.df.y > subsample['y'][0]) & (self.data.df.x < subsample['y'][1])).values.compute()
-            self.cells = self.cells[filt_x & filt_y]
-            #self.cells = np.random.choice(self.data.df.index.compute(),size=int(subsample*self.data.shape[0]),replace=False)
+        subsample= self.subsample
+        self.subsample_xy()
 
         if type(ref_celltypes) != type(None):
             self.ref_celltypes = torch.tensor(ref_celltypes,dtype=torch.float32)
@@ -197,6 +188,18 @@ class GraphData(pl.LightningDataModule):
         data= np.ones_like(cols)
         sm = sparse.csr_matrix((data,(rows,cols))).T
         return sm
+    
+    def subsample_xy(self):
+        if type(self.cells) == type(None):
+            #self.cells = self.data.df.index.compute()
+            self.cells = np.arange(self.data.shape[0])
+        if type(self.subsample) == int and self.subsample < 1:
+            self.cells = np.random.randint(0,self.data.shape[0], int(self.subsample*self.data.shape[0]))
+        elif type(self.subsample) == dict:
+            filt_x =  ((self.data.df.x > self.subsample['x'][0]) & (self.data.df.x < self.subsample['x'][1])).values.compute()
+            filt_y =  ((self.data.df.y > self.subsample['y'][0]) & (self.data.df.x < self.subsample['y'][1])).values.compute()
+            self.cells = self.cells[filt_x & filt_y]
+            #self.cells = np.random.choice(self.data.df.index.compute(),size=int(subsample*self.data.shape[0]),replace=False)
 
     def buildGraph(self, d_th):
         print('Building graph...')
