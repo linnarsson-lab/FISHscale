@@ -81,10 +81,13 @@ class GraphData(pl.LightningDataModule):
 
         if type(self.cells) == type(None):
             #self.cells = self.data.df.index.compute()
-            self.cells = np.arange(self.data.shape[0])
-        
-        if subsample < 1:
+
+        if type(subsample) == int and subsample < 1:
             self.cells = np.random.randint(0,self.data.shape[0], int(subsample*self.data.shape[0]))
+        elif type(subsample) == dict:
+            filt_x =  ((self.data.df.x > subsample['x'][0]) & (self.data.df.x < subsample['x'][1])).values.compute()
+            filt_y =  ((self.data.df.y > subsample['y'][0]) & (self.data.df.x < subsample['y'][1])).values.compute()
+            self.cells = self.cells[filt_x & filt_y]
             #self.cells = np.random.choice(self.data.df.index.compute(),size=int(subsample*self.data.shape[0]),replace=False)
 
         if type(ref_celltypes) != type(None):
