@@ -32,7 +32,6 @@ class SAGE(pl.LightningModule):
 
         ):
 
-
         super().__init__()
         self.save_hyperparameters()
 
@@ -57,7 +56,6 @@ class SAGE(pl.LightningModule):
         if self.supervised:
             self.classifier = Classifier(n_input=hidden_channels,n_labels=output_channels,softmax=False)
                 
-
     def neighborhood_forward(self,x,adjs):
         x = torch.log(x + 1)
         for i, (edge_index, _, size) in enumerate(adjs):
