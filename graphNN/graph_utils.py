@@ -258,7 +258,7 @@ class GraphData(pl.LightningDataModule):
             tree_file = os.path.join(self.save_to,'Supervised-Tree-{}Nodes-Ngh{}-{}-dst{}.ann'.format(self.cells.shape[0],self.ngh_sizes[0],self.ngh_sizes[1],self.distance_threshold))
         
             coords = coords
-            neighborhood_size = self.ngh_sizes[0]
+            neighborhood_size = self.ngh_sizes[0] + 100
 
         if not os.path.isfile(edge_file):
             t = AnnoyIndex(2, 'euclidean')  # Length of item vector that will be indexed
@@ -288,7 +288,6 @@ class GraphData(pl.LightningDataModule):
 
             with h5py.File(edge_file, 'w') as hf:
                 hf.create_dataset("edges",  data=res)
-
         else:
             print('Edges file exists, loading...')
             with h5py.File(edge_file, 'r+') as hf:
