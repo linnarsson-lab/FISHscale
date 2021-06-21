@@ -1,5 +1,6 @@
 import networkx as nx
 from networkx.algorithms.traversal import edgedfs
+from numpy.core.fromnumeric import size
 import torch
 import numpy as np
 import torch
@@ -43,6 +44,7 @@ class GraphData(pl.LightningDataModule):
         save_to = '',
         subsample=1,
         ref_celltypes=None,
+        Ncells = None,
         ):
         """
         Initialize GraphData class
@@ -82,10 +84,17 @@ class GraphData(pl.LightningDataModule):
         self.subsample = subsample
         self.subsample_xy()
 
+        '''        
         if type(ref_celltypes) != type(None):
             self.ref_celltypes = torch.tensor(ref_celltypes,dtype=torch.float32)
         else:
             self.ref_celltypes = None
+        '''
+        
+        if type(ref_celltypes) != type(None):
+            if type(Ncells) == type(None):
+                Ncells = np.ones(ref_celltypes.shape[1])
+            self.cluster_nghs, self.cluster_edges, self.cluster_labels = self.cell_types_to_graph(ref_celltypes, Ncells)
         
         # Save random cell selection
         self.buildGraph(self.distance_threshold)
@@ -131,14 +140,14 @@ class GraphData(pl.LightningDataModule):
         return NeighborSampler2(self.edges_tensor, node_idx=self.indices_train,data=self.d,
                                sizes=self.ngh_sizes, return_e_id=False,
                                batch_size=self.batch_size,
-                               shuffle=True, num_workers=self.num_workers,supervised_data=self.ref_celltypes)
+                               shuffle=True, num_workers=self.num_workers)
 
     def validation_dataloader(self):
         # set a big batch size, not all will be loaded in memory but it will loop relatively fast through large dataset
         return NeighborSampler2(self.edges_tensor, node_idx=self.indices_validation,data=self.d,
                                sizes=self.ngh_sizes, return_e_id=False,
                                batch_size=self.batch_size*1,
-                               shuffle=False,supervised_data=self.ref_celltypes)
+                               shuffle=False)
 
     def train(self,max_epochs=5,gpus=-1):     
         print('Saving random cells used during training...')
@@ -236,11 +245,20 @@ class GraphData(pl.LightningDataModule):
             self.cells = self.cells[filt_x & filt_y]
             #self.cells = np.random.choice(self.data.df.index.compute(),size=int(subsample*self.data.shape[0]),replace=False)
 
-    def buildGraph(self, d_th):
+    def buildGraph(self, d_th,coords=None):
         print('Building graph...')
-        edge_file = os.path.join(self.save_to,'Edges-{}Nodes-Ngh{}-{}-dst{}'.format(self.cells.shape[0],self.ngh_sizes[0],self.ngh_sizes[1],self.distance_threshold))
-        tree_file = os.path.join(self.save_to,'Tree-{}Nodes-Ngh{}-{}-dst{}.ann'.format(self.cells.shape[0],self.ngh_sizes[0],self.ngh_sizes[1],self.distance_threshold))
-        coords = np.array([self.data.df.x.values.compute()[self.cells], self.data.df.y.values.compute()[self.cells]]).T
+        if type(coords)  == type(None):
+            edge_file = os.path.join(self.save_to,'Edges-{}Nodes-Ngh{}-{}-dst{}'.format(self.cells.shape[0],self.ngh_sizes[0],self.ngh_sizes[1],self.distance_threshold))
+            tree_file = os.path.join(self.save_to,'Tree-{}Nodes-Ngh{}-{}-dst{}.ann'.format(self.cells.shape[0],self.ngh_sizes[0],self.ngh_sizes[1],self.distance_threshold))
+        
+            coords = np.array([self.data.df.x.values.compute()[self.cells], self.data.df.y.values.compute()[self.cells]]).T
+            neighborhood_size = self.ngh_sizes[0]
+        else:
+            edge_file = os.path.join(self.save_to,'Supervised-Edges-{}Nodes-Ngh{}-{}-dst{}'.format(self.cells.shape[0],self.ngh_sizes[0],self.ngh_sizes[1],self.distance_threshold))
+            tree_file = os.path.join(self.save_to,'Supervised-Tree-{}Nodes-Ngh{}-{}-dst{}.ann'.format(self.cells.shape[0],self.ngh_sizes[0],self.ngh_sizes[1],self.distance_threshold))
+        
+            coords = coords
+            neighborhood_size = self.ngh_sizes[0]
 
         if not os.path.isfile(edge_file):
             t = AnnoyIndex(2, 'euclidean')  # Length of item vector that will be indexed
@@ -260,7 +278,7 @@ class GraphData(pl.LightningDataModule):
                     # 100 sets the number of neighbors to find for each node
                     #  it is set to 100 since we usually will compute neighbors
                     #  [20,10]
-                    search = tree.get_nns_by_item(i,self.ngh_sizes[0],include_distances=True)
+                    search = tree.get_nns_by_item(i, neighborhood_size, include_distances=True)
                     pair = [(i,n) for n,d in zip(search[0],search[1]) if d < distance]
                     if len(pair) > self.minimum_nodes_connected:
                         res += pair
@@ -277,6 +295,50 @@ class GraphData(pl.LightningDataModule):
                 res = hf['edges'][:]
         print('Edges',res.shape)
         self.edges_tensor = torch.tensor(res.T)
+
+    def cell_types_to_graph(self, data, Ncells):
+        """
+        cell_types_to_graph [summary]
+
+        Transform data (Ncells, genes) into fake molecule neighborhoods
+
+        Args:
+            data ([type]): [description]
+            Ncells ([type]): [description]
+
+        Returns:
+            [type]: [description]
+        """        
+        all_molecules = []
+        all_coords = []
+        all_cl = []
+
+        print('Converting clusters into simulated molecule neighborhoods...')
+        for i in trange(data.shape[1]):
+            molecules = []
+            # Reduce number of cells by Ncells.min() to avoid having a huge dataframe, since it is actually simulated data
+            cl_i = data[:,i]*(Ncells[i]/Ncells.min())
+            for x in range(cl_i.shape[0]):
+                dot = np.zeros_like(cl_i)
+                dot[i] = 1
+                try:
+                    dot = np.stack([dot]*int(cl_i[x]))
+                    molecules.append(dot)
+
+                except:
+                    pass
+            molecules = np.concatenate(molecules)
+            all_molecules.append(molecules)
+            
+            all_coords.append(np.random.normal(loc=i*100,scale=25,size=[molecules.shape[0],2]))
+            #all_coords.append(np.ones_like(molecules)*50*i)
+            all_cl.append(np.ones(molecules.shape[0])*i)
+
+        all_molecules = np.concatenate(all_molecules)
+        all_coords = np.concatenate(all_coords)
+        all_cl = np.concatenate(all_cl)
+        edges = self.buildGraph(2.5,coords=all_coords)
+        return all_molecules, edges, all_cl
 
 '''
 def compute_library_size(data):   
