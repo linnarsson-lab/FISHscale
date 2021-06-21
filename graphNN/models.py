@@ -103,7 +103,7 @@ class SAGE(pl.LightningModule):
         
         # Add loss if trying to reconstruct cell types
         if type(classes) != type(None):
-            prediction = self.classifier(q_m)
+            prediction = self.classifier(z)
             cce = torch.nn.CrossEntropyLoss()
             classifier_loss = cce(prediction,classes)
             n_loss += classifier_loss

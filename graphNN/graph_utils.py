@@ -227,7 +227,7 @@ class GraphData(pl.LightningDataModule):
                 plt.xlabel("Y"+str(cycled[i]))
                 plt.ylabel("Y"+str(cycled[i+1]))
             plt.tight_layout()
-            plt.savefig("{}/umap_embedding.png".format(GD.folder), bbox_inches='tight', dpi=500)
+            plt.savefig("{}/umap_embedding.png".format(self.folder), bbox_inches='tight', dpi=500)
 
     def molecules_df(self):
         rows,cols = [],[]
@@ -248,7 +248,8 @@ class GraphData(pl.LightningDataModule):
         if type(self.cells) == type(None):
             #self.cells = self.data.df.index.compute()
             self.cells = np.arange(self.data.shape[0])
-        if type(self.subsample) == int and self.subsample < 1:
+
+        if type(self.subsample) == float and self.subsample < 1:
             self.cells = np.random.randint(0,self.data.shape[0], int(self.subsample*self.data.shape[0]))
         elif type(self.subsample) == dict:
             filt_x =  ((self.data.df.x > self.subsample['x'][0]) & (self.data.df.x < self.subsample['x'][1])).values.compute()
@@ -540,7 +541,7 @@ class NeighborSampler2(torch.utils.data.DataLoader):
                         torch.tensor(self.data[pos].toarray(),dtype=torch.float32),
                         torch.tensor(self.data[neg].toarray(),dtype=torch.float32),
                         adjs,
-                        torch.tensor(self.cluster_labels[n_id],dtype=torch.float32))
+                        torch.tensor(self.cluster_labels[n_id[:batch_size]],dtype=torch.long))
 
         out = self.transform(*out) if self.transform is not None else out
         return out
