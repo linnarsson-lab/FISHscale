@@ -32,7 +32,6 @@ class SAGE(pl.LightningModule):
 
         ):
 
-
         super().__init__()
         self.save_hyperparameters()
 
@@ -57,7 +56,6 @@ class SAGE(pl.LightningModule):
         if self.supervised:
             self.classifier = Classifier(n_input=hidden_channels,n_labels=output_channels,softmax=False)
                 
-
     def neighborhood_forward(self,x,adjs):
         x = torch.log(x + 1)
         for i, (edge_index, _, size) in enumerate(adjs):
@@ -103,7 +101,7 @@ class SAGE(pl.LightningModule):
         
         # Add loss if trying to reconstruct cell types
         if type(classes) != type(None):
-            prediction = self.classifier(q_m)
+            prediction = self.classifier(z)
             cce = torch.nn.CrossEntropyLoss()
             classifier_loss = cce(prediction,classes)
             n_loss += classifier_loss
