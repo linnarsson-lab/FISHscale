@@ -886,7 +886,7 @@ class Regionalize(Iteration):
                 transform, square root transform, or z scores respectively. 
                 Defaults to 'log'.
             n_components (int, optional): Number of PCA components to use for
-                clustering. Defaults to 100.
+                clustering. First component is not included. Defaults to 100.
             clust_dist_threshold (float, optional): Distance threshold for 
                 Scipy Agglomerative clustering. Defaults to 70.
             clust_neighbor_rings (int, optional): Number of rings around a 
@@ -932,7 +932,7 @@ class Regionalize(Iteration):
         #Calculate PCA
         pc = self.hexbin_PCA(df_hex_norm)
         #Cluster dataset
-        labels = self.clust_hex_connected(pc[:,:n_components], hex_coord, distance_threshold=clust_dist_threshold, neighbor_rings=clust_neighbor_rings)
+        labels = self.clust_hex_connected(pc[:,1:n_components+1], hex_coord, distance_threshold=clust_dist_threshold, neighbor_rings=clust_neighbor_rings)
         #Spatially smooth cluster labels
         labels = self.smooth_hex_labels(hex_coord, labels, smooth_neighbor_rings, smooth_cycles, n_jobs=1)
         #Get boundary points of regions

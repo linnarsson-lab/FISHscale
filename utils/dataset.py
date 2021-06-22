@@ -544,7 +544,7 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
                 'x' : Sort by width in X.
                 'y' : Sort by width in Y.
                 'name' : Sort by dataset name in alphanumerical order.                
-                 Defaults to 'z'.
+                    Defaults to 'z'.
 
         Raises:
             Exception: If `orderby` is not properly defined.
