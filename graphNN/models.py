@@ -108,14 +108,15 @@ class SAGE(pl.LightningModule):
         # Add loss if trying to reconstruct cell types
         if self.supervised_decoder:
             px =  self.decoder(z)
-
             if self.supervised_loss == 'kl-poisson':
                 supervised_loss = 0
                 #supervised_loss = kl(Poisson(px),Poisson(torch.log(ref+1))).sum(dim=1).mean()
             elif self.supervised_loss == 'cosine-similarity':
                 cos= 0
                 for c in range(px.shape[0]):
-                    cos += torch.nn.functional.cosine_similarity(px[c:c+1,:],ref.T).mean()
+                    cos = torch.nn.functional.cosine_similarity(px[c:c+1,:],ref.T)
+                    cos = - cos.max() - cos.var()
+                    cos += cos
                 cos = cos/px.shape[0]
                 supervised_loss = cos
             elif self.supervised_loss == 'matmul':

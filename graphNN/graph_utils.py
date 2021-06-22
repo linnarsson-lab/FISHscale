@@ -79,12 +79,8 @@ class GraphData(pl.LightningDataModule):
         self.folder = self.analysis_name+ '_' +datetime.now().strftime("%Y-%m-%d-%H%M%S")
         os.mkdir(self.folder)
 
-        if type(self.cells) == type(None):
-            self.cells = self.data.df.index.compute()
-        
-        if subsample < 1:
-            #self.cells = np.random.randint(0,self.data.shape[0], int(subsample*self.data.shape[0]))
-            self.cells = np.random.choice(self.data.df.index.compute(),size=int(subsample*self.data.shape[0]),replace=False)
+        self.subsample = subsample
+        self.subsample_xy()
 
         if type(ref_celltypes) != type(None):
             self.ref_celltypes = torch.tensor(ref_celltypes,dtype=torch.float32)
@@ -105,15 +101,118 @@ class GraphData(pl.LightningDataModule):
             )
         self.early_stop_callback = EarlyStopping(
             monitor='val_loss',
-            min_delta=0.2,
-            patience=2,
-            verbose=True
-            mode='min'
+            min_delta=0.1,
+            patience=3,
+            verbose=True,
+            mode='min',
             )
+    
+    def prepare_data(self):
+        # do-something
+        pass
+
+    def setup(self, stage: Optional[str] = None):
+        print('Loading dataset...')
+        #self.d = torch.tensor(self.molecules_df(),dtype=torch.float32) #works
+        self.d = self.molecules_df()
+        
+        print('tensor',self.d.shape)
+
+    def compute_size(self):
+        self.train_size = int((self.cells.shape[0])*self.train_p)
+        self.test_size = self.cells.shape[0]-int(self.cells.shape[0]*self.train_p)  
+        random_state = np.random.RandomState(seed=0)
+        permutation = random_state.permutation(self.cells.shape[0])
+        self.indices_test = torch.tensor(permutation[:self.test_size])
+        self.indices_train = torch.tensor(permutation[self.test_size : (self.test_size + self.train_size)])
+        self.indices_validation = torch.tensor(np.arange(self.cells.shape[0]))
+
+    def train_dataloader(self):
+        return NeighborSampler2(self.edges_tensor, node_idx=self.indices_train,data=self.d,
+                               sizes=self.ngh_sizes, return_e_id=False,
+                               batch_size=self.batch_size,
+                               shuffle=True, num_workers=self.num_workers,supervised_data=self.ref_celltypes)
+
+    def validation_dataloader(self):
+        # set a big batch size, not all will be loaded in memory but it will loop relatively fast through large dataset
+        return NeighborSampler2(self.edges_tensor, node_idx=self.indices_validation,data=self.d,
+                               sizes=self.ngh_sizes, return_e_id=False,
+                               batch_size=self.batch_size*1,
+                               shuffle=False,supervised_data=self.ref_celltypes)
+
+    def train(self,max_epochs=5,gpus=-1):     
+        print('Saving random cells used during training...')
+        np.save(self.folder +'/random_cells.npy',self.cells)
+        trainer = pl.Trainer(gpus=gpus,callbacks=[self.checkpoint_callback,self.early_stop_callback],max_epochs=max_epochs)
+        trainer.fit(self.model, train_dataloader=self.train_dataloader(),val_dataloaders=self.validation_dataloader())
+
+    def get_latent(self, deterministic=True,run_clustering=True,make_plot=True):
+        print('Training done, generating embedding...')
+        import matplotlib.pyplot as plt
+        embedding = []
+        for x,pos,neg,adjs,ref in self.validation_dataloader():
+            z,qm,_ = self.model.neighborhood_forward(x,adjs)
+            if deterministic and self.model.apply_normal_latent:
+                z = qm
+            embedding.append(z.detach().numpy())
+            
+        self.embedding = np.concatenate(embedding)
+        np.save(self.folder+'/loadings.npy',self.embedding)
+
+        if run_clustering:
+            self.data.clustering_scanpy(self.embedding)
+    
+        if make_plot:
+            ### Plot spatial dots with assigned cluster
+            fig=plt.figure(figsize=(6,6),dpi=1000)
+            ax = fig.add_subplot(1, 1, 1)
+            ax.set_facecolor("black")
+            width_cutoff = 1640 # um
+            plt.scatter(self.data.df.x.compute(), self.data.df.y.compute(), c=self.data.dask_attrs['leiden'].compute().astype('int64'), s=0.2,marker='.',linewidths=0, edgecolors=None, cmap='rainbow')
+            plt.xticks(fontsize=4)
+            plt.yticks(fontsize=4)
+            plt.axis('scaled')
+            plt.savefig("{}/spatial_umap_embedding.png".format(self.folder), bbox_inches='tight', dpi=500)
+
+    def make_umap(self,make_plot=True):
+        print('Embedding done, generating umap and plots...')
+        import matplotlib.pyplot as plt
+        import umap
+
+        reducer = umap.UMAP(
+            n_neighbors=15,
+            n_components=3,
+            n_epochs=250,
+            init='spectral',
+            min_dist=0.1,
+            spread=1,
+            random_state=1,
+            verbose=True,
+            n_jobs=-1
+        )
+        umap_embedding = reducer.fit_transform(self.embedding)
+        np.save(self.folder+'/umap.npy',umap_embedding)
+
+        if make_plot:
+            Y_umap = umap_embedding
+            Y_umap -= np.min(Y_umap, axis=0)
+            Y_umap /= np.max(Y_umap, axis=0)
+            Y_umap.shape
+
+            fig=plt.figure(figsize=(7,4),dpi=500)
+            cycled = [0,1,2,0]
+            for i in range(3):
+                plt.subplot(1,3,i+1)
+                plt.scatter(Y_umap[:,cycled[i]], Y_umap[:,cycled[i+1]], c=Y_umap,  s=5, marker='.', linewidths=0, edgecolors=None)
+                plt.xlabel("Y"+str(cycled[i]))
+                plt.ylabel("Y"+str(cycled[i+1]))
+            plt.tight_layout()
+            plt.savefig("{}/umap_embedding.png".format(GD.folder), bbox_inches='tight', dpi=500)
 
     def molecules_df(self):
         rows,cols = [],[]
-        filt = self.data.df.map_partitions(lambda x: x[x.index.isin(self.cells)]).g.values.compute()
+        #filt = self.data.df.map_partitions(lambda x: x[x.index.isin(self.cells)]).g.values.compute()
+        filt = self.data.df.g.values.compute()[self.cells]
         for r in trange(self.data.unique_genes.shape[0]):
             g = self.data.unique_genes[r]
             expressed = np.where(filt == g)[0].tolist()
@@ -124,12 +223,24 @@ class GraphData(pl.LightningDataModule):
         data= np.ones_like(cols)
         sm = sparse.csr_matrix((data,(rows,cols))).T
         return sm
+    
+    def subsample_xy(self):
+        if type(self.cells) == type(None):
+            #self.cells = self.data.df.index.compute()
+            self.cells = np.arange(self.data.shape[0])
+        if type(self.subsample) == int and self.subsample < 1:
+            self.cells = np.random.randint(0,self.data.shape[0], int(self.subsample*self.data.shape[0]))
+        elif type(self.subsample) == dict:
+            filt_x =  ((self.data.df.x > self.subsample['x'][0]) & (self.data.df.x < self.subsample['x'][1])).values.compute()
+            filt_y =  ((self.data.df.y > self.subsample['y'][0]) & (self.data.df.x < self.subsample['y'][1])).values.compute()
+            self.cells = self.cells[filt_x & filt_y]
+            #self.cells = np.random.choice(self.data.df.index.compute(),size=int(subsample*self.data.shape[0]),replace=False)
 
     def buildGraph(self, d_th):
         print('Building graph...')
         edge_file = os.path.join(self.save_to,'Edges-{}Nodes-Ngh{}-{}-dst{}'.format(self.cells.shape[0],self.ngh_sizes[0],self.ngh_sizes[1],self.distance_threshold))
         tree_file = os.path.join(self.save_to,'Tree-{}Nodes-Ngh{}-{}-dst{}.ann'.format(self.cells.shape[0],self.ngh_sizes[0],self.ngh_sizes[1],self.distance_threshold))
-        coords = np.array([self.data.df.x.compute()[self.cells].values, self.data.df.x.compute()[self.cells].values]).T
+        coords = np.array([self.data.df.x.values.compute()[self.cells], self.data.df.y.values.compute()[self.cells]]).T
 
         if not os.path.isfile(edge_file):
             t = AnnoyIndex(2, 'euclidean')  # Length of item vector that will be indexed
@@ -166,74 +277,7 @@ class GraphData(pl.LightningDataModule):
                 res = hf['edges'][:]
         print('Edges',res.shape)
         self.edges_tensor = torch.tensor(res.T)
-    
-    def prepare_data(self):
-        # do-something
-        pass
-    
-    def compute_size(self):
-        self.train_size = int((self.cells.shape[0])*self.train_p)
-        self.test_size = self.cells.shape[0]-int(self.cells.shape[0]*self.train_p)  
-        random_state = np.random.RandomState(seed=0)
-        permutation = random_state.permutation(self.cells.shape[0])
-        self.indices_test = torch.tensor(permutation[:self.test_size])
-        self.indices_train = torch.tensor(permutation[self.test_size : (self.test_size + self.train_size)])
-        self.indices_validation = torch.tensor(np.arange(self.cells.shape[0]))
 
-    def setup(self, stage: Optional[str] = None):
-        print('Loading dataset...')
-        #self.d = torch.tensor(self.molecules_df(),dtype=torch.float32) #works
-        self.d = self.molecules_df()
-        
-        print('tensor',self.d.shape)
-    def train_dataloader(self):
-        return NeighborSampler2(self.edges_tensor, node_idx=self.indices_train,data=self.d,
-                               sizes=self.ngh_sizes, return_e_id=False,
-                               batch_size=self.batch_size,
-                               shuffle=True, num_workers=self.num_workers,supervised_data=self.ref_celltypes)
-
-    def validation_dataloader(self):
-        # set a big batch size, not all will be loaded in memory but it will loop relatively fast through large dataset
-        return NeighborSampler2(self.edges_tensor, node_idx=self.indices_validation,data=self.d,
-                               sizes=self.ngh_sizes, return_e_id=False,
-                               batch_size=102400,
-                               shuffle=False,supervised_data=self.ref_celltypes)
-
-    def train(self,max_epochs=5,gpus=-1):     
-        print('Saving random cells used during training...')
-        np.save(self.folder +'/random_cells.npy',self.cells)
-        
-        trainer = pl.Trainer(gpus=gpus,callbacks=[self.checkpoint_callback,self.early_stop_callback],max_epochs=max_epochs)
-        trainer.fit(self.model, self.train_dataloader())
-
-    def get_latent(self, deterministic=True):
-        print('Training done, generating embedding...')
-        embedding = []
-        for x,pos,neg,adjs,ref in self.validation_dataloader():
-            z,qm,_ = self.model.neighborhood_forward(x,adjs)
-            if deterministic:
-                z = qm
-            embedding.append(z.detach().numpy())
-            
-        self.embedding = np.concatenate(embedding)
-        np.save(self.folder+'/loadings.npy',self.embedding)
-
-    def make_umap(self):
-        print('Embedding done, generating umap...')
-        import umap
-        reducer = umap.UMAP(
-            n_neighbors=15,
-            n_components=3,
-            n_epochs=250,
-            init='spectral',
-            min_dist=0.1,
-            spread=1,
-            random_state=1,
-            verbose=True,
-            n_jobs=-1
-        )
-        umap_embedding = reducer.fit_transform(self.embedding)
-        np.save(self.folder+'/umap.npy',umap_embedding)
 '''
 def compute_library_size(data):   
     sum_counts = data.sum(axis=1)
