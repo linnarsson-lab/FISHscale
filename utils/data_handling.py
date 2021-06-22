@@ -111,9 +111,7 @@ class DataLoader_base():
             raise Exception(f'Input should be a dictionary, not {type(data_dict)}.')
         
         existing_dict = self._metadatafile_read()
-        print(existing_dict)
         merged_dict = {**existing_dict, **data_dict}
-        print(merged_dict)
         
         self._metadatafile_make(merged_dict)
         
@@ -284,8 +282,6 @@ class DataLoader(DataLoader_base):
                 
                 #Get data shape
                 self.shape = data.shape
-                print('shape')
-                
                 
                 #Offset data
                 if x_offset !=0 or y_offset != 0:
@@ -310,7 +306,6 @@ class DataLoader(DataLoader_base):
                     self.unique_genes = np.unique(data.g)
                 else:
                     self.unique_genes = unique_genes
-                print('\nunique genes')
                 self._metadatafile_add({'unique_genes': self.unique_genes})
                 self._metadatafile_add({'shape': self.shape})
 
@@ -327,9 +322,6 @@ class DataLoader(DataLoader_base):
         if new_parse == True:
             self.dask_attrs = dd.from_pandas(pd.DataFrame(index=self.df.index),npartitions=self.df.npartitions,sort=False)
             self.dask_attrs.to_parquet(path.join(self.dataset_folder,self.FISHscale_data_folder,'attributes'))
-        #Temporary shape when reparse=False
-        ###########self.shape = self.df.compute().shape
-        #print('hi')
 
         else:
             #Get coordinate properties from metadata
