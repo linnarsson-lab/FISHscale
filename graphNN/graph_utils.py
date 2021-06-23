@@ -327,7 +327,7 @@ class GraphData(pl.LightningDataModule):
         all_molecules = []
         all_coords = []
         all_cl = []
-        data = data*(Ncells.min()/10).astype('int')
+        data = (data*(Ncells.min()/10)).astype('int')
 
         print('Converting clusters into simulated molecule neighborhoods...')
         for i in trange(data.shape[1]):
@@ -337,7 +337,7 @@ class GraphData(pl.LightningDataModule):
             
             for x in range(cl_i.shape[0]):
                 dot = np.zeros_like(cl_i)
-                dot[i] = 1
+                dot[x] = 1
                 try:
                     dot = np.stack([dot]*int(cl_i[x]))
                     molecules.append(dot)
