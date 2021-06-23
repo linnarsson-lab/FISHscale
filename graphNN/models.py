@@ -56,7 +56,7 @@ class SAGE(pl.LightningModule):
 
         if self.supervised:
             self.classifier = Classifier(n_input=hidden_channels,n_labels=output_channels,softmax=False)
-            #self.train_acc = torchmetrics.Accuracy()
+            self.train_acc = torchmetrics.Accuracy()
                 
     def neighborhood_forward(self,x,adjs):
         x = torch.log(x + 1)
@@ -110,6 +110,9 @@ class SAGE(pl.LightningModule):
             n_loss += classifier_loss
             #print(supervised_loss)
             self.log('Classifier Loss',classifier_loss)
+            self.train_acc(prediction.softmax(dim=-1),F.one_hot(classes,num_classes=prediction.shape[1]))
+            self.log('train_acc', self.train_acc, prog_bar=True, on_step=False,
+                 on_epoch=True)
             
         return n_loss
 
