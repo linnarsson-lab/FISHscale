@@ -209,6 +209,7 @@ class DataLoader(DataLoader_base):
         self.x_extend = self.x_max - self.x_min
         self.y_extend = self.y_max - self.y_min 
         self.xy_center = (self.x_max - 0.5*self.x_extend, self.y_max - 0.5*self.y_extend)
+        self.shape = prop['shape']
 
     def load_data(self, filename: str, x_label: str, y_label: str, gene_label: str, other_columns: Optional[list], 
                   x_offset: float, y_offset: float, z_offset: float, pixel_size: str, unique_genes: Optional[np.ndarray],
@@ -306,6 +307,7 @@ class DataLoader(DataLoader_base):
                 else:
                     self.unique_genes = unique_genes
                 self._metadatafile_add({'unique_genes': self.unique_genes})
+                self._metadatafile_add({'shape': self.shape})
 
                 #Group the data by gene and save
                 data.groupby('g').apply(lambda x: self._dump_to_parquet(x, self.dataset_name, self.FISHscale_data_folder))#, meta=('float64')).compute()
@@ -316,20 +318,19 @@ class DataLoader(DataLoader_base):
         #Load Dask Dataframe from the parsed gene dataframes
         makedirs(self.FISHscale_data_folder, exist_ok=True)
         self.df = dd.read_parquet(path.join(self.FISHscale_data_folder, '*.parquet'))
-        #Temporary shape when reparse=False
-        self.shape = self.df.compute().shape
-
-        if reparse:
+        
+        if new_parse == True:
             self.dask_attrs = dd.from_pandas(pd.DataFrame(index=self.df.index),npartitions=self.df.npartitions,sort=False)
             self.dask_attrs.to_parquet(path.join(self.dataset_folder,self.FISHscale_data_folder,'attributes'))
+
         else:
-            self.dask_attrs = dd.read_parquet(path.join(self.dataset_folder,self.FISHscale_data_folder,'attributes','*.parquet'))
-        
-        if new_parse == False:
             #Get coordinate properties from metadata
             self._get_coordinate_properties()
             #Unique genes
             unique_genes_metadata = self._metadatafile_get('unique_genes')
+            #Attributes
+            self.dask_attrs = dd.read_parquet(path.join(self.dataset_folder,self.FISHscale_data_folder,'attributes','*.parquet'))
+            
             #Check if unique_genes are given by user
             if isinstance(unique_genes, np.ndarray):
                 self.unique_genes = unique_genes

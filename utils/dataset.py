@@ -1,7 +1,7 @@
 
 from typing import Union, Optional
 import pandas as pd
-from FISHscale import Window
+from FISHscale.visualization.primitiveVis_open3dv2 import Window
 from FISHscale.utils.hex_regionalization import Regionalize
 from FISHscale.utils.fast_iteration import Iteration, MultiIteration
 from FISHscale.utils.colors import ManyColors
@@ -544,7 +544,7 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
                 'x' : Sort by width in X.
                 'y' : Sort by width in Y.
                 'name' : Sort by dataset name in alphanumerical order.                
-                 Defaults to 'z'.
+                    Defaults to 'z'.
 
         Raises:
             Exception: If `orderby` is not properly defined.

@@ -62,7 +62,8 @@ class Window:
                 self.color_dic[g] = col
 
         # setting title 
-        if str(self.dataset.__class__) == str(FISHscale.utils.dataset.Dataset):
+        #if str(self.dataset.__class__) == str(FISHscale.utils.dataset.Dataset):
+        if isinstance(self.dataset,FISHscale.utils.dataset.Dataset):
             print('Single Dataset')
             self.unique_genes = self.dataset.unique_genes
             self.dataset = [dataset]
@@ -73,7 +74,8 @@ class Window:
             self.pass_multi_data()
             print('Data Loaded')
 
-        elif str(self.dataset.__class__) == str(FISHscale.utils.MultiDataset):
+        #elif str(self.dataset.__class__) == str(FISHscale.utils.dataset.MultiDataset):
+        elif isinstance(self.dataset, FISHscale.utils.dataset.MultiDataset):
             print('MultiDataset')
             self.dataset = dataset
             self.dic_pointclouds ={'g':self.dataset.unique_genes}

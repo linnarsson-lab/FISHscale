@@ -137,11 +137,8 @@ class GeneScatter(AxSize):
                 Defaults to True.
             show_axes (bool, optional): If True adds the axes to the plot.
                 Defaults to False.
-            show_legend (bool, optional): 
-            
-            
-            XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-            
+            show_legend (bool, optional): Show the gene legend. Can not show
+                more than 15 genes.
             save (bool, optional): If True saves the plot. Defaults to False.
             save_name (str, optional): Name of the plot. If not given will have
                 the format: "Scatter_plot_<dataset_name>_<timestamp>"
@@ -200,8 +197,8 @@ class GeneScatter(AxSize):
                                 transform=ax.transAxes, zorder=-1))
         
         if show_legend:
-            if len(genes) > 10:
-                print('Can not add the legend for more than 10 genes. Please see self.color_dict for gene colors.')
+            if len(genes) > 15:
+                print('Can not add the legend for more than 15 genes. Please see self.color_dict for gene colors.')
             else:
                 lgnd = plt.legend(loc = 2, frameon=False)
                 for handle in lgnd.legendHandles:
@@ -215,14 +212,47 @@ class GeneScatter(AxSize):
 
 
 class MultiGeneScatter(AxSize):
+    """Make a scatter plot of all data.
+
+        Use self.arange_grid_ffset() to arrange datasets in a grid.   
+        Uses a black background. Plots in real size if `ax_scale_factor` is 1. 
+        If the plot is saved it rasterizes the points because vector plots of
+        milions of points get very huge. All other parts of the plot are 
+        vectors.
+
+        Args:
+            genes (Union[List, np.ndarray]): List of genes to plot. First gene
+                will be plotted first and thus be on the bottom of the stack.
+            s (float, optional): Size of the points. Defaults to 0.1.
+            ax_scale_factor (int, optional): Scale factor of the plot. If 1,
+                the plot will be in real size. Carefully scale this for every 
+                plot so that the plot does not become too small or too big.
+                Defaults to 10.
+            view (Union[Any, List], optional): If given it crops the points. 
+                Should be a list of list with the the Left Bottom and Top Right
+                corner coordinates: [[X_BL, Y_BL], [X_TR, Y_TR]]
+                Defaults to None.
+            scalebar (bool, optional): If True adds a scalebar.
+                Defaults to True.
+            show_axes (bool, optional): If True adds the axes to the plot.
+                Defaults to False.
+            show_legend (bool, optional): Show the gene legend. Can not show
+                more than 15 genes.
+            save (bool, optional): If True saves the plot. Defaults to False.
+            save_name (str, optional): Name of the plot. If not given will have
+                the format: "Scatter_plot_<dataset_name>_<timestamp>"
+                Defaults to ''.
+            dpi (int, optional): Dots Per Inch (DPI) of the plot.
+                Defaults to 300.
+            file_format (str, optional): Format of the plot including the 
+                point. Even if vector format is given the points will be 
+                rasterized. Defaults to '.eps'.
+        """   
 
     def scatter_plot(self, genes: Union[List, np.ndarray], s: float=0.1, ax_scale_factor: int=10, 
-                    scalebar: bool=True, show_axes: bool=False, flip_y: bool=False,
+                    scalebar: bool=True, show_axes: bool=False, flip_y: bool=False, show_legend=True,
                     save: bool=False, save_name: str='', dpi: int=300, file_format: str='.eps'):
-        
-        #Make sure gene coordinate dictionary is present
-        self.make_multi_gene_coordinates()
-        
+               
         #Check input
         if not isinstance(genes, list) and not isinstance(genes, np.ndarray):
             print('made_list')
@@ -239,10 +269,11 @@ class MultiGeneScatter(AxSize):
         y_max = 0
 
         #Plot points
-        for d in self.datasets:
+        for i, d in enumerate(self.datasets):
             for g in genes:
-                x = d.gene_coordinates[g][:, 0]
-                y = d.gene_coordinates[g][:, 1]
+                data = d.get_gene(g)
+                x = data.x
+                y = data.y
 
                 x_min_g, x_max_g = x.min(), x.max()
                 y_min_g, y_max_g = y.min(), y.max()
@@ -250,8 +281,11 @@ class MultiGeneScatter(AxSize):
                 x_max = x_max_g if x_max_g > x_max else x_max
                 y_min = y_min_g if y_min_g < y_min else y_min
                 y_max = y_max_g if y_max_g > y_max else y_max
-
-                ax.scatter(x, y, s=s, color=self.color_dict[g], zorder=0)
+                
+                if i == 0:
+                    ax.scatter(x, y, s=s, color=self.color_dict[g], zorder=0, label=g)
+                else:
+                    ax.scatter(x, y, s=s, color=self.color_dict[g], zorder=0)
             
         #Rescale
         x_extend = x_max - x_min
@@ -273,6 +307,15 @@ class MultiGeneScatter(AxSize):
                                 transform=ax.transAxes, zorder=-1))
         plt.gca().xaxis.set_major_locator(plt.NullLocator())
         plt.gca().yaxis.set_major_locator(plt.NullLocator())
+        
+        if show_legend:
+            if len(genes) > 15:
+                print('Can not add the legend for more than 10 genes. Please see self.color_dict for gene colors.')
+            else:
+                lgnd = plt.legend(loc = 2, frameon=False)
+                for handle in lgnd.legendHandles:
+                    handle.set_sizes([20])
+                    plt.setp(lgnd.get_texts(), color='w')  
 
         if save:
             if save_name == '':
