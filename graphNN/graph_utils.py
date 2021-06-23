@@ -77,6 +77,7 @@ class GraphData(pl.LightningDataModule):
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.save_to = save_to
+        self.ref_celltypes = ref_celltypes 
 
         self.folder = self.analysis_name+ '_' +datetime.now().strftime("%Y-%m-%d-%H%M%S")
         os.mkdir(self.folder)
@@ -91,10 +92,10 @@ class GraphData(pl.LightningDataModule):
             self.ref_celltypes = None
         '''
         
-        if type(ref_celltypes) != type(None):
+        if type(self.ref_celltypes) != type(None):
             if type(Ncells) == type(None):
-                Ncells = np.ones(ref_celltypes.shape[1])
-            self.cluster_nghs, self.cluster_edges, self.cluster_labels = self.cell_types_to_graph(ref_celltypes, Ncells)
+                Ncells = np.ones(self.ref_celltypes.shape[1])
+            self.cluster_nghs, self.cluster_edges, self.cluster_labels = self.cell_types_to_graph(self.ref_celltypes, Ncells)
         
         # Save random cell selection
         self.buildGraph(self.distance_threshold)
@@ -124,7 +125,6 @@ class GraphData(pl.LightningDataModule):
         print('Loading dataset...')
         #self.d = torch.tensor(self.molecules_df(),dtype=torch.float32) #works
         self.d = self.molecules_df()
-        
         print('tensor',self.d.shape)
 
     def compute_size(self):
@@ -137,11 +137,22 @@ class GraphData(pl.LightningDataModule):
         self.indices_validation = torch.tensor(np.arange(self.cells.shape[0]))
 
     def train_dataloader(self):
-        return NeighborSampler2(self.edges_tensor, node_idx=self.indices_train,data=self.d,
+        unlabelled=  NeighborSampler2(self.edges_tensor, node_idx=self.indices_train,data=self.d,
                                sizes=self.ngh_sizes, return_e_id=False,
                                batch_size=self.batch_size,
                                shuffle=True, num_workers=self.num_workers)
 
+        if type(self.ref_celltypes) != type(None):
+            indices_lab = torch.tensor(np.random.randint(0,self.cluster_nghs.shape[0],size=self.indices_train.shape[0]))
+            labelled = NeighborSampler2(self.cluster_edges, node_idx=indices_lab,
+                            data=self.cluster_nghs, sizes=self.ngh_sizes,  
+                            return_e_id=False, batch_size=self.batch_size,
+                            shuffle=True, num_workers=self.num_workers,cluster_labels=self.cluster_labels)
+        else:
+            labelled = None
+
+        return {'unlabelled':unlabelled,'labelled':labelled}
+        
     def validation_dataloader(self):
         # set a big batch size, not all will be loaded in memory but it will loop relatively fast through large dataset
         return NeighborSampler2(self.edges_tensor, node_idx=self.indices_validation,data=self.d,
@@ -216,7 +227,7 @@ class GraphData(pl.LightningDataModule):
                 plt.xlabel("Y"+str(cycled[i]))
                 plt.ylabel("Y"+str(cycled[i+1]))
             plt.tight_layout()
-            plt.savefig("{}/umap_embedding.png".format(GD.folder), bbox_inches='tight', dpi=500)
+            plt.savefig("{}/umap_embedding.png".format(self.folder), bbox_inches='tight', dpi=500)
 
     def molecules_df(self):
         rows,cols = [],[]
@@ -237,7 +248,8 @@ class GraphData(pl.LightningDataModule):
         if type(self.cells) == type(None):
             #self.cells = self.data.df.index.compute()
             self.cells = np.arange(self.data.shape[0])
-        if type(self.subsample) == int and self.subsample < 1:
+
+        if type(self.subsample) == float and self.subsample < 1:
             self.cells = np.random.randint(0,self.data.shape[0], int(self.subsample*self.data.shape[0]))
         elif type(self.subsample) == dict:
             filt_x =  ((self.data.df.x > self.subsample['x'][0]) & (self.data.df.x < self.subsample['x'][1])).values.compute()
@@ -248,17 +260,17 @@ class GraphData(pl.LightningDataModule):
     def buildGraph(self, d_th,coords=None):
         print('Building graph...')
         if type(coords)  == type(None):
+            supervised = False
             edge_file = os.path.join(self.save_to,'Edges-{}Nodes-Ngh{}-{}-dst{}'.format(self.cells.shape[0],self.ngh_sizes[0],self.ngh_sizes[1],self.distance_threshold))
             tree_file = os.path.join(self.save_to,'Tree-{}Nodes-Ngh{}-{}-dst{}.ann'.format(self.cells.shape[0],self.ngh_sizes[0],self.ngh_sizes[1],self.distance_threshold))
-        
             coords = np.array([self.data.df.x.values.compute()[self.cells], self.data.df.y.values.compute()[self.cells]]).T
             neighborhood_size = self.ngh_sizes[0]
         else:
+            supervised=True
             edge_file = os.path.join(self.save_to,'Supervised-Edges-{}Nodes-Ngh{}-{}-dst{}'.format(self.cells.shape[0],self.ngh_sizes[0],self.ngh_sizes[1],self.distance_threshold))
             tree_file = os.path.join(self.save_to,'Supervised-Tree-{}Nodes-Ngh{}-{}-dst{}.ann'.format(self.cells.shape[0],self.ngh_sizes[0],self.ngh_sizes[1],self.distance_threshold))
-        
             coords = coords
-            neighborhood_size = self.ngh_sizes[0]
+            neighborhood_size = self.ngh_sizes[0] + 100
 
         if not os.path.isfile(edge_file):
             t = AnnoyIndex(2, 'euclidean')  # Length of item vector that will be indexed
@@ -288,13 +300,16 @@ class GraphData(pl.LightningDataModule):
 
             with h5py.File(edge_file, 'w') as hf:
                 hf.create_dataset("edges",  data=res)
-
         else:
             print('Edges file exists, loading...')
             with h5py.File(edge_file, 'r+') as hf:
                 res = hf['edges'][:]
         print('Edges',res.shape)
-        self.edges_tensor = torch.tensor(res.T)
+
+        if supervised==False:
+            self.edges_tensor = torch.tensor(res.T)
+        else:
+            return torch.tensor(res.T)
 
     def cell_types_to_graph(self, data, Ncells):
         """
@@ -312,32 +327,35 @@ class GraphData(pl.LightningDataModule):
         all_molecules = []
         all_coords = []
         all_cl = []
+        data = (data*(Ncells.mean()/100)).astype('int')
 
         print('Converting clusters into simulated molecule neighborhoods...')
         for i in trange(data.shape[1]):
             molecules = []
             # Reduce number of cells by Ncells.min() to avoid having a huge dataframe, since it is actually simulated data
-            cl_i = data[:,i]*(Ncells[i]/Ncells.min())
+            cl_i = data[:,i]#*(Ncells[i]/(Ncells.min()*100)).astype('int')
+            
             for x in range(cl_i.shape[0]):
                 dot = np.zeros_like(cl_i)
-                dot[i] = 1
+                dot[x] = 1
                 try:
                     dot = np.stack([dot]*int(cl_i[x]))
                     molecules.append(dot)
 
                 except:
                     pass
+
             molecules = np.concatenate(molecules)
             all_molecules.append(molecules)
             
-            all_coords.append(np.random.normal(loc=i*100,scale=25,size=[molecules.shape[0],2]))
+            all_coords.append(np.random.normal(loc=i*1000,scale=25,size=[molecules.shape[0],2]))
             #all_coords.append(np.ones_like(molecules)*50*i)
             all_cl.append(np.ones(molecules.shape[0])*i)
 
-        all_molecules = np.concatenate(all_molecules)
+        all_molecules = sparse.csr_matrix(np.concatenate(all_molecules))
         all_coords = np.concatenate(all_coords)
         all_cl = np.concatenate(all_cl)
-        edges = self.buildGraph(2.5,coords=all_coords)
+        edges = self.buildGraph(5,coords=all_coords)
         return all_molecules, edges, all_cl
 
 '''
@@ -429,7 +447,8 @@ class NeighborSampler2(torch.utils.data.DataLoader):
     def __init__(self, edge_index: Union[Tensor, SparseTensor], data,
                  sizes: List[int], node_idx: Optional[Tensor] = None,
                  num_nodes: Optional[int] = None, return_e_id: bool = True,
-                 transform: Callable = None, supervised_data:Optional[Tensor]=None,**kwargs):
+                 transform: Callable = None, cluster_labels:Optional[Tensor]=None, 
+                 **kwargs):
 
         edge_index = edge_index.to('cpu')
 
@@ -447,7 +466,7 @@ class NeighborSampler2(torch.utils.data.DataLoader):
         self.is_sparse_tensor = isinstance(edge_index, SparseTensor)
         self.__val__ = None
         self.data = data
-        self.supervised_data = supervised_data
+        self.cluster_labels = cluster_labels
 
         # Obtain a *transposed* `SparseTensor` instance.
         if not self.is_sparse_tensor:
@@ -511,12 +530,18 @@ class NeighborSampler2(torch.utils.data.DataLoader):
         #out = (self.data[n_id],self.data[pos],self.data[neg], adjs) #v1 no sparse tensor
 
         #out v2 using sparse tensor
-        out = (torch.tensor(self.data[n_id].toarray(),dtype=torch.float32),
-                torch.tensor(self.data[pos].toarray(),dtype=torch.float32),
-                torch.tensor(self.data[neg].toarray(),dtype=torch.float32),
-                adjs,
-                self.supervised_data)
-
+        if type(self.cluster_labels) == type(None):
+            out = (torch.tensor(self.data[n_id].toarray(),dtype=torch.float32),
+                        torch.tensor(self.data[pos].toarray(),dtype=torch.float32),
+                        torch.tensor(self.data[neg].toarray(),dtype=torch.float32),
+                        adjs,
+                        None)
+        else:
+            out = (torch.tensor(self.data[n_id].toarray(),dtype=torch.float32),
+                        torch.tensor(self.data[pos].toarray(),dtype=torch.float32),
+                        torch.tensor(self.data[neg].toarray(),dtype=torch.float32),
+                        adjs,
+                        torch.tensor(self.cluster_labels[n_id[:batch_size]],dtype=torch.long))
 
         out = self.transform(*out) if self.transform is not None else out
         return out

@@ -7,6 +7,7 @@ from typing import Iterable
 from torch.distributions import Normal,Poisson
 from torch.distributions import Normal, kl_divergence as kl
 import pytorch_lightning as pl
+import torchmetrics
 
 def reparameterize_gaussian(mu, var):
     return Normal(mu, var.sqrt()).rsample()
@@ -27,11 +28,10 @@ class SAGE(pl.LightningModule):
         num_layers:int=2,
         normalize:bool=True,
         apply_normal_latent:bool=False,
-        supervised_decoder:bool=False,
+        supervised:bool=False,
         output_channels:int=448,
-        supervised_loss:str= 'matmul', # choose 
-        ):
 
+        ):
 
         super().__init__()
         self.save_hyperparameters()
@@ -40,8 +40,7 @@ class SAGE(pl.LightningModule):
         self.normalize = normalize
         self.convs = torch.nn.ModuleList()
         self.apply_normal_latent = apply_normal_latent
-        self.supervised_decoder = supervised_decoder
-        self.supervised_loss = supervised_loss
+        self.supervised= supervised
 
         for i in range(num_layers):
             in_channels = in_channels if i == 0 else hidden_channels
@@ -55,13 +54,10 @@ class SAGE(pl.LightningModule):
             self.mean_encoder = nn.Linear(hidden_channels, hidden_channels)
             self.var_encoder = nn.Linear(hidden_channels, hidden_channels)
 
-        if self.supervised_decoder:
-            if self.supervised_loss != 'kl-poisson':
-                self.decoder = DecoderSCVI(hidden_channels,output_channels,softmax=False)   
-            else:
-                self.decoder = DecoderSCVI(hidden_channels,output_channels,softmax=False)
+        if self.supervised:
+            self.classifier = Classifier(n_input=hidden_channels,n_labels=output_channels,softmax=False)
+            self.train_acc = torchmetrics.Accuracy()
                 
-        
     def neighborhood_forward(self,x,adjs):
         x = torch.log(x + 1)
         for i, (edge_index, _, size) in enumerate(adjs):
@@ -82,7 +78,7 @@ class SAGE(pl.LightningModule):
 
         return x, q_m, q_v
 
-    def forward(self,x,pos_x,neg_x,adjs,ref):
+    def forward(self,x,pos_x,neg_x,adjs,classes=None):
         # Embedding sampled nodes
         z, q_m, q_v = self.neighborhood_forward(x,adjs)
         # Embedding for neighbor nodes of sample nodes
@@ -106,25 +102,17 @@ class SAGE(pl.LightningModule):
             n_loss = n_loss + kl_divergence_z.mean()
         
         # Add loss if trying to reconstruct cell types
-        if self.supervised_decoder:
-            px =  self.decoder(z)
-            if self.supervised_loss == 'kl-poisson':
-                supervised_loss = 0
-                #supervised_loss = kl(Poisson(px),Poisson(torch.log(ref+1))).sum(dim=1).mean()
-            elif self.supervised_loss == 'cosine-similarity':
-                cos= 0
-                for c in range(px.shape[0]):
-                    cos = torch.nn.functional.cosine_similarity(px[c:c+1,:],ref.T)
-                    cos = - cos.max() - cos.var()
-                    cos += cos
-                cos = cos/px.shape[0]
-                supervised_loss = cos
-            elif self.supervised_loss == 'matmul':
-                supervised_loss = - F.log_softmax(torch.matmul(px,ref),dim=1).sum(dim=-1).mean()/1000
-
-            n_loss += supervised_loss
+        if type(classes) != type(None):
+            prediction = self.classifier(z)
+            cce = torch.nn.CrossEntropyLoss()
+            classifier_loss = cce(prediction,classes)
+            #self.train_acc(y_hat.softmax(dim=-1), y)
+            n_loss += classifier_loss
             #print(supervised_loss)
-            self.log('Autoencoder Loss',supervised_loss)
+            self.log('Classifier Loss',classifier_loss)
+            self.train_acc(prediction.softmax(dim=-1),F.one_hot(classes,num_classes=prediction.shape[1]))
+            self.log('train_acc', self.train_acc, prog_bar=True, on_step=False,
+                 on_epoch=True)
             
         return n_loss
 
@@ -133,8 +121,16 @@ class SAGE(pl.LightningModule):
         return optimizer
 
     def training_step(self, batch, batch_idx):
-        x,pos,neg,adjs,c = batch
-        loss= self(x,pos,neg,adjs,c)
+        x,pos,neg,adjs,c = batch['unlabelled']
+        loss = self(x,pos,neg,adjs,c)
+
+        labelled = batch['labelled']
+        if type(labelled) != type(None):
+            x_lab, pos_lab, neg_lab, adjs, c = labelled
+            loss_labelled = self(x_lab,pos_lab,neg_lab,adjs,c)
+            self.log('labelled_loss',loss_labelled)
+            loss += loss_labelled
+        
         self.log('train_loss', loss)
         return loss
 
@@ -178,3 +174,35 @@ class DecoderSCVI(nn.Module):
         px = self.px_decoder(z)
         px= self.px_scale_decoder(px)
         return px
+
+class Classifier(nn.Module):
+    """Basic fully-connected NN classifier
+    """
+
+    def __init__(
+        self,
+        n_input,
+        n_hidden=24,
+        n_labels=5,
+        n_layers=1,
+        dropout_rate=0.1,
+        softmax=True,
+        use_batch_norm: bool=True,
+        bias: bool=True,
+        use_relu:bool=True,
+    ):
+        super().__init__()
+        layers = [nn.Sequential(
+                            nn.Linear(n_input , n_hidden, bias=bias),
+                            nn.BatchNorm1d(n_hidden, momentum=0.01, eps=0.001) if use_batch_norm else None,
+                            nn.ReLU() if use_relu else None,
+                            nn.Dropout(p=dropout_rate) if dropout_rate > 0 else None),
+            nn.Linear(n_hidden, n_labels),]
+
+        if softmax:
+            layers.append(nn.Softmax(dim=-1))
+
+        self.classifier = nn.Sequential(*layers)
+
+    def forward(self, x):
+        return self.classifier(x)
