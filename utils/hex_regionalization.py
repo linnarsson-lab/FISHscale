@@ -22,7 +22,8 @@ class Regionalize(Iteration):
     """Class for regionalization of multidimensional 2D point data.
 
     """
-    def __init__(self, 
+    #this was __init__
+    def NOPE(self, 
         filename: str,
         x: str = 'r_px_microscope_stitched',
         y: str = 'c_px_microscope_stitched',
@@ -68,14 +69,7 @@ class Regionalize(Iteration):
         self.pixel_size = self.ureg(pixel_size)
         self.pixel_area = self.pixel_size ** 2
 
-    def vp(self, *args):
-        """Function to print output if verbose mode is True
-        """
-        if self.verbose:
-            for arg in args:
-                print('    ' + arg)
-
-    def make_hexbin(self, spacing: float, min_count: int) -> Tuple[Any, np.ndarray, Any]:
+    def hexbin_make(self, spacing: float, min_count: int) -> Tuple[Any, np.ndarray, Any]:
         """
         Bin 2D point data with hexagonal bins.
 
@@ -101,22 +95,19 @@ class Regionalize(Iteration):
         n_genes = len(self.unique_genes)
             
         #Get canvas size
-        max_x = self.x.max()
-        min_x = self.x.min()
-        max_y = self.y.max()
-        min_y = self.y.min()
+        max_x = self.x_max
+        min_x = self.x_min
+        max_y = self.y_max
+        min_y = self.y_min
 
         #Determine largest axes and use this to make a hexbin grid with square extent.
         #If it is not square matplotlib will stretch the hexagonal tiles to an asymetric shape.
-        xlength = max_x - min_x
-        ylength = max_y - min_y
-
-        if xlength > ylength:
+        if self.x_extend > self.y_extend:
             #Find number of points   
             n_points = math.ceil((max_x - min_x) / spacing)
             #Correct x range to match whole number of tiles
             extent = n_points * spacing
-            difference_x = extent - xlength
+            difference_x = extent - self.x_extend
             min_x = min_x - (0.5 * difference_x)
             max_x = max_x + (0.5 * difference_x)
             # *
@@ -130,7 +121,7 @@ class Regionalize(Iteration):
             y_spacing = (spacing * np.sqrt(3)) / 2
             n_points_y = int(xlength / y_spacing)
             extent_y = n_points_y * y_spacing
-            difference_y = extent_y - ylength
+            difference_y = extent_y - self.y_extend
             min_y = min_y - (0.5 * difference_y)
             max_y = max_y + (0.5 * difference_y)
 
@@ -139,13 +130,13 @@ class Regionalize(Iteration):
             n_points = math.ceil((max_y - min_y) / spacing)
             #Correct y range to match whole number of tiles
             extent = n_points * spacing
-            difference_y = extent - ylength
+            difference_y = extent - self.y_extend
             min_y = min_y - (0.5 * difference_y)
             max_y = max_y + (0.5 * difference_y)
             #Correct x range to match y range
             #because the x dimension is driving for the matplotlib hexbin function 
             ylength = max_y - min_y
-            difference_x = ylength - xlength
+            difference_x = ylength - self.x_extend
             min_x = min_x - (0.5 * difference_x)
             max_x = max_x + (0.5 * difference_x)
             #Adjust the y scale to match the number of tiles in x
@@ -158,9 +149,10 @@ class Regionalize(Iteration):
             max_y = max_y + (0.5 * difference_y)
 
         #Perform hexagonal binning for each gene
-        for i, (g, x, y) in enumerate(self.xy_groupby_gene_generator()):
+        for i, g in enumerate(self.unique_genes):
+            data = self.get_gene(g)
             #Make hexagonal binning of the data
-            hb = hexbin(x, y, gridsize=int(n_points), 
+            hb = hexbin(data.x, data.y, gridsize=int(n_points), 
                         extent=[min_x, max_x, min_y, max_y], visible=False)
             #For the first iteration initiate the output data
             if i == 0:
@@ -178,6 +170,8 @@ class Regionalize(Iteration):
             else:
                 df_hex.loc[g] = hb.get_array()
 
+        del data
+        
         #Filter on number of molecules
         filt = df_hex.sum() >= min_count
         df_hex = df_hex.loc[:, filt]
@@ -203,13 +197,11 @@ class Regionalize(Iteration):
         """
 
         if mode == 'log':
-            result = np.log(df_hex + 1)
+            result = self.log_norm(df_hex)
         elif mode == 'sqrt':
-            result = np.sqrt(df_hex)
+            result = self.sqrt_norm(df_hex)
         elif mode == 'z':
-            mean = df_hex.mean(axis=1)
-            std = df_hex.std(axis=1)
-            result = (df_hex.subtract(mean, axis=0)).divide(std, axis=0)
+            result = self.z_norm(df_hex)
         else:
             raise Exception(f'Invalid "mode": {mode}')
 
@@ -378,7 +370,7 @@ class Regionalize(Iteration):
         else:
             return results[-1]
 
-    def make_cluster_mean(self, df_hex: Any, labels: np.ndarray) -> Any:
+    def cluster_mean_make(self, df_hex: Any, labels: np.ndarray) -> Any:
         """Calculate cluster mean.
 
         For a DataFrame with samples in columns, calculate the mean expression
@@ -404,7 +396,7 @@ class Regionalize(Iteration):
 
         return cluster_mean
 
-    def make_cluster_sum(self, df_hex, labels: np.ndarray) -> Any: 
+    def cluster_sum_make(self, df_hex, labels: np.ndarray) -> Any: 
         """Calculate cluster sum.
 
         For a DataFrame with samples in columns, calculate the sum expression
@@ -454,7 +446,7 @@ class Regionalize(Iteration):
                                     [x+0.5*s, y - delta_y],])
         return neighbour_coord
 
-    def get_rotation(self, x1: float, y1: float, x2: float, y2: float) -> float:
+    def get_rotation_deg(self, x1: float, y1: float, x2: float, y2: float) -> float:
         """Calculates the rotation of a vector between 2 points and the origin.
 
         Args:
@@ -473,6 +465,38 @@ class Regionalize(Iteration):
         angle = np.rad2deg(math.atan2(dy, dx))
 
         return angle
+    
+    def hex_get_shared_corners(self, angle, corner_dict, x=0, y=0):
+        """
+        Get the corners that are shared with a neighbouring tile.
+
+        Input:
+        `angle`(int): Angle the centroid of the neighbouring tile makes
+            with the tile of interest, relative to the origin at (0,0)
+            Uses the "shared_corner" dictionary.
+        `x`(float): centroid x coordinate of tile of interest.
+        `y`(float): centroid y coordinate of tile of interest.
+        Returns:
+        Coordinates of shared corner points.
+
+        """
+        #Dictionary coupling angle with neighbour to angle of shared corners
+        shared_corner = {0: [-30, 30],
+                        60: [30, 90],
+                        120: [90, 150],
+                        180: [150, -150],
+                        -120: [-150, -90],
+                        -60: [-90, -30]}
+        
+        shared_angles = shared_corner[angle]        
+        corner1 = (corner_dict[shared_angles[0]]) + [x, y]
+        corner2 = (corner_dict[shared_angles[1]]) + [x, y]
+        return corner1, corner2
+    
+    def find_nearest_value(self, array, value):
+        
+        idx = (np.abs(array - value)).argmin()
+        return array[idx]
 
     def hex_region_boundaries(self, hex_coord: np.ndarray, hexagon_shape: Any, hexbin_spacing: float, labels: np.ndarray, 
                               decimals: int = 7) -> dict:
@@ -496,36 +520,12 @@ class Regionalize(Iteration):
                 decimals. Default suggestion: 7
 
         Returns:
-            dict: Dictunary with for each label the boundary point of the 
+            dict: Dictionary with for each label the boundary point of the 
                 hexagonal tile as Numpy Array. 
         
         """
-        #Dictionary coupling angle with neighbour to angle of shared corners
-        shared_corner = {0: [-30, 30],
-                        60: [30, 90],
-                        120: [90, 150],
-                        180: [150, -150],
-                        -120: [-150, -90],
-                        -60: [-90, -30]}
-
-        def get_shared_corners(angle, x=0, y=0):
-            """
-            Get the corners that are shared with a neighbouring tile.
-
-            Input:
-            `angle`(int): Angle the centroid of the neighbouring tile makes
-                with the tile of interest, relative to the origin at (0,0)
-                Uses the "shared_corner" dictionary.
-            `x`(float): centroid x coordinate of tile of interest.
-            `y`(float): centroid y coordinate of tile of interest.
-            Returns:
-            Coordinates of shared corner points.
-
-            """
-            shared_angles = shared_corner[angle]
-            corner1 = corner[shared_angles[0]] + [x, y]
-            corner2 = corner[shared_angles[1]] + [x, y]
-            return corner1, corner2
+        angle_array_corners = np.array([30, 90, 150, -150, -90, -30])
+        angle_array_neighbours = np.array([0, 60, 120, 180, -120, -60])
 
         #make result dictionary
         boundary_points = {l:[] for l in np.unique(labels)}
@@ -535,7 +535,8 @@ class Regionalize(Iteration):
         #Matplotlib Polygon.
         corner = {}
         for c in hexagon_shape[0].vertices[:6]: #There are points in the polygon for the closing vertice.
-            angle = round(self.get_rotation(0,0, c[0], c[1]))
+
+            angle = self.find_nearest_value(angle_array_corners, self.get_rotation_deg(0,0, c[0], c[1]))
             corner[angle] = c
 
         #Find neighbours
@@ -553,14 +554,15 @@ class Regionalize(Iteration):
                 own_coord = hex_coord[i]
                 neighbour_coords = hex_coord[indices]
                 #Find the angles of the neigbouring tiles
-                angles = np.array([round(self.get_rotation(own_coord[0], own_coord[1], c[0], c[1])) for c in neighbour_coords])
+                angles = np.array([self.find_nearest_value(angle_array_neighbours, self.get_rotation_deg(own_coord[0], own_coord[1], c[0], c[1])) for c in neighbour_coords])
+
                 #Iterate over all possible neighbour angles
                 to_add = []
                 for a in [0, 60, 120, 180, -120, -60]:
                     #Check if a neighbour exists
                     if a in angles:
                         angle_index = np.where(angles == a)
-                        #Check of this neighbour is of a different identity
+                        #Check if this neighbour is of a different identity
                         if neighbour_identity[angle_index] != l:
                             to_add.append(a)
                     #No there is no neigbour at that angle, this is a border tile   
@@ -568,7 +570,7 @@ class Regionalize(Iteration):
                         to_add.append(a)
                 #Get the shared corner point for neighbours that are missing or have a different identity      
                 for a2 in to_add:
-                    c1, c2 = get_shared_corners(a2, x=own_coord[0], y=own_coord[1])
+                    c1, c2 = self.hex_get_shared_corners(a2, corner, x=own_coord[0], y=own_coord[1])
                     boundary_points[l].append(c1)
                     boundary_points[l].append(c2)
                     #Add intermediate point to help making circles
@@ -581,7 +583,7 @@ class Regionalize(Iteration):
 
         return boundary_points
 
-    def order_points(self, boundary_points: dict) -> dict:
+    def polygon_order_points(self, boundary_points: dict) -> dict:
         """Order set of point for making polygons.
 
         This function makes a network out of a set of points, and uses this to 
@@ -629,7 +631,7 @@ class Regionalize(Iteration):
         
         return results
 
-    def smooth_points(self, ordered_points: dict, degree: int=2) -> dict:
+    def polygon_smooth_points(self, ordered_points: dict, degree: int=2) -> dict:
         """Smooth polygon point using skimage.measure.subdivide_polygon().
 
         This is not a very strong smoothing on hexagon border data. 
@@ -719,7 +721,7 @@ class Regionalize(Iteration):
         
         return results
 
-    def make_geoSeries(self, polygons: dict) -> Any:
+    def geoSeries_make(self, polygons: dict) -> Any:
         """Convert dictionary with shapely polygons to geoPandas GeoSeries.
 
         Args:
@@ -733,7 +735,7 @@ class Regionalize(Iteration):
         """
         return gp.GeoSeries(polygons, index=list(polygons.keys()))
 
-    def make_geoDataFrame(self, data: np.ndarray, index: Union[List[str], np.ndarray], 
+    def geoDataFrame_make(self, data: np.ndarray, index: Union[List[str], np.ndarray], 
                           columns: Union[List[str], np.ndarray], geometry: Any) -> Any:
         """Construct geoDataFrame. 
 
@@ -751,7 +753,7 @@ class Regionalize(Iteration):
         gdf = gp.GeoDataFrame(data=data, index=index, columns=columns, geometry=geometry)
         return gdf
 
-    def get_bounding_box(self, polygon: np.ndarray) -> np.ndarray:
+    def bounding_box_get(self, polygon: np.ndarray) -> np.ndarray:
         """Get the bounding box of a single polygon.
 
         Args:
@@ -767,7 +769,7 @@ class Regionalize(Iteration):
         xmax, ymax = polygon.max(axis=0)
         return np.array([[xmin, ymin], [xmax, ymax]])
 
-    def make_bounding_box(self, polygon_points: dict) -> dict:
+    def bounding_box_make(self, polygon_points: dict) -> dict:
         """Find bounding box coordinates of dictionary with polygon points.
 
         Args:
@@ -786,7 +788,7 @@ class Regionalize(Iteration):
             results[l] = []
             #Loop over polygon list
             for poly in polygon_points[l]:
-                results[l].append(self.get_bounding_box(poly))
+                results[l].append(self.bounding_box_get(poly))
         return results
 
     def bbox_filter_points(self, bbox: np.ndarray, points: np.ndarray) -> np.ndarray:
@@ -833,34 +835,37 @@ class Regionalize(Iteration):
         """
         #Make base geopandas dataframe
         polygons = self.to_Shapely_polygons(polygon_points)
-        gs = self.make_geoSeries(polygons)
+        gs = self.geoSeries_make(polygons)
         labels = list(polygon_points.keys())
-        gdf = self.make_geoDataFrame(data=np.zeros((len(labels), len(self.unique_genes)), dtype='int64'), index=labels, 
+        gdf = self.geoDataFrame_make(data=np.zeros((len(labels), len(self.unique_genes)), dtype='int64'), index=labels, 
                                             columns=self.unique_genes,  geometry=gs)
 
         #Recount which points fall in which (multi-)polygon
-        df = pd.DataFrame(data = self.gene, columns = ['gene'])
-        for l, filt in inside_multi_polygons(polygon_points, np.column_stack((self.x, self.y))):
+        df = pd.DataFrame(data = self.df.g, columns = ['gene'])
+        points = self.df.loc[:, ['x', 'y']].compute().to_numpy() #Loading all points in RAM
+        for l, filt in inside_multi_polygons(polygon_points, points): 
             #get the sum of every gene and asign to gene count for that area. 
             gdf.loc[l, self.unique_genes] = df[filt].groupby('gene').size() 
+        del points
 
         #Normalize data    
         if normalize:
-            area_in_pixels = gdf.area
+            area_in_original_unit = gdf.area
             conversion = self.area_scale.to(self.ureg(normalize_unit) ** 2)
-            area_in_desired_unit = area_in_pixels * conversion.magnitude
-            gdf.iloc[:,:-1] = gdf.iloc[:,:-1].divide(area_in_desired_unit, axis=0)            
+            area_in_desired_unit = area_in_original_unit * conversion.magnitude
+            gdf.iloc[:,:-1] = gdf.iloc[:,:-1].divide(area_in_desired_unit, axis=0)  
+            self.vp(f'Points per area normalized per {conversion.units}')          
 
         return gdf
 
-    def run_regionalization(self, spacing: float, min_count: int,
+    def regionalization_run(self, spacing: float, min_count: int,
                             normalization_mode: str = 'log', 
                             n_components: int = 100, clust_dist_threshold: float = 70, clust_neighbor_rings: int = 1,
                             smooth_neighbor_rings: int = 1, smooth_cycles: int = 1,
                             boundary_decimals: int = 7,
                             smooth_polygon: bool = False, smooth_polygon_degree:int = 7, 
                             recount: bool = False,
-                            area_normalize: bool = True, area_normalize_unit: str = 'micrometer') -> None:
+                            area_normalize: bool = True, area_normalize_unit: str = 'millimeter') -> None:
         """Run the regionalization pipeline.
 
         Chains all functions to go from raw point data to regions. Use the
@@ -881,7 +886,7 @@ class Regionalize(Iteration):
                 transform, square root transform, or z scores respectively. 
                 Defaults to 'log'.
             n_components (int, optional): Number of PCA components to use for
-                clustering. Defaults to 100.
+                clustering. First component is not included. Defaults to 100.
             clust_dist_threshold (float, optional): Distance threshold for 
                 Scipy Agglomerative clustering. Defaults to 70.
             clust_neighbor_rings (int, optional): Number of rings around a 
@@ -921,45 +926,46 @@ class Regionalize(Iteration):
 
         """
         #Bin the data with a hexagonal grid
-        df_hex, hex_coord, hexagon_shape = self.make_hexbin(spacing, min_count)
+        df_hex, hex_coord, hexagon_shape = self.hexbin_make(spacing, min_count)
         #Normalize data
         df_hex_norm = self.hexbin_normalize(df_hex, mode=normalization_mode)
         #Calculate PCA
         pc = self.hexbin_PCA(df_hex_norm)
         #Cluster dataset
-        labels = self.clust_hex_connected(pc[:,:n_components], hex_coord, distance_threshold=clust_dist_threshold, neighbor_rings=clust_neighbor_rings)
+        labels = self.clust_hex_connected(pc[:,1:n_components+1], hex_coord, distance_threshold=clust_dist_threshold, neighbor_rings=clust_neighbor_rings)
         #Spatially smooth cluster labels
         labels = self.smooth_hex_labels(hex_coord, labels, smooth_neighbor_rings, smooth_cycles, n_jobs=1)
         #Get boundary points of regions
         boundary_points = self.hex_region_boundaries(hex_coord, hexagon_shape, spacing, labels, decimals = boundary_decimals)
         #Order boundary point for making polygons
-        ordered_points = self.order_points(boundary_points)
+        ordered_points = self.polygon_order_points(boundary_points)
         #Smooth boundary points
         if smooth_polygon == True:
-            ordered_points = self.smooth_points(ordered_points, degree = smooth_polygon_degree)
+            ordered_points = self.polygon_smooth_points(ordered_points, degree = smooth_polygon_degree)
             if recount == False:
                 recount = True
-                self.vp('Recount set to True after "Smooth_polygon" was set to True.')
+                print('Recount set to True after "Smooth_polygon" was set to True.')
         #Recount points in polygons and make geoDataFrame
         if recount == True:
-            self.regions = self.point_in_region(ordered_points, normalize=area_normalize,normalize_unit=area_normalize_unit)
+            self.regions = self.point_in_region(ordered_points, normalize=area_normalize, normalize_unit=area_normalize_unit)
             self.vp(f'{self.dataset_name} regionalized, result can be found in "self.regions"')
         #make geoDataFrame with region data
         else:
-            sum_counts = self.make_cluster_sum(df_hex, labels).T #Transpose because geopandas wants regions in index
+            sum_counts = self.cluster_sum_make(df_hex, labels).T #Transpose because geopandas wants regions in index
             shapely_polygons = self.to_Shapely_polygons(ordered_points)
-            new_geoseries = self.make_geoSeries(shapely_polygons)
+            new_geoseries = self.geoSeries_make(shapely_polygons)
 
             if area_normalize:
-                area_in_pixels = new_geoseries.area
+                area_in_original_unit = new_geoseries.area
                 conversion = self.area_scale.to(self.ureg(area_normalize_unit) ** 2)
-                area_in_desired_unit = area_in_pixels * conversion.magnitude
+                area_in_desired_unit = area_in_original_unit * conversion.magnitude
                 sum_counts = sum_counts.divide(area_in_desired_unit, axis=0)
+                self.vp(f'Points per area normalized per {conversion.units}')
 
-            gdf = self.make_geoDataFrame(data = sum_counts.to_numpy(), index = sum_counts.index, 
+            gdf = self.geoDataFrame_make(data = sum_counts.to_numpy(), index = sum_counts.index, 
                                                  columns = sum_counts.columns, geometry=new_geoseries)
             self.regions = gdf
-            self.vp(f'{self.dataset_name} regionalized, result can be found in "self.regions"')
+            self.vp(f'{self.dataset_name} regionalized, result can be found in "self.regions" as GeoPandas dataframe. ')
 
             
 

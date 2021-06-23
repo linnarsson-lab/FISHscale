@@ -2,9 +2,116 @@ import pandas as pd
 import numpy as np
 from typing import Generator, Tuple
 from functools import lru_cache
-from joblib import Parallel, delayed
 
 class Iteration:
+
+    def get_gene(self, gene: str, include_z:bool = False, include_other:list = []):
+        """Get the xyz coordinates of points of a queried gene.
+        
+        This causes the data to get loaded in RAM.
+
+        Args:
+            gene (str): Name of gene.
+            include_z (bool, optional): True if Z coordinate should be 
+                returned. Defaults to False
+            include_other (list, optional): List of other column headers to 
+                return. Defaults to [].
+
+        Returns:
+            [pd.DataFrame]: Pandas Dataframe with coordinates.
+        """
+        gene_i= self.gene_index[gene]
+        
+        if isinstance(include_other, str):
+            include_other = [include_other]
+
+        columns = ['x', 'y']
+        if include_z:
+            columns.append('z')
+        for c in include_other:
+            columns.append(c)
+        
+        return self.df.get_partition(gene_i).loc[:, columns].compute()
+    
+    def get_gene_sample(self, gene: str, include_z = False, 
+                        include_other:list = [], frac: float=0.1, 
+                        minimum: int=None, random_state: int=None):
+        """Get the xyz coordinates of a sample of points of a queried gene.
+        
+        This causes the data to get loaded in RAM.
+
+        Args:
+            gene (str): Name of gene.
+            include_z (bool, optional): True if Z coordinate should be 
+                returned. Defaults to False
+            include_other (list, optional): List of other column headers to 
+                return. Defaults to [].
+            frac (float, optional): Fraction of the points to load. 
+                Defaults to 0.1 which is 10% of the data.
+            minimum (int, optional): If minimum is given the fraction will be 
+                adapted to return at least the minimum number of points. if 
+                there are less points than the minimum it returns all. 
+                Defaults to None.
+            random_state (int, optional): Random state for the sampling to 
+                return the same points over multiple iterations.
+                Defaults to None.
+                
+        Returns:
+            [pd.DataFrame]: Pandas Dataframe with coordinates.
+        """
+        if minimum != None:
+            n_points = self.gene_n_points[gene]
+            if n_points < minimum:
+                frac = 1
+            elif frac * n_points < minimum:
+                frac = minimum / n_points
+        
+        gene_i= self.gene_index[gene]
+        
+        columns = ['x', 'y']
+        if include_z:
+            columns.append('z')
+        for c in include_other:
+            columns.append(c)
+            
+        return self.df.get_partition(gene_i).loc[:, columns].sample(frac=frac, random_state=random_state).compute()
+    
+    
+    
+    
+
+    
+    
+    
+    
+class _old_stuff:
+    
+    def _group_by(self, by='g'):
+        return self.df.groupby(by).apply(lambda g: np.array([g.x, g.y]).T, meta=('float64')).compute()
+    
+    
+    def make_gene_coordinates(self, save_z = False) -> None:
+        """Make a dictionary with point coordinates for each gene.
+
+        Output will be in self.gene_coordinates. Output will be cached so that
+        this function can be called many times but the calculation is only
+        performed the first time.
+
+        """
+        if self._offset_flag == True:
+                   
+            if save_z:
+                self.gene_coordinates = {g: np.column_stack((xy, np.array([self.z_offset]*xy.shape[0]))).astype('float64') for g, xy in self._group_by().to_dict().items()}
+                
+            else:
+                self.gene_coordinates = self._group_by().to_dict()
+                
+            self._offset_flag = False
+            
+        else:
+            print('Gene coodinates already calculated. skipping')
+            pass
+    
 
     def xy_groupby_gene_generator(self, gene_order: np.ndarray = None) -> Generator[Tuple[str, np.ndarray, np.ndarray], None, None]:
         """Generator function that groups XY coordinates by gene.

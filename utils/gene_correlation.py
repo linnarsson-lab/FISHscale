@@ -12,20 +12,17 @@ class GeneCorr:
         """Make gene coordinate and gene KDTree dictionaries.
 
         Results stored as:
-        "self.gene_coordinates" With all points per gene.
         "self.gene_KDTree" With a scipy.spatial.KDTree for the point of each
         gene. 
         
         """
-        self.make_gene_coordinates()
-
         gene_KDTree = {}
-        for gene in self.gene_coordinates.keys():
-            gene_KDTree[gene] = KDTree(self.gene_coordinates[gene])
+        for gene in self.unique_genes:
+            gene_KDTree[gene] = KDTree(self.get_gene(gene))
 
         self.gene_KDTree = gene_KDTree
 
-    def CBC(self, geneA: str, geneB: str, radius: float, gene_coordinates: dict, gene_KDTree: dict, workers: int=-1) -> Tuple[Any, Any]:
+    def CBC(self, geneA: str, geneB: str, radius: float, workers: int=-1) -> Tuple[Any, Any]:
         """Calculate coordinate based colocalization.
 
         Malkusch, S., Endesfelder, U., Mondry, J. et al. Coordinate-based 
@@ -38,16 +35,14 @@ class GeneCorr:
         Args:
             geneA (str): Name of first gene.
             geneB (str): name of second gene.
+            geneA (pandas.core.frame.DataFrame): Dataframe with x and y 
+                coordinates for geneA.
+            geneB (pandas.core.frame.DataFrame): Dataframe with x and y 
+                coordinates for geneB.
             radius (float): Radius within to look for neighbouring spots. The 
                 algorithm counts the number of spots of gene A and gene B 
                 within the radius for all spots of gene A and gene B. The plot
                 has a black bar for the size of the radius.
-            gene_coordinates (dict): Dictionary with gene names as keys and a
-                Numpy array in the shape (N, 2) with the point X and Y 
-                coordinates in the columns.
-            gene_KDTree (dict): Dictionary with gene names as keys and 
-                scipy.spatial.KDTree made on the coordinates of the spots as 
-                values.
             workers (int, optional): Number of processes for the scipy KDTree 
                 .query_ball_point() function. -1 is all processors. 
                 Defaults to -1.
@@ -57,37 +52,40 @@ class GeneCorr:
                 correlation of geneA to geneB, and the second the reverse. 
                 Each object contains the r value and a p value.
         """
-
         #Area of the chosen radius
         area = np.pi * (radius**2)
+        
+        #Get the points
+        geneA_points = self.get_gene(geneA)
+        geneB_points = self.get_gene(geneB)
 
         #Calculate maximum radius to fit all spots and the max area for that radius
-        max_radius_A_x = abs(gene_coordinates[geneA][:, 0].min() - gene_coordinates[geneA][:, 0].max())
-        max_radius_A_y = abs(gene_coordinates[geneA][:, 1].min() - gene_coordinates[geneA][:, 1].max())
+        max_radius_A_x = abs(geneA_points.x.min() - geneA_points.x.max())
+        max_radius_A_y = abs(geneA_points.y.min() - geneA_points.y.max())
         max_radius_A = max_radius_A_x if max_radius_A_x > max_radius_A_y else max_radius_A_y
         max_area_A = np.pi * (max_radius_A**2)
 
-        max_radius_B_x = abs(gene_coordinates[geneB][:, 0].min() - gene_coordinates[geneB][:, 0].max())
-        max_radius_B_y = abs(gene_coordinates[geneB][:, 1].min() - gene_coordinates[geneB][:, 1].max())
+        max_radius_B_x = abs(geneB_points.x.min() - geneB_points.x.max())
+        max_radius_B_y = abs(geneB_points.y.min() - geneB_points.y.max())
         max_radius_B = max_radius_B_x if max_radius_B_x > max_radius_B_y else max_radius_B_y
         max_area_B = np.pi * (max_radius_B**2)
 
         #Get max number of dots
-        n_spots_A = gene_coordinates[geneA].shape[0]
-        n_spots_B = gene_coordinates[geneB].shape[0]
+        n_spots_A = self.gene_n_points[geneA]
+        n_spots_B = self.gene_n_points[geneB]
 
         #Get the trees
-        treeA = gene_KDTree[geneA]
-        treeB = gene_KDTree[geneB]
+        treeA = self.gene_KDTree[geneA]
+        treeB = self.gene_KDTree[geneB]
 
         #Get number of neighbours of A for each spot in A
-        AA = treeA.query_ball_point(gene_coordinates[geneA], radius,return_length=True, workers=workers)
+        AA = treeA.query_ball_point(geneA_points, radius,return_length=True, workers=workers)
         #get number of neighbours of B for each spot in A
-        AB = treeB.query_ball_point(gene_coordinates[geneA], radius,return_length=True, workers=workers)
+        AB = treeB.query_ball_point(geneA_points, radius,return_length=True, workers=workers)
         #get number of neighbours of B for each spot in B
-        BB = treeB.query_ball_point(gene_coordinates[geneB], radius,return_length=True, workers=workers)
+        BB = treeB.query_ball_point(geneB_points, radius,return_length=True, workers=workers)
         #get number of neighbours of A for each spot in B
-        BA = treeA.query_ball_point(gene_coordinates[geneB], radius,return_length=True, workers=workers)
+        BA = treeA.query_ball_point(geneB_points, radius,return_length=True, workers=workers)
 
         #Calculate coordinate-based colocalization. corrected for area and total density. 
         DAA = (AA / area) * (max_area_A / n_spots_A)
@@ -102,7 +100,7 @@ class GeneCorr:
         
         return cor_AB, cor_BA
 
-    def CBC_matrix(self, radius: float, gene_coordinates: dict, gene_KDTree: dict, workers: int=-1) -> Tuple[Any, Any]:
+    def CBC_matrix(self, radius: float, workers: int=-1) -> Tuple[Any, Any]:
         """Calculate coordinate based colocalization for all genes.
 
         Malkusch, S., Endesfelder, U., Mondry, J. et al. Coordinate-based 
@@ -114,12 +112,6 @@ class GeneCorr:
             radius (float): Radius within to look for neighbouring spots. The 
                 algorithm counts the number of spots of gene A and gene B 
                 within the radius for all spots of gene A and gene B.
-            gene_coordinates (dict): Dictionary with gene names as keys and a
-                Numpy array in the shape (N, 2) with the point X and Y 
-                coordinates in the columns.
-            gene_KDTree (dict): Dictionary with gene names as keys and 
-                scipy.spatial.KDTree made on the coordinates of the spots as 
-                values.
             workers (int, optional): Number of processes for the scipy KDTree 
                 .query_ball_point() function. -1 is all processors. 
                 Defaults to -1.
@@ -130,9 +122,11 @@ class GeneCorr:
             values.
 
         """
-
+        #Make sure self.gene_KDTree is made.
+        self.make_gene_KDTree()
+        
         #make empty matrices to put the r and p values in.
-        genes = sorted(gene_coordinates.keys())
+        genes = self.unique_genes
         n_genes = len(genes)
         cor = pd.DataFrame(np.zeros((n_genes, n_genes)), index = genes, columns = genes)
         p = pd.DataFrame(np.zeros((n_genes, n_genes)), index = genes, columns = genes)
@@ -143,7 +137,7 @@ class GeneCorr:
         for i, (geneA, geneB) in enumerate(combinations):
             print(f'Radius {radius}: {i}/{combinations.shape[0]}             ', end='\r')
             #Get the spearman r and p value for gene A versus gene B and gene B versus gene A
-            cor_AB, cor_BA = self.CBC(geneA, geneB, radius, gene_coordinates, gene_KDTree, workers=workers)
+            cor_AB, cor_BA = self.CBC(geneA, geneB, radius, workers=workers)
             #Place in matrix
             if geneA == geneB:
                 cor.loc[geneA, geneB] = cor_AB[0]
@@ -179,11 +173,10 @@ class GeneCorr:
         Returns:
             Tuple[Any, Any]: [description]
         """
-
-        #Make sure "self.gene_coordinates" and "self.gene_KDTree" are made
+        #Make sure self.gene_KDTree is made.
         self.make_gene_KDTree()
         
-        return self.CBC_matrix(radius, self.gene_coordinates, self.gene_KDTree, workers)
+        return self.CBC_matrix(radius, workers)
 
 
     def gene_corr_hex(self, method: str='spearman', df_hex: Any=None, spacing: float=None, min_count: int=1) -> Any:

@@ -5,7 +5,7 @@ from math import ceil
 
 
 class HexBin(object):
-    def make_hexbin(self, spacing, name=None,min_count=1, background=False):
+    def make_hexbin(self, spacing: int, name: str=None, min_count: int=1, background: bool=False):
         """
         Bin 2D expression data into hexagonal bins.
         
