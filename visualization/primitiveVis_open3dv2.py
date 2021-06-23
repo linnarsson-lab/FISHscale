@@ -73,7 +73,7 @@ class Window:
             self.pass_multi_data()
             print('Data Loaded')
 
-        elif str(self.dataset.__class__) == str(FISHscale.utils.dataset.MultiDataset):
+        elif str(self.dataset.__class__) == str(FISHscale.utils.MultiDataset):
             print('MultiDataset')
             self.dataset = dataset
             self.dic_pointclouds ={'g':self.dataset.unique_genes}
