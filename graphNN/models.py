@@ -202,7 +202,7 @@ class Classifier(nn.Module):
         if softmax:
             layers.append(nn.Softmax(dim=-1))
 
-        self.classifier = nn.Sequential(*layers)
+        self.classifier = nn.Sequential(*layers,nn.ReLU())
 
     def forward(self, x):
         return self.classifier(x)
