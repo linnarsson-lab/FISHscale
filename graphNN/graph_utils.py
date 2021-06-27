@@ -160,6 +160,14 @@ class GraphData(pl.LightningDataModule):
                                batch_size=self.batch_size*1,
                                shuffle=False)
 
+    def labelled_dataloader(self):
+        indices_lab = torch.tensor(np.arange(0,self.cluster_nghs.shape[0]))
+        labelled = NeighborSampler2(self.cluster_edges, node_idx=indices_lab,
+                        data=self.cluster_nghs, sizes=self.ngh_sizes,  
+                        return_e_id=False, batch_size=self.batch_size,
+                        shuffle=True, num_workers=self.num_workers,cluster_labels=self.cluster_labels)
+        return labelled
+
     def train(self,max_epochs=5,gpus=-1):     
         print('Saving random cells used during training...')
         np.save(self.folder +'/random_cells.npy',self.cells)
