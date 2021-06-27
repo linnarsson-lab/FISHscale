@@ -165,7 +165,7 @@ class GraphData(pl.LightningDataModule):
         labelled = NeighborSampler2(self.cluster_edges, node_idx=indices_lab,
                         data=self.cluster_nghs, sizes=self.ngh_sizes,  
                         return_e_id=False, batch_size=self.batch_size,
-                        shuffle=True, num_workers=self.num_workers,cluster_labels=self.cluster_labels)
+                        shuffle=False, num_workers=self.num_workers,cluster_labels=self.cluster_labels)
         return labelled
 
     def train(self,max_epochs=5,gpus=-1):     
