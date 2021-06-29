@@ -96,6 +96,8 @@ class GraphData(pl.LightningDataModule):
             if type(Ncells) == type(None):
                 Ncells = np.ones(self.ref_celltypes.shape[1])
             self.cluster_nghs, self.cluster_edges, self.cluster_labels = self.cell_types_to_graph(self.ref_celltypes, Ncells)
+
+            print('Cluster nghs: {}'.format(self.cluster_nghs.shape))
         
         # Save random cell selection
         self.buildGraph(self.distance_threshold)
@@ -152,7 +154,7 @@ class GraphData(pl.LightningDataModule):
             labelled = None
 
         return {'unlabelled':unlabelled,'labelled':labelled}
-        
+       
     def validation_dataloader(self):
         # set a big batch size, not all will be loaded in memory but it will loop relatively fast through large dataset
         return NeighborSampler2(self.edges_tensor, node_idx=self.indices_validation,data=self.d,
@@ -177,6 +179,7 @@ class GraphData(pl.LightningDataModule):
     def get_latent(self, deterministic=True,run_clustering=True,make_plot=True):
         print('Training done, generating embedding...')
         import matplotlib.pyplot as plt
+        self.model.eval()
         embedding = []
         for x,pos,neg,adjs,ref in self.validation_dataloader():
             z,qm,_ = self.model.neighborhood_forward(x,adjs)
@@ -275,10 +278,9 @@ class GraphData(pl.LightningDataModule):
             neighborhood_size = self.ngh_sizes[0]
         else:
             supervised=True
-            edge_file = os.path.join(self.save_to,'Supervised-Edges-{}Nodes-Ngh{}-{}-dst{}'.format(self.cells.shape[0],self.ngh_sizes[0],self.ngh_sizes[1],self.distance_threshold))
-            tree_file = os.path.join(self.save_to,'Supervised-Tree-{}Nodes-Ngh{}-{}-dst{}.ann'.format(self.cells.shape[0],self.ngh_sizes[0],self.ngh_sizes[1],self.distance_threshold))
-            coords = coords
-            neighborhood_size = self.ngh_sizes[0] + 100
+            edge_file = os.path.join(self.save_to,'Supervised-Edges-{}Nodes-Ngh{}-{}-dst{}'.format(coords.shape[0],self.ngh_sizes[0],self.ngh_sizes[1],self.distance_threshold))
+            tree_file = os.path.join(self.save_to,'Supervised-Tree-{}Nodes-Ngh{}-{}-dst{}.ann'.format(coords.shape[0],self.ngh_sizes[0],self.ngh_sizes[1],self.distance_threshold))
+            neighborhood_size = self.ngh_sizes[0]
 
         if not os.path.isfile(edge_file):
             t = AnnoyIndex(2, 'euclidean')  # Length of item vector that will be indexed
@@ -286,9 +288,7 @@ class GraphData(pl.LightningDataModule):
                 v = coords[i,:]
                 t.add_item(i, v)
 
-            print('Building tree...')
             t.build(10) # 10 trees
-            print('Built tree.')
             t.save(tree_file)
         
             def find_nn_distance(coords,tree,distance):
@@ -309,11 +309,8 @@ class GraphData(pl.LightningDataModule):
             with h5py.File(edge_file, 'w') as hf:
                 hf.create_dataset("edges",  data=res)
         else:
-            print('Edges file exists, loading...')
             with h5py.File(edge_file, 'r+') as hf:
                 res = hf['edges'][:]
-        print('Edges',res.shape)
-
         if supervised==False:
             self.edges_tensor = torch.tensor(res.T)
         else:
@@ -546,10 +543,10 @@ class NeighborSampler2(torch.utils.data.DataLoader):
                         None)
         else:
             out = (torch.tensor(self.data[n_id].toarray(),dtype=torch.float32),
-                        torch.tensor(self.data[pos].toarray(),dtype=torch.float32),
-                        torch.tensor(self.data[neg].toarray(),dtype=torch.float32),
-                        adjs,
-                        torch.tensor(self.cluster_labels[n_id[:batch_size]],dtype=torch.long))
+                    torch.tensor(self.data[pos].toarray(),dtype=torch.float32),
+                    torch.tensor(self.data[neg].toarray(),dtype=torch.float32),
+                    adjs,
+                    torch.tensor(self.cluster_labels[n_id[:batch_size]],dtype=torch.long))
 
         out = self.transform(*out) if self.transform is not None else out
         return out
