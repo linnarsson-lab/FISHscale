@@ -363,7 +363,7 @@ class DataLoader(DataLoader_base):
     def transpose(self):
         """Transpose data. Switches X and Y.
         
-        This does NOT survive realoading the data
+        This operation does NOT survive reloading the data.
         """
         rename_col = {'x': 'y', 'y': 'x'}
         self.df = self.df.rename(columns = rename_col)
@@ -371,6 +371,20 @@ class DataLoader(DataLoader_base):
         self.x_extend = self.x_max - self.x_min
         self.y_extend = self.y_max - self.y_min 
         self.xy_center = (self.x_max - 0.5*self.x_extend, self.y_max - 0.5*self.y_extend)
+    
+    def flip_x(self):
+        """Flips the X coordinates around the X center.
+        
+        This operation does NOT survive reloading the data.
+        """
+        self.df.x = -(self.df.x - self.xy_center[0]) + self.xy_center[0]
+    
+    def flip_y(self):
+        """Flips the Y coordinates around the Y center.
+        
+        This operation does NOT survive reloading the data.
+        """
+        self.df.y = -(self.df.y - self.xy_center[1]) + self.xy_center[1]
     
     def get_dask_attrs_rows(self,l:list):
         """
