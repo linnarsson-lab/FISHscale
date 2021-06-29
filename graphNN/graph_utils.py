@@ -143,7 +143,7 @@ class GraphData(pl.LightningDataModule):
                                shuffle=True, num_workers=self.num_workers)
 
         if type(self.ref_celltypes) != type(None):
-            indices_lab = torch.tensor(np.random.randint(0,self.cluster_nghs.shape[0],size=self.indices_train.shape[0]))
+            self.indices_labelled = torch.tensor(np.random.randint(0,self.cluster_nghs.shape[0],size=self.indices_train.shape[0]))
             labelled = NeighborSampler2(self.cluster_edges, node_idx=indices_lab,
                             data=self.cluster_nghs, sizes=self.ngh_sizes,  
                             return_e_id=False, batch_size=self.batch_size,
