@@ -96,8 +96,6 @@ class GraphData(pl.LightningDataModule):
             if type(Ncells) == type(None):
                 Ncells = np.ones(self.ref_celltypes.shape[1])
             self.cluster_nghs, self.cluster_edges, self.cluster_labels = self.cell_types_to_graph(self.ref_celltypes, Ncells)
-
-            print('Cluster nghs: {}'.format(self.cluster_nghs.shape))
         
         # Save random cell selection
         self.buildGraph(self.distance_threshold)
@@ -124,10 +122,8 @@ class GraphData(pl.LightningDataModule):
         pass
 
     def setup(self, stage: Optional[str] = None):
-        print('Loading dataset...')
         #self.d = torch.tensor(self.molecules_df(),dtype=torch.float32) #works
         self.d = self.molecules_df()
-        print('tensor',self.d.shape)
 
     def compute_size(self):
         self.train_size = int((self.cells.shape[0])*self.train_p)
@@ -171,7 +167,6 @@ class GraphData(pl.LightningDataModule):
         return labelled
 
     def train(self,max_epochs=5,gpus=-1):     
-        print('Saving random cells used during training...')
         np.save(self.folder +'/random_cells.npy',self.cells)
         trainer = pl.Trainer(gpus=gpus,callbacks=[self.checkpoint_callback,self.early_stop_callback],max_epochs=max_epochs)
         trainer.fit(self.model, train_dataloader=self.train_dataloader(),val_dataloaders=self.validation_dataloader())
