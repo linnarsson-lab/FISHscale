@@ -10,21 +10,21 @@ class BoneFight:
         """Perform BoneFight to align two datasets.
         
         This is a wrapper around BoneFight to make implementation with 
-        FISHscale data easier. Made for 2D data (genes by objects).
+        FISHscale data easier. Made for 2D data (genes by observations).
         For more advanced features, use Bonefight directly.
+        Observations could be cells, clusters, groups, tiles, FOVs etc.
         
         WARNING: This function requires input for X_1 and X_2 as (genes, 
-        clusters) which is the opposite of BoneFight itself. Clusters could
-        also be cells, groups or any other object.
+        observations) which is the opposite of BoneFight itself.
         
         Args:
             X_1 (Pandas dataframe ornp.ndarray): Preferred a Pandas dataframe 
-                with features as rows, with names in the index. And cells/
-                clusters/groups in columns. Alternatively a numpy array.
+                with features as rows, with names in the index. And 
+                observations in columns. Alternatively a numpy array.
             volume_1 (np.ndarray): Volume prior for X_1 for each column of X_1.
             X_2 ([type], optional): Preferred a Pandas dataframe 
-                with features as rows, with names in the index. And cells/
-                clusters/groups in columns. Alternatively a numpy array can be
+                with features as rows, with names in the index. And 
+                observations in columns. Alternatively a numpy array can be
                 provided in the same format, in which case, make sure the order
                 of the index is identical with X_1.
                 If None is provided a hexagonal bin will be made of the data
