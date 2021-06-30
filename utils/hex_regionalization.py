@@ -1,6 +1,6 @@
 import math
 from itertools import  permutations
-from sklearn.decomposition import PCA
+from sklearn.decomposition import PCA, LatentDirichletAllocation
 import geopandas as gp
 import matplotlib.pyplot as plt
 import networkx as nx
@@ -156,6 +156,8 @@ class Regionalize(Iteration):
                         extent=[min_x, max_x, min_y, max_y], visible=False)
             #For the first iteration initiate the output data
             if i == 0:
+                #Save the polycollection
+                self._hexbin_polycollection = hb
                 #Get the coordinates of the tiles, parameters should be the same regardles of gene.
                 hex_coord = hb.get_offsets()
                 #Get shape of the hexagon
@@ -186,8 +188,10 @@ class Regionalize(Iteration):
             df_hex (pd.DataFrame): DataFrame with gene counts per hexagonal 
                 tile.
             mode (str, optional): Normalization method. Choose from: "log",
-                "sqrt" or "z" for log +1 transform, square root transform, or
-                z scores respectively. Defaults to 'log'.
+                "sqrt",  "z" or None. for log +1 transform, square root 
+                transform, or z scores respectively. When the mode is None, no 
+                normalization will be performed and the input is the output.
+                Defaults to 'log'.
 
         Raises:
             Exception: If mode is not properly defined
@@ -202,6 +206,8 @@ class Regionalize(Iteration):
             result = self.sqrt_norm(df_hex)
         elif mode == 'z':
             result = self.z_norm(df_hex)
+        elif mode == None:
+            result = df_hex
         else:
             raise Exception(f'Invalid "mode": {mode}')
 
@@ -212,16 +218,29 @@ class Regionalize(Iteration):
 
         Args:
             df_hex (pd.DataFrame): DataFrame with gene counts per hexagonal 
-                tile.
+                tile. The function transposes the dataset.
 
         Returns:
-             [np.array]: Array with principle components as rows
-
+             [np.array]: Array with principle components as rows.
         """
-
         pca = PCA()
         return pca.fit_transform(df_hex.T)
+    
+    def hexbin_LDA(self, df_hex: Any, n_components:int = 64, n_jobs:int = -1) -> np.ndarray:
+        """Calculate Latent Dirichlet Allocation.
 
+        Args:
+            df_hex (pd.DataFrame): DataFrame with gene counts per hexagonal 
+                tile. The function transposes the dataset.
+            n_components (int, optional): Number of resulting components.
+                Defaults to 64.
+            n_jobs (int, optional): Number of jobs. Defaults to -1.
+
+        Returns:
+            np.ndarray: Array with components as rows.
+        """
+        lda = LatentDirichletAllocation(n_components=n_components, random_state=0, n_jobs=n_jobs)
+        return lda.fit_transform(df_hex.T)
 
     def clust_hex_connected(self, df_hex, hex_coord: np.ndarray, distance_threshold: float = None, 
                             n_clusters:int = None, neighbor_rings:int = 1) -> np.ndarray:
@@ -858,14 +877,21 @@ class Regionalize(Iteration):
 
         return gdf
 
-    def regionalization_run(self, spacing: float, min_count: int,
-                            normalization_mode: str = 'log', 
-                            n_components: int = 100, clust_dist_threshold: float = 70, clust_neighbor_rings: int = 1,
-                            smooth_neighbor_rings: int = 1, smooth_cycles: int = 1,
+    def regionalization_run(self, spacing: float, 
+                            min_count: int,
+                            normalization_mode: str = 'log',
+                            dimensionality_reduction: str = 'PCA', 
+                            n_components: int = 100,
+                            clust_dist_threshold: float = 70, 
+                            clust_neighbor_rings: int = 1,
+                            smooth_neighbor_rings: int = 1, 
+                            smooth_cycles: int = 1,
                             boundary_decimals: int = 7,
-                            smooth_polygon: bool = False, smooth_polygon_degree:int = 7, 
+                            smooth_polygon: bool = False, 
+                            smooth_polygon_degree:int = 7, 
                             recount: bool = False,
-                            area_normalize: bool = True, area_normalize_unit: str = 'millimeter') -> None:
+                            area_normalize: bool = True, 
+                            area_normalize_unit: str = 'millimeter') -> None:
         """Run the regionalization pipeline.
 
         Chains all functions to go from raw point data to regions. Use the
@@ -883,9 +909,12 @@ class Regionalize(Iteration):
                 Suggested to be at least 1.
             normalization_mode (str, optional): normalization method for 
                 clustering. Choose from: "log", "sqrt" or "z" for log +1 
-                transform, square root transform, or z scores respectively. 
-                Defaults to 'log'.
-            n_components (int, optional): Number of PCA components to use for
+                transform, square root transform, or z scores respectively.
+                Also possible to not normalize, in which case the input should
+                be None. Usefull for LDA. Defaults to 'log'.
+            dimensionality_reduction (str, optional): Method for dimentionality
+                reduction. Implmented PCA, LDA. Defaults to 'PCA'.
+            n_components (int, optional): Number of components to use for
                 clustering. First component is not included. Defaults to 100.
             clust_dist_threshold (float, optional): Distance threshold for 
                 Scipy Agglomerative clustering. Defaults to 70.
@@ -927,28 +956,44 @@ class Regionalize(Iteration):
         """
         #Bin the data with a hexagonal grid
         df_hex, hex_coord, hexagon_shape = self.hexbin_make(spacing, min_count)
+        
         #Normalize data
         df_hex_norm = self.hexbin_normalize(df_hex, mode=normalization_mode)
-        #Calculate PCA
-        pc = self.hexbin_PCA(df_hex_norm)
+        
+        #Dimensionality reduction
+        if dimensionality_reduction.lower() == 'pca':
+            #Calculate PCA
+            dr = self.hexbin_PCA(df_hex_norm)
+            dr_start = 1 #Skip first component which usually marks expression level.
+        elif dimensionality_reduction.lower() == 'lda':
+            #Calculate Latent Dirichlet Allocation
+            dr = self.hexbin_LDA(df_hex_norm, n_components=n_components, n_jobs=-1)
+            dr_start = 0
+        
         #Cluster dataset
-        labels = self.clust_hex_connected(pc[:,1:n_components+1], hex_coord, distance_threshold=clust_dist_threshold, neighbor_rings=clust_neighbor_rings)
+        labels = self.clust_hex_connected(dr[:, dr_start:n_components], hex_coord, distance_threshold=clust_dist_threshold, neighbor_rings=clust_neighbor_rings)
+        
         #Spatially smooth cluster labels
         labels = self.smooth_hex_labels(hex_coord, labels, smooth_neighbor_rings, smooth_cycles, n_jobs=1)
+        
         #Get boundary points of regions
         boundary_points = self.hex_region_boundaries(hex_coord, hexagon_shape, spacing, labels, decimals = boundary_decimals)
+        
         #Order boundary point for making polygons
         ordered_points = self.polygon_order_points(boundary_points)
+        
         #Smooth boundary points
         if smooth_polygon == True:
             ordered_points = self.polygon_smooth_points(ordered_points, degree = smooth_polygon_degree)
             if recount == False:
                 recount = True
                 print('Recount set to True after "Smooth_polygon" was set to True.')
+        
         #Recount points in polygons and make geoDataFrame
         if recount == True:
             self.regions = self.point_in_region(ordered_points, normalize=area_normalize, normalize_unit=area_normalize_unit)
             self.vp(f'{self.dataset_name} regionalized, result can be found in "self.regions"')
+        
         #make geoDataFrame with region data
         else:
             sum_counts = self.cluster_sum_make(df_hex, labels).T #Transpose because geopandas wants regions in index

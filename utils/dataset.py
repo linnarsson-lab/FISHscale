@@ -12,6 +12,7 @@ from FISHscale.utils.normalization import Normalization
 from FISHscale.visualization.gene_scatter import GeneScatter, MultiGeneScatter
 from FISHscale.utils.data_handling import DataLoader, DataLoader_base
 from FISHscale.utils.clustering import Clustering
+from FISHscale.utils.bonefight import BoneFight
 from PyQt5 import QtWidgets
 import sys
 from datetime import datetime
@@ -37,7 +38,7 @@ except ModuleNotFoundError as e:
     print(f'Please install "pyarrow" to load ".parquet" files. Without only .csv files are supported which are memory inefficient. Error: {e}')
 
 class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, SpatialMetrics, DataLoader, Normalization, 
-              Density1D, Clustering):
+              Density1D, Clustering, BoneFight):
     """
     Base Class for FISHscale, still under development
 
