@@ -227,6 +227,7 @@ class ListWidget(QWidget):
             except:
                 pass
             self.list_widget.addItem(i)
+        self.list_widget.sortItems()
         # adding items to the list widget '''
     
     def selectionChanged(self):
@@ -246,24 +247,24 @@ class ListWidget(QWidget):
                             ps = d.get_gene(g, include_z=True)
                             points.append(ps)
                             cs= np.array([[self.vis.color_dic[g]] *(ps.shape[0])])[0,:,:]
-                            colors.append(cs)   
+                            colors.append(cs)
+                    
+                    elif self.section == 'fov_num':
+                        self.selected = [int(x) for x in self.selected]
+                        selection =  d.df[d.df.fov_num.isin(self.selected)].compute() #.index.compute()
+                        ps = selection.loc[:,['x','y','z']].values
+                        cs = np.array([c for c in selection.loc[:,['fov_num']].fov_num.apply(lambda x: d.color_dict[str(x)])])
+                        points.append(ps)
+                        colors.append(cs)
+
                     else:
                         #selected_indices = d.dask_attrs[d.dask_attrs['labels'].isin(self.selected)].index.compute() #.index.compute()
                         selected_features = d.dask_attrs[d.dask_attrs[self.section].isin(self.selected)].compute()
                         ps = d.df.loc[lambda x: x.index.isin(selected_features.index)].loc[:,['x','y','z']].values.compute()
                         cs = np.array([x for x in selected_features[self.section].apply(lambda x: d.color_dict[str(x)])])
-
                         points.append(ps)
                         colors.append(cs)
-                        '''
-                        grpg = d.df.groupby(self.section)
-                        for g, d in grpg:
-                            if str(g) in self.selected:
-                                g= str(g)
-                                ps = d.loc[:,['x','y','z']].values
-                                       
-                        '''
-
+                    
             ps,cs = np.concatenate(points), np.concatenate(colors)
             self.vis.pcd.points = o3d.utility.Vector3dVector(ps)
             self.vis.pcd.colors = o3d.utility.Vector3dVector(cs)

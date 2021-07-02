@@ -321,8 +321,9 @@ class DataLoader(DataLoader_base):
         
         if new_parse == True:
             self.dask_attrs = dd.from_pandas(pd.DataFrame(index=self.df.index),npartitions=self.df.npartitions,sort=False)
+            for c in other_columns:
+                self.add_dask_attribute(c,self.df[c])
             self.dask_attrs.to_parquet(path.join(self.dataset_folder,self.FISHscale_data_folder,'attributes'))
-
         else:
             #Get coordinate properties from metadata
             self._get_coordinate_properties()
