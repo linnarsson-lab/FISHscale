@@ -20,7 +20,7 @@ class SAGE(pl.LightningModule):
     to generate similar embedding for closeby nodes (i.e. regionalization).
 
  
-    """ 
+    """     
 
     def __init__(self, 
         in_channels :int, 
@@ -32,6 +32,20 @@ class SAGE(pl.LightningModule):
         output_channels:int=448,
 
         ):
+        """
+        __init__ [summary]
+
+        [extended_summary]
+
+        Args:
+            in_channels (int): [description]
+            hidden_channels (int): [description]
+            num_layers (int, optional): [description]. Defaults to 2.
+            normalize (bool, optional): [description]. Defaults to True.
+            apply_normal_latent (bool, optional): [description]. Defaults to False.
+            supervised (bool, optional): [description]. Defaults to False.
+            output_channels (int, optional): [description]. Defaults to 448.
+        """        
 
         super().__init__()
         self.save_hyperparameters()
