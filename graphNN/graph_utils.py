@@ -207,7 +207,7 @@ class GraphData(pl.LightningDataModule):
         import umap
 
         reducer = umap.UMAP(
-            n_neighbors=15,
+            n_neighbors=150,
             n_components=3,
             n_epochs=250,
             init='spectral',
