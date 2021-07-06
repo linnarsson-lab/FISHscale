@@ -11,7 +11,8 @@ class Normalization:
         Formula: log(X + 1)
 
         Args:
-            df ([pd.DataFrame]): Pandas dataframe.
+            df ([pd.DataFrame]): Pandas dataframe with features as rows and 
+                samples as columns.
 
         Returns:
             [pd.DataFrame]: Log normalized Pandas dataframe.
@@ -24,7 +25,8 @@ class Normalization:
         Formula: sqrt(X)
 
         Args:
-            df ([pd.DataFrame]): Pandas dataframe.
+            df ([pd.DataFrame]): Pandas dataframe with features as rows and 
+                samples as columns.
 
         Returns:
             [pd.DataFrame]: Square root normalized Pandas dataframe.
@@ -38,7 +40,8 @@ class Normalization:
         Formula: (X - mean) / std
 
         Args:
-            df ([type]): Pandas dataframe.
+            df ([type]): Pandas dataframe with features as rows and 
+                samples as columns.
 
         Returns:
             [pd.DataFrame]: Pandas dataframe.
@@ -63,8 +66,8 @@ class Normalization:
         Based on: https://doi.org/10.1101/2020.12.01.405886
 
         Args:
-            df ([pd.DataFrame]): Pandas dataframe with genes as rows and genes
-                as columns.
+            df ([pd.DataFrame]): Pandas dataframe with features as rows and 
+                samples as columns.
                 
         Returns:
             [pd.DataFrame]: Pandas dataframe with results.
@@ -86,6 +89,7 @@ class Normalization:
 
         Args:
             data (np.ndarray, pd.DataFrame): Array or data frame with data.
+                Features in rows and samples in columns.
             mode (str, optional): Normalization method. Choose from: "log",
                 "sqrt",  "z", "APR" or None. for log +1 transform, square root 
                 transform, z scores or Analytic Pearson residuals respectively.

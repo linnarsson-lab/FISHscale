@@ -90,7 +90,6 @@ class DataLoader_base():
             raise e
         except Exception as e:
             print('Could not open metadata file please reparse or remake.')
-            print(e)
             raise e
         
         if not isinstance(prop, dict):
@@ -155,7 +154,6 @@ class DataLoader_base():
         file_path = file.split('.')[0] + '_FISHscale_Data'
         file_name = path.splitext(path.basename(file))[0]
         metadata_file = path.join(file_path, (file_name + '_metadata.pkl'))
-        print(metadata_file)
         
         #open file
         existing_dict = self._metadatafile_read(metadata_file)    

@@ -1,6 +1,5 @@
 import math
 from itertools import  permutations
-from sklearn.decomposition import PCA, LatentDirichletAllocation
 import geopandas as gp
 import matplotlib.pyplot as plt
 import networkx as nx
@@ -14,6 +13,7 @@ from sklearn.cluster import AgglomerativeClustering
 from sklearn.neighbors import kneighbors_graph, radius_neighbors_graph
 from pint import UnitRegistry
 from FISHscale.utils.fast_iteration import Iteration
+from FISHscale.utils.decomposition import Decomposition
 from FISHscale.utils.inside_polygon import inside_multi_polygons
 #Mypy types
 from typing import Tuple, Union, Any, List
@@ -28,7 +28,7 @@ from functools import lru_cache
 import colorsys
 from sklearn.manifold import TSNE, SpectralEmbedding
 
-class Regionalize(Iteration):
+class Regionalize(Iteration, Decomposition):
     """Class for regionalization of multidimensional 2D point data.
 
     """
@@ -173,12 +173,13 @@ class Regionalize(Iteration):
         """
         patches = []
         for i in self.hexbin_coordinates:
-            pol = mpl_polygon(self.hexbin_hexagon_shape + i, closed=False)
+            pol = mpl_polygon(self.hexbin_hexagon_shape + i, closed=True)
             patches.append(pol)
         self._hexbin_PatchCollection = PatchCollection(patches)
         return PatchCollection(patches)
                 
-    def hexbin_plot(self, c: Union[np.ndarray, list], cm=None, ax:Any=None, save:bool=False, savename:str='',
+    def hexbin_plot(self, c: Union[np.ndarray, list], cm=None, ax:Any=None, 
+                    figsize=None, save:bool=False, savename:str='',
                     vmin:float=None, vmax:float=None):
         """Plot hexbin results. 
 
@@ -188,6 +189,8 @@ class Regionalize(Iteration):
             cm (plt color map): The color map to use when c is an array.
                 Defaults to plt.cm.viridis.
             ax (Any, optional): Axes object to plot on. Defaults to None.
+            figsize (tuple): Size of figure if not defined by ax. 
+                If None uses: (10,10). Defaults to None.
             save (bool, optional): Save the plot as .pdf. Defaults to False.
             savename (str, optional): Name of the plot. Defaults to ''.
             vmin (float, optional): If c is an Array you can set vmin.
@@ -197,25 +200,41 @@ class Regionalize(Iteration):
         """
         #Input handling
         colorbar=False
-        if ax == None:       
-            fig, ax = plt.subplots(figsize=(20,8))
+        if ax == None: 
+            if figsize == None:
+                figsize = (10,10)
+            fig, ax = plt.subplots(figsize=figsize)
             colorbar=True
         if cm == None:
             cm = plt.cm.viridis
 
-        #Get PatchCollection
-        p = copy.copy(self._hexbin_PatchCollection_make(self._hexbin_params))
+        #Get PatchCollection, patchCollection can only be added once to a figue so make a deep copy.
+        if not hasattr(self, '_hexbin_params'):
+            raise Exception('Hexbin has not been calculated yet. Please make using: self.hexbin_make()')
+        p = copy.deepcopy(self._hexbin_PatchCollection_make(self._hexbin_params))
         ax.add_collection(p)
-        
         #Set colors from an RGB list
         if type(c) == list:
             p.set_color(c)
+            p.set_linewidth(0.1) #To hide small white lines between the polygons
+            p.set_edgecolor(c)
+            
         #Set colors from an array of values
         else:
-            p.set_array(c / c.max())
+            c = c / c.max()
+            p.set_array(c)
             p.set_cmap(cm)
+            p.set_linewidth(0.1) #To hide small white lines between the polygons
             if vmin!= None and vmax!=None:
                 p.set_clim(vmin=vmin, vmax=vmax)
+                c_scaled = c - vmin
+                c_scaled[c_scaled < 0] = 0
+                c_scaled = c_scaled / (vmax - vmin)
+                p.set_edgecolor(cm(c_scaled))
+            else:
+                c_scaled = c - c.min()
+                c_scaled = c_scaled / c_scaled.max()
+                p.set_edgecolor(cm(c_scaled))
 
         #Colorbar
         if colorbar:
@@ -240,8 +259,8 @@ class Regionalize(Iteration):
         With 2 components the angle and distance are used for HSV colors.
 
         Args:
-            data ([pd.DataFrame]): DataFrame with genes in rows and tiles in
-                columns, like from the self.hexbin_make() function.
+            data ([pd.DataFrame]): DataFrame with features in rows and samples
+                in columns, like from the self.hexbin_make() function.
                 Best to normalize the data and/or apply PCA first.
                 Defaults to None.
             tsne (np.ndarray, optional): Pre computed tSNE embedding of hexbin
@@ -251,6 +270,9 @@ class Regionalize(Iteration):
                 tSNE with, either 2 or 3. Defaults to 2.
             save (bool, optional): Save the plot as .pdf. Defaults to False.
             savename (str, optional): Name of the plot. Defaults to ''.
+            
+        Retruns:
+            tsne (np.ndarray) tSNE coordinates.
         """
         if not (components ==2 or components==3):
             raise Exception(f'Number of components should be 2 or 3, not: {components}')
@@ -339,38 +361,53 @@ class Regionalize(Iteration):
         if save:
             plt.savefig(f'{savename}_hexbin_tsne.pdf')
         
-
-    def hexbin_PCA(self, df_hex: Any) -> np.ndarray:
-        """Calculate principle components
-
-        Args:
-            df_hex (pd.DataFrame): DataFrame with gene counts per hexagonal 
-                tile. The function transposes the dataset.
-
-        Returns:
-             [np.array]: Array with principle components as rows.
-        """
-        pca = PCA()
-        return pca.fit_transform(df_hex.T)
+        return tsne
+        
     
-    def hexbin_LDA(self, df_hex: Any, n_components:int = 64, n_jobs:int = -1) -> np.ndarray:
-        """Calculate Latent Dirichlet Allocation.
+    
+    def hexbin_decomposition_plot(self, data, components:list = [0, 9], save: bool=False, savename:str=''):
+        """Plot decomposition components spatially.
+        
+        Usefull to plot PCA or LDA components spatially. 
 
         Args:
-            df_hex (pd.DataFrame): DataFrame with gene counts per hexagonal 
-                tile. The function transposes the dataset.
-            n_components (int, optional): Number of resulting components.
-                Defaults to 64.
-            n_jobs (int, optional): Number of jobs. Defaults to -1.
-
-        Returns:
-            np.ndarray: Array with components as rows.
+            data ([np.ndarray, pd.DataFrame]): Array with components in
+                columns. 
+            components (list, optional): List with range of components to plot.
+                Defaults to [0, 9].
+            save (bool, optional): Save the plot as .pdf. Defaults to False.
+            savename (str, optional): Name of the plot. Defaults to ''.
         """
-        lda = LatentDirichletAllocation(n_components=n_components, random_state=0, n_jobs=n_jobs)
-        return lda.fit_transform(df_hex.T)
+        
+        n = components[1] - components[0]
+        n_grid = math.ceil(np.sqrt(n))
+        
+        fig, axes = plt.subplots(figsize=(3*n_grid, 3*n_grid), ncols=n_grid, nrows=n_grid)
+
+        #Plot components
+        for i in range(n):
+            j = i + components[0]
+            ax = axes[int(i/n_grid), i%n_grid]
+            self.hexbin_plot(c = data[:,j] / data[:,j].max(), ax=ax)
+            ax.set_aspect('equal')
+            ax.set_title(j)
+            ax.axis('off')
+        
+        #Hide unused axes   
+        n_res = (n_grid **2) - n
+        for i in range(n_res):
+            i += components[1]
+            ax = axes[int(i/n_grid), i%n_grid]
+            ax.axis('off')
+            
+        plt.tight_layout()
+        
+        #Save
+        if save:
+            plt.savefig(f'{savename}_hexbin_decomposition_[{components[0]}, {components[1]}].png', dpi=200)
 
     def clust_hex_connected(self, df_hex, hex_coord: np.ndarray, distance_threshold: float = None, 
-                            n_clusters:int = None, neighbor_rings:int = 1) -> np.ndarray:
+                            n_clusters:int = None, neighbor_rings:int = 1, n_jobs:int=-1) -> np.ndarray:
         """Cluster hex-bin data, with a neighborhood embedding.
 
         Clusters with AggolmerativeClustering that uses a distance matrix 
@@ -409,18 +446,19 @@ class Regionalize(Iteration):
             raise Exception('One of "distance_threshold" or "n_clusters" should be defined, not both.')
         if distance_threshold==None and n_clusters==None:
             raise Exception('One of "distance_threshold" or "n_clusters" should be defined.')
-        
+
         #Make graph to connect neighbours 
         n_neighbors = (neighbor_rings * 6)
-        Kgraph = kneighbors_graph(hex_coord, n_neighbors, include_self=False)
+        Kgraph = kneighbors_graph(hex_coord, n_neighbors, include_self=False, n_jobs=n_jobs)
 
         #Cluster
-        clust_result = AgglomerativeClustering(n_clusters=n_clusters, distance_threshold=distance_threshold, 
-                                            compute_full_tree=True, connectivity=Kgraph,
-                                            linkage='ward').fit(df_hex)
+        clust_result = AgglomerativeClustering(n_clusters=n_clusters,
+                                               distance_threshold=distance_threshold, 
+                                               compute_full_tree=True, 
+                                               connectivity=Kgraph,
+                                               linkage='ward').fit(df_hex)
         #Return labels
-        labels = clust_result.labels_
-        return labels
+        return clust_result.labels_
 
     def smooth_hex_labels(self, hex_coord: np.ndarray, labels: np.ndarray, neighbor_rings: int = 1, cycles: int = 1,
                         return_all: bool = False, n_jobs: int = -1) -> Union[np.ndarray, list]:
@@ -431,7 +469,6 @@ class Regionalize(Iteration):
         The original label is taken into account. If a tie is encountered,
         the label is set to the original label that was the input of that
         smoothing round.
-
 
         Args:
             hex_coord (np.array): Numpy Array with XY coordinates of the
@@ -1058,10 +1095,10 @@ class Regionalize(Iteration):
         #Dimensionality reduction
         if dimensionality_reduction.lower() == 'pca':
             #Calculate PCA
-            dr = self.hexbin_PCA(df_hex_norm)
+            dr = self.PCA(df_hex_norm.T)
         elif dimensionality_reduction.lower() == 'lda':
             #Calculate Latent Dirichlet Allocation
-            dr = self.hexbin_LDA(df_hex_norm, n_components=n_components, n_jobs=-1)
+            dr = self.LDA(df_hex_norm.T, n_components=n_components, n_jobs=-1)
         
         #Cluster dataset
         labels = self.clust_hex_connected(dr[:, n_components[0] : n_components[1]], hex_coord, distance_threshold=clust_dist_threshold, neighbor_rings=clust_neighbor_rings)

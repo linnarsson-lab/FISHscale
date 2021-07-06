@@ -14,6 +14,7 @@ from FISHscale.utils.data_handling import DataLoader, DataLoader_base
 from FISHscale.utils.clustering import Clustering
 from FISHscale.utils.bonefight import BoneFight
 from FISHscale.utils.regionalization_multi import RegionalizeMulti
+from FISHscale.utils.decomposition import Decomposition
 from PyQt5 import QtWidgets
 import sys
 from datetime import datetime
@@ -41,7 +42,7 @@ from tqdm import tqdm
 
 
 class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, SpatialMetrics, DataLoader, Normalization, 
-              Density1D, Clustering, BoneFight):
+              Density1D, Clustering, BoneFight, Decomposition):
     """
     Base Class for FISHscale, still under development
 
@@ -241,7 +242,8 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
         print('DBscan found {} clusters'.format(labels.max()))
         
 
-class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base, Normalization, RegionalizeMulti):
+class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base, Normalization, RegionalizeMulti,
+                   Decomposition):
     """Load multiple datasets as Dataset objects.
     """
 
@@ -475,7 +477,6 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
                 try:
                     self.unique_genes = self._metadatafile_get_bypass(files[0], 'unique_genes')
                     ug_success = True
-                    print('success')
                 except Exception as e:
                     self.vp(f'Failed to fetch unique genes from metadata of previously parsed files. Recalculating. Exception: {e}')
             
@@ -492,6 +493,7 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
             lazy_result.append(lr)
         futures = dask.persist(*lazy_result, num_workers=1, num_threads = num_threads)
         self.datasets = dask.compute(*futures)
+        self.datasets_names = [d.dataset_name for d in self.datasets]
         
     def load_Datasets(self, Dataset_list:list):
         """
@@ -504,6 +506,7 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
 
         """        
         self.datasets = Dataset_list
+        self.datasets_names = [d.dataset_name for d in self.datasets]
 
         #Set unique genes
         self.unique_genes = self.datasets[0].unique_genes
