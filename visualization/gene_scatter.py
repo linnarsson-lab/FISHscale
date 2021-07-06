@@ -4,13 +4,12 @@ from pint import UnitRegistry
 from typing import Union, Any, List
 from time import strftime
 
-
 class AxSize:
 
     def __init__(self):
         self.ureg = UnitRegistry()
 
-    def to_inch(self, x:Union[float, str], unit: str='micrometer') -> float:
+    def _to_inch(self, x:Union[float, str], unit: str='micrometer') -> float:
         """Convert scale to inches.
 
         Takes an length in micrometer or length with specified unit and 
@@ -37,7 +36,7 @@ class AxSize:
 
         return inch.magnitude
 
-    def set_ax_size(self, w:float, h:float, ax: Any=None):
+    def _set_ax_size(self, w:float, h:float, ax: Any=None):
         """Set size of axis, will drive figure size.
 
         From: https://stackoverflow.com/questions/44970010/axes-class-set-explicitly-size-width-height-of-axes-in-given-units
@@ -45,8 +44,8 @@ class AxSize:
         Args:
             w (float): Width of axes in inch.
             h (float): Hight of axes in inch.
-            ax (Any, optional): [description]. Ax to set size. If None will 
-                get current axes. Defaults to None.
+            ax (Any, optional): Ax to set size. If None will get current axes. 
+                Defaults to None.
         """
 
         if not ax: ax=plt.gca()
@@ -57,26 +56,52 @@ class AxSize:
         figw = float(w)/(r-l)
         figh = float(h)/(t-b)
         ax.figure.set_size_inches(figw, figh)
+        
+    def _line_font_size(self, ax):
+        """Decide line width and fontsize based on axis size.
+        Args:
+            ax (matplotlib.axes._subplots.AxesSubplot): Axis to calculate for.
 
-    def add_scale_bar(self, ax):
+        Returns:
+            [int, int]: linewidth, fontsize
+        """
+        ax_hight = ax.bbox.transformed(ax.transAxes).height
+        
+        #Line width
+        lw = ax_hight / 40000
+        if lw > 15:
+            lw = 15
+        if lw < 1:
+            lw = 1
+        
+        #Font size    
+        fs = ax_hight / 8000
+        if fs > 18:
+            fs = 18
+        if fs < 1 : 
+            fs = 1
+            
+        return lw, fs
+
+    def _add_scale_bar(self, ax):
 
         scale_defaults = np.array([0.001, 0.01, 0.1, 1, 10, 50, 100, 500, 1000, 
                                    5000, 10000, 50000, 100000, 500000, 1000000])
         scale_names = ['1 nm', '10 nm', '100 nm', '1 µm', '10 µm', '50 µm', '100 µm', '500 µm', 
                        '1 mm', '5 mm', '1 cm', '5 cm', '10 cm', '50 cm', '1 m']
         
-        #Get extend of x axis
+        #Get extent of x axis
         x_min, x_max = ax.get_xlim()
         y_min, y_max = ax.get_ylim()
-        x_extend = x_max - x_min
-        y_extend = y_max - y_min
+        x_extent = x_max - x_min
+        y_extent = y_max - y_min
 
         #Convert to micrometer
-        x_extend_um = (x_extend * self.unit_scale).to(self.ureg.micrometer).magnitude
+        x_extent_um = (x_extent * self.unit_scale).to(self.ureg.micrometer).magnitude
 
         #Find closest scale bar
-        indx = np.argmin(np.abs(scale_defaults - (x_extend_um * 0.1)))
-        if x_extend_um > (scale_defaults[-1] * 5):
+        indx = np.argmin(np.abs(scale_defaults - (x_extent_um * 0.1)))
+        if x_extent_um > (scale_defaults[-1] * 5):
             print(f'Scale bar warning: Scale bars longer than {scale_names[-1]} are not supported yet.')
             indx = len(scale_defaults)
         if indx == -1:
@@ -85,22 +110,14 @@ class AxSize:
         bar_name = scale_names[indx]
 
         #Define position
-        right = x_max - (0.05 * x_extend) 
+        right = x_max - (0.05 * x_extent) 
         left = right - bar_size
         text_center = right - (0.5 * (right - left))
-        hight_bar = y_min + (0.05 * y_extend)
-        hight_text = y_min + (0.07 * y_extend)
+        hight_bar = y_min + (0.05 * y_extent)
+        hight_text = y_min + (0.07 * y_extent)
 
         #Define linewidth and fontsize
-        ax_hight = ax.bbox.transformed(ax.transAxes).height
-        lw = ax_hight / 40000
-        if lw > 15:
-            lw = 15
-        fs = ax_hight / 8000
-        if fs > 32:
-            fs = 32
-        if fs < 1 : 
-            fs = 1
+        lw, fs = self._line_font_size(ax)
 
         #Set scale bar
         ax.text(text_center, hight_text, bar_name, color='white', ha='center', fontsize=fs,
@@ -174,19 +191,19 @@ class GeneScatter(AxSize):
         
         #Rescale
         if isinstance(view, list):
-            x_extend = view[1][0] - view[0][0]
-            y_extend = view[1][1] - view[0][1]
+            x_extent = view[1][0] - view[0][0]
+            y_extent = view[1][1] - view[0][1]
         else:
-            x_extend = self.x_extend
-            y_extend = self.y_extend
+            x_extent = self.x_extent
+            y_extent = self.y_extent
 
-        x_scale = self.to_inch(x_extend * ax_scale_factor)
-        y_scale = self.to_inch(y_extend * ax_scale_factor)
-        self.set_ax_size(x_scale, y_scale)
+        x_scale = self._to_inch(x_extent * ax_scale_factor)
+        y_scale = self._to_inch(y_extent * ax_scale_factor)
+        self._set_ax_size(x_scale, y_scale)
 
         #Add scale bar
         if scalebar:   
-            self.add_scale_bar(ax)
+            self._add_scale_bar(ax)
         
         #Plot layout
         if not show_axes:
@@ -200,9 +217,11 @@ class GeneScatter(AxSize):
             if len(genes) > 15:
                 print('Can not add the legend for more than 15 genes. Please see self.color_dict for gene colors.')
             else:
-                lgnd = plt.legend(loc = 2, frameon=False)
+                lw, fs = self._line_font_size(ax)
+                lgnd = plt.legend(loc = 2, frameon=False, fontsize=fs, handletextpad=-0.3)
+                print('got_here')
                 for handle in lgnd.legendHandles:
-                    handle.set_sizes([20])
+                    handle.set_sizes([lw*5])
                     plt.setp(lgnd.get_texts(), color='w')                       
 
         if save:
@@ -212,7 +231,12 @@ class GeneScatter(AxSize):
 
 
 class MultiGeneScatter(AxSize):
-    """Make a scatter plot of all data.
+    
+    def scatter_plot(self, genes: Union[List, np.ndarray], s: float=0.1, ax_scale_factor: int=10, 
+                    scalebar: bool=True, show_axes: bool=False, flip_y: bool=False, show_legend=True,
+                    show_title=False, save: bool=False, save_name: str='', dpi: int=300, 
+                    file_format: str='.eps'):
+        """Make a scatter plot of all data.
 
         Use self.arange_grid_ffset() to arrange datasets in a grid.   
         Uses a black background. Plots in real size if `ax_scale_factor` is 1. 
@@ -238,24 +262,21 @@ class MultiGeneScatter(AxSize):
                 Defaults to False.
             show_legend (bool, optional): Show the gene legend. Can not show
                 more than 15 genes.
+            show_title (bool, optional): Shows the names of the datsets above
+                each dataset. Defaults to False.
             save (bool, optional): If True saves the plot. Defaults to False.
             save_name (str, optional): Name of the plot. If not given will have
                 the format: "Scatter_plot_<dataset_name>_<timestamp>"
                 Defaults to ''.
-            dpi (int, optional): Dots Per Inch (DPI) of the plot.
+            dpi (int, optional): Dots Per Inch (DPI) of the plot when saving.
                 Defaults to 300.
             file_format (str, optional): Format of the plot including the 
                 point. Even if vector format is given the points will be 
                 rasterized. Defaults to '.eps'.
         """   
 
-    def scatter_plot(self, genes: Union[List, np.ndarray], s: float=0.1, ax_scale_factor: int=10, 
-                    scalebar: bool=True, show_axes: bool=False, flip_y: bool=False, show_legend=True,
-                    save: bool=False, save_name: str='', dpi: int=300, file_format: str='.eps'):
-               
         #Check input
         if not isinstance(genes, list) and not isinstance(genes, np.ndarray):
-            print('made_list')
             genes = [genes]
 
         #Make figure
@@ -286,19 +307,24 @@ class MultiGeneScatter(AxSize):
                     ax.scatter(x, y, s=s, color=self.color_dict[g], zorder=0, label=g)
                 else:
                     ax.scatter(x, y, s=s, color=self.color_dict[g], zorder=0)
+                    
+            if show_title:
+                lw, fs = self._line_font_size(ax)
+                print(fs)
+                ax.text(d.xy_center[0], d.y_max, d.dataset_name, color='white', ha='center', fontsize=fs)
             
         #Rescale
-        x_extend = x_max - x_min
-        y_extend = y_max - y_min
-        x_scale = self.to_inch(x_extend * ax_scale_factor)
-        y_scale = self.to_inch(y_extend * ax_scale_factor)
-        self.set_ax_size(x_scale, y_scale)
+        x_extent = x_max - x_min
+        y_extent = y_max - y_min
+        x_scale = self._to_inch(x_extent * ax_scale_factor)
+        y_scale = self._to_inch(y_extent * ax_scale_factor)
+        self._set_ax_size(x_scale, y_scale)
         if flip_y:
             ax.invert_yaxis()            
 
         #Add scale bar
         if scalebar:   
-            self.add_scale_bar(ax)
+            self._add_scale_bar(ax)
         
         #Plot layout
         if not show_axes:
@@ -310,13 +336,13 @@ class MultiGeneScatter(AxSize):
         
         if show_legend:
             if len(genes) > 15:
-                print('Can not add the legend for more than 10 genes. Please see self.color_dict for gene colors.')
+                print('Can not add the legend for more than 15 genes. Please see self.color_dict for gene colors.')
             else:
-                lgnd = plt.legend(loc = 2, frameon=False)
+                lw, fs = self._line_font_size(ax)
+                lgnd = plt.legend(loc = 2, frameon=False, fontsize=fs)
                 for handle in lgnd.legendHandles:
-                    handle.set_sizes([20])
+                    handle.set_sizes([lw*10])
                     plt.setp(lgnd.get_texts(), color='w')  
-
         if save:
             if save_name == '':
                 save_name = f'Scatter_plot_{self.dataset_name}_{strftime("%Y-%m-%d_%H-%M-%S")}'

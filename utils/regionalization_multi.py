@@ -2,7 +2,6 @@ import gc
 import glob
 import math
 from itertools import combinations, permutations
-from multiprocessing import cpu_count
 import geopandas as gp
 import matplotlib.pyplot as plt
 import networkx as nx
@@ -19,7 +18,146 @@ from sklearn.neighbors import kneighbors_graph, radius_neighbors_graph
 from numba import jit, njit
 import numba
 from pint import UnitRegistry
-#Mypy types
+from tqdm import tqdm
+from typing import Any
+import copy
+
+import dask
+
+class RegionalizeMulti:
+    
+    def hexbin_multi(self, spacing: float, min_count: int) -> dict:
+        """Make hexagonal bining of all datasets
+
+        Args:
+            spacing (float): Center to center spacing between hexagons
+            min_count (int): Minimum count to keep tile i nthe dataset.
+
+        Returns:
+            dict: Dictionary with dataset names as keys 
+        """
+        results = {}
+        for d in tqdm(self.datasets):
+            r = dask.delayed(d.hexbin_make)(spacing, min_count, workers=1)
+            results[d.dataset_name] = r   
+        results = dask.compute(results)
+        
+        return results[0]
+    
+    def hexbin_plot(self, hexbin_results:dict, gene:str, ax:Any=None, save:bool=False, savename:str=''):
+        """Plot hexbin results. 
+        
+        If datasets are plottet over each other, first run
+        self.arange_grid_offset() and then rerun the hexbin_make() function
+
+        Args:
+            hexbin_results (dict): Results of the hexbin_make() function of a
+                multidataset
+            gene (str): Gene or index of interest
+            ax (Any, optional): Axes object to plot on Defaults to None.
+            save (bool, optional): Save the plot as .pdf. Defaults to False.
+            savename (str, optional): Name of the plot. Defaults to ''.
+        """
+        if ax == None:       
+            fig, ax = plt.subplots(figsize=(20,8))
+        
+        data = []
+        x_min = 0
+        x_max = 0
+        y_min = 0
+        y_max = 0
+        data_max = 0
+        
+        #collect data
+        for k in hexbin_results.keys():
+            d = hexbin_results[k][0]
+            d = d.loc[gene]
+            if d.max() > data_max:
+                data_max = d.max()
+            data.append(d) 
+        
+        #plot data
+        for i, d in enumerate(self.datasets):           
+            p = copy.copy(d._hexbin_PatchCollection_make(d._hexbin_params))
+            ax.add_collection(p)
+            p.set_array(data[i] / data_max)
+            
+            if d.x_min < x_min:
+                x_min = d.x_min
+            if d.x_max > x_max:
+                x_max = d.x_max
+            if d.y_min < y_min:
+                y_min = d.y_min
+            if d.y_max > y_max:
+                y_max = d.y_max
+        
+        #Set axis size   
+        ax.set_aspect('equal')
+        ax.set_xlim(x_min, x_max)
+        ax.set_ylim(y_min, y_max)
+
+        #Save data
+        if save:
+            plt.savefig(f'{savename}_{gene}.pdf')
+        
+
+    def merge_norm(self, hexbin_results:dict, mode:str=None):
+        """
+        Merge multiple datasets and optonally normalize the data.
+        Input:
+        `hex_bin`(dict): Dictonray with hex bin results for every dataset.
+            Output form the hex_bin.make_hexbin() function.
+         mode (str, optional): Normalization method. Choose from: "log",
+                "sqrt",  "z" or None. for log +1 transform, square root 
+                transform, or z scores respectively. When the mode is None, no 
+                normalization will be performed but the datasets will be 
+                merged. Defaults to None.
+        Returns:
+        `df`(pd.Dataframe): Dataframe with all tiles in one table. Optionally
+            with normalization applied
+        `samples`(np.array): Array with original dataset names.
+        
+        """
+        nrows = math.ceil(len(hexbin_results.keys())/2)
+        fig, axes = plt.subplots(ncols=2, nrows=nrows, figsize=(10,1.5*nrows), sharey=True, sharex=True)
+        
+        norm = mode != None
+        
+        for i, d in tqdm(enumerate(list(hexbin_results.keys()))):
+            if i == 0:
+                df_next = hexbin_results[d][0]
+                df_all = df_next
+                samples = [d for i in df_all.columns]
+                if norm:
+                    df_next_norm = self.normalize(df_next, mode=mode)
+                    df_norm = df_next_norm
+                
+            else:
+                df_next = hexbin_results[d][0]
+                df_all = pd.concat([df_all, df_next], axis=1, sort=False)
+                for j in df_next.columns:
+                    samples.append(d)
+                if norm:
+                    df_next_norm = self.normalize(df_next, mode=mode)
+                    df_norm = pd.concat([df_norm, df_next_norm], axis=1, sort=False)
+                
+            
+            ax = axes[int(i/2), i%2]
+            if norm:
+                ax.hist(df_next_norm.sum(), bins=100)
+                ax.set_title(f'{d} normalized')
+            else:
+                ax.hist(df_next.sum(), bins=100)
+                ax.set_title(d)
+            ax.set_ylabel('Frequency')
+            ax.set_xlabel('Sum molecule count')
+        plt.tight_layout()
+        
+        if norm:
+            return df_norm, np.array(samples)
+        else:
+            return df_all, np.array(samples)
+
 
 class MultiRegionalize:
 
@@ -302,7 +440,7 @@ class MultiRegionalize:
         
         return labels_all
 
-     def make_cluster_mean(hex_bin_signal, samples, labels, names):
+    def make_cluster_mean(hex_bin_signal, samples, labels, names):
         """
 
         THIS IS THE ORIGINAL FUNCTION RE-IMPLEMENTED ABOVE. MAKE A NEW IMPLEMENTATION THAT WORKS 

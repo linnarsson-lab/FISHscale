@@ -13,6 +13,7 @@ from FISHscale.visualization.gene_scatter import GeneScatter, MultiGeneScatter
 from FISHscale.utils.data_handling import DataLoader, DataLoader_base
 from FISHscale.utils.clustering import Clustering
 from FISHscale.utils.bonefight import BoneFight
+from FISHscale.utils.regionalization_multi import RegionalizeMulti
 from PyQt5 import QtWidgets
 import sys
 from datetime import datetime
@@ -36,6 +37,8 @@ try:
     from pyarrow.parquet import ParquetFile
 except ModuleNotFoundError as e:
     print(f'Please install "pyarrow" to load ".parquet" files. Without only .csv files are supported which are memory inefficient. Error: {e}')
+from tqdm import tqdm
+
 
 class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, SpatialMetrics, DataLoader, Normalization, 
               Density1D, Clustering, BoneFight):
@@ -186,9 +189,9 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
             self.z_offset += z_offset
             self.df.z += z_offset
 
-        self.x_extend = self.x_max - self.x_min
-        self.y_extend = self.y_max - self.y_min 
-        self.xy_center = (self.x_max - 0.5*self.x_extend, self.y_max - 0.5*self.y_extend)
+        self.x_extent = self.x_max - self.x_min
+        self.y_extent = self.y_max - self.y_min 
+        self.xy_center = (self.x_max - 0.5*self.x_extent, self.y_max - 0.5*self.y_extent)
 
 
     def visualize(self,columns:list=[],width=2000,height=2000,show_axis=False):
@@ -238,7 +241,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
         print('DBscan found {} clusters'.format(labels.max()))
         
 
-class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base):
+class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base, Normalization, RegionalizeMulti):
     """Load multiple datasets as Dataset objects.
     """
 
@@ -446,6 +449,11 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
 
         #Load data
         files = glob(filepath + '*' + '.parquet')
+        if len(files) == 0:
+            files = glob(filepath + '*' + '.csv')
+        if len(files) == 0:
+            raise Exception(f'No .parquet or .csv files found in {filepath}')
+        
         n_files = len(files)
         if not isinstance(z, (list, np.ndarray)):
             z = [z] * n_files
@@ -458,20 +466,32 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
         if not isinstance(pixel_size, (list, np.ndarray)):
             pixel_size = [pixel_size] * n_files
         
-        #Get unique genes of first dataset if not defined
-        if not isinstance(self.unique_genes, np.ndarray):   
-            open_f = self._open_data_function(files[0])
-            all_genes = open_f(files[0], [gene_label])
-            self.unique_genes = np.unique(all_genes)                
+        
+        #Get the unique genes
+        if not isinstance(self.unique_genes, np.ndarray): 
+            #Check if data has already been parsed to get the unique genes
+            ug_success = False
+            if self._check_parsed(files[0].split('.')[0] + '_FISHscale_Data')[0] and reparse == False:
+                try:
+                    self.unique_genes = self._metadatafile_get_bypass(files[0], 'unique_genes')
+                    ug_success = True
+                    print('success')
+                except Exception as e:
+                    self.vp(f'Failed to fetch unique genes from metadata of previously parsed files. Recalculating. Exception: {e}')
+            
+            if not ug_success: 
+                open_f = self._open_data_function(files[0])
+                all_genes = open_f(files[0], [gene_label])
+                self.unique_genes = np.unique(all_genes)
         
         #Open the files with the option to do this in paralell.
         lazy_result = []
-        for f, zz, pxs, xo, yo, zo in zip(files, z, pixel_size, x_offset, y_offset, z_offset):
+        for f, zz, pxs, xo, yo, zo in tqdm(zip(files, z, pixel_size, x_offset, y_offset, z_offset)):
             lr = dask.delayed(Dataset) (f, x_label, y_label, gene_label, other_columns, self.unique_genes, zz, pxs,
                                     xo, yo, zo, reparse, verbose = self.verbose, part_of_multidataset=True)
             lazy_result.append(lr)
         futures = dask.persist(*lazy_result, num_workers=1, num_threads = num_threads)
-        self.datasets =  dask.compute(*futures)
+        self.datasets = dask.compute(*futures)
         
     def load_Datasets(self, Dataset_list:list):
         """
@@ -551,14 +571,14 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
             Exception: If `orderby` is not properly defined.
         """
 
-        max_x_extend = max([d.x_extend for d in self.datasets])
-        max_y_extend = max([d.y_extend for d in self.datasets])
+        max_x_extent = max([d.x_extent for d in self.datasets])
+        max_y_extent = max([d.y_extent for d in self.datasets])
         n_datasets = len(self.datasets)
         grid_size = ceil(np.sqrt(n_datasets))
-        x_extend = (grid_size - 1) * max_x_extend
-        y_extend = (grid_size - 1) * max_y_extend
-        x_spacing = np.linspace(-0.5 * x_extend, 0.5* x_extend, grid_size)
-        y_spacing = np.linspace(-0.5 * y_extend, 0.5* y_extend, grid_size)
+        x_extent = (grid_size - 1) * max_x_extent
+        y_extent = (grid_size - 1) * max_y_extent
+        x_spacing = np.linspace(-0.5 * x_extent, 0.5* x_extent, grid_size)
+        y_spacing = np.linspace(-0.5 * y_extent, 0.5* y_extent, grid_size)
         x, y = np.meshgrid(x_spacing, y_spacing)
         x, y = x.ravel(), y.ravel()
 
@@ -567,9 +587,9 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
         elif orderby == 'name':
             sorted = np.argsort([d.dataset_name for d in self.datasets])
         elif orderby == 'x':
-            sorted = np.argsort([d.x_extend for d in self.datasets])
+            sorted = np.argsort([d.x_extent for d in self.datasets])
         elif orderby == 'y':
-            sorted = np.argsort([d.y_extend for d in self.datasets])
+            sorted = np.argsort([d.y_extent for d in self.datasets])
         else:
             raise Exception(f'"Orderby" key not understood: {orderby}')
 

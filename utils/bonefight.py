@@ -118,3 +118,9 @@ class BoneFight:
         else:
             return model
         
+class BoneFightMulti:
+    
+    
+    
+    def bonefight_multi(self):
+        pass
