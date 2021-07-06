@@ -1,3 +1,5 @@
+from FISHscale.utils.decomposition import Decomposition
+from FISHscale.utils.density_1D import Density1D
 import gc
 import glob
 import math
@@ -21,10 +23,11 @@ from pint import UnitRegistry
 from tqdm import tqdm
 from typing import Any
 import copy
-
+from sklearn.manifold import TSNE
 import dask
+import colorsys
 
-class RegionalizeMulti:
+class RegionalizeMulti(Decomposition):
     
     def hexbin_multi(self, spacing: float, min_count: int) -> dict:
         """Make hexagonal bining of all datasets
@@ -44,10 +47,74 @@ class RegionalizeMulti:
         
         return results[0]
     
-    def hexbin_plot(self, hexbin_results:dict, gene:str, ax:Any=None, save:bool=False, savename:str=''):
+    def hexbin_plot(self, c:list, cm=None, gridspec=None, figsize=None, 
+                    save:bool=False, savename:str=''):
+        """Plot spatial multidataset hexbin results
+
+        Args:
+            c (list): List of color values to plot for each dataset.
+                The length of the list should equal to the number of datasets
+                in self.datasets. Each object should either contain an  numpy 
+                array with color values as a float between 0 an 1, or a list of
+                RGB color values. The length of each sub- list or array should
+                match the number of hexagonal tiles.
+            cm (plt colormap, optional): The color map to use when the items in
+                c are arrays. Defaults to plt.cm.viridis.
+            gridspec (plt gridspec, optional): To incorporate this plot into
+                another figure, pass a gridspec location. This will be
+                subdivided to fit each dataset. If none a new figure will be 
+                made. Defaults to None.
+            figsize (tuple): Size of figure if not defined by gridspec. 
+                If None uses: (sqrt(n_datasets) * 5, sqrt(n_datasets) * 5).
+                Defaults to None.
+            save (bool, optional): Save the plot as .pdf. Defaults to False.
+            savename (str, optional): Name of the plot. Defaults to ''.
+        """
+        #calculate grid
+        n_datasets = len(c)
+        n_grid = math.ceil(np.sqrt(n_datasets))
+        
+        #Make figure if gridspec is not provided
+        if gridspec == None:
+            if figsize == None:
+                figsize = (5*n_grid, 5*n_grid)
+            fig = plt.figure(figsize=(figsize))
+            gridspec = fig.add_gridspec(1,1)[0]
+        
+        #Subdivide space into required number of axes    
+        inner_grid = gridspec.subgridspec(n_grid, n_grid)
+        axes = inner_grid.subplots()
+        
+        #plot data
+        for d, col, ((i,j), ax) in zip(self.datasets, c, np.ndenumerate(axes)):
+            ax = axes[i,j]
+            d.hexbin_plot(c = col, cm=cm, ax=ax)
+            ax.set_title(d.dataset_name, fontsize=6)
+            ax.set_aspect('equal')
+            ax.set_axis_off()
+            
+        #Hide unused axes   
+        n_res = (n_grid **2) - n_datasets
+        for i in range(n_res):
+            i += n_datasets
+            ax = axes[int(i/n_grid), i%n_grid]
+            ax.set_axis_off()
+            
+        plt.tight_layout()
+        
+        #Save figure
+        if save:
+            plt.savefig(f'{savename}_hexbinmulti.pdf')
+            
+        
+        
+        
+        
+    
+    def hexbin_plot_deprecated(self, hexbin_results:dict, gene:str, ax:Any=None, save:bool=False, savename:str=''):
         """Plot hexbin results. 
         
-        If datasets are plottet over each other, first run
+        If datasets are plotted over each other, first run
         self.arange_grid_offset() and then rerun the hexbin_make() function
 
         Args:
@@ -78,7 +145,7 @@ class RegionalizeMulti:
         
         #plot data
         for i, d in enumerate(self.datasets):           
-            p = copy.copy(d._hexbin_PatchCollection_make(d._hexbin_params))
+            p = copy.deepcopy(d._hexbin_PatchCollection_make(d._hexbin_params))
             ax.add_collection(p)
             p.set_array(data[i] / data_max)
             
@@ -100,7 +167,6 @@ class RegionalizeMulti:
         if save:
             plt.savefig(f'{savename}_{gene}.pdf')
         
-
     def merge_norm(self, hexbin_results:dict, mode:str=None):
         """
         Merge multiple datasets and optonally normalize the data.
@@ -157,7 +223,138 @@ class RegionalizeMulti:
             return df_norm, np.array(samples)
         else:
             return df_all, np.array(samples)
+    
+    def hexbin_tsne_plot(self, data = None, samples=None, tsne:np.ndarray = None, components: int = 2, 
+                         save:bool=False, savename:str=''):
+        """Calculate tSNE on hexbin and plot spatial identities.
+        
+        Calculates a tSNE and makes a color scheme based on the tSNE 
+        coordinates, which is then used to color the spatial hexbin data.
+        With 3 components the 3 tSNE dimenstions are used for RGB colors.
+        With 2 components the angle and distance are used for HSV colors.
 
+        Args:
+            data ([pd.DataFrame]): DataFrame with features in rows and samples
+                in columns, like from the self.hexbin_make() function.
+                Best to normalize the data and/or apply PCA first.
+                Defaults to None.
+            tsne (np.ndarray, optional): Pre computed tSNE embedding of hexbin
+                data with 2 or 3 components. If not provided, tSNE will be 
+                calculated.
+            components (int, optional): Nuber of components to calculate the 
+                tSNE with, either 2 or 3. Defaults to 2.
+            save (bool, optional): Save the plot as .pdf. Defaults to False.
+            savename (str, optional): Name of the plot. Defaults to ''.
+        
+        Retruns:
+            tsne (np.ndarray) tSNE coordinates.
+        """
+        if not (components ==2 or components==3):
+            raise Exception(f'Number of components should be 2 or 3, not: {components}')
+        if not isinstance(samples, np.ndarray):
+            samples = np.array(samples)
+        
+        #Calculate tSNE
+        if isinstance(tsne, np.ndarray):
+            components = tsne.shape[1]
+        else:        
+            tsne = TSNE(n_components=components, n_jobs=self.cpu_count).fit_transform(data.T)
+               
+        #make figure
+        fig = plt.figure(figsize=(15,7))
+        gs = fig.add_gridspec(2, 4)
+        
+        if components == 2:
+            #Make axes
+            ax0 = fig.add_subplot(gs[:, :1])
+            
+            #Use rotation and distance from centroid to calculate HSV colors. 
+            #Calculate rotation
+            rotation = np.array([Density1D.get_rotation_rad('self', 0,0, i[0], i[1]) for i in tsne])
+            rotation = (rotation + np.pi) / (2 * np.pi)
+            #Calculate distance
+            origin= np.array([0,0])
+            dist = np.array([np.linalg.norm(origin - i) for i in tsne])
+            dist = dist / dist.max()
+            dist = (dist + 0.5) / 1.5
+            #Make colors
+            c = np.column_stack((rotation, dist, np.ones(dist.shape[0])))
+            c = [colorsys.hsv_to_rgb(i[0], i[1], i[2]) for i in c]
+            
+            #plot tSNE
+            ax0.scatter(tsne[:,0], tsne[:,1], s=0.5, c=c)
+            ax0.set_aspect('equal')
+            ax0.set_axis_off()
+            ax0.set_title('tSNE', fontsize=14)
+            
+            #plot spatial
+            c = np.array(c)
+            d_c = [list(c[samples == d, :]) for d in self.datasets_names]
+            self.hexbin_plot(d_c, gridspec=gs[:, 1:])
+
+        if components == 3:
+            #Make axes
+            ax0_0 = fig.add_subplot(gs[0,0])
+            ax0_1 = fig.add_subplot(gs[0,1])
+            ax0_2 = fig.add_subplot(gs[1,0])
+            ax1 = fig.add_subplot(gs[:, 2:])
+            
+            #Make colors Translate tSNE coordinates into RGB
+            c = tsne + np.abs(tsne.min(axis=0))
+            c = c / c.max(axis=0)
+            c = [list(i) for i in c]
+            
+            #tSNE
+            ax0_0.scatter(tsne[:,0], tsne[:,1], s=1, c=c)
+            ax0_0.set_xlabel('tSNE 0')
+            ax0_0.set_ylabel('tSNE 1')
+            ax0_0.spines['right'].set_visible(False)
+            ax0_0.spines['top'].set_visible(False)
+            ax0_0.set_title('tSNE', fontsize=14)
+            
+            ax0_1.scatter(tsne[:,1], tsne[:,2], s=1, c=c)
+            ax0_1.set_xlabel('tSNE 1')
+            ax0_1.set_ylabel('tSNE 2')
+            ax0_1.spines['right'].set_visible(False)
+            ax0_1.spines['top'].set_visible(False)
+            ax0_1.set_title('tSNE',fontsize=14)
+            
+            ax0_2.scatter(tsne[:,0], tsne[:,2], s=1, c=c)
+            ax0_2.set_xlabel('tSNE 0')
+            ax0_2.set_ylabel('tSNE 2')
+            ax0_2.spines['right'].set_visible(False)
+            ax0_2.spines['top'].set_visible(False)
+            ax0_2.set_title('tSNE', fontsize=14)
+            
+            #Spatial
+            self.hexbin_plot(c, ax=ax1)
+            ax1.set_axis_off()
+            ax1.set_title('Spatial', fontsize=14)
+
+        plt.tight_layout()
+        
+        #Save
+        if save:
+            plt.savefig(f'{savename}_hexbin_tsne.pdf')
+            
+        return tsne
+    
+    def clust_hex_connected(self, df_hex, hex_coord: np.ndarray, distance_threshold: float = None, 
+                            n_clusters:int = None, neighbor_rings:int = 1) -> np.ndarray:
+
+        
+        #Normalization
+        
+        
+        #decomposition
+        
+        
+        #Clustering
+        
+        
+        
+        
+        
 
 class MultiRegionalize:
 
