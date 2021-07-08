@@ -1,3 +1,4 @@
+from numpy.linalg.linalg import norm
 from FISHscale.utils.decomposition import Decomposition
 from FISHscale.utils.density_1D import Density1D
 import gc
@@ -23,12 +24,16 @@ from pint import UnitRegistry
 from tqdm import tqdm
 from typing import Any
 import copy
-from sklearn.manifold import TSNE
+from sklearn.manifold import TSNE, SpectralEmbedding
 import dask
 import colorsys
+from dask.diagnostics import ProgressBar
+
+from collections import Counter
 
 class RegionalizeMulti(Decomposition):
     
+    #### HEXAGONAL BINNING ####    
     def hexbin_multi(self, spacing: float, min_count: int) -> dict:
         """Make hexagonal bining of all datasets
 
@@ -40,13 +45,18 @@ class RegionalizeMulti(Decomposition):
             dict: Dictionary with dataset names as keys 
         """
         results = {}
-        for d in tqdm(self.datasets):
-            r = dask.delayed(d.hexbin_make)(spacing, min_count, workers=1)
-            results[d.dataset_name] = r   
-        results = dask.compute(results)
+         
+        for d in self.datasets:
+            r = dask.delayed(d.hexbin_make)(spacing, min_count, n_jobs=1)
+            results[d.dataset_name] = {'df_hex': r[0],
+                                       'coordinates': r[1]}
+        
+        with ProgressBar():
+            results = dask.compute(results) #It is not paralel because d can not be pickled, but there is still some speed up
         
         return results[0]
     
+    #### PLOTTING ####        
     def hexbin_plot(self, c:list, cm=None, gridspec=None, figsize=None, 
                     save:bool=False, savename:str=''):
         """Plot spatial multidataset hexbin results
@@ -106,124 +116,6 @@ class RegionalizeMulti(Decomposition):
         if save:
             plt.savefig(f'{savename}_hexbinmulti.pdf')
             
-        
-        
-        
-        
-    
-    def hexbin_plot_deprecated(self, hexbin_results:dict, gene:str, ax:Any=None, save:bool=False, savename:str=''):
-        """Plot hexbin results. 
-        
-        If datasets are plotted over each other, first run
-        self.arange_grid_offset() and then rerun the hexbin_make() function
-
-        Args:
-            hexbin_results (dict): Results of the hexbin_make() function of a
-                multidataset
-            gene (str): Gene or index of interest
-            ax (Any, optional): Axes object to plot on Defaults to None.
-            save (bool, optional): Save the plot as .pdf. Defaults to False.
-            savename (str, optional): Name of the plot. Defaults to ''.
-        """
-        if ax == None:       
-            fig, ax = plt.subplots(figsize=(20,8))
-        
-        data = []
-        x_min = 0
-        x_max = 0
-        y_min = 0
-        y_max = 0
-        data_max = 0
-        
-        #collect data
-        for k in hexbin_results.keys():
-            d = hexbin_results[k][0]
-            d = d.loc[gene]
-            if d.max() > data_max:
-                data_max = d.max()
-            data.append(d) 
-        
-        #plot data
-        for i, d in enumerate(self.datasets):           
-            p = copy.deepcopy(d._hexbin_PatchCollection_make(d._hexbin_params))
-            ax.add_collection(p)
-            p.set_array(data[i] / data_max)
-            
-            if d.x_min < x_min:
-                x_min = d.x_min
-            if d.x_max > x_max:
-                x_max = d.x_max
-            if d.y_min < y_min:
-                y_min = d.y_min
-            if d.y_max > y_max:
-                y_max = d.y_max
-        
-        #Set axis size   
-        ax.set_aspect('equal')
-        ax.set_xlim(x_min, x_max)
-        ax.set_ylim(y_min, y_max)
-
-        #Save data
-        if save:
-            plt.savefig(f'{savename}_{gene}.pdf')
-        
-    def merge_norm(self, hexbin_results:dict, mode:str=None):
-        """
-        Merge multiple datasets and optonally normalize the data.
-        Input:
-        `hex_bin`(dict): Dictonray with hex bin results for every dataset.
-            Output form the hex_bin.make_hexbin() function.
-         mode (str, optional): Normalization method. Choose from: "log",
-                "sqrt",  "z" or None. for log +1 transform, square root 
-                transform, or z scores respectively. When the mode is None, no 
-                normalization will be performed but the datasets will be 
-                merged. Defaults to None.
-        Returns:
-        `df`(pd.Dataframe): Dataframe with all tiles in one table. Optionally
-            with normalization applied
-        `samples`(np.array): Array with original dataset names.
-        
-        """
-        nrows = math.ceil(len(hexbin_results.keys())/2)
-        fig, axes = plt.subplots(ncols=2, nrows=nrows, figsize=(10,1.5*nrows), sharey=True, sharex=True)
-        
-        norm = mode != None
-        
-        for i, d in tqdm(enumerate(list(hexbin_results.keys()))):
-            if i == 0:
-                df_next = hexbin_results[d][0]
-                df_all = df_next
-                samples = [d for i in df_all.columns]
-                if norm:
-                    df_next_norm = self.normalize(df_next, mode=mode)
-                    df_norm = df_next_norm
-                
-            else:
-                df_next = hexbin_results[d][0]
-                df_all = pd.concat([df_all, df_next], axis=1, sort=False)
-                for j in df_next.columns:
-                    samples.append(d)
-                if norm:
-                    df_next_norm = self.normalize(df_next, mode=mode)
-                    df_norm = pd.concat([df_norm, df_next_norm], axis=1, sort=False)
-                
-            
-            ax = axes[int(i/2), i%2]
-            if norm:
-                ax.hist(df_next_norm.sum(), bins=100)
-                ax.set_title(f'{d} normalized')
-            else:
-                ax.hist(df_next.sum(), bins=100)
-                ax.set_title(d)
-            ax.set_ylabel('Frequency')
-            ax.set_xlabel('Sum molecule count')
-        plt.tight_layout()
-        
-        if norm:
-            return df_norm, np.array(samples)
-        else:
-            return df_all, np.array(samples)
-    
     def hexbin_tsne_plot(self, data = None, samples=None, tsne:np.ndarray = None, components: int = 2, 
                          save:bool=False, savename:str=''):
         """Calculate tSNE on hexbin and plot spatial identities.
@@ -339,18 +231,422 @@ class RegionalizeMulti(Decomposition):
             
         return tsne
     
-    def clust_hex_connected(self, df_hex, hex_coord: np.ndarray, distance_threshold: float = None, 
-                            n_clusters:int = None, neighbor_rings:int = 1) -> np.ndarray:
+    #### DATA MANIPULATION ####
+    def get_dict_item(self, results:dict, item:str)-> list:
+        """Return list of items from a nested dictionary.
+        
+        Assumes the keys are the dataset names
+
+        Args:
+            results (dict): Nested dictionary
+            item (str): Key to retrieve for each dataset
+
+        Returns:
+            list: List with items in the same order as self.datasets_names
+        """
+
+        c = []
+        for k in self.datasets_names:
+            c.append(results[k][item])
+        return c
+            
+    def merge_norm(self, data:list, mode:str=None, plot:bool = False):
+        """Merge multiple datasets and optionaly normalize before merging.
+
+        Args:
+            data (list): List of pandas dataframes in the same order as 
+                self.datasets_names. 
+            mode (str, optional):Normalization method. Choose from: "log",
+                "sqrt",  "z", "APR" or None. for log +1 transform, square root 
+                transform, z scores or Analytic Pearson residuals respectively.
+                When the mode is None, no normalization will be performed and
+                the input is the output. Defaults to None.
+            plot (bool, optional): Plot a histogram of the data. Usefull to
+                evaluate normalization performace. Defaults to False.
+
+        Returns:
+            Tuple with:
+            [pd.DataFrame]: Merged dataframe.
+            [np.ndarray]: Array with sample labels to match columns in the
+                merged dataframe with the original dataset name. 
+        """
+        nrows = math.ceil(len(data)/2)
+        norm = mode != None
+        if plot:
+            fig, axes = plt.subplots(ncols=2, nrows=nrows, figsize=(10,1.5*nrows), sharey=True, sharex=True)
+        
+        for i, (df_next, name) in tqdm(enumerate(zip(data, self.datasets_names))):
+            if i == 0:
+                df_all = df_next
+                samples = [name for j in df_all.columns]
+                if norm:
+                    df_next_norm = self.normalize(df_next, mode=mode)
+                    df_norm = df_next_norm
+                
+            else:
+                df_all = pd.concat([df_all, df_next], axis=1, sort=False)
+                for j in df_next.columns:
+                    samples.append(name)
+                if norm:
+                    df_next_norm = self.normalize(df_next, mode=mode)
+                    df_norm = pd.concat([df_norm, df_next_norm], axis=1, sort=False)
+            
+            if plot:    
+                ax = axes[int(i/2), i%2]
+                if norm:
+                    ax.hist(df_next_norm.sum(), bins=100)
+                    ax.set_title(f'{name} normalized')
+                else:
+                    ax.hist(df_next.sum(), bins=100)
+                    ax.set_title(name)
+                ax.set_ylabel('Frequency')
+                ax.set_xlabel('Sum molecule count')
+        
+        if plot:
+            plt.tight_layout()
+        
+        if norm:
+            return df_norm, np.array(samples)
+        else:
+            return df_all, np.array(samples)
+    
+    def cluster_mean(self, data: Any, labels: np.ndarray) -> Any:
+        """Calculate cluster mean.
+
+        For a DataFrame with samples in columns, calculate the mean expression
+            values for each unique label in labels.
+
+        Args:
+            data (pd.DataFrame): Pandas DataFrame with samples in columns.
+            labels (np.ndarray): Numpy array with cluster labels
+
+        Returns:
+            [pd.DataFrame]: Pandas Dataframe with mean values for each label.
+
+        """
+        unique_labels = np.unique(labels)
+        cluster_mean = pd.DataFrame(data=np.zeros((data.shape[0], len(unique_labels))), index = data.index,
+                                    columns=unique_labels)
+
+        #Loop over clusters
+        for l in unique_labels:
+            filt = labels == l
+            #Get mean expression of cluster
+            cluster_mean.loc[:, l] = data.loc[:, filt].mean(axis=1)
+
+        return cluster_mean
+    
+    def make_cluster_correlation(self, data:dict, normalized:bool = True, method:str = 'pearson'):
+        """
+        Return a correlation matrix between cluster_mean expression.
+        This is basically a wrapper for the Pandas .corr() function.
+        Input:
+        `cluster_mean`(pd.Dataframe): Dataframe with clusters as columns, and mean
+            expression for each gene as rows. 
+        `method`(str): Method for correlation: "pearson", "kendall", "spearman"
+        Returns
+        Pandas dataframe with correlation matrix.
+        
+        """
+        if normalized:
+            target = 'df_norm'
+        else:
+            target = 'df_mean'
+        
+        #Get datasets
+        dfs = self.get_dict_item(data, target)
+        
+        #make dataset specific labels
+        dataset_labels = []
+        for i, d in enumerate(dfs):
+            for l in d.columns:
+                dataset_labels.append(f'{i}_{l}')
+        
+        #Merge datasets
+        df = pd.concat(dfs, axis=1)
+        df.columns = dataset_labels
+        
+        #Make correlation matrix
+        return df.corr(method=method)
+        
+    #### REGIONALIZATION ####
+    def similarity_network_correlation(self, data:dict, normalized:bool=True, cutoff:float=0.7, 
+                                       method:str='pearson', plot:bool=False):
+        """
+        Make links between correlating clusters and return a network.
+        
+        Makes links of the highest correlating clusters above the cutoff.
+        
+        TODO: NOW IT ONLY CORRELATES WITH THE NEXT DATASET BUT HAVE IT SKIP ONE SO THAT A SINGLE BAD DATASET SHOULD NOT 
+        MESS UP THE LINKAGE
+        
+        Input:
+        data (dictionary): Dictionary with the "regionalize_cluster()" results.
+        normalized (bool, optional): If True uses the normalized data that was
+            made by the "regionalize_cluster()" function. Defaults to True.
+        cutoff (float, optional): Cutoff correlation coefficient above which
+            clusters will be linked. Defaults to 0.7.
+        method (str, optional): Correlation method to use. Choose from: 
+            "pearson", "kendall", "spearman". Defaults to "pearson" 
+        plot (bool, optional): If true plots the generated network.
+            Defaults to False.
+
+        Returns:
+            Networkx Network with edges between nodes that are correlated with each 
+            other above the cutoff.
+        
+        """
+        if normalized:
+            target = 'df_norm'
+        else:
+            target = 'df_mean'
+        
+        edge_list = []
+        datasets = list(data.keys())
+        dix = lambda x: int(x.split('_')[0])
+        
+        for i, (d0, d1) in enumerate(zip(self.datasets_names, self.datasets_names[1:])):
+            df0 = data[d0][target]
+            df1 = data[d1][target]
+            
+            #make dataset specific labels
+            dataset_labels = []
+            for j, d in enumerate([df0, df1]):
+                for l in d.columns:
+                    dataset_labels.append(f'{i + j}_{l}')
+            
+            #Merge datasets
+            df = pd.concat([df0, df1], axis=1)
+            df.columns = dataset_labels
+            
+            #Make correlation matrix
+            links =  df.corr(method=method).stack().reset_index()
+            links.columns = ['Var1', 'Var2', 'value']
+            #Filter the links
+            links = links.loc[links['Var1'].str.startswith(str(i))]
+            links = links.loc[links['Var2'].str.startswith(str(i+1))]
+            links = links.loc[(links['value'] < 1) & (links['value'] > cutoff)]
+            links = links.sort_values('value', ascending=False)
+            #Select highest correlating links, one per cluster
+            links_edges = []
+            used_var1 = []
+            used_var2 = []
+            for i, [v1, v2, val] in links.iterrows():
+                if v1 not in used_var1 and v2 not in used_var2:
+                    links_edges.append([v1, v2, val])
+                    used_var2.append(v2)
+                    used_var1.append(v1)
+            
+            edges = pd.DataFrame.from_records(links_edges, columns =['Var1', 'Var2', 'value'])
+            edge_list.append(edges)
+        
+        #Merge all links    
+        edges_all = pd.concat(edge_list, axis=0)
+        #return edges_all
+    
+        #Network
+        G = nx.from_pandas_edgelist(edges_all, source='Var1', target='Var2', edge_attr='value')
+
+        #Plot
+        if plot:
+            fig = plt.figure(figsize=(10,10))
+            nx.draw(G, with_labels=True, node_color='orange', node_size=20, edge_color='gray', 
+                    linewidths=1, font_size=10,ax=plt.gca())
+        
+        return G
+
+    def merge_labels(self, G, labels:list, reorder_labels:bool = True, data:list=None,
+                     mode:str='APR') -> list:
+        """Merge cluster labels based on network with linked clusters.
+        
+        Args:
+            G ([networkx]): Network with links between cluster labels that 
+                need to be merged. 
+            labels (list): List of numpy arrays with the cluster labels for 
+                each dataset. Labels should have the format 
+                '<dataset index>_<cluster label>' like '1_3' for dataset 1 
+                cluster 3. 
+            reorder_labels (bool, optional): If True the clsuter labels will be
+                reordered based on similarity. Uses (merged)cluster mean 
+                expression as input for SpectralEmbedding to order labels.
+                When True the parameters "data" and "mode" need to be defined.
+                Defaults to True.
+            data (list, optional): List of hexbin dataframes where the order
+                matches self.datasets_names. Defaults to None.
+            mode (str, optional): Normalization mode to use for merging 
+                datasets. Defaults to 'APR'.
+
+        Returns:
+            list: List of numpy arrays with new cluster labels for each 
+            dataset. Order is the same as self.datasets_names. 
+        """
+        
+        #make dictionary with new label for a group
+        merge_dict = {}
+        merged_clusters = []
+        for i, group in enumerate(nx.connected_components(G)):
+            for g in group:
+                merge_dict[g] = f'merge_{i}'
+                merged_clusters.append(g)
+        
+         
+        #Make labels to have a dataset index. Like '1_3' for dataset 1 cluster 3       
+        dataset_label = []
+        for i, l in enumerate(labels):
+            dataset_label.append(np.array([f'{i}_{j}' for j in l]))
+            
+        #Replace original labels with merged label. 
+        merged_label = []
+        for dl in dataset_label:
+            dl_list = []
+            for l in dl:
+                if l in merged_clusters:
+                    dl_list.append(merge_dict[l])
+                else:
+                    dl_list.append(l)
+            merged_label.append(np.array(dl_list))
+        
+        #Change labels to integers
+        unique_labels = np.unique(np.concatenate(merged_label))
+        int_label_dict = dict(zip(unique_labels, range(unique_labels.shape[0])))
+        int_labels = []
+        for l in merged_label:
+            int_labels.append(np.array([int_label_dict[i] for i in l]))
+            
+        if reorder_labels:
+            #Merge datasets
+            merged_data, samples = self.merge_norm(data, mode=mode)
+            #Merge labels
+            all_labels = np.concatenate(int_labels)
+            
+            #Calculate cluster mean
+            cluster_mean = self.cluster_mean(merged_data, all_labels)
+            #Order clusters
+            manifold = SpectralEmbedding(n_components=1).fit_transform(cluster_mean.T)
+            even_spaced = np.linspace(0, 1, manifold.shape[0])
+            even_spaced_dict = dict(zip(np.sort(manifold.ravel()), even_spaced))
+            manifold_even = np.array([even_spaced_dict[i] for i in manifold.ravel()])
+            manifold_even_dict = dict(zip(cluster_mean.columns, manifold_even))
+            #Reassign labels
+            final_labels = []
+            for l in int_labels:
+                final_labels.append(np.array([manifold_even_dict[i] for i in l]))
+            
+        else:
+            final_labels = int_labels
+
+        return final_labels
+        
+    def regionalize(self,
+                    spacing: float, 
+                    min_count: int,
+                    normalization_mode: str = 'APR',
+                    dimensionality_reduction: str = 'PCA', 
+                    n_components: list = [0,100],
+                    clust_dist_threshold: float = 70, 
+                    clust_neighbor_rings: int = 1,
+                    smooth: bool = False,
+                    smooth_neighbor_rings: int = 1, 
+                    smooth_cycles: int = 1,
+                    merge_labels: bool = True,
+                    merge_cutoff: float = 0.7,
+                    correlation_method = 'pearson',
+                    reorder_labels: bool = True) -> dict:
+        """Regionalize and cluster individual datasets.
+
+       Args:
+             spacing (float): distance between tile centers, in same units as 
+                the data. The function makes hexagons with the point up: ⬡
+            min_count (int):  Minimal number of molecules in a tile to keep the 
+                tile in the dataset. The algorithm will generate a lot of empty 
+                tiles, which are later discarded using the min_count threshold.
+                Suggested to be at least 1.
+            normalization_mode (str, optional):Normalization method. Choose 
+                from: "log", "sqrt",  "z", "APR" or None. for log +1 transform,
+                square root transform, z scores or Analytic Pearson residuals
+                respectively. Also possible to not normalize, in which case the
+                input should be None. Usefull for LDA. Defaults to 'APR'.
+            dimensionality_reduction (str, optional): Method for dimentionality
+                reduction. Implmented PCA, LDA. Defaults to 'PCA'.
+            n_components (list, optional): Components to use for clustering.
+                In some cases the PCA component 0 signifies to total expression
+                which should be excluded for clustering. Defaults to [0, 100].
+            clust_dist_threshold (float, optional): Distance threshold for 
+                Scipy Agglomerative clustering. Defaults to 70.
+            clust_neighbor_rings (int, optional): Number of rings around a 
+                central tile to make connections between tiles for 
+                Agglomerative Clustering with connectivity. 1 means connections
+                with the 6 imediate neighbors. 2 means the first and second 
+                ring, making 18 neigbors, etc. Defaults to 1.
+            smooth (bool, optional): If True performs label smoothing after
+                clustering. Defaults to False.
+            smooth_neighbor_rings (int, optional):  Number of rings around a 
+                central tile to smooth over. 1 means connections with the 6 
+                imediate neighbors. 2 means the first and second ring, making 
+                18 neigbors, etc. Defaults to 1.
+            smooth_cycles (int, optional): Number of smoothing cycles.
+                Defaults to 1.
+            merge_labels (bool, optional): If True, the cluster labels of the
+                regionalization of the individual sections are merged based on
+                correlation to link one dataset to the next. Defaults to True.
+            merge_cutoff (float, optional): Cutoff correlation coefficient 
+                above which clusters will be linked. Defaults to 0.7.
+            correlation_method (str, optional): Correlation method to use for
+                mergin. Choose from: "pearson", "kendall", "spearman".
+                Defaults to "pearson".
+            reorder_labels (bool, optional): Reorder the labels so that similar
+                clusters get a label number that is close. Only works when 
+                "merge_labels" is set to True. Defaults to True.
+
+        Returns:
+            Dict containing:
+                - df_hex: Dataframe with counts for each hexagonal tile.
+                - labels: Numpy array with cluster labels for each tile.
+                - hex_coord: XY coordinates for each hexagonal tile.
+                - df_mean: Dataframe with mean count per region.
+                - df_norm: Dataframe with mean normalized count per region.
+                Optional:
+                - labels_merged: Merged labels when "merge_labels" is True.
+        """
+        #regionalize individual datasets
+        results = {}
+        for d in self.datasets:
+            r = dask.delayed(d.regionalize)(spacing, min_count, normalization_mode, dimensionality_reduction,
+                                            n_components, clust_dist_threshold, clust_neighbor_rings,
+                                            smooth, smooth_neighbor_rings, smooth_cycles, n_jobs=1)
+            results[d.dataset_name] = ({'df_hex': r[0],
+                                       'labels': r[1],
+                                       'coordinates': r[2],
+                                       'df_mean': r[3],
+                                       'df_norm': r[4]})
+        
+        with ProgressBar(): 
+            collection = dask.compute(results)
+        collection = collection[0]
 
         
-        #Normalization
+        if merge_labels:
+            print('got here')
+            #make similarity network based on correlation
+            G = self.similarity_network_correlation(collection, normalized=True, cutoff=merge_cutoff, 
+                                        method=correlation_method, plot=False)
+            
+            #Merge labels
+            merged_labels = self.merge_labels(G, self.get_dict_item(collection, 'labels'),
+                                              reorder_labels=reorder_labels, 
+                                              data=self.get_dict_item(collection, 'df_hex'),
+                                              mode=normalization_mode)
+            
+            for i, d in enumerate(self.datasets_names):
+                collection[d]['labels_merged'] = merged_labels[i]
+
+        return collection
+    
+    
+    
         
         
-        #decomposition
-        
-        
-        #Clustering
-        
+
         
         
         

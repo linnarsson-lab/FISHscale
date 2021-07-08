@@ -66,7 +66,7 @@ class Regionalize(Iteration, Decomposition):
             
         return coordinates
             
-    def hexbin_make(self, spacing: float, min_count: int, workers: int=-1) -> Tuple[Any, np.ndarray, Any]:
+    def hexbin_make(self, spacing: float, min_count: int, n_jobs: int=-1) -> Tuple[Any, np.ndarray, Any]:
         """
         Bin 2D point data with hexagonal bins.
         
@@ -78,7 +78,7 @@ class Regionalize(Iteration, Decomposition):
                 the data. The function makes hexagons with the point up: ⬡
             min_count (int): Minimal number of molecules in a tile to keep the 
                 tile in the dataset.
-            workers (int, optional): Number of workers. If -1 it takes the max
+            n_jobs (int, optional): Number of workers. If -1 it takes the max
                 cpu count. Defaults to -1.
 
         Returns:
@@ -91,8 +91,8 @@ class Regionalize(Iteration, Decomposition):
         self._hexbin_params = f'spacing_{spacing}_min_count_{min_count}'
         
         #workers
-        if workers == -1:
-            workers = self.cpu_count
+        if n_jobs == -1:
+            n_jobs = self.cpu_count
             
         #Get canvas size
         max_x = self.x_max
@@ -139,7 +139,7 @@ class Regionalize(Iteration, Decomposition):
         for i, g in enumerate(self.unique_genes):
             data = self.get_gene(g)
             #Query nearest neighbour ()
-            dist, idx = tree.query(data, distance_upper_bound=spacing, workers=workers)
+            dist, idx = tree.query(data, distance_upper_bound=spacing, workers=n_jobs)
             #Count the number of hits
             count = np.zeros(n_tiles)
             counter = Counter(idx)
@@ -363,8 +363,6 @@ class Regionalize(Iteration, Decomposition):
         
         return tsne
         
-    
-    
     def hexbin_decomposition_plot(self, data, components:list = [0, 9], save: bool=False, savename:str=''):
         """Plot decomposition components spatially.
         
@@ -644,7 +642,7 @@ class Regionalize(Iteration, Decomposition):
         return corner1, corner2
     
     def find_nearest_value(self, array, value):
-        
+        """Find the nearest value from an given array."""
         idx = (np.abs(array - value)).argmin()
         return array[idx]
 
@@ -1007,33 +1005,31 @@ class Regionalize(Iteration, Decomposition):
             self.vp(f'Points per area normalized per {conversion.units}')          
 
         return gdf
-
-    def regionalization_run(self, spacing: float, 
-                            min_count: int,
-                            normalization_mode: str = 'log',
-                            dimensionality_reduction: str = 'PCA', 
-                            n_components: list = [0,100],
-                            clust_dist_threshold: float = 70, 
-                            clust_neighbor_rings: int = 1,
-                            smooth_neighbor_rings: int = 1, 
-                            smooth_cycles: int = 1,
-                            boundary_decimals: int = 7,
-                            smooth_polygon: bool = False, 
-                            smooth_polygon_degree:int = 7, 
-                            recount: bool = False,
-                            area_normalize: bool = True, 
-                            area_normalize_unit: str = 'millimeter') -> None:
-        """Run the regionalization pipeline.
-
-        Chains all functions to go from raw point data to regions. Use the
-        individual functions for more control.
+    
+    def regionalize(self, spacing: float, 
+                        min_count: int,
+                        normalization_mode: str = 'APR',
+                        dimensionality_reduction: str = 'PCA', 
+                        n_components: list = [0,100],
+                        clust_dist_threshold: float = 70, 
+                        clust_neighbor_rings: int = 1,
+                        smooth: bool = False,
+                        smooth_neighbor_rings: int = 1, 
+                        smooth_cycles: int = 1,
+                        n_jobs=-1) -> Union[Any, np.ndarray, np.ndarray, Any]:
+        """Regionalize dataset.
+        
+        Performs the following steps:
+        - Hexagonal binning
+        - Normalization
+        - Dimensionality reduction (PCA or LDA)
+        - Clustering
+        - Optional smoothing
+        - Calculating mean region expression matrix
 
         Args:
-            spacing (float): distance between tile centers, in same units as 
-                the data. The actual spacing will have a verry small deviation 
-                (tipically lower than 2e-9%) in the y axis, due to the 
-                matplotlib hexbin function. The function makes hexagons with 
-                the point up: ⬡
+             spacing (float): distance between tile centers, in same units as 
+                the data. The function makes hexagons with the point up: ⬡
             min_count (int):  Minimal number of molecules in a tile to keep the 
                 tile in the dataset. The algorithm will generate a lot of empty 
                 tiles, which are later discarded using the min_count threshold.
@@ -1042,7 +1038,7 @@ class Regionalize(Iteration, Decomposition):
                 from: "log", "sqrt",  "z", "APR" or None. for log +1 transform,
                 square root transform, z scores or Analytic Pearson residuals
                 respectively. Also possible to not normalize, in which case the
-                input should be None. Usefull for LDA. Defaults to 'log'.
+                input should be None. Usefull for LDA. Defaults to 'APR'.
             dimensionality_reduction (str, optional): Method for dimentionality
                 reduction. Implmented PCA, LDA. Defaults to 'PCA'.
             n_components (list, optional): Components to use for clustering.
@@ -1055,12 +1051,77 @@ class Regionalize(Iteration, Decomposition):
                 Agglomerative Clustering with connectivity. 1 means connections
                 with the 6 imediate neighbors. 2 means the first and second 
                 ring, making 18 neigbors, etc. Defaults to 1.
+            smooth (bool, optional): If True performs label smoothing after
+                clustering. Defaults to False.
             smooth_neighbor_rings (int, optional):  Number of rings around a 
                 central tile to smooth over. 1 means connections with the 6 
                 imediate neighbors. 2 means the first and second ring, making 
                 18 neigbors, etc. Defaults to 1.
             smooth_cycles (int, optional): Number of smoothing cycles.
                 Defaults to 1.
+            n_jobs (int, optional): Number op processes. If -1 uses the max 
+                number of CPUs. Defaults to -1.
+
+        Returns:
+            Union[pd.DataFrame, np.ndarray, np.ndarray, pd.DataFrame, 
+                pd.DataFrame]: Tuple containing:
+                - df_hex: Dataframe with counts for each hexagonal tile.
+                - labels: Numpy array with cluster labels for each tile.
+                - hex_coord: XY coordinates for each hexagonal tile.
+                - df_mean: Dataframe with mean count per region.
+                - df_norm: Dataframe with mean normalized count per region.
+        """
+        #Bin the data with a hexagonal grid
+        df_hex, hex_coord = self.hexbin_make(spacing, min_count, n_jobs=n_jobs)
+        
+        #Normalize data
+        df_hex_norm = self.normalize(df_hex, mode=normalization_mode)
+        
+        #Dimensionality reduction
+        if dimensionality_reduction.lower() == 'pca':
+            #Calculate PCA
+            dr = self.PCA(df_hex_norm.T)
+        elif dimensionality_reduction.lower() == 'lda':
+            #Calculate Latent Dirichlet Allocation
+            dr = self.LDA(df_hex_norm.T, n_components=n_components, n_jobs=n_jobs)
+            
+        #Cluster dataset
+        labels = self.clust_hex_connected(dr[:, n_components[0] : n_components[1]], hex_coord, 
+                                          distance_threshold=clust_dist_threshold, 
+                                          neighbor_rings=clust_neighbor_rings, n_jobs=n_jobs)
+        
+        #Spatially smooth cluster labels
+        if smooth:
+            labels = self.smooth_hex_labels(hex_coord, labels, smooth_neighbor_rings, smooth_cycles, n_jobs=n_jobs)
+        
+        #make mean expression
+        df_mean = self.cluster_mean_make(df_hex, labels)
+        df_norm = self.cluster_mean_make(df_hex_norm, labels)
+        
+        return df_hex, labels, hex_coord, df_mean, df_norm
+
+    def geopandas_make(self, spacing: float, 
+                            df_hex: Any,
+                            labels: np.ndarray,
+                            hex_coord: np.ndarray,
+                            boundary_decimals: int = 7,
+                            smooth_polygon: bool = False, 
+                            smooth_polygon_degree:int = 7, 
+                            recount: bool = False,
+                            area_normalize: bool = True, 
+                            area_normalize_unit: str = 'millimeter') -> None:
+        """Make a GeoPandas dataframe of clustered hexbin data.
+        
+        Output is a GeoPandas dataframe which contains the (normalized) counts
+        per region and a polygon for each region.
+
+        Args:
+            spacing (float): Spacing used to generate the hexbins.
+            df_hex (pandas DataFrame): Dataframe with features in rows and 
+                hexagonal tiles in columns with count values.
+            labels: (np.ndarray): Cluster labels matching the number of tiles.
+            hex_coord (np.ndarray): Array with XY coordinates of the hexagonal
+                tiles.
             boundary_decimals (int, optional): Due to inaccuracies in the 
                 original hexagon tile  generation and rounding errors, the 
                 points need to be rounded to return all unique points. If you 
@@ -1086,26 +1147,6 @@ class Regionalize(Iteration, Decomposition):
             [None]: Data saved as self.regions. 
 
         """
-        #Bin the data with a hexagonal grid
-        df_hex, hex_coord = self.hexbin_make(spacing, min_count)
-        
-        #Normalize data
-        df_hex_norm = self.normalize(df_hex, mode=normalization_mode)
-        
-        #Dimensionality reduction
-        if dimensionality_reduction.lower() == 'pca':
-            #Calculate PCA
-            dr = self.PCA(df_hex_norm.T)
-        elif dimensionality_reduction.lower() == 'lda':
-            #Calculate Latent Dirichlet Allocation
-            dr = self.LDA(df_hex_norm.T, n_components=n_components, n_jobs=-1)
-        
-        #Cluster dataset
-        labels = self.clust_hex_connected(dr[:, n_components[0] : n_components[1]], hex_coord, distance_threshold=clust_dist_threshold, neighbor_rings=clust_neighbor_rings)
-        
-        #Spatially smooth cluster labels
-        labels = self.smooth_hex_labels(hex_coord, labels, smooth_neighbor_rings, smooth_cycles, n_jobs=1)
-        
         #Get boundary points of regions
         boundary_points = self.hex_region_boundaries(hex_coord, self.hexbin_hexagon_shape, spacing, labels, decimals = boundary_decimals)
         
@@ -1121,8 +1162,8 @@ class Regionalize(Iteration, Decomposition):
         
         #Recount points in polygons and make geoDataFrame
         if recount == True:
-            self.regions = self.point_in_region(ordered_points, normalize=area_normalize, normalize_unit=area_normalize_unit)
-            self.vp(f'{self.dataset_name} regionalized, result can be found in "self.regions"')
+            gdf = self.point_in_region(ordered_points, normalize=area_normalize, normalize_unit=area_normalize_unit)
+            return gdf
         
         #make geoDataFrame with region data
         else:
@@ -1139,8 +1180,7 @@ class Regionalize(Iteration, Decomposition):
 
             gdf = self.geoDataFrame_make(data = sum_counts.to_numpy(), index = sum_counts.index, 
                                                  columns = sum_counts.columns, geometry=new_geoseries)
-            self.regions = gdf
-            self.vp(f'{self.dataset_name} regionalized, result can be found in "self.regions" as GeoPandas dataframe. ')
-
+            
+            return gdf
             
 

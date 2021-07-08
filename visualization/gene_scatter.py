@@ -219,7 +219,6 @@ class GeneScatter(AxSize):
             else:
                 lw, fs = self._line_font_size(ax)
                 lgnd = plt.legend(loc = 2, frameon=False, fontsize=fs, handletextpad=-0.3)
-                print('got_here')
                 for handle in lgnd.legendHandles:
                     handle.set_sizes([lw*5])
                     plt.setp(lgnd.get_texts(), color='w')                       
@@ -310,7 +309,6 @@ class MultiGeneScatter(AxSize):
                     
             if show_title:
                 lw, fs = self._line_font_size(ax)
-                print(fs)
                 ax.text(d.xy_center[0], d.y_max, d.dataset_name, color='white', ha='center', fontsize=fs)
             
         #Rescale
@@ -329,10 +327,10 @@ class MultiGeneScatter(AxSize):
         #Plot layout
         if not show_axes:
             ax.set_axis_off()
+            plt.gca().xaxis.set_major_locator(plt.NullLocator())
+            plt.gca().yaxis.set_major_locator(plt.NullLocator())
         ax.add_patch(plt.Rectangle((0,0), 1, 1, facecolor=(0,0,0),
                                 transform=ax.transAxes, zorder=-1))
-        plt.gca().xaxis.set_major_locator(plt.NullLocator())
-        plt.gca().yaxis.set_major_locator(plt.NullLocator())
         
         if show_legend:
             if len(genes) > 15:

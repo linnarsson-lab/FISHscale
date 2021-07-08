@@ -99,7 +99,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
             reparse (bool, optional): True if you want to reparse the data,
                 if False, it will repeat the parsing. Parsing will apply the
                 offset. Defaults to False.
-            color_input (Optional[st`r, dict], optional): If a filename is 
+            color_input (Optional[str, dict], optional): If a filename is 
                 specifiedthat endswith "_color_dictionary.pkl" the function 
                 will try to load that dictionary. If "auto" is provided it will
                 try to load an previously generated color dictionary for this 
@@ -518,6 +518,7 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
         """
         for d in self.datasets:
                 d.color_dict = self.color_dict
+                d._metadatafile_add({'color_dict': self.color_dict})
 
     def check_unit(self) -> None:
         """Check if all datasets have the same scale unit. 
@@ -553,8 +554,40 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
         """
         for d in self.datasets:
                 d.part_of_multidataset = True
+                
+    def order_datasets(self, orderby: str='z', order:list=None):
+        """Order self.datasets.
 
-    def arange_grid_offset(self, orderby: str='z'):
+        Args:
+            orderby (str, optional): Sort by parameter:
+                'z' : Sort by Z coordinate.
+                'x' : Sort by width in X.
+                'y' : Sort by width in Y.
+                'name' : Sort by dataset name in alphanumerical order.                
+                Defaults to 'z'.
+            order (list, optional): List of indexes to use for sorting. If 
+                "order" is provided, "orderby" is ignored. Defaults to None.
+        """
+        
+        if order == None:
+            if orderby == 'z':
+                sorted = np.argsort([d.z for d in self.datasets])
+            elif orderby == 'name':
+                sorted = np.argsort([d.dataset_name for d in self.datasets])
+            elif orderby == 'x':
+                sorted = np.argsort([d.x_extent for d in self.datasets])
+            elif orderby == 'y':
+                sorted = np.argsort([d.y_extent for d in self.datasets])
+            else:
+                raise Exception(f'"Orderby" key not understood: {orderby}')
+        else:
+            sorted = order
+        
+        self.datasets = [self.datasets[i] for i in sorted]
+        self.datasets_names = [self.datasets_names[i] for i in sorted]            
+        
+
+    def arange_grid_offset(self, orderby: str='order'):
         """Set offset of datasets so that they are in a XY grid side by side.
 
         Changes the X and Y coordinates so that all datasets are positioned in
@@ -564,11 +597,12 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
 
         Args:
             orderby (str, optional): Sort by parameter:
+                'order' : Sort by order in self.datasets
                 'z' : Sort by Z coordinate.
                 'x' : Sort by width in X.
                 'y' : Sort by width in Y.
                 'name' : Sort by dataset name in alphanumerical order.                
-                    Defaults to 'z'.
+                    Defaults to 'order'.
 
         Raises:
             Exception: If `orderby` is not properly defined.
@@ -584,8 +618,12 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
         y_spacing = np.linspace(-0.5 * y_extent, 0.5* y_extent, grid_size)
         x, y = np.meshgrid(x_spacing, y_spacing)
         x, y = x.ravel(), y.ravel()
+        y = np.flip(y)
 
-        if orderby == 'z':
+
+        if orderby == 'order':
+            sorted = np.arange(0, len(self.datasets))
+        elif orderby == 'z':
             sorted = np.argsort([d.z for d in self.datasets])
         elif orderby == 'name':
             sorted = np.argsort([d.dataset_name for d in self.datasets])

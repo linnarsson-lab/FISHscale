@@ -53,7 +53,7 @@ def is_inside_sm(polygon: np.ndarray, point: np.ndarray) -> Any:
     return intersections & 1  
 
 @njit(parallel=True)
-def is_inside_sm_parallel(polygon: np.ndarray, points: np.ndarray) -> np.ndarray:
+def is_inside_sm_parallel(polygon: np.ndarray, points: np.ndarray, n_jobs=-1) -> np.ndarray:
     """Test if array of point is inside a polygon.
 
     Paralelized the points using numba. 
@@ -66,16 +66,30 @@ def is_inside_sm_parallel(polygon: np.ndarray, points: np.ndarray) -> np.ndarray
             be closed, meaning that the first and last point are identical.
         point (np.ndarray): Array with X and Y coordinates of points 
             to query.
+        n_jobs (int, optional): Number of threads Numba can use. If -1 it uses
+            all threads. After execution of the function it returns to the
+            starting value. Defaults to -1.
 
     Returns:
         [np.ndarray]: Boolean array, with True if point falls inside
             polygon.
 
     """
+    #Set number of threads
+    if n_jobs != -1:
+        default_n_threads = numba.get_num_threads()
+        numba.set_num_threads(n_jobs)
+    
+    #Perform function    
     ln = len(points)
     D = np.empty(ln, dtype=numba.boolean) 
     for i in numba.prange(ln):
         D[i] = is_inside_sm(polygon, points[i])
+    
+    #Reset number of threads
+    if n_jobs != -1:
+        numba.set_num_threads(default_n_threads)    
+    
     return D  
 
 def get_bounding_box(polygon: np.ndarray) -> np.ndarray:
