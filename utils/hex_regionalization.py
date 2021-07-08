@@ -66,7 +66,8 @@ class Regionalize(Iteration, Decomposition):
             
         return coordinates
             
-    def hexbin_make(self, spacing: float, min_count: int, n_jobs: int=-1) -> Tuple[Any, np.ndarray, Any]:
+    def hexbin_make(self, spacing: float, min_count: int, feature_selection: np.ndarray=None,
+                    n_jobs: int=-1) -> Tuple[Any, np.ndarray, Any]:
         """
         Bin 2D point data with hexagonal bins.
         
@@ -86,10 +87,7 @@ class Regionalize(Iteration, Decomposition):
             Pandas Dataframe with counts for each valid tile.
             Numpy Array with centroid coordinates for the tiles.
             
-        """
-        #store settings for plotting
-        self._hexbin_params = f'spacing_{spacing}_min_count_{min_count}'
-        
+        """        
         #workers
         if n_jobs == -1:
             n_jobs = self.cpu_count
@@ -128,15 +126,23 @@ class Regionalize(Iteration, Decomposition):
         #make KDTree
         tree = KDTree(coordinates)
         
+        #genes
+        if not isinstance(feature_selection, np.ndarray):
+            genes = self.unique_genes
+        elif isinstance(feature_selection, list):
+            genes = np.array(feature_selection)
+        else:
+            genes = feature_selection
+        
         #Make Results dataframe
-        n_genes = len(self.unique_genes)
+        n_genes = len(genes)
         n_tiles = coordinates.shape[0]
         df_hex = pd.DataFrame(data=np.zeros((n_genes, n_tiles)),
-                            index=self.unique_genes, 
+                            index=genes, 
                             columns=[f'{self.dataset_name}_{j}' for j in range(n_tiles)])
         
         #Hexagonal binning of data
-        for i, g in enumerate(self.unique_genes):
+        for i, g in enumerate(genes):
             data = self.get_gene(g)
             #Query nearest neighbour ()
             dist, idx = tree.query(data, distance_upper_bound=spacing, workers=n_jobs)
@@ -155,6 +161,9 @@ class Regionalize(Iteration, Decomposition):
         df_hex = df_hex.loc[:, filt]
         coordinates = coordinates[filt]
         self.hexbin_coordinates = coordinates
+        
+        #store settings for plotting
+        self._hexbin_params = f'spacing_{spacing}_min_count_{min_count}_ngenes{n_genes}'
 
         return df_hex, coordinates
                   
@@ -1008,10 +1017,12 @@ class Regionalize(Iteration, Decomposition):
     
     def regionalize(self, spacing: float, 
                         min_count: int,
+                        feature_selection: np.ndarray = None,
                         normalization_mode: str = 'APR',
                         dimensionality_reduction: str = 'PCA', 
                         n_components: list = [0,100],
-                        clust_dist_threshold: float = 70, 
+                        clust_dist_threshold: float = 70,
+                        n_clusters: int = None,
                         clust_neighbor_rings: int = 1,
                         smooth: bool = False,
                         smooth_neighbor_rings: int = 1, 
@@ -1034,6 +1045,8 @@ class Regionalize(Iteration, Decomposition):
                 tile in the dataset. The algorithm will generate a lot of empty 
                 tiles, which are later discarded using the min_count threshold.
                 Suggested to be at least 1.
+            feature_selection (np.ndarray, optional): Array of genes to use.
+                If none is provided will run on all genes. Defaults to None.
             normalization_mode (str, optional):Normalization method. Choose 
                 from: "log", "sqrt",  "z", "APR" or None. for log +1 transform,
                 square root transform, z scores or Analytic Pearson residuals
@@ -1046,6 +1059,8 @@ class Regionalize(Iteration, Decomposition):
                 which should be excluded for clustering. Defaults to [0, 100].
             clust_dist_threshold (float, optional): Distance threshold for 
                 Scipy Agglomerative clustering. Defaults to 70.
+            n_clusters (int, optional): Number of desired clusters. Either this
+                or clust_dist_threshold should be provided. Defaults to None.
             clust_neighbor_rings (int, optional): Number of rings around a 
                 central tile to make connections between tiles for 
                 Agglomerative Clustering with connectivity. 1 means connections
@@ -1072,7 +1087,8 @@ class Regionalize(Iteration, Decomposition):
                 - df_norm: Dataframe with mean normalized count per region.
         """
         #Bin the data with a hexagonal grid
-        df_hex, hex_coord = self.hexbin_make(spacing, min_count, n_jobs=n_jobs)
+        df_hex, hex_coord = self.hexbin_make(spacing, min_count, feature_selection=feature_selection, n_jobs=n_jobs)
+        print(df_hex.shape)
         
         #Normalize data
         df_hex_norm = self.normalize(df_hex, mode=normalization_mode)
@@ -1087,7 +1103,8 @@ class Regionalize(Iteration, Decomposition):
             
         #Cluster dataset
         labels = self.clust_hex_connected(dr[:, n_components[0] : n_components[1]], hex_coord, 
-                                          distance_threshold=clust_dist_threshold, 
+                                          distance_threshold=clust_dist_threshold,
+                                          n_clusters = n_clusters,
                                           neighbor_rings=clust_neighbor_rings, n_jobs=n_jobs)
         
         #Spatially smooth cluster labels

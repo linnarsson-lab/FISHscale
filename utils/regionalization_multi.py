@@ -540,10 +540,12 @@ class RegionalizeMulti(Decomposition):
     def regionalize(self,
                     spacing: float, 
                     min_count: int,
+                    feature_selection: np.ndarray = None,
                     normalization_mode: str = 'APR',
                     dimensionality_reduction: str = 'PCA', 
                     n_components: list = [0,100],
-                    clust_dist_threshold: float = 70, 
+                    clust_dist_threshold: float = 70,
+                    n_clusters: int=None,
                     clust_neighbor_rings: int = 1,
                     smooth: bool = False,
                     smooth_neighbor_rings: int = 1, 
@@ -561,6 +563,8 @@ class RegionalizeMulti(Decomposition):
                 tile in the dataset. The algorithm will generate a lot of empty 
                 tiles, which are later discarded using the min_count threshold.
                 Suggested to be at least 1.
+            feature_selection (np.ndarray, optional): Array of genes to use.
+                If none is provided will run on all genes. Defaults to None.
             normalization_mode (str, optional):Normalization method. Choose 
                 from: "log", "sqrt",  "z", "APR" or None. for log +1 transform,
                 square root transform, z scores or Analytic Pearson residuals
@@ -573,6 +577,8 @@ class RegionalizeMulti(Decomposition):
                 which should be excluded for clustering. Defaults to [0, 100].
             clust_dist_threshold (float, optional): Distance threshold for 
                 Scipy Agglomerative clustering. Defaults to 70.
+            n_clusters (int, optional): Number of desired clusters. Either this
+                or clust_dist_threshold should be provided. Defaults to None.
             clust_neighbor_rings (int, optional): Number of rings around a 
                 central tile to make connections between tiles for 
                 Agglomerative Clustering with connectivity. 1 means connections
@@ -611,9 +617,10 @@ class RegionalizeMulti(Decomposition):
         #regionalize individual datasets
         results = {}
         for d in self.datasets:
-            r = dask.delayed(d.regionalize)(spacing, min_count, normalization_mode, dimensionality_reduction,
-                                            n_components, clust_dist_threshold, clust_neighbor_rings,
-                                            smooth, smooth_neighbor_rings, smooth_cycles, n_jobs=1)
+            r = dask.delayed(d.regionalize)(spacing, min_count, feature_selection, normalization_mode, 
+                                            dimensionality_reduction, n_components, clust_dist_threshold, 
+                                            n_clusters, clust_neighbor_rings, smooth, smooth_neighbor_rings, 
+                                            smooth_cycles, n_jobs=1)
             results[d.dataset_name] = ({'df_hex': r[0],
                                        'labels': r[1],
                                        'coordinates': r[2],
@@ -626,7 +633,6 @@ class RegionalizeMulti(Decomposition):
 
         
         if merge_labels:
-            print('got here')
             #make similarity network based on correlation
             G = self.similarity_network_correlation(collection, normalized=True, cutoff=merge_cutoff, 
                                         method=correlation_method, plot=False)
