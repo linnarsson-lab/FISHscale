@@ -1,6 +1,5 @@
 import math
 from itertools import  permutations
-from sklearn.decomposition import PCA
 import geopandas as gp
 import matplotlib.pyplot as plt
 import networkx as nx
@@ -14,217 +13,408 @@ from sklearn.cluster import AgglomerativeClustering
 from sklearn.neighbors import kneighbors_graph, radius_neighbors_graph
 from pint import UnitRegistry
 from FISHscale.utils.fast_iteration import Iteration
+from FISHscale.utils.decomposition import Decomposition
 from FISHscale.utils.inside_polygon import inside_multi_polygons
 #Mypy types
 from typing import Tuple, Union, Any, List
+import gc
+from memory_profiler import profile
+from scipy.spatial import KDTree
+from collections import Counter
+from matplotlib.patches import Polygon as mpl_polygon
+from matplotlib.collections import PatchCollection
+import copy
+from functools import lru_cache
+import colorsys
+from sklearn.manifold import TSNE, SpectralEmbedding
 
-class Regionalize(Iteration):
+class Regionalize(Iteration, Decomposition):
     """Class for regionalization of multidimensional 2D point data.
 
     """
-    #this was __init__
-    def NOPE(self, 
-        filename: str,
-        x: str = 'r_px_microscope_stitched',
-        y: str = 'c_px_microscope_stitched',
-        gene_column: str = 'below3Hdistance_genes',
-        other_columns: list = [],
-        unique_genes: np.ndarray = None,
-        pixel_size: str = None,
-        verbose: bool = False):
-        """Class for regionalization of 2D point data with hexagonal tiles.
+           
+    def hexagon_shape(self, spacing: float, closed=True) -> np.ndarray:
+        """Make coordinates of hexagon with the point up.      
 
         Args:
-            filename (str): Path to the pandas dataframe saved in .parquet 
-                format with point location and label.
-            x (str, optional): Name of the column with the X coordinates.
-                Defaults to 'r_px_microscope_stitched'.
-            y (str, optional): Name of the column with the Y coordinates.
-                Defaults to 'c_px_microscope_stitched'.
-            gene_column (str, optional): Name of the column with the gene 
-                labels for every point. Defaults to 'below3Hdistance_genes'.
-            other_columns (list, optional): List of other columns. 
-                Defaults to [].
-            unique_genes (np.ndarray, optional): Numpy array with unique gene
-                names. If not defined, the unique genes will be found but this
-                can take time for milions of points.
-            pixel_size (str, optional): Input for Pint's UnitRegistry. Like:
-                "5 micrometer" will result in a pixel_size of 5 with the 
-                correct unit. See Pint documentation for help. 
-                Defaults to None.
-            verbose (bool, optional): If True prints additional output.
+            spacing (float): Distance between centroid and centroid of 
+                horizontal neighbour. 
+            closed (bool, optional): If True first and last point will be
+                identical. Needed for some polygon algorithms. 
+                Defaults to True.
 
+        Returns:
+            [np.ndarray]: Array of coordinates.
         """
-        self.filename = filename
-        self.dataset_name = self.filename.split('/')[-1].split('.')[0]
-        self.x, self.y = x, y
-        self.data = pd.read_parquet(filename)
-        self.gene_column = gene_column
-        self.other_columns = other_columns
-        if not isinstance(unique_genes, np.ndarray):
-            self.unique_genes = np.unique(self.data[self.gene_column])
-        else:
-            self.unique_genes = unique_genes
-        self.ureg = UnitRegistry()
-        self.pixel_size = self.ureg(pixel_size)
-        self.pixel_area = self.pixel_size ** 2
-
-    def hexbin_make(self, spacing: float, min_count: int) -> Tuple[Any, np.ndarray, Any]:
+        
+        # X coodrinate 4 corners
+        x = 0.5 * spacing
+        # Y coordinate 4 corners, tan(30)=1/sqrt(3)
+        y = 0.5 * spacing *  (1 / np.sqrt(3))
+        # Y coordinate top/bottom
+        h = (0.5 * spacing) / (np.sqrt(3)/2)
+        
+        coordinates = np.array([[0, h],
+                                [x, y,],
+                                [x, -y],
+                                [0, -h],
+                                [-x, -y],
+                                [-x, y]])
+        
+        if closed:
+            coordinates = np.vstack((coordinates, coordinates[0]))
+            
+        return coordinates
+            
+    def hexbin_make(self, spacing: float, min_count: int, feature_selection: np.ndarray=None,
+                    n_jobs: int=-1) -> Tuple[Any, np.ndarray, Any]:
         """
         Bin 2D point data with hexagonal bins.
+        
+        Stores the centroids of the exagons under self.hexagon_coordinates,
+        and the hexagon shape under self.hexbin_hexagon_shape.
 
         Args:
             spacing (float): distance between tile centers, in same units as 
-                the data. The actual spacing will have a verry small deviation 
-                (tipically lower than 2e-9%) in the y axis, due to the 
-                matplotlib hexbin function. The function makes hexagons with 
-                the point up: ⬡
+                the data. The function makes hexagons with the point up: ⬡
             min_count (int): Minimal number of molecules in a tile to keep the 
-                tile in the dataset. The algorithm will generate a lot of empty 
-                tiles, which are later discarded using the min_count threshold.
-                Suggested to be at least 1.
+                tile in the dataset.
+            n_jobs (int, optional): Number of workers. If -1 it takes the max
+                cpu count. Defaults to -1.
 
         Returns:
-            Tuple[pd.DataFrame, np.ndarray, plt.Path]: 
+            Tuple[pd.DataFrame, np.ndarray, np.ndarray]: 
             Pandas Dataframe with counts for each valid tile.
             Numpy Array with centroid coordinates for the tiles.
-            Matplotlib path object for a single hexagon.
-
-        """
-        #Get number of genes
-        n_genes = len(self.unique_genes)
+            
+        """        
+        #workers
+        if n_jobs == -1:
+            n_jobs = self.cpu_count
             
         #Get canvas size
         max_x = self.x_max
         min_x = self.x_min
         max_y = self.y_max
         min_y = self.y_min
-
-        #Determine largest axes and use this to make a hexbin grid with square extent.
-        #If it is not square matplotlib will stretch the hexagonal tiles to an asymetric shape.
-        if self.x_extend > self.y_extend:
-            #Find number of points   
-            n_points = math.ceil((max_x - min_x) / spacing)
-            #Correct x range to match whole number of tiles
-            extent = n_points * spacing
-            difference_x = extent - self.x_extend
-            min_x = min_x - (0.5 * difference_x)
-            max_x = max_x + (0.5 * difference_x)
-            # *
-            #Adjust the y scale to match the number of tiles in x
-            #For the same lengt the number of tiles in x is not equal
-            #to the number of rows in y.
-            #For a hexagonal grid with the tiles pointing up, the distance
-            #between rows is (x_spacing * sqrt(3)) / 2
-            #(sqrt(3)/2 comes form sin(60))
-            xlength = max_x - min_x
-            y_spacing = (spacing * np.sqrt(3)) / 2
-            n_points_y = int(xlength / y_spacing)
-            extent_y = n_points_y * y_spacing
-            difference_y = extent_y - self.y_extend
-            min_y = min_y - (0.5 * difference_y)
-            max_y = max_y + (0.5 * difference_y)
-
-        else:
-            #Find number of points  
-            n_points = math.ceil((max_y - min_y) / spacing)
-            #Correct y range to match whole number of tiles
-            extent = n_points * spacing
-            difference_y = extent - self.y_extend
-            min_y = min_y - (0.5 * difference_y)
-            max_y = max_y + (0.5 * difference_y)
-            #Correct x range to match y range
-            #because the x dimension is driving for the matplotlib hexbin function 
-            ylength = max_y - min_y
-            difference_x = ylength - self.x_extend
-            min_x = min_x - (0.5 * difference_x)
-            max_x = max_x + (0.5 * difference_x)
-            #Adjust the y scale to match the number of tiles in x
-            #See explantion above at *
-            y_spacing = (spacing * np.sqrt(3)) / 2
-            n_points_y = int(ylength / y_spacing)
-            extent_y = n_points_y * y_spacing
-            difference_y = extent_y - ylength
-            min_y = min_y - (0.5 * difference_y)
-            max_y = max_y + (0.5 * difference_y)
-
-        #Perform hexagonal binning for each gene
-        for i, g in enumerate(self.unique_genes):
-            data = self.get_gene(g)
-            #Make hexagonal binning of the data
-            hb = hexbin(data.x, data.y, gridsize=int(n_points), 
-                        extent=[min_x, max_x, min_y, max_y], visible=False)
-            #For the first iteration initiate the output data
-            if i == 0:
-                #Get the coordinates of the tiles, parameters should be the same regardles of gene.
-                hex_coord = hb.get_offsets()
-                #Get shape of the hexagon
-                hexbin_hexagon_shape = hb.get_paths()
-                #Make dataframe and add first results
-                n_tiles = hex_coord.shape[0]
-                df_hex = pd.DataFrame(data=np.zeros((n_genes, n_tiles)),
-                                    index=self.unique_genes, 
-                                    columns=[f'{self.dataset_name}_{j}' for j in range(n_tiles)])
-                df_hex.loc[g] = hb.get_array()
-            
-            else:
-                df_hex.loc[g] = hb.get_array()
-
-        del data
         
-        #Filter on number of molecules
+        #Find X range 
+        n_points_x = math.ceil((max_x - min_x) / spacing)
+        #Correct x range to match whole number of tiles
+        full_x_extent = n_points_x * spacing
+        difference_x = full_x_extent - self.x_extent
+        min_x = min_x - (0.5 * difference_x)
+        max_x = max_x + (0.5 * difference_x)
+        
+        #Find Y range 
+        y_spacing = (spacing * np.sqrt(3)) / 2
+        n_points_y = math.ceil((max_y - min_y) / y_spacing)
+        #Correct y range to match whole number of tiles
+        full_y_extent = n_points_y * y_spacing
+        difference_y = full_y_extent - self.y_extent
+        min_y = min_y - (0.5 * difference_y)
+        max_y = max_y + (0.5 * difference_y)
+            
+        #make hexagonal grid
+        x = np.arange(min_x, max_x, spacing, dtype=float)
+        y = np.arange(min_y, max_y, y_spacing, dtype=float)
+        xx, yy = np.meshgrid(x, y)
+        #Offset every second row 
+        xx[::2, :] += 0.5*spacing
+        coordinates = np.array([xx.ravel(), yy.ravel()]).T
+        
+        #make KDTree
+        tree = KDTree(coordinates)
+        
+        #genes
+        if not isinstance(feature_selection, np.ndarray):
+            genes = self.unique_genes
+        elif isinstance(feature_selection, list):
+            genes = np.array(feature_selection)
+        else:
+            genes = feature_selection
+        
+        #Make Results dataframe
+        n_genes = len(genes)
+        n_tiles = coordinates.shape[0]
+        df_hex = pd.DataFrame(data=np.zeros((n_genes, n_tiles)),
+                            index=genes, 
+                            columns=[f'{self.dataset_name}_{j}' for j in range(n_tiles)])
+        
+        #Hexagonal binning of data
+        for i, g in enumerate(genes):
+            data = self.get_gene(g)
+            #Query nearest neighbour ()
+            dist, idx = tree.query(data, distance_upper_bound=spacing, workers=n_jobs)
+            #Count the number of hits
+            count = np.zeros(n_tiles)
+            counter = Counter(idx)
+            count[list(counter.keys())] = list(counter.values())
+            #Add to dataframe
+            df_hex.loc[g] = count
+        
+        #make hexagon coordinates
+        self.hexbin_hexagon_shape = self.hexagon_shape(spacing, closed=True)
+            
+        #Filter on number of counts
         filt = df_hex.sum() >= min_count
         df_hex = df_hex.loc[:, filt]
-        hex_coord = hex_coord[filt]
+        coordinates = coordinates[filt]
+        self.hexbin_coordinates = coordinates
+        
+        #store settings for plotting
+        self._hexbin_params = f'spacing_{spacing}_min_count_{min_count}_ngenes{n_genes}'
 
-        return df_hex, hex_coord, hexbin_hexagon_shape
-
-    def hexbin_normalize(self, df_hex: Any, mode:str = 'log') -> Any:
-        """Simple data normalization.
+        return df_hex, coordinates
+                  
+    @lru_cache(maxsize=1)
+    def _hexbin_PatchCollection_make(self, params: str):
+        """Generate hexbin patch collection for plotting
 
         Args:
-            df_hex (pd.DataFrame): DataFrame with gene counts per hexagonal 
-                tile.
-            mode (str, optional): Normalization method. Choose from: "log",
-                "sqrt" or "z" for log +1 transform, square root transform, or
-                z scores respectively. Defaults to 'log'.
-
-        Raises:
-            Exception: If mode is not properly defined
+            params (str): The hexbin function saves its parameters under:
+                self._hexbin_params. This is used to check if the patch 
+                collection needs to be recalculated when the hexbin function 
+                has been run with different parameters.
 
         Returns:
-            [pd.Dataframe]: Normalzed dataframe.
+            Matplotlib patch collection
         """
+        patches = []
+        for i in self.hexbin_coordinates:
+            pol = mpl_polygon(self.hexbin_hexagon_shape + i, closed=True)
+            patches.append(pol)
+        self._hexbin_PatchCollection = PatchCollection(patches)
+        return PatchCollection(patches)
+                
+    def hexbin_plot(self, c: Union[np.ndarray, list], cm=None, ax:Any=None, 
+                    figsize=None, save:bool=False, savename:str='',
+                    vmin:float=None, vmax:float=None):
+        """Plot hexbin results. 
 
-        if mode == 'log':
-            result = self.log_norm(df_hex)
-        elif mode == 'sqrt':
-            result = self.sqrt_norm(df_hex)
-        elif mode == 'z':
-            result = self.z_norm(df_hex)
+        Args:
+            c (np.ndarray, list): Eiter an Array with color values as a float
+                between 0 an 1. Or a list of RGB color values.
+            cm (plt color map): The color map to use when c is an array.
+                Defaults to plt.cm.viridis.
+            ax (Any, optional): Axes object to plot on. Defaults to None.
+            figsize (tuple): Size of figure if not defined by ax. 
+                If None uses: (10,10). Defaults to None.
+            save (bool, optional): Save the plot as .pdf. Defaults to False.
+            savename (str, optional): Name of the plot. Defaults to ''.
+            vmin (float, optional): If c is an Array you can set vmin.
+                Defaults to None.
+            vmax (float, optional): If c is an Array you can set vmax.
+                Defaults to None.
+        """
+        #Input handling
+        colorbar=False
+        if ax == None: 
+            if figsize == None:
+                figsize = (10,10)
+            fig, ax = plt.subplots(figsize=figsize)
+            colorbar=True
+        if cm == None:
+            cm = plt.cm.viridis
+
+        #Get PatchCollection, patchCollection can only be added once to a figue so make a deep copy.
+        if not hasattr(self, '_hexbin_params'):
+            raise Exception('Hexbin has not been calculated yet. Please make using: self.hexbin_make()')
+        p = copy.deepcopy(self._hexbin_PatchCollection_make(self._hexbin_params))
+        ax.add_collection(p)
+        #Set colors from an RGB list
+        if type(c) == list:
+            p.set_color(c)
+            p.set_linewidth(0.1) #To hide small white lines between the polygons
+            p.set_edgecolor(c)
+            
+        #Set colors from an array of values
         else:
-            raise Exception(f'Invalid "mode": {mode}')
+            c = c / c.max()
+            p.set_array(c)
+            p.set_cmap(cm)
+            p.set_linewidth(0.1) #To hide small white lines between the polygons
+            if vmin!= None and vmax!=None:
+                p.set_clim(vmin=vmin, vmax=vmax)
+                c_scaled = c - vmin
+                c_scaled[c_scaled < 0] = 0
+                c_scaled = c_scaled / (vmax - vmin)
+                p.set_edgecolor(cm(c_scaled))
+            else:
+                c_scaled = c - c.min()
+                c_scaled = c_scaled / c_scaled.max()
+                p.set_edgecolor(cm(c_scaled))
 
-        return result
-
-    def hexbin_PCA(self, df_hex: Any) -> np.ndarray:
-        """Calculate principle components
+        #Colorbar
+        if colorbar:
+            fig.colorbar(p, ax=ax)
+            
+        #Scale
+        d = 0.5 * int(self._hexbin_params.split('_')[1])
+        ax.set_xlim(self.x_min - d, self.x_max + d)
+        ax.set_ylim(self.y_min - d, self.y_max + d)
+        ax.set_aspect('equal')
+        
+        #Save
+        if save:
+            plt.savefig(f'{savename}_hexbin.pdf')
+            
+    def hexbin_tsne_plot(self, data = None, tsne:np.ndarray = None, components: int = 2, save:bool=False, savename:str=''):
+        """Calculate tSNE on hexbin and plot spatial identities.
+        
+        Calculates a tSNE and makes a color scheme based on the tSNE 
+        coordinates, which is then used to color the spatial hexbin data.
+        With 3 components the 3 tSNE dimenstions are used for RGB colors.
+        With 2 components the angle and distance are used for HSV colors.
 
         Args:
-            df_hex (pd.DataFrame): DataFrame with gene counts per hexagonal 
-                tile.
-
-        Returns:
-             [np.array]: Array with principle components as rows
-
+            data ([pd.DataFrame]): DataFrame with features in rows and samples
+                in columns, like from the self.hexbin_make() function.
+                Best to normalize the data and/or apply PCA first.
+                Defaults to None.
+            tsne (np.ndarray, optional): Pre computed tSNE embedding of hexbin
+                data with 2 or 3 components. If not provided, tSNE will be 
+                calculated.
+            components (int, optional): Nuber of components to calculate the 
+                tSNE with, either 2 or 3. Defaults to 2.
+            save (bool, optional): Save the plot as .pdf. Defaults to False.
+            savename (str, optional): Name of the plot. Defaults to ''.
+            
+        Retruns:
+            tsne (np.ndarray) tSNE coordinates.
         """
+        if not (components ==2 or components==3):
+            raise Exception(f'Number of components should be 2 or 3, not: {components}')
+        
+        #Calculate tSNE
+        if isinstance(tsne, np.ndarray):
+            components = tsne.shape[1]
+        else:        
+            tsne = TSNE(n_components=components, n_jobs=self.cpu_count).fit_transform(data.T)
+               
+        #make figure
+        fig = plt.figure(figsize=(15,7))
+        gs = fig.add_gridspec(2, 4)
+        
+        if components == 2:
+            #Make axes
+            ax0 = fig.add_subplot(gs[:, :2])
+            ax1 = fig.add_subplot(gs[:, 2:])
+            
+            #Use rotation and distance from centroid to calculate HSV colors. 
+            #Calculate rotation
+            rotation = np.array([self.get_rotation_rad(0,0, i[0], i[1]) for i in tsne])
+            rotation = (rotation + np.pi) / (2 * np.pi)
+            #Calculate distance
+            origin= np.array([0,0])
+            dist = np.array([np.linalg.norm(origin - i) for i in tsne])
+            dist = dist / dist.max()
+            dist = (dist + 0.5) / 1.5
+            #Make colors
+            c = np.column_stack((rotation, dist, np.ones(dist.shape[0])))
+            c = [colorsys.hsv_to_rgb(i[0], i[1], i[2]) for i in c]
+            
+            #plot tSNE
+            ax0.scatter(tsne[:,0], tsne[:,1], s=3, c=c)
+            ax0.set_aspect('equal')
+            ax0.set_axis_off()
+            ax0.set_title('tSNE', fontsize=14)
+            
+            #plot spatial
+            self.hexbin_plot(c, ax=ax1)
+            ax1.set_axis_off()
+            ax1.set_title('Spatial', fontsize=14)
+            
+        if components == 3:
+            #Make axes
+            ax0_0 = fig.add_subplot(gs[0,0])
+            ax0_1 = fig.add_subplot(gs[0,1])
+            ax0_2 = fig.add_subplot(gs[1,0])
+            ax1 = fig.add_subplot(gs[:, 2:])
+            
+            #Make colors Translate tSNE coordinates into RGB
+            c = tsne + np.abs(tsne.min(axis=0))
+            c = c / c.max(axis=0)
+            c = [list(i) for i in c]
+            
+            #tSNE
+            ax0_0.scatter(tsne[:,0], tsne[:,1], s=1, c=c)
+            ax0_0.set_xlabel('tSNE 0')
+            ax0_0.set_ylabel('tSNE 1')
+            ax0_0.spines['right'].set_visible(False)
+            ax0_0.spines['top'].set_visible(False)
+            ax0_0.set_title('tSNE', fontsize=14)
+            
+            ax0_1.scatter(tsne[:,1], tsne[:,2], s=1, c=c)
+            ax0_1.set_xlabel('tSNE 1')
+            ax0_1.set_ylabel('tSNE 2')
+            ax0_1.spines['right'].set_visible(False)
+            ax0_1.spines['top'].set_visible(False)
+            ax0_1.set_title('tSNE',fontsize=14)
+            
+            ax0_2.scatter(tsne[:,0], tsne[:,2], s=1, c=c)
+            ax0_2.set_xlabel('tSNE 0')
+            ax0_2.set_ylabel('tSNE 2')
+            ax0_2.spines['right'].set_visible(False)
+            ax0_2.spines['top'].set_visible(False)
+            ax0_2.set_title('tSNE', fontsize=14)
+            
+            #Spatial
+            self.hexbin_plot(c, ax=ax1)
+            ax1.set_axis_off()
+            ax1.set_title('Spatial', fontsize=14)
 
-        pca = PCA()
-        return pca.fit_transform(df_hex.T)
+        plt.tight_layout()
+        
+        #Save
+        if save:
+            plt.savefig(f'{savename}_hexbin_tsne.pdf')
+        
+        return tsne
+        
+    def hexbin_decomposition_plot(self, data, components:list = [0, 9], save: bool=False, savename:str=''):
+        """Plot decomposition components spatially.
+        
+        Usefull to plot PCA or LDA components spatially. 
 
+        Args:
+            data ([np.ndarray, pd.DataFrame]): Array with components in
+                columns. 
+            components (list, optional): List with range of components to plot.
+                Defaults to [0, 9].
+            save (bool, optional): Save the plot as .pdf. Defaults to False.
+            savename (str, optional): Name of the plot. Defaults to ''.
+        """
+        
+        n = components[1] - components[0]
+        n_grid = math.ceil(np.sqrt(n))
+        
+        fig, axes = plt.subplots(figsize=(3*n_grid, 3*n_grid), ncols=n_grid, nrows=n_grid)
+
+        #Plot components
+        for i in range(n):
+            j = i + components[0]
+            ax = axes[int(i/n_grid), i%n_grid]
+            self.hexbin_plot(c = data[:,j] / data[:,j].max(), ax=ax)
+            ax.set_aspect('equal')
+            ax.set_title(j)
+            ax.axis('off')
+        
+        #Hide unused axes   
+        n_res = (n_grid **2) - n
+        for i in range(n_res):
+            i += components[1]
+            ax = axes[int(i/n_grid), i%n_grid]
+            ax.axis('off')
+            
+        plt.tight_layout()
+        
+        #Save
+        if save:
+            plt.savefig(f'{savename}_hexbin_decomposition_[{components[0]}, {components[1]}].png', dpi=200)
 
     def clust_hex_connected(self, df_hex, hex_coord: np.ndarray, distance_threshold: float = None, 
-                            n_clusters:int = None, neighbor_rings:int = 1) -> np.ndarray:
+                            n_clusters:int = None, neighbor_rings:int = 1, n_jobs:int=-1) -> np.ndarray:
         """Cluster hex-bin data, with a neighborhood embedding.
 
         Clusters with AggolmerativeClustering that uses a distance matrix 
@@ -258,56 +448,24 @@ class Regionalize(Iteration):
             [np.array]: Numpy array with cluster labels.
 
         """
-        #Make graph to connect neighbours 
-        n_neighbors = (neighbor_rings * 6)
-        Kgraph = kneighbors_graph(hex_coord, n_neighbors, include_self=False)
-
-        #Cluster
+        #Input check
         if distance_threshold!=None and n_clusters!=None:
             raise Exception('One of "distance_threshold" or "n_clusters" should be defined, not both.')
-
-        elif distance_threshold != None:
-            clust_result = AgglomerativeClustering(n_clusters=None, distance_threshold=distance_threshold, 
-                                                compute_full_tree=True, connectivity=Kgraph).fit(df_hex)
-
-        elif n_clusters != None:
-            clust_result = AgglomerativeClustering(n_clusters=n_clusters, 
-                                                connectivity=Kgraph).fit(df_hex)
-
-        else:
+        if distance_threshold==None and n_clusters==None:
             raise Exception('One of "distance_threshold" or "n_clusters" should be defined.')
 
+        #Make graph to connect neighbours 
+        n_neighbors = (neighbor_rings * 6)
+        Kgraph = kneighbors_graph(hex_coord, n_neighbors, include_self=False, n_jobs=n_jobs)
+
+        #Cluster
+        clust_result = AgglomerativeClustering(n_clusters=n_clusters,
+                                               distance_threshold=distance_threshold, 
+                                               compute_full_tree=True, 
+                                               connectivity=Kgraph,
+                                               linkage='ward').fit(df_hex)
         #Return labels
-        labels = clust_result.labels_
-        return labels
-
-    def plot_hex_labels(self, hex_coord: np.ndarray, labels: np.ndarray, s:int =4, 
-                        save: bool = False, save_path: str = ''):
-        """Plot clustering results of hexagonal tiles.
-
-        Args:
-            hex_coord (np.ndarray): Numpy Array with XY coordinates of the
-                centroids of the hexagonal tiles.
-            labels (np.ndarray): Numpy Array with cluster labels.
-            s (int, optional): Size of the hexagon in the plot. Defaults to 4.
-            save (bool, optional): If True saves the plot. Defaults to False.
-            save_path (str, optional): Path to where the plot should be saved. 
-                Defaults to ''.
-
-        """
-        n_clust = len(np.unique(labels))
-        plt.figure(figsize=(10,10))
-        colors = np.multiply(plt.cm.gist_ncar(labels/max(labels)), [0.9, 0.9, 0.9, 1])
-        xdata = hex_coord[:,0]
-        ydata = hex_coord[:,1]
-        #There must be some smart way to determine the size of the marker so that it matches the spacing between the 
-        #tiles and the hexagons line up nicely. But the definition of the size is too convoluted to make a quick fix.
-        plt.scatter(xdata, ydata, s=s, marker=(6, 0, 0), c=colors)
-        plt.gca().set_aspect('equal')
-        plt.axis('off')
-        plt.title(f'{self.dataset_name} {n_clust} clusters')
-        if save == True:
-            plt.savefig(f'{save_path}{self.dataset_name}_hexagon_clustering.pdf')
+        return clust_result.labels_
 
     def smooth_hex_labels(self, hex_coord: np.ndarray, labels: np.ndarray, neighbor_rings: int = 1, cycles: int = 1,
                         return_all: bool = False, n_jobs: int = -1) -> Union[np.ndarray, list]:
@@ -318,7 +476,6 @@ class Regionalize(Iteration):
         The original label is taken into account. If a tie is encountered,
         the label is set to the original label that was the input of that
         smoothing round.
-
 
         Args:
             hex_coord (np.array): Numpy Array with XY coordinates of the
@@ -494,7 +651,7 @@ class Regionalize(Iteration):
         return corner1, corner2
     
     def find_nearest_value(self, array, value):
-        
+        """Find the nearest value from an given array."""
         idx = (np.abs(array - value)).argmin()
         return array[idx]
 
@@ -534,7 +691,7 @@ class Regionalize(Iteration):
         #Because of small devitions of a perfect hexagonal grid it is best to get the hexagon border point form the 
         #Matplotlib Polygon.
         corner = {}
-        for c in hexagon_shape[0].vertices[:6]: #There are points in the polygon for the closing vertice.
+        for c in hexagon_shape[:6]: #There are points in the polygon for the closing vertice.
 
             angle = self.find_nearest_value(angle_array_corners, self.get_rotation_deg(0,0, c[0], c[1]))
             corner[angle] = c
@@ -857,49 +1014,131 @@ class Regionalize(Iteration):
             self.vp(f'Points per area normalized per {conversion.units}')          
 
         return gdf
-
-    def regionalization_run(self, spacing: float, min_count: int,
-                            normalization_mode: str = 'log', 
-                            n_components: int = 100, clust_dist_threshold: float = 70, clust_neighbor_rings: int = 1,
-                            smooth_neighbor_rings: int = 1, smooth_cycles: int = 1,
-                            boundary_decimals: int = 7,
-                            smooth_polygon: bool = False, smooth_polygon_degree:int = 7, 
-                            recount: bool = False,
-                            area_normalize: bool = True, area_normalize_unit: str = 'millimeter') -> None:
-        """Run the regionalization pipeline.
-
-        Chains all functions to go from raw point data to regions. Use the
-        individual functions for more control.
+    
+    def regionalize(self, spacing: float, 
+                        min_count: int,
+                        feature_selection: np.ndarray = None,
+                        normalization_mode: str = 'APR',
+                        dimensionality_reduction: str = 'PCA', 
+                        n_components: list = [0,100],
+                        clust_dist_threshold: float = 70,
+                        n_clusters: int = None,
+                        clust_neighbor_rings: int = 1,
+                        smooth: bool = False,
+                        smooth_neighbor_rings: int = 1, 
+                        smooth_cycles: int = 1,
+                        n_jobs=-1) -> Union[Any, np.ndarray, np.ndarray, Any]:
+        """Regionalize dataset.
+        
+        Performs the following steps:
+        - Hexagonal binning
+        - Normalization
+        - Dimensionality reduction (PCA or LDA)
+        - Clustering
+        - Optional smoothing
+        - Calculating mean region expression matrix
 
         Args:
-            spacing (float): distance between tile centers, in same units as 
-                the data. The actual spacing will have a verry small deviation 
-                (tipically lower than 2e-9%) in the y axis, due to the 
-                matplotlib hexbin function. The function makes hexagons with 
-                the point up: ⬡
+             spacing (float): distance between tile centers, in same units as 
+                the data. The function makes hexagons with the point up: ⬡
             min_count (int):  Minimal number of molecules in a tile to keep the 
                 tile in the dataset. The algorithm will generate a lot of empty 
                 tiles, which are later discarded using the min_count threshold.
                 Suggested to be at least 1.
-            normalization_mode (str, optional): normalization method for 
-                clustering. Choose from: "log", "sqrt" or "z" for log +1 
-                transform, square root transform, or z scores respectively. 
-                Defaults to 'log'.
-            n_components (int, optional): Number of PCA components to use for
-                clustering. First component is not included. Defaults to 100.
+            feature_selection (np.ndarray, optional): Array of genes to use.
+                If none is provided will run on all genes. Defaults to None.
+            normalization_mode (str, optional):Normalization method. Choose 
+                from: "log", "sqrt",  "z", "APR" or None. for log +1 transform,
+                square root transform, z scores or Analytic Pearson residuals
+                respectively. Also possible to not normalize, in which case the
+                input should be None. Usefull for LDA. Defaults to 'APR'.
+            dimensionality_reduction (str, optional): Method for dimentionality
+                reduction. Implmented PCA, LDA. Defaults to 'PCA'.
+            n_components (list, optional): Components to use for clustering.
+                In some cases the PCA component 0 signifies to total expression
+                which should be excluded for clustering. Defaults to [0, 100].
             clust_dist_threshold (float, optional): Distance threshold for 
                 Scipy Agglomerative clustering. Defaults to 70.
+            n_clusters (int, optional): Number of desired clusters. Either this
+                or clust_dist_threshold should be provided. Defaults to None.
             clust_neighbor_rings (int, optional): Number of rings around a 
                 central tile to make connections between tiles for 
                 Agglomerative Clustering with connectivity. 1 means connections
                 with the 6 imediate neighbors. 2 means the first and second 
                 ring, making 18 neigbors, etc. Defaults to 1.
+            smooth (bool, optional): If True performs label smoothing after
+                clustering. Defaults to False.
             smooth_neighbor_rings (int, optional):  Number of rings around a 
                 central tile to smooth over. 1 means connections with the 6 
                 imediate neighbors. 2 means the first and second ring, making 
                 18 neigbors, etc. Defaults to 1.
             smooth_cycles (int, optional): Number of smoothing cycles.
                 Defaults to 1.
+            n_jobs (int, optional): Number op processes. If -1 uses the max 
+                number of CPUs. Defaults to -1.
+
+        Returns:
+            Union[pd.DataFrame, np.ndarray, np.ndarray, pd.DataFrame, 
+                pd.DataFrame]: Tuple containing:
+                - df_hex: Dataframe with counts for each hexagonal tile.
+                - labels: Numpy array with cluster labels for each tile.
+                - hex_coord: XY coordinates for each hexagonal tile.
+                - df_mean: Dataframe with mean count per region.
+                - df_norm: Dataframe with mean normalized count per region.
+        """
+        #Bin the data with a hexagonal grid
+        df_hex, hex_coord = self.hexbin_make(spacing, min_count, feature_selection=feature_selection, n_jobs=n_jobs)
+        print(df_hex.shape)
+        
+        #Normalize data
+        df_hex_norm = self.normalize(df_hex, mode=normalization_mode)
+        
+        #Dimensionality reduction
+        if dimensionality_reduction.lower() == 'pca':
+            #Calculate PCA
+            dr = self.PCA(df_hex_norm.T)
+        elif dimensionality_reduction.lower() == 'lda':
+            #Calculate Latent Dirichlet Allocation
+            dr = self.LDA(df_hex_norm.T, n_components=n_components, n_jobs=n_jobs)
+            
+        #Cluster dataset
+        labels = self.clust_hex_connected(dr[:, n_components[0] : n_components[1]], hex_coord, 
+                                          distance_threshold=clust_dist_threshold,
+                                          n_clusters = n_clusters,
+                                          neighbor_rings=clust_neighbor_rings, n_jobs=n_jobs)
+        
+        #Spatially smooth cluster labels
+        if smooth:
+            labels = self.smooth_hex_labels(hex_coord, labels, smooth_neighbor_rings, smooth_cycles, n_jobs=n_jobs)
+        
+        #make mean expression
+        df_mean = self.cluster_mean_make(df_hex, labels)
+        df_norm = self.cluster_mean_make(df_hex_norm, labels)
+        
+        return df_hex, labels, hex_coord, df_mean, df_norm
+
+    def geopandas_make(self, spacing: float, 
+                            df_hex: Any,
+                            labels: np.ndarray,
+                            hex_coord: np.ndarray,
+                            boundary_decimals: int = 7,
+                            smooth_polygon: bool = False, 
+                            smooth_polygon_degree:int = 7, 
+                            recount: bool = False,
+                            area_normalize: bool = True, 
+                            area_normalize_unit: str = 'millimeter') -> None:
+        """Make a GeoPandas dataframe of clustered hexbin data.
+        
+        Output is a GeoPandas dataframe which contains the (normalized) counts
+        per region and a polygon for each region.
+
+        Args:
+            spacing (float): Spacing used to generate the hexbins.
+            df_hex (pandas DataFrame): Dataframe with features in rows and 
+                hexagonal tiles in columns with count values.
+            labels: (np.ndarray): Cluster labels matching the number of tiles.
+            hex_coord (np.ndarray): Array with XY coordinates of the hexagonal
+                tiles.
             boundary_decimals (int, optional): Due to inaccuracies in the 
                 original hexagon tile  generation and rounding errors, the 
                 points need to be rounded to return all unique points. If you 
@@ -925,30 +1164,24 @@ class Regionalize(Iteration):
             [None]: Data saved as self.regions. 
 
         """
-        #Bin the data with a hexagonal grid
-        df_hex, hex_coord, hexagon_shape = self.hexbin_make(spacing, min_count)
-        #Normalize data
-        df_hex_norm = self.hexbin_normalize(df_hex, mode=normalization_mode)
-        #Calculate PCA
-        pc = self.hexbin_PCA(df_hex_norm)
-        #Cluster dataset
-        labels = self.clust_hex_connected(pc[:,1:n_components+1], hex_coord, distance_threshold=clust_dist_threshold, neighbor_rings=clust_neighbor_rings)
-        #Spatially smooth cluster labels
-        labels = self.smooth_hex_labels(hex_coord, labels, smooth_neighbor_rings, smooth_cycles, n_jobs=1)
         #Get boundary points of regions
-        boundary_points = self.hex_region_boundaries(hex_coord, hexagon_shape, spacing, labels, decimals = boundary_decimals)
+        boundary_points = self.hex_region_boundaries(hex_coord, self.hexbin_hexagon_shape, spacing, labels, decimals = boundary_decimals)
+        
         #Order boundary point for making polygons
         ordered_points = self.polygon_order_points(boundary_points)
+        
         #Smooth boundary points
         if smooth_polygon == True:
             ordered_points = self.polygon_smooth_points(ordered_points, degree = smooth_polygon_degree)
             if recount == False:
                 recount = True
                 print('Recount set to True after "Smooth_polygon" was set to True.')
+        
         #Recount points in polygons and make geoDataFrame
         if recount == True:
-            self.regions = self.point_in_region(ordered_points, normalize=area_normalize, normalize_unit=area_normalize_unit)
-            self.vp(f'{self.dataset_name} regionalized, result can be found in "self.regions"')
+            gdf = self.point_in_region(ordered_points, normalize=area_normalize, normalize_unit=area_normalize_unit)
+            return gdf
+        
         #make geoDataFrame with region data
         else:
             sum_counts = self.cluster_sum_make(df_hex, labels).T #Transpose because geopandas wants regions in index
@@ -964,8 +1197,7 @@ class Regionalize(Iteration):
 
             gdf = self.geoDataFrame_make(data = sum_counts.to_numpy(), index = sum_counts.index, 
                                                  columns = sum_counts.columns, geometry=new_geoseries)
-            self.regions = gdf
-            self.vp(f'{self.dataset_name} regionalized, result can be found in "self.regions" as GeoPandas dataframe. ')
-
+            
+            return gdf
             
 

@@ -68,7 +68,7 @@ class DataLoader_base():
         with open(file_name, 'wb') as pf:
             pickle.dump(data_dict, pf)
         
-    def _metadatafile_read(self) -> Dict:
+    def _metadatafile_read(self, file_name=None) -> Dict:
         """Read the full metadata file and return the dictionary.
 
         Raises:
@@ -79,7 +79,8 @@ class DataLoader_base():
         Returns:
             Dict: Metadata dictionary
         """
-        file_name = path.join(self.FISHscale_data_folder, f'{self.dataset_name}_metadata.pkl')
+        if file_name == None:
+            file_name = path.join(self.FISHscale_data_folder, f'{self.dataset_name}_metadata.pkl')
         
         try:
             with open(file_name, 'rb') as pf:
@@ -139,6 +140,26 @@ class DataLoader_base():
                 print(f'Existing keys: {existing_dict.keys()}')
             return False
         
+    def _metadatafile_get_bypass(self, file : str, item: str) -> Any:
+        """Access metadata file of a parsed dataset wihout loading the dataset.
+
+        Args:
+            file (str): Full path to the original dataset file.
+            item (str): Item to retrieve from the metadata
+
+        Returns:
+            Any: Resulting values fetched from the metadata file.
+        """
+        
+        file_path = file.split('.')[0] + '_FISHscale_Data'
+        file_name = path.splitext(path.basename(file))[0]
+        metadata_file = path.join(file_path, (file_name + '_metadata.pkl'))
+        
+        #open file
+        existing_dict = self._metadatafile_read(metadata_file)    
+        
+        return existing_dict[item]
+        
     def _dump_to_parquet(self, data, name, folder_name:str):
         """Save groupby results as .parquet files.
 
@@ -151,44 +172,42 @@ class DataLoader_base():
         fn_out = path.join(folder_name, f'{name}_{data.name}.parquet')
         #write data
         data.to_parquet(fn_out)
+        
+    def _check_parsed(self, folder: str) -> bool:
+        """Check if data has already been parsed.
+
+        Args:
+            folder (str): folder with FISHscale data.
+
+        Returns:
+            [bool, int]: True if folder with name <dataset_name>_FISHscale_Data
+                is present and contains at least one ".parquet" file. And the
+                number of files found.
+        """
+        if path.exists(folder):
+            fn = path.join(folder, '*.parquet')
+            len_file_list = len(glob(fn))
+            if len_file_list > 0:
+                return True, len_file_list
+            else:
+                return False, 0
+
+        else:
+            return False, 0
 
 
 class DataLoader(DataLoader_base):
-           
-    def _check_parsed(self, filename: str, reparse: bool) -> bool:
-        """Check if data has already been parsed
-
-        Args:
-            filename (str): path to data file.
-            reparse (bool): True if data needs to be reparsed
-
-        Returns:
-            bool: True if folder with name <dataset_name>_FISHscale_Data is 
-                present and contains at least one ".parquet" file.
-        """
-        if path.exists(self.FISHscale_data_folder):
-            fn = path.join(self.FISHscale_data_folder, '*.parquet')
-            file_list = glob(fn)
-            if len(file_list) > 0:
-                if not reparse:
-                    self.vp(f'Found {len(file_list)} already parsed files. Skipping parsing.')
-                return True
-            else:
-                return False          
-
-        else:
-            return False
-
+    
     def _coordinate_properties(self, data):
         """Calculate properties of coordinates.
 
-        Calculates XY min, max, extend and center of the points. 
+        Calculates XY min, max, extent and center of the points. 
         """
         self.x_min, self.x_max = data.x.min(), data.x.max()
         self.y_min, self.y_max = data.y.min(), data.y.max()
-        self.x_extend = self.x_max - self.x_min
-        self.y_extend = self.y_max - self.y_min 
-        self.xy_center = (self.x_max - 0.5*self.x_extend, self.y_max - 0.5*self.y_extend)
+        self.x_extent = self.x_max - self.x_min
+        self.y_extent = self.y_max - self.y_min 
+        self.xy_center = (self.x_max - 0.5*self.x_extent, self.y_max - 0.5*self.y_extent)
         
         prop = {'x_min': self.x_min,
                 'x_max': self.x_max,
@@ -206,9 +225,9 @@ class DataLoader(DataLoader_base):
         self.x_max = prop['x_max']
         self.y_min = prop['y_min']
         self.y_max = prop['y_max']
-        self.x_extend = self.x_max - self.x_min
-        self.y_extend = self.y_max - self.y_min 
-        self.xy_center = (self.x_max - 0.5*self.x_extend, self.y_max - 0.5*self.y_extend)
+        self.x_extent = self.x_max - self.x_min
+        self.y_extent = self.y_max - self.y_min 
+        self.xy_center = (self.x_max - 0.5*self.x_extent, self.y_max - 0.5*self.y_extent)
         self.shape = prop['shape']
 
     def load_data(self, filename: str, x_label: str, y_label: str, gene_label: str, other_columns: Optional[list], 
@@ -262,7 +281,10 @@ class DataLoader(DataLoader_base):
         """
         new_parse = False
         #Check if data has already been parsed
-        if not self._check_parsed(filename, reparse) or reparse:
+        already_parsed = self._check_parsed(filename.split('.')[0] + '_FISHscale_Data') 
+        if not already_parsed[0] or reparse:
+            if already_parsed[0] and not reparse:
+                self.vp(f'Found {already_parsed[1]} already parsed files. Skipping parsing.')
             new_parse = True
             
             #Data parsing
@@ -298,7 +320,7 @@ class DataLoader(DataLoader_base):
                 if pixel_size != 1:
                     data.loc[:, ['x', 'y']] = data.loc[:, ['x', 'y']] * pixel_size
                 
-                #Find data extend and make metadata file
+                #Find data extent and make metadata file
                 self._coordinate_properties(data)
 
                 #unique genes
@@ -364,14 +386,28 @@ class DataLoader(DataLoader_base):
     def transpose(self):
         """Transpose data. Switches X and Y.
         
-        This does NOT survive realoading the data
+        This operation does NOT survive reloading the data.
         """
         rename_col = {'x': 'y', 'y': 'x'}
         self.df = self.df.rename(columns = rename_col)
         self.x_min, self.y_min, self.x_max, self.y_max = self.y_min, self.x_min, self.y_max, self.x_max
-        self.x_extend = self.x_max - self.x_min
-        self.y_extend = self.y_max - self.y_min 
-        self.xy_center = (self.x_max - 0.5*self.x_extend, self.y_max - 0.5*self.y_extend)
+        self.x_extent = self.x_max - self.x_min
+        self.y_extent = self.y_max - self.y_min 
+        self.xy_center = (self.x_max - 0.5*self.x_extent, self.y_max - 0.5*self.y_extent)
+    
+    def flip_x(self):
+        """Flips the X coordinates around the X center.
+        
+        This operation does NOT survive reloading the data.
+        """
+        self.df.x = -(self.df.x - self.xy_center[0]) + self.xy_center[0]
+    
+    def flip_y(self):
+        """Flips the Y coordinates around the Y center.
+        
+        This operation does NOT survive reloading the data.
+        """
+        self.df.y = -(self.df.y - self.xy_center[1]) + self.xy_center[1]
     
     def get_dask_attrs_rows(self,l:list):
         """
