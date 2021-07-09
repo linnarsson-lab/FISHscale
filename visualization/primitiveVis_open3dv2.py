@@ -36,6 +36,7 @@ import time, threading
 import FISHscale
 import functools
 from datetime import datetime, timedelta
+from math import ceil
 
 class Window: 
 
@@ -152,20 +153,19 @@ class Visualizer:
         if points > 10000000:
             points = 10000000
        
-        x= np.random.randint(int(minx),int(maxx),points, dtype='int32')
-        y = np.random.randint(int(miny),int(maxy),points, dtype='int32')
-        
-        z = np.zeros(points, dtype='int32')
+        x = np.linspace(int(minx), ceil(maxx), 2, dtype='int32')
+        y = np.linspace(int(miny), ceil(maxy), 2, dtype='int32')
+        z = np.zeros_like(x)
 
         self.allgenes = np.stack([x,y,z]).T
-        self.allcolors = np.ones([points,3])*0#np.concatenate(colors)[:,0,:]
-
+        self.allcolors = np.ones([2, 3])*0#np.concatenate(colors)[:,0,:]
+        
         self.pcd = o3d.geometry.PointCloud()
         self.pcd.points = o3d.utility.Vector3dVector(self.allgenes)
         self.pcd.colors = o3d.utility.Vector3dVector(self.allcolors)   
 
         self.visM.add_geometry(self.pcd)
-        self.vp('Data loaded')
+        print('Data loaded')
         opt = self.visM.get_render_option()
 
         if show_axis:
