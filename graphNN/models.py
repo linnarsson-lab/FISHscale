@@ -60,9 +60,13 @@ class SAGE(pl.LightningModule):
             in_channels = in_channels if i == 0 else hidden_channels
             # L2 regularization only on last layer
             if i == num_layers-1:
-                self.convs.append(SAGEConv(in_channels, hidden_channels,normalize=self.normalize))
+                self.convs.append(SAGEConv(in_channels, hidden_channels,normalize=self.normalize,aggr='add'))
             else:
-                self.convs.append(SAGEConv(in_channels, hidden_channels,normalize=False))
+                self.convs.append(SAGEConv(in_channels, hidden_channels,normalize=False,aggr='add'))
+
+        self.bns = nn.ModuleList()
+        for _ in range(num_layers - 1):
+            self.bns.append(nn.BatchNorm1d(hidden_channels))
 
         if self.apply_normal_latent:
             self.mean_encoder = nn.Linear(hidden_channels, hidden_channels)
@@ -79,8 +83,9 @@ class SAGE(pl.LightningModule):
 
             x = self.convs[i]((x, x_target), edge_index)
             if i != self.num_layers - 1:
+                x = self.bns[i](x)
                 x = x.relu()
-                x = F.dropout(x, p=0.1, training=self.training)
+                x = F.dropout(x, p=0.25, training=self.training)
 
         if self.apply_normal_latent:
             q_m = self.mean_encoder(x)
@@ -102,8 +107,7 @@ class SAGE(pl.LightningModule):
 
         pos_loss = F.logsigmoid((z * z_pos).sum(-1))
         neg_loss = F.logsigmoid(-(z * z_neg).sum(-1))
-        #ratio = pos_loss/neg_loss + 1e-8
-
+       
         pos_loss = pos_loss.mean()
         neg_loss = neg_loss.mean()
         n_loss = - pos_loss - neg_loss
@@ -121,17 +125,19 @@ class SAGE(pl.LightningModule):
             cce = torch.nn.CrossEntropyLoss()
             classifier_loss = cce(prediction,classes)
             #self.train_acc(y_hat.softmax(dim=-1), y)
-            n_loss += classifier_loss
+            n_loss += classifier_loss #* 10
             #print(supervised_loss)
             self.log('Classifier Loss',classifier_loss)
-            self.train_acc(prediction.softmax(dim=-1),F.one_hot(classes,num_classes=prediction.shape[1]))
-            self.log('train_acc', self.train_acc, prog_bar=True, on_step=False,
-                 on_epoch=True)
+            #self.train_acc(prediction.softmax(dim=-1),F.one_hot(classes,num_classes=prediction.shape[1]))
+            self.train_acc(prediction.argsort(axis=-1)[:,-1],classes)
+            self.log('train_acc', self.train_acc, prog_bar=True, on_step=True)
+        else:
+            n_loss = n_loss #* 10
             
         return n_loss
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=0.001)
+        optimizer = torch.optim.Adam(self.parameters(), lr=0.01)
         return optimizer
 
     def training_step(self, batch, batch_idx):
@@ -200,7 +206,7 @@ class Classifier(nn.Module):
         n_labels=5,
         n_layers=1,
         dropout_rate=0.1,
-        softmax=True,
+        softmax=False,
         use_batch_norm: bool=True,
         bias: bool=True,
         use_relu:bool=True,
@@ -219,4 +225,4 @@ class Classifier(nn.Module):
         self.classifier = nn.Sequential(*layers,nn.ReLU())
 
     def forward(self, x):
-        return self.classifier(x)
+        return F.log_softmax(self.classifier(x),dim=-1)

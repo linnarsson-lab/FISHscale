@@ -328,14 +328,17 @@ class GraphData(pl.LightningDataModule):
         all_molecules = []
         all_coords = []
         all_cl = []
-        data = (data*100).astype('int')
+        data = data/data.sum(axis=0)
+        #data = (data*1000).astype('int')
 
         print('Converting clusters into simulated molecule neighborhoods...')
         for i in trange(data.shape[1]):
             molecules = []
             # Reduce number of cells by Ncells.min() to avoid having a huge dataframe, since it is actually simulated data
             cl_i = data[:,i]#*(Ncells[i]/(Ncells.min()*100)).astype('int')
-            
+            random_molecules = np.random.choice(data.shape[0],size=5000,p=cl_i)
+
+            '''            
             for x in range(cl_i.shape[0]):
                 dot = np.zeros_like(cl_i)
                 dot[x] = 1
@@ -345,8 +348,19 @@ class GraphData(pl.LightningDataModule):
 
                 except:
                     pass
+            '''
 
-            molecules = np.concatenate(molecules)
+            for x in random_molecules:
+                dot = np.zeros_like(cl_i)
+                dot[x] = 1
+                try:
+                    #dot = np.stack([dot]*int(cl_i[x]))
+                    molecules.append(dot)
+                except:
+                    pass
+
+            molecules = np.stack(molecules)
+            #molecules = np.concatenate(molecules)
             all_molecules.append(molecules)
             
             all_coords.append(np.random.normal(loc=i*1000,scale=25,size=[molecules.shape[0],2]))
@@ -357,6 +371,7 @@ class GraphData(pl.LightningDataModule):
         all_coords = np.concatenate(all_coords)
         all_cl = np.concatenate(all_cl)
         edges = self.buildGraph(5,coords=all_coords)
+        print('Fake Molecules: ',all_molecules.shape)
         return all_molecules, edges, all_cl
 
 '''
