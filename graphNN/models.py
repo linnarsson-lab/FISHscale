@@ -99,11 +99,12 @@ class SAGE(pl.LightningModule):
 
     def forward(self,x,pos_x,neg_x,adjs,classes=None):
         # Embedding sampled nodes
+        adjs_i,adjs_pos,adjs_neg = adjs
         z, q_m, q_v = self.neighborhood_forward(x,adjs)
         # Embedding for neighbor nodes of sample nodes
-        z_pos, q_m_pos, q_v_pos = self.neighborhood_forward(pos_x,adjs)
+        z_pos, q_m_pos, q_v_pos = self.neighborhood_forward(pos_x,adjs_pos)
         # Ebedding for random nodes
-        z_neg, q_m_pos, q_v_pos = self.neighborhood_forward(neg_x,adjs)
+        z_neg, q_m_pos, q_v_pos = self.neighborhood_forward(neg_x,adjs_neg)
 
         pos_loss = F.logsigmoid((z * z_pos).sum(-1))
         neg_loss = F.logsigmoid(-(z * z_neg).sum(-1))
@@ -142,12 +143,19 @@ class SAGE(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         x,pos,neg,adjs,c = batch['unlabelled']
-        loss = self(x,pos,neg,adjs,c)
+        x,adjs_x = x
+        pos, adjs_pos = pos
+        neg, adjs_neg = neg
+        loss = self(x,pos,neg,(adjs,adjs_pos,adjs_neg),c)
 
         labelled = batch['labelled']
         if type(labelled) != type(None):
-            x_lab, pos_lab, neg_lab, adjs, c = labelled
-            loss_labelled = self(x_lab,pos_lab,neg_lab,adjs,c)
+            x, pos, neg, adjs, c = labelled
+            x,adjs_x = x
+            pos, adjs_pos = pos
+            neg, adjs_neg = neg
+            loss = self(x,pos,neg,(adjs,adjs_pos,adjs_neg),c)
+
             self.log('labelled_loss',loss_labelled)
             loss += loss_labelled
         
@@ -156,7 +164,10 @@ class SAGE(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         x,pos,neg,adjs,c = batch
-        loss= self(x,pos,neg,adjs,c)
+        x,adjs_x = x
+        pos, adjs_pos = pos
+        neg, adjs_neg = neg
+        loss = self(x,pos,neg,(adjs,adjs_pos,adjs_neg),c)
         self.log('val_loss', loss)
         return loss
     

@@ -517,7 +517,7 @@ class NeighborSampler2(torch.utils.data.DataLoader):
         super(NeighborSampler2, self).__init__(
             node_idx.view(-1).tolist(), collate_fn=self.sample, **kwargs)
 
-    def sample(self, batch):
+    def sample_i(self, batch):
         if not isinstance(batch, Tensor):
             batch = torch.tensor(batch)
 
@@ -541,23 +541,28 @@ class NeighborSampler2(torch.utils.data.DataLoader):
 
         adjs = adjs[0] if len(adjs) == 1 else adjs[::-1]
         out = (batch_size, n_id, adjs)
+        return out
+
+    def sample(self,batch):
+        batch_size,n_id, adjs = self.sample_i(batch)
         n_id,pos,neg = self.sample_pos_neg(n_id)
 
-        #out = (self.data[n_id],self.data[pos],self.data[neg], adjs) #v1 no sparse tensor
+        _,pos,adjs_pos = self.sample_i(pos)
+        _,neg,adjs_neg = self.sample_i(neg)
 
         #out v2 using sparse tensor
         if type(self.cluster_labels) == type(None):
-            out = (torch.tensor(self.data[n_id].toarray(),dtype=torch.float32),
-                        torch.tensor(self.data[pos].toarray(),dtype=torch.float32),
-                        torch.tensor(self.data[neg].toarray(),dtype=torch.float32),
+            out = ((torch.tensor(self.data[n_id].toarray(),dtype=torch.float32),adjs),
+                        (torch.tensor(self.data[pos].toarray(),dtype=torch.float32),adjs_pos),
+                        (torch.tensor(self.data[neg].toarray(),dtype=torch.float32),adjs_neg),
                         adjs,
                         None)
         else:
-            out = (torch.tensor(self.data[n_id].toarray(),dtype=torch.float32),
-                    torch.tensor(self.data[pos].toarray(),dtype=torch.float32),
-                    torch.tensor(self.data[neg].toarray(),dtype=torch.float32),
-                    adjs,
-                    torch.tensor(self.cluster_labels[n_id[:batch_size]],dtype=torch.long))
+            out = ((torch.tensor(self.data[n_id].toarray(),dtype=torch.float32),adjs),
+                        (torch.tensor(self.data[pos].toarray(),dtype=torch.float32),adjs_pos),
+                        (torch.tensor(self.data[neg].toarray(),dtype=torch.float32),adjs_neg),
+                        adjs,
+                        None)
 
         out = self.transform(*out) if self.transform is not None else out
         return out
