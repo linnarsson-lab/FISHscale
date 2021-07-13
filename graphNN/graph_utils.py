@@ -150,7 +150,10 @@ class GraphData(pl.LightningDataModule):
         else:
             labelled = None
 
-        return {'unlabelled':unlabelled,'labelled':labelled}
+        if type(labelled) != type(None):
+            return {'unlabelled':unlabelled,'labelled':labelled}
+        else:
+            return {'unlabelled':unlabelled}
        
     def validation_dataloader(self):
         # set a big batch size, not all will be loaded in memory but it will loop relatively fast through large dataset
@@ -545,7 +548,7 @@ class NeighborSampler2(torch.utils.data.DataLoader):
 
     def sample(self,batch):
         batch_size,n_id, adjs = self.sample_i(batch)
-        n_id,pos,neg = self.sample_pos_neg(n_id)
+        _,pos,neg = self.sample_pos_neg(n_id[:batch_size])
 
         _,pos,adjs_pos = self.sample_i(pos)
         _,neg,adjs_neg = self.sample_i(neg)
