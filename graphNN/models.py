@@ -85,7 +85,7 @@ class SAGE(pl.LightningModule):
             if i != self.num_layers - 1:
                 x = self.bns[i](x)
                 x = x.relu()
-                x = F.dropout(x, p=0.25, training=self.training)
+                x = F.dropout(x, p=0.1, training=self.training)
 
         if self.apply_normal_latent:
             q_m = self.mean_encoder(x)
