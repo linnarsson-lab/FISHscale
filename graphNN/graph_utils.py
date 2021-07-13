@@ -112,7 +112,7 @@ class GraphData(pl.LightningDataModule):
         self.early_stop_callback = EarlyStopping(
             monitor='val_loss',
             min_delta=0.1,
-            patience=3,
+            patience=10,
             verbose=True,
             mode='min',
             )
@@ -175,13 +175,14 @@ class GraphData(pl.LightningDataModule):
         trainer = pl.Trainer(gpus=gpus,callbacks=[self.checkpoint_callback,self.early_stop_callback],max_epochs=max_epochs)
         trainer.fit(self.model, train_dataloader=self.train_dataloader(),val_dataloaders=self.validation_dataloader())
 
-    def get_latent(self, deterministic=True,run_clustering=True,make_plot=True):
+    def get_latent(self, deterministic=True,run_clustering=False,make_plot=False):
         print('Training done, generating embedding...')
         import matplotlib.pyplot as plt
         self.model.eval()
         embedding = []
         for x,pos,neg,adjs,ref in self.validation_dataloader():
-            z,qm,_ = self.model.neighborhood_forward(x,adjs)
+
+            z,qm,_ = self.model.neighborhood_forward(x[0],x[1])
             if deterministic and self.model.apply_normal_latent:
                 z = qm
             embedding.append(z.detach().numpy())

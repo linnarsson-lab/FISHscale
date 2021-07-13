@@ -110,7 +110,7 @@ class SAGE(pl.LightningModule):
         neg_loss = F.logsigmoid(-(z * z_neg).sum(-1))
        
         pos_loss = pos_loss.mean()
-        neg_loss = neg_loss.mean()
+        neg_loss = neg_loss.mean() * 10
         n_loss = - pos_loss - neg_loss
 
         # KL Divergence
