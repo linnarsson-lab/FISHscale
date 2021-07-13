@@ -30,6 +30,7 @@ class SAGE(pl.LightningModule):
         apply_normal_latent:bool=False,
         supervised:bool=False,
         output_channels:int=448,
+        loss_fn:str='sigmoid',
 
         ):
         """
@@ -55,6 +56,7 @@ class SAGE(pl.LightningModule):
         self.convs = torch.nn.ModuleList()
         self.apply_normal_latent = apply_normal_latent
         self.supervised= supervised
+        self.loss_fn = loss_fn
 
         for i in range(num_layers):
             in_channels = in_channels if i == 0 else hidden_channels
@@ -105,12 +107,16 @@ class SAGE(pl.LightningModule):
         z_pos, q_m_pos, q_v_pos = self.neighborhood_forward(pos_x, adjs_pos)
         # Ebedding for random nodes
         z_neg, q_m_pos, q_v_pos = self.neighborhood_forward(neg_x, adjs_neg)
-
-        pos_loss = F.logsigmoid((z * z_pos).sum(-1))
-        neg_loss = F.logsigmoid(-(z * z_neg).sum(-1))
+        
+        if self.loss_fn == 'sigmoid':
+            pos_loss = F.logsigmoid((z * z_pos).sum(-1))
+            neg_loss = F.logsigmoid(-(z * z_neg).sum(-1))
+        elif self.loss_fn == 'cosine':
+            pos_loss = torch.cosine_similarity(z,z_pos)
+            neg_loss = -torch.cosine_similarity(z,z_neg)*100
        
         pos_loss = pos_loss.mean()
-        neg_loss = neg_loss.mean() * 10
+        neg_loss = neg_loss.mean() #* 10
         n_loss = - pos_loss - neg_loss
 
         # KL Divergence
