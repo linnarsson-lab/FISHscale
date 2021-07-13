@@ -150,12 +150,10 @@ class SAGE(pl.LightningModule):
 
         if 'labelled' in batch:
             x, pos, neg, adjs, c = batch['labelled']
-
             x, adjs_i = x
             pos, adjs_pos = pos
             neg, adjs_neg = neg
             loss_labelled = self(x, pos, neg, (adjs_i, adjs_pos, adjs_neg), c)
-
             self.log('labelled_loss',loss_labelled)
             loss += loss_labelled
         
@@ -164,7 +162,6 @@ class SAGE(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         x,pos,neg,adjs,c = batch
-
         x, adjs_i = x
         pos, adjs_pos = pos
         neg, adjs_neg = neg
