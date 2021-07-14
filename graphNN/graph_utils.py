@@ -160,14 +160,21 @@ class GraphData(pl.LightningDataModule):
         return NeighborSampler2(self.edges_tensor, node_idx=self.indices_validation,data=self.d,
                                sizes=self.ngh_sizes, return_e_id=False,
                                batch_size=self.batch_size*1,num_workers=10,
-                               shuffle=False)
+                               shuffle=False, evaluation=False)
+    def latent_dataloader(self):
+        # set a big batch size, not all will be loaded in memory but it will loop relatively fast through large dataset
+        return NeighborSampler2(self.edges_tensor, node_idx=self.indices_validation,data=self.d,
+                               sizes=self.ngh_sizes, return_e_id=False,
+                               batch_size=self.batch_size*1,num_workers=10,
+                               shuffle=False, evaluation=False)
 
     def labelled_dataloader(self):
         indices_lab = torch.tensor(np.arange(0,self.cluster_nghs.shape[0]))
         labelled = NeighborSampler2(self.cluster_edges, node_idx=indices_lab,
                         data=self.cluster_nghs, sizes=self.ngh_sizes,  
                         return_e_id=False, batch_size=self.batch_size,
-                        shuffle=False, num_workers=self.num_workers,cluster_labels=self.cluster_labels)
+                        shuffle=False, num_workers=self.num_workers,
+                        cluster_labels=self.cluster_labels,evaluation=True)
         return labelled
 
     def train(self,max_epochs=5,gpus=-1):     
@@ -180,9 +187,8 @@ class GraphData(pl.LightningDataModule):
         import matplotlib.pyplot as plt
         self.model.eval()
         embedding = []
-        for x,pos,neg,adjs,ref in self.validation_dataloader():
-
-            z,qm,_ = self.model.neighborhood_forward(x[0],x[1])
+        for x,adjs,ref in self.latent_dataloader():
+            z,qm,_ = self.model.neighborhood_forward(x,adjs)
             if deterministic and self.model.apply_normal_latent:
                 z = qm
             embedding.append(z.detach().numpy())
@@ -388,7 +394,6 @@ def compute_library_size(data):
     return local_mean, local_var
 '''
 
-
 class NeighborSampler2(torch.utils.data.DataLoader):
     r"""The neighbor sampler from the `"Inductive Representation Learning on
     Large Graphs" <https://arxiv.org/abs/1706.02216>`_ paper, which allows
@@ -469,7 +474,7 @@ class NeighborSampler2(torch.utils.data.DataLoader):
                  sizes: List[int], node_idx: Optional[Tensor] = None,
                  num_nodes: Optional[int] = None, return_e_id: bool = True,
                  transform: Callable = None, cluster_labels:Optional[Tensor]=None, 
-                 **kwargs):
+                 evaluation:bool=False, **kwargs):
 
         edge_index = edge_index.to('cpu')
 
@@ -488,6 +493,7 @@ class NeighborSampler2(torch.utils.data.DataLoader):
         self.__val__ = None
         self.data = data
         self.cluster_labels = cluster_labels
+        self.evaluation = evaluation
 
         # Obtain a *transposed* `SparseTensor` instance.
         if not self.is_sparse_tensor:
@@ -570,15 +576,18 @@ class NeighborSampler2(torch.utils.data.DataLoader):
         # example) and a random node (as negative example):
 
         batch = torch.tensor(batch)
-        pos_batch = random_walk(row, col, batch, walk_length=1,
-                                coalesced=False)[:, 1]
+        if self.evaluation:
+            return self.sample_i(batch)
+        else:
+            pos_batch = random_walk(row, col, batch, walk_length=1,
+                                    coalesced=False)[:, 1]
 
-        neg_batch = torch.randint(0, self.adj_t.size(1), (batch.numel(), ),
-                                dtype=torch.long)
+            neg_batch = torch.randint(0, self.adj_t.size(1), (batch.numel(), ),
+                                    dtype=torch.long)
 
-        batch = torch.cat([batch, pos_batch, neg_batch], dim=0)
-        return self.sample_i(batch)
-        #return batch,pos_batch,neg_batch
+            batch = torch.cat([batch, pos_batch, neg_batch], dim=0)
+            return self.sample_i(batch)
+            #return batch,pos_batch,neg_batch
 
     def __repr__(self):
         return '{}(sizes={})'.format(self.__class__.__name__, self.sizes)
