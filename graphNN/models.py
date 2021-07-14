@@ -1,5 +1,5 @@
 import torch
-from torch_geometric.nn import SAGEConv
+from torch_geometric.nn import SAGEConv, GATConv
 import collections
 import torch.nn.functional as F
 from torch import nn
@@ -62,9 +62,9 @@ class SAGE(pl.LightningModule):
             in_channels = in_channels if i == 0 else hidden_channels
             # L2 regularization only on last layer
             if i == num_layers-1:
-                self.convs.append(SAGEConv(in_channels, hidden_channels,normalize=self.normalize,aggr='add'))
+                self.convs.append(SAGEConv(in_channels, hidden_channels,normalize=self.normalize,aggr='max'))
             else:
-                self.convs.append(SAGEConv(in_channels, hidden_channels,normalize=False,aggr='add'))
+                self.convs.append(SAGEConv(in_channels, hidden_channels,normalize=False,aggr='max'))
 
         self.bns = nn.ModuleList()
         for _ in range(num_layers - 1):
