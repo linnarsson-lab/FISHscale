@@ -81,7 +81,7 @@ class SAGE(pl.LightningModule):
             self.train_acc = torchmetrics.Accuracy()
                 
     def neighborhood_forward(self,x,adjs):
-        #x = torch.log(x + 1)
+        x = torch.log(x + 1)
         for i, (edge_index, _, size) in enumerate(adjs):
             x_target = x[:size[1]]  # Target nodes are always placed first.
 
