@@ -1,5 +1,5 @@
 import torch
-from torch_geometric.nn import SAGEConv
+from torch_geometric.nn import SAGEConv, GATConv
 import collections
 import torch.nn.functional as F
 from torch import nn
@@ -62,14 +62,16 @@ class SAGE(pl.LightningModule):
             in_channels = in_channels if i == 0 else hidden_channels
             # L2 regularization only on last layer
             if i == num_layers-1:
-                self.convs.append(SAGEConv(in_channels, hidden_channels,normalize=self.normalize,aggr='add'))
+                self.convs.append(SAGEConv(in_channels, hidden_channels,normalize=self.normalize,aggr='max'))
+                #self.convs.append(GATConv(in_channels, hidden_channels, heads=8, dropout=0.1,aggr='max'))
             else:
-                self.convs.append(SAGEConv(in_channels, hidden_channels,normalize=False,aggr='add'))
-
+                self.convs.append(SAGEConv(in_channels, hidden_channels,normalize=self.normalize,aggr='max'))
+                #self.convs.append(GATConv(in_channels, hidden_channels, heads=1, concat=False, dropout=0.1,aggr='max'))
+        '''
         self.bns = nn.ModuleList()
         for _ in range(num_layers - 1):
             self.bns.append(nn.BatchNorm1d(hidden_channels))
-
+        '''
         if self.apply_normal_latent:
             self.mean_encoder = nn.Linear(hidden_channels, hidden_channels)
             self.var_encoder = nn.Linear(hidden_channels, hidden_channels)
@@ -79,13 +81,14 @@ class SAGE(pl.LightningModule):
             self.train_acc = torchmetrics.Accuracy()
                 
     def neighborhood_forward(self,x,adjs):
-        x = torch.log(x + 1)
+        #x = torch.log(x + 1)
         for i, (edge_index, _, size) in enumerate(adjs):
             x_target = x[:size[1]]  # Target nodes are always placed first.
 
             x = self.convs[i]((x, x_target), edge_index)
+            #x = self.convs[i](x, edge_index)
             if i != self.num_layers - 1:
-                x = self.bns[i](x)
+                #x = self.bns[i](x)
                 x = x.relu()
                 x = F.dropout(x, p=0.1, training=self.training)
 
@@ -113,9 +116,8 @@ class SAGE(pl.LightningModule):
             neg_loss = F.logsigmoid(-(z * z_neg).sum(-1))
         elif self.loss_fn == 'cosine':
             pos_loss = torch.cosine_similarity(z,z_pos)
-            neg_loss = -torch.cosine_similarity(z,z_neg)*100
+            neg_loss = -torch.cosine_similarity(z,z_neg)#*100
        
-
         #lambd = 2 / (1 + math.exp(-10 * progress)) - 1
         pos_loss = pos_loss.mean()
         neg_loss = neg_loss.mean() #* 10
@@ -146,7 +148,7 @@ class SAGE(pl.LightningModule):
         return n_loss
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=0.01)
+        optimizer = torch.optim.Adam(self.parameters(), lr=0.01,weight_decay=5e-4)
         return optimizer
 
     def training_step(self, batch, batch_idx):

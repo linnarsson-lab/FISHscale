@@ -112,7 +112,7 @@ class GraphData(pl.LightningDataModule):
         self.early_stop_callback = EarlyStopping(
             monitor='val_loss',
             min_delta=0.1,
-            patience=10,
+            patience=50,
             verbose=True,
             mode='min',
             )
@@ -171,7 +171,7 @@ class GraphData(pl.LightningDataModule):
         return labelled
 
     def train(self,max_epochs=5,gpus=-1):     
-        np.save(self.folder +'/random_cells.npy',self.cells)
+        np.save(self.folder +'/cells.npy',self.cells)
         trainer = pl.Trainer(gpus=gpus,callbacks=[self.checkpoint_callback,self.early_stop_callback],max_epochs=max_epochs)
         trainer.fit(self.model, train_dataloader=self.train_dataloader(),val_dataloaders=self.validation_dataloader())
 
