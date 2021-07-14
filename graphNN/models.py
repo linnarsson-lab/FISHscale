@@ -102,6 +102,14 @@ class SAGE(pl.LightningModule):
 
         return x, q_m, q_v
 
+    def full_forward(self, x, edge_index):
+        for i, conv in enumerate(self.convs):
+            x = conv(x, edge_index)
+            if i != self.num_layers - 1:
+                x = x.relu()
+                x = F.dropout(x, p=0.5, training=self.training)
+        return x
+
     def forward(self,x,adjs,classes=None):
         # Embedding sampled nodes
         z, qm, qv = self.neighborhood_forward(x, adjs)
