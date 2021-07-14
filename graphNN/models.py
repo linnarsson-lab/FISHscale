@@ -102,15 +102,15 @@ class SAGE(pl.LightningModule):
 
         return x, q_m, q_v
 
-    def forward(self,x,pos_x,neg_x,adjs,classes=None):
+    def forward(self,x,adjs,classes=None):
         # Embedding sampled nodes
-        adjs_i,adjs_pos,adjs_neg = adjs
-        z, q_m, q_v = self.neighborhood_forward(x, adjs_i)
+        z, qm, qv = self.neighborhood_forward(x, adjs)
+        z, z_pos, z_neg = z.split(z.size(0) // 3, dim=0)
+        if qm != 0:
+            qm, qm_pos, qm_neg = qm.split(qm.size(0) // 3, dim=0)
+            qv, qv_pos, qv_neg = qv.split(qv.size(0) // 3, dim=0)
         # Embedding for neighbor nodes of sample nodes
-        z_pos, q_m_pos, q_v_pos = self.neighborhood_forward(pos_x, adjs_pos)
-        # Ebedding for random nodes
-        z_neg, q_m_pos, q_v_pos = self.neighborhood_forward(neg_x, adjs_neg)
-        
+
         if self.loss_fn == 'sigmoid':
             pos_loss = F.logsigmoid((z * z_pos).sum(-1))
             neg_loss = F.logsigmoid(-(z * z_neg).sum(-1))
@@ -125,9 +125,9 @@ class SAGE(pl.LightningModule):
 
         # KL Divergence
         if self.apply_normal_latent:
-            mean = torch.zeros_like(q_m)
-            scale = torch.ones_like(q_v)
-            kl_divergence_z = kl(Normal(q_m, torch.sqrt(q_v)), Normal(mean, scale)).sum(dim=1)
+            mean = torch.zeros_like(qm)
+            scale = torch.ones_like(qv)
+            kl_divergence_z = kl(Normal(qm, torch.sqrt(qv)), Normal(mean, scale)).sum(dim=1)
             n_loss = n_loss + kl_divergence_z.mean()
         
         # Add loss if trying to reconstruct cell types
@@ -152,18 +152,12 @@ class SAGE(pl.LightningModule):
         return optimizer
 
     def training_step(self, batch, batch_idx):
-        x,pos,neg,adjs,c = batch['unlabelled']
-        x, adjs_i = x
-        pos, adjs_pos = pos
-        neg, adjs_neg = neg
-        loss = self(x, pos, neg, (adjs_i, adjs_pos, adjs_neg), c)
+        x,adjs,c = batch['unlabelled']
+        loss = self(x, adjs, c)
 
         if 'labelled' in batch:
-            x, pos, neg, adjs, c = batch['labelled']
-            x, adjs_i = x
-            pos, adjs_pos = pos
-            neg, adjs_neg = neg
-            loss_labelled = self(x, pos, neg, (adjs_i, adjs_pos, adjs_neg), c)
+            x, adjs, c = batch['labelled']
+            loss_labelled = self(x, adjs, c)
             self.log('labelled_loss',loss_labelled)
             loss += loss_labelled
         
@@ -171,11 +165,8 @@ class SAGE(pl.LightningModule):
         return loss
 
     def validation_step(self, batch, batch_idx):
-        x,pos,neg,adjs,c = batch
-        x, adjs_i = x
-        pos, adjs_pos = pos
-        neg, adjs_neg = neg
-        loss = self(x, pos, neg, (adjs_i , adjs_pos, adjs_neg), c)
+        x, adjs, c = batch
+        loss = self(x, adjs, c)
         self.log('val_loss', loss)
         return loss
     
