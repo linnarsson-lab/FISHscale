@@ -62,15 +62,16 @@ class SAGE(pl.LightningModule):
             in_channels = in_channels if i == 0 else hidden_channels
             # L2 regularization
             if i == num_layers-1:
-                self.convs.append(SAGEConv(in_channels, hidden_channels,normalize=self.normalize,aggr='max'))
+                self.convs.append(SAGEConv(in_channels, hidden_channels))#,normalize=self.normalize,aggr='max'))
                 #self.convs.append(GATConv(in_channels, hidden_channels, heads=8, dropout=0.1,aggr='max'))
             else:
-                self.convs.append(SAGEConv(in_channels, hidden_channels,normalize=self.normalize,aggr='max'))
+                self.convs.append(SAGEConv(in_channels, hidden_channels))#,normalize=self.normalize,aggr='max'))
                 #self.convs.append(GATConv(in_channels, hidden_channels, heads=1, concat=False, dropout=0.1,aggr='max'))
-
+        '''
         self.bns = nn.ModuleList()
         for _ in range(num_layers - 1):
             self.bns.append(nn.BatchNorm1d(hidden_channels))
+        '''
 
         if self.apply_normal_latent:
             self.mean_encoder = nn.Linear(hidden_channels, hidden_channels)
@@ -88,9 +89,9 @@ class SAGE(pl.LightningModule):
             x = self.convs[i]((x, x_target), edge_index)
             #x = self.convs[i](x, edge_index)
             if i != self.num_layers - 1:
-                x = self.bns[i](x)
+                #x = self.bns[i](x)
                 x = x.relu()
-                x = F.dropout(x, p=0.1, training=self.training)
+                x = F.dropout(x, p=0.5, training=self.training)
 
         if self.apply_normal_latent:
             q_m = self.mean_encoder(x)
@@ -107,7 +108,7 @@ class SAGE(pl.LightningModule):
             x = conv(x, edge_index)
             if i != self.num_layers - 1:
                 x = x.relu()
-                x = F.dropout(x, p=0.1, training=self.training)
+                x = F.dropout(x, p=0.5, training=self.training)
         return x
 
     def forward(self,x,adjs,classes=None):
@@ -156,7 +157,7 @@ class SAGE(pl.LightningModule):
         return n_loss
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=0.01,weight_decay=5e-4)
+        optimizer = torch.optim.Adam(self.parameters(), lr=0.01)#,weight_decay=5e-4)
         return optimizer
 
     def training_step(self, batch, batch_idx):
