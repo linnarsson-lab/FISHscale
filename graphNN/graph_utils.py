@@ -100,7 +100,8 @@ class GraphData(pl.LightningDataModule):
         self.buildGraph(self.distance_threshold)
         self.compute_size()
         self.setup()
-        self.knn_smooth()
+        if self.smooth:
+            self.knn_smooth()
 
         self.checkpoint_callback = ModelCheckpoint(
             monitor='train_loss',
@@ -405,7 +406,7 @@ class GraphData(pl.LightningDataModule):
         print('Fake Molecules: ',all_molecules.shape)
         return all_molecules, edges, all_cl
 
-    def knn_smooth(neighborhood_size=25):
+    def knn_smooth(self,neighborhood_size=25):
         print('Smoothing neighborhoods with kernel size: {}'.format(neighborhood_size))
         
         u = AnnoyIndex(2, 'euclidean')
@@ -422,7 +423,8 @@ class GraphData(pl.LightningDataModule):
                 smoothed_dataframe.append(smoothed_nn)
                 molecules_connected.append(i)
             except:
-                pass
+                smoothed_dataframe.append(self.d[i,:].toarray())
+                
         smoothed_dataframe= np.concatenate(smoothed_dataframe)
         self.d = sparse.csr_matrix(smoothed_dataframe)
         self.molecules_connected = np.array(molecules_connected)
