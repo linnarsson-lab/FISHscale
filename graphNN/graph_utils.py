@@ -36,7 +36,7 @@ class GraphData(pl.LightningDataModule):
         analysis_name:str,
         cells=None, # Array with cell_ids of shape (Cells)
         distance_threshold = 250,
-        minimum_nodes_connected = 5,
+        minimum_nodes_connected = 25,
         ngh_sizes = [20, 10],
         train_p = 0.25,
         batch_size= 1024,
@@ -44,7 +44,7 @@ class GraphData(pl.LightningDataModule):
         save_to = '',
         subsample=1,
         ref_celltypes=None,
-        Ncells = None,
+        smooth:bool=False
         ):
         """
         Initialize GraphData class
@@ -78,6 +78,7 @@ class GraphData(pl.LightningDataModule):
         self.num_workers = num_workers
         self.save_to = save_to
         self.ref_celltypes = ref_celltypes 
+        self.smooth = smooth
 
         self.folder = self.analysis_name+ '_' +datetime.now().strftime("%Y-%m-%d-%H%M%S")
         os.mkdir(self.folder)
@@ -93,14 +94,13 @@ class GraphData(pl.LightningDataModule):
         '''
         
         if type(self.ref_celltypes) != type(None):
-            if type(Ncells) == type(None):
-                Ncells = np.ones(self.ref_celltypes.shape[1])
-            self.cluster_nghs, self.cluster_edges, self.cluster_labels = self.cell_types_to_graph(self.ref_celltypes, Ncells)
+            self.cluster_nghs, self.cluster_edges, self.cluster_labels = self.cell_types_to_graph(self.ref_celltypes)
         
         # Save random cell selection
         self.buildGraph(self.distance_threshold)
         self.compute_size()
         self.setup()
+        self.knn_smooth()
 
         self.checkpoint_callback = ModelCheckpoint(
             monitor='train_loss',
@@ -126,13 +126,18 @@ class GraphData(pl.LightningDataModule):
         self.d = self.molecules_df()
 
     def compute_size(self):
-        self.train_size = int((self.cells.shape[0])*self.train_p)
-        self.test_size = self.cells.shape[0]-int(self.cells.shape[0]*self.train_p)  
+        cells = self.cells
+        if self.smooth:
+            cells = self.molecules_connected
+        np.save(self.folder +'/cells.npy', cells)
+
+        self.train_size = int((cells.shape[0])*self.train_p)
+        self.test_size = cells.shape[0]-int(cells.shape[0]*self.train_p)  
         random_state = np.random.RandomState(seed=0)
-        permutation = random_state.permutation(self.cells.shape[0])
+        permutation = random_state.permutation(cells.shape[0])
         self.indices_test = torch.tensor(permutation[:self.test_size])
         self.indices_train = torch.tensor(permutation[self.test_size : (self.test_size + self.train_size)])
-        self.indices_validation = torch.tensor(np.arange(self.cells.shape[0]))
+        self.indices_validation = torch.tensor(np.arange(cells.shape[0]))
 
     def train_dataloader(self):
         unlabelled=  NeighborSampler2(self.edges_tensor, node_idx=self.indices_train,data=self.d,
@@ -178,7 +183,6 @@ class GraphData(pl.LightningDataModule):
         return labelled
 
     def train(self,max_epochs=5,gpus=-1):     
-        np.save(self.folder +'/cells.npy',self.cells)
         trainer = pl.Trainer(gpus=gpus,callbacks=[self.checkpoint_callback,self.early_stop_callback],max_epochs=max_epochs)
         trainer.fit(self.model, train_dataloader=self.train_dataloader(),val_dataloaders=self.validation_dataloader())
 
@@ -248,7 +252,6 @@ class GraphData(pl.LightningDataModule):
 
     def molecules_df(self):
         rows,cols = [],[]
-        #filt = self.data.df.map_partitions(lambda x: x[x.index.isin(self.cells)]).g.values.compute()
         filt = self.data.df.g.values.compute()[self.cells]
         for r in trange(self.data.unique_genes.shape[0]):
             g = self.data.unique_genes[r]
@@ -310,19 +313,37 @@ class GraphData(pl.LightningDataModule):
                         res += pair
                 res= np.array(res)
                 return res
-            res = find_nn_distance(coords,t,d_th)
-
+            edges = find_nn_distance(coords,t,d_th)
+                    
             with h5py.File(edge_file, 'w') as hf:
-                hf.create_dataset("edges",  data=res)
+                hf.create_dataset("edges",  data=edges)
+
         else:
             with h5py.File(edge_file, 'r+') as hf:
-                res = hf['edges'][:]
-        if supervised==False:
-            self.edges_tensor = torch.tensor(res.T)
-        else:
-            return torch.tensor(res.T)
+                edges = hf['edges'][:]
 
-    def cell_types_to_graph(self, data, Ncells):
+        G = nx.Graph()
+        G.add_nodes_from(np.arange(coords.shape[0]))
+            # Add edges
+        G.add_edges_from(edges)
+
+        node_removed = []
+        for component in tqdm(list(nx.connected_components(G))):
+            if len(component) < self.minimum_nodes_connected:
+                for node in component:
+                    node_removed.append(node)
+                    G.remove_node(node)
+
+        edges = torch.tensor(list(G.edges)).T
+        cells = torch.tensor(list(G.nodes))
+
+        if supervised==False:
+            self.edges_tensor = edges
+            self.molecules_connected = cells
+        else:
+            return edges
+
+    def cell_types_to_graph(self, data):
         """
         cell_types_to_graph [summary]
 
@@ -384,15 +405,27 @@ class GraphData(pl.LightningDataModule):
         print('Fake Molecules: ',all_molecules.shape)
         return all_molecules, edges, all_cl
 
-'''
-def compute_library_size(data):   
-    sum_counts = data.sum(axis=1)
-    masked_log_sum = np.ma.log(sum_counts)
-    log_counts = masked_log_sum.filled(0)
-    local_mean = np.mean(log_counts).astype(np.float32)
-    local_var = np.var(log_counts).astype(np.float32)
-    return local_mean, local_var
-'''
+    def knn_smooth(neighborhood_size=25):
+        print('Smoothing neighborhoods with kernel size: {}'.format(neighborhood_size))
+        
+        u = AnnoyIndex(2, 'euclidean')
+        u.load(os.path.join(self.save_to,'Tree-{}Nodes-Ngh{}-{}-dst{}.ann'.format(self.cells.shape[0],self.ngh_sizes[0],self.ngh_sizes[1],self.distance_threshold)))
+        smoothed_dataframe = []
+        molecules_connected = []
+        for i in trange(self.d.shape[0]):
+            search = u.get_nns_by_item(i, neighborhood_size, include_distances=True)
+            neighbors = [n for n,d in zip(search[0],search[1]) if d < self.distance_threshold]
+
+            try:
+                rnd_neighbors = np.random.choice(neighbors, size=neighborhood_size,replace=False)
+                smoothed_nn = self.d[rnd_neighbors,:].sum(axis=0)
+                smoothed_dataframe.append(smoothed_nn)
+                molecules_connected.append(i)
+            except:
+                pass
+        smoothed_dataframe= np.concatenate(smoothed_dataframe)
+        self.d = sparse.csr_matrix(smoothed_dataframe)
+        self.molecules_connected = np.array(molecules_connected)
 
 class NeighborSampler2(torch.utils.data.DataLoader):
     r"""The neighbor sampler from the `"Inductive Representation Learning on
