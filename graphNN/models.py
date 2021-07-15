@@ -67,19 +67,11 @@ class SAGE(pl.LightningModule):
             else:
                 self.convs.append(SAGEConv(in_channels, hidden_channels))#,normalize=self.normalize,aggr='max'))
                 #self.convs.append(GATConv(in_channels, hidden_channels, heads=1, concat=False, dropout=0.1,aggr='max'))
-<<<<<<< HEAD
-        '''
-        self.bns = nn.ModuleList()
-        for _ in range(num_layers - 1):
-            self.bns.append(nn.BatchNorm1d(hidden_channels))
-        '''
-=======
 
         '''        
         self.bns = nn.ModuleList()
         for _ in range(num_layers - 1):
             self.bns.append(nn.BatchNorm1d(hidden_channels))'''
->>>>>>> b2f3e090fdffb470136922e3cc54c9b399d596e4
 
         if self.apply_normal_latent:
             self.mean_encoder = nn.Linear(hidden_channels, hidden_channels)
