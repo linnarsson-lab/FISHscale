@@ -176,9 +176,9 @@ class SAGE(pl.LightningModule):
             self.log('labelled_loss',loss_labelled)
             loss += loss_labelled
 
-        self.log('Positive Loss',-pos_loss,on_step=True)
-        self.log('Negative Loss',-neg_loss,on_step=True)
-        self.log('train_loss', loss,on_step=True)
+        self.log('Positive Loss',-pos_loss,on_step=True, on_epoch=True)
+        self.log('Negative Loss',-neg_loss,on_step=True, on_epoch=True)
+        self.log('train_loss', loss,on_step=True, on_epoch=True)
         
         return loss
 
