@@ -136,9 +136,6 @@ class SAGE(pl.LightningModule):
         self.progress += 1
         pos_loss = pos_loss.mean() #* lambd
         neg_loss = neg_loss.mean() #* 100
-
-        self.log('Positive Loss',pos_loss,on_step=True)
-        self.log('Negative Loss',neg_loss,on_step=True)
         n_loss = - pos_loss - neg_loss
 
         # KL Divergence
@@ -163,23 +160,26 @@ class SAGE(pl.LightningModule):
         else:
             n_loss = n_loss #* 10
             
-        return n_loss
+        return n_loss, pos_loss, neg_loss
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=0.001)#,weight_decay=5e-4)
+        optimizer = torch.optim.Adam(self.parameters(), lr=0.01)#,weight_decay=5e-4)
         return optimizer
 
     def training_step(self, batch, batch_idx):
         x,adjs,c = batch['unlabelled']
-        loss = self(x, adjs, c)
+        loss, pos_loss, neg_loss = self(x, adjs, c)
 
         if 'labelled' in batch:
             x, adjs, c = batch['labelled']
-            loss_labelled = self(x, adjs, c)
+            loss_labelled, _, _ = self(x, adjs, c)
             self.log('labelled_loss',loss_labelled)
             loss += loss_labelled
-        
+
+        self.log('Positive Loss',-pos_loss,on_step=True)
+        self.log('Negative Loss',-neg_loss,on_step=True)
         self.log('train_loss', loss,on_step=True)
+        
         return loss
 
     def validation_step(self, batch, batch_idx):
