@@ -614,7 +614,7 @@ class NeighborSampler2(torch.utils.data.DataLoader):
         if self.evaluation:
             return self.sample_i(batch)
         else:
-            pos_batch = random_walk(row, col, batch, walk_length=1,
+            pos_batch = random_walk(row, col, batch, walk_length=2,
                                     coalesced=False)[:, 1]
 
             neg_batch = torch.randint(0, self.adj_t.size(1), (batch.numel(), ),

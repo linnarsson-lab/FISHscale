@@ -66,11 +66,11 @@ class SAGE(pl.LightningModule):
             in_channels = in_channels if i == 0 else hidden_channels
             # L2 regularization
             if i == num_layers-1:
-                #self.convs.append(SAGEConv(in_channels, hidden_channels,normalize=False))
-                self.convs.append(GATConv(in_channels, hidden_channels, heads=8, dropout=0.1,concat=False))
+                self.convs.append(SAGEConv(in_channels, hidden_channels,normalize=False))
+                #self.convs.append(GATConv(in_channels, hidden_channels, heads=8, dropout=0.1,concat=False))
             else:
-                #self.convs.append(SAGEConv(in_channels, hidden_channels,normalize=self.normalize))
-                self.convs.append(GATConv(in_channels, hidden_channels, heads=8, dropout=0.1,concat=False))
+                self.convs.append(SAGEConv(in_channels, hidden_channels,normalize=self.normalize))
+                #self.convs.append(GATConv(in_channels, hidden_channels, heads=8, dropout=0.1,concat=False))
 
         '''        
         self.bns = nn.ModuleList()
@@ -134,7 +134,7 @@ class SAGE(pl.LightningModule):
 
         lambd = 2 / (1 + math.exp(-10 * self.progress/self.max_lambd)) - 1
         self.progress += 1
-        pos_loss = pos_loss.mean() * lambd
+        pos_loss = pos_loss.mean() #* lambd
         neg_loss = neg_loss.mean() #* 100
 
         self.log('Positive Loss',pos_loss,on_step=True)
