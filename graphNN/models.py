@@ -8,6 +8,7 @@ from torch.distributions import Normal,Poisson
 from torch.distributions import Normal, kl_divergence as kl
 import pytorch_lightning as pl
 import torchmetrics
+import math
 
 def reparameterize_gaussian(mu, var):
     return Normal(mu, var.sqrt()).rsample()
@@ -31,6 +32,7 @@ class SAGE(pl.LightningModule):
         supervised:bool=False,
         output_channels:int=448,
         loss_fn:str='sigmoid',
+        max_lambd:int=100000,
 
         ):
         """
@@ -57,16 +59,18 @@ class SAGE(pl.LightningModule):
         self.apply_normal_latent = apply_normal_latent
         self.supervised= supervised
         self.loss_fn = loss_fn
-
+        self.progress = 0
+        self.max_lambd = max_lambd
+        
         for i in range(num_layers):
             in_channels = in_channels if i == 0 else hidden_channels
             # L2 regularization
             if i == num_layers-1:
                 self.convs.append(SAGEConv(in_channels, hidden_channels,normalize=False))
-                #self.convs.append(GATConv(in_channels, hidden_channels, heads=8, dropout=0.1))
+                #self.convs.append(GATConv(in_channels, hidden_channels, heads=8, dropout=0.1,concat=False))
             else:
                 self.convs.append(SAGEConv(in_channels, hidden_channels,normalize=self.normalize))
-                #self.convs.append(GATConv(in_channels, hidden_channels, heads=8, dropout=0.1))
+                #self.convs.append(GATConv(in_channels, hidden_channels, heads=8, dropout=0.1,concat=False))
 
         '''        
         self.bns = nn.ModuleList()
@@ -127,13 +131,14 @@ class SAGE(pl.LightningModule):
             pos_loss = torch.cosine_similarity(z,z_pos)
             neg_loss = -torch.cosine_similarity(z,z_neg)
 
-       
-        #lambd = 2 / (1 + math.exp(-10 * progress)) - 1
-        pos_loss = pos_loss.mean()
+
+        lambd = 2 / (1 + math.exp(-10 * self.progress/self.max_lambd)) - 1
+        self.progress += 1
+        pos_loss = pos_loss.mean() #* lambd
         neg_loss = neg_loss.mean() #* 100
 
-        self.log('Positive Loss',pos_loss)
-        self.log('Negative Loss',neg_loss)
+        self.log('Positive Loss',pos_loss,on_step=True)
+        self.log('Negative Loss',neg_loss,on_step=True)
         n_loss = - pos_loss - neg_loss
 
         # KL Divergence
@@ -161,7 +166,7 @@ class SAGE(pl.LightningModule):
         return n_loss
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=0.01)#,weight_decay=5e-4)
+        optimizer = torch.optim.Adam(self.parameters(), lr=0.001)#,weight_decay=5e-4)
         return optimizer
 
     def training_step(self, batch, batch_idx):
@@ -174,7 +179,7 @@ class SAGE(pl.LightningModule):
             self.log('labelled_loss',loss_labelled)
             loss += loss_labelled
         
-        self.log('train_loss', loss)
+        self.log('train_loss', loss,on_step=True)
         return loss
 
     def validation_step(self, batch, batch_idx):

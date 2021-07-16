@@ -424,7 +424,7 @@ class GraphData(pl.LightningDataModule):
                 molecules_connected.append(i)
             except:
                 smoothed_dataframe.append(self.d[i,:].toarray())
-                
+
         smoothed_dataframe= np.concatenate(smoothed_dataframe)
         self.d = sparse.csr_matrix(smoothed_dataframe)
         self.molecules_connected = np.array(molecules_connected)
@@ -614,7 +614,7 @@ class NeighborSampler2(torch.utils.data.DataLoader):
         if self.evaluation:
             return self.sample_i(batch)
         else:
-            pos_batch = random_walk(row, col, batch, walk_length=1,
+            pos_batch = random_walk(row, col, batch, walk_length=2,
                                     coalesced=False)[:, 1]
 
             neg_batch = torch.randint(0, self.adj_t.size(1), (batch.numel(), ),
