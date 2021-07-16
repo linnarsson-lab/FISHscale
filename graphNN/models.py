@@ -166,7 +166,7 @@ class SAGE(pl.LightningModule):
         return n_loss
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=0.001)#,weight_decay=5e-4)
+        optimizer = torch.optim.Adam(self.parameters(), lr=0.01)#,weight_decay=5e-4)
         return optimizer
 
     def training_step(self, batch, batch_idx):
