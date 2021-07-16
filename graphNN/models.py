@@ -8,6 +8,7 @@ from torch.distributions import Normal,Poisson
 from torch.distributions import Normal, kl_divergence as kl
 import pytorch_lightning as pl
 import torchmetrics
+import math
 
 def reparameterize_gaussian(mu, var):
     return Normal(mu, var.sqrt()).rsample()
@@ -57,7 +58,8 @@ class SAGE(pl.LightningModule):
         self.apply_normal_latent = apply_normal_latent
         self.supervised= supervised
         self.loss_fn = loss_fn
-
+        self.progress = 0
+        
         for i in range(num_layers):
             in_channels = in_channels if i == 0 else hidden_channels
             # L2 regularization
@@ -127,9 +129,10 @@ class SAGE(pl.LightningModule):
             pos_loss = torch.cosine_similarity(z,z_pos)
             neg_loss = -torch.cosine_similarity(z,z_neg)
 
-       
-        #lambd = 2 / (1 + math.exp(-10 * progress)) - 1
-        pos_loss = pos_loss.mean()
+        n_it = self.dataloader['unlabelled'].node_idx.shape
+        lambd = 2 / (1 + math.exp(-10 * self.progress/(n_it*5)))) - 1
+        self.progress += 1
+        pos_loss = pos_loss.mean() * lambd
         neg_loss = neg_loss.mean() #* 100
 
         self.log('Positive Loss',pos_loss)
@@ -161,7 +164,7 @@ class SAGE(pl.LightningModule):
         return n_loss
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=0.01)#,weight_decay=5e-4)
+        optimizer = torch.optim.Adam(self.parameters(), lr=0.001)#,weight_decay=5e-4)
         return optimizer
 
     def training_step(self, batch, batch_idx):
