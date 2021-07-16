@@ -406,7 +406,7 @@ class GraphData(pl.LightningDataModule):
         print('Fake Molecules: ',all_molecules.shape)
         return all_molecules, edges, all_cl
 
-    def knn_smooth(self,neighborhood_size=25):
+    def knn_smooth(self,neighborhood_size=75):
         print('Smoothing neighborhoods with kernel size: {}'.format(neighborhood_size))
         
         u = AnnoyIndex(2, 'euclidean')
