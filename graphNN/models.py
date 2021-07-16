@@ -65,7 +65,7 @@ class SAGE(pl.LightningModule):
                 self.convs.append(SAGEConv(in_channels, hidden_channels))#,normalize=self.normalize,aggr='max'))
                 #self.convs.append(GATConv(in_channels, hidden_channels, heads=8, dropout=0.1,aggr='max'))
             else:
-                self.convs.append(SAGEConv(in_channels, hidden_channels))#,normalize=self.normalize,aggr='max'))
+                self.convs.append(SAGEConv(in_channels, hidden_channels,normalize=self.normalize))#,normalize=self.normalize,aggr='max'))
                 #self.convs.append(GATConv(in_channels, hidden_channels, heads=1, concat=False, dropout=0.1,aggr='max'))
 
         '''        
