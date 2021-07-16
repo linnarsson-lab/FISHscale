@@ -62,11 +62,11 @@ class SAGE(pl.LightningModule):
             in_channels = in_channels if i == 0 else hidden_channels
             # L2 regularization
             if i == num_layers-1:
-                self.convs.append(SAGEConv(in_channels, hidden_channels))#,normalize=self.normalize,aggr='max'))
-                #self.convs.append(GATConv(in_channels, hidden_channels, heads=8, dropout=0.1,aggr='max'))
+                self.convs.append(SAGEConv(in_channels, hidden_channels,normalize=False))
+                #self.convs.append(GATConv(in_channels, hidden_channels, heads=8, dropout=0.1))
             else:
-                self.convs.append(SAGEConv(in_channels, hidden_channels,normalize=self.normalize))#,normalize=self.normalize,aggr='max'))
-                #self.convs.append(GATConv(in_channels, hidden_channels, heads=1, concat=False, dropout=0.1,aggr='max'))
+                self.convs.append(SAGEConv(in_channels, hidden_channels,normalize=self.normalize))
+                #self.convs.append(GATConv(in_channels, hidden_channels, heads=8, dropout=0.1))
 
         '''        
         self.bns = nn.ModuleList()
@@ -125,11 +125,15 @@ class SAGE(pl.LightningModule):
             neg_loss = F.logsigmoid(-(z * z_neg).sum(-1))
         elif self.loss_fn == 'cosine':
             pos_loss = torch.cosine_similarity(z,z_pos)
-            neg_loss = -torch.cosine_similarity(z,z_neg)#*100
+            neg_loss = -torch.cosine_similarity(z,z_neg)
+
        
         #lambd = 2 / (1 + math.exp(-10 * progress)) - 1
         pos_loss = pos_loss.mean()
-        neg_loss = neg_loss.mean() #* 10
+        neg_loss = neg_loss.mean() #* 100
+
+        self.log('Positive Loss',pos_loss)
+        self.log('Negative Loss',neg_loss)
         n_loss = - pos_loss - neg_loss
 
         # KL Divergence

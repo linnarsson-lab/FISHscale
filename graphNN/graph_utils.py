@@ -172,7 +172,7 @@ class GraphData(pl.LightningDataModule):
         return NeighborSampler2(self.edges_tensor, node_idx=self.indices_validation,data=self.d,
                                sizes=self.ngh_sizes, return_e_id=False,
                                batch_size=self.batch_size*1,num_workers=10,
-                               shuffle=False, evaluation=False)
+                               shuffle=False, evaluation=True)
 
     def labelled_dataloader(self):
         indices_lab = torch.tensor(np.arange(0,self.cluster_nghs.shape[0]))
