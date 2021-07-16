@@ -130,7 +130,7 @@ class SAGE(pl.LightningModule):
             neg_loss = -torch.cosine_similarity(z,z_neg)
 
         n_it = self.dataloader['unlabelled'].node_idx.shape
-        lambd = 2 / (1 + math.exp(-10 * self.progress/(n_it*5)))) - 1
+        lambd = 2 / (1 + math.exp(-10 * self.progress/(n_it*5))) - 1
         self.progress += 1
         pos_loss = pos_loss.mean() * lambd
         neg_loss = neg_loss.mean() #* 100
