@@ -120,11 +120,7 @@ class SAGE(pl.LightningModule):
         # Embedding sampled nodes
         z, qm, qv = self.neighborhood_forward(x, adjs)
         z, z_pos, z_neg = z.split(z.size(0) // 3, dim=0)
-<<<<<<< HEAD
-        if type(qm) == int:
-=======
         if type(qm) != int:
->>>>>>> b93c71b9baa764ba161b1d5909133b932e2444c7
             qm, qm_pos, qm_neg = qm.split(qm.size(0) // 3, dim=0)
             qv, qv_pos, qv_neg = qv.split(qv.size(0) // 3, dim=0)
         # Embedding for neighbor nodes of sample nodes
