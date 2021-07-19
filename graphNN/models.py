@@ -62,7 +62,7 @@ class SAGE(pl.LightningModule):
         self.progress = 0
         self.max_lambd = max_lambd
         self.automatic_optimization = False
-        
+
         for i in range(num_layers):
             in_channels = in_channels if i == 0 else hidden_channels
             # L2 regularization
@@ -87,7 +87,7 @@ class SAGE(pl.LightningModule):
             self.train_acc = torchmetrics.Accuracy()
                 
     def neighborhood_forward(self,x,adjs):
-        #x = torch.log(x + 1)
+        x = torch.log(x + 1)
         for i, (edge_index, _, size) in enumerate(adjs):
             x_target = x[:size[1]]  # Target nodes are always placed first.
 
@@ -126,18 +126,18 @@ class SAGE(pl.LightningModule):
         # Embedding for neighbor nodes of sample nodes
 
         if self.loss_fn == 'sigmoid':
-            pos_loss = F.logsigmoid((z * z_pos).sum(-1))
-            neg_loss = F.logsigmoid(-(z * z_neg).sum(-1))
+            pos_loss = -F.logsigmoid((z * z_pos).sum(-1))
+            neg_loss = -F.logsigmoid(-(z * z_neg).sum(-1))
         elif self.loss_fn == 'cosine':
-            pos_loss = torch.cosine_similarity(z,z_pos)
-            neg_loss = -torch.cosine_similarity(z,z_neg)
+            pos_loss = -torch.cosine_similarity(z,z_pos)
+            neg_loss = torch.cosine_similarity(z,z_neg)
 
 
         lambd = 2 / (1 + math.exp(-10 * self.progress/self.max_lambd)) - 1
         self.progress += 1
         pos_loss = pos_loss.mean() #* lambd
         neg_loss = neg_loss.mean() #* 100
-        n_loss = - pos_loss - neg_loss
+        n_loss = pos_loss + neg_loss
 
         # KL Divergence
         if self.apply_normal_latent:
@@ -173,19 +173,16 @@ class SAGE(pl.LightningModule):
 
     def training_step(self, batch, batch_idx,optimizer_idx):
         x,adjs,c = batch['unlabelled']
-        loss,pos_loss,neg_loss = self(x, adjs, c)
-        #loss = self.compute_loss(batch)
 
+        loss,pos_loss,neg_loss = self(x, adjs, c)
         p_opt,n_opt = self.optimizers()
         p_opt.zero_grad()
-        self.manual_backward(-pos_loss)
+        self.manual_backward(pos_loss)
         p_opt.step()
 
         loss,pos_loss,neg_loss = self(x, adjs, c)
-        #loss = self.compute_loss(batch)
-
         n_opt.zero_grad()
-        self.manual_backward(-neg_loss)
+        self.manual_backward(neg_loss)
         n_opt.step()
 
         if 'labelled' in batch:
@@ -194,11 +191,11 @@ class SAGE(pl.LightningModule):
             self.log('labelled_loss',loss_labelled)
             loss += loss_labelled
 
-        self.log('Positive Loss',-pos_loss,on_step=True, on_epoch=True,prog_bar=True)
-        self.log('Negative Loss',-neg_loss,on_step=True, on_epoch=True,prog_bar=True)
+        self.log('Positive Loss', pos_loss,on_step=True, on_epoch=True,prog_bar=True)
+        self.log('Negative Loss', neg_loss,on_step=True, on_epoch=True,prog_bar=True)
         self.log('train_loss', loss,on_step=True, on_epoch=True,prog_bar=True)
         
-        return loss
+        #return loss
 
     def validation_step(self, batch, batch_idx):
         x, adjs, c = batch
