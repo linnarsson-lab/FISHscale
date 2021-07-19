@@ -61,6 +61,7 @@ class SAGE(pl.LightningModule):
         self.loss_fn = loss_fn
         self.progress = 0
         self.max_lambd = max_lambd
+        self.automatic_optimization = False
         
         for i in range(num_layers):
             in_channels = in_channels if i == 0 else hidden_channels
@@ -119,7 +120,11 @@ class SAGE(pl.LightningModule):
         # Embedding sampled nodes
         z, qm, qv = self.neighborhood_forward(x, adjs)
         z, z_pos, z_neg = z.split(z.size(0) // 3, dim=0)
+<<<<<<< HEAD
         if type(qm) == int:
+=======
+        if type(qm) != int:
+>>>>>>> b93c71b9baa764ba161b1d5909133b932e2444c7
             qm, qm_pos, qm_neg = qm.split(qm.size(0) // 3, dim=0)
             qv, qv_pos, qv_neg = qv.split(qv.size(0) // 3, dim=0)
         # Embedding for neighbor nodes of sample nodes
@@ -163,12 +168,29 @@ class SAGE(pl.LightningModule):
         return n_loss, pos_loss, neg_loss
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=0.01)#,weight_decay=5e-4)
-        return optimizer
+        #optimizer = torch.optim.Adam(self.parameters(), lr=0.01)#,weight_decay=5e-4)
 
-    def training_step(self, batch, batch_idx):
+        pos_opt = torch.optim.Adam(self.parameters(), lr=0.001)
+        neg_opt = torch.optim.Adam(self.parameters(), lr=0.001)
+        return pos_opt, neg_opt
+
+
+    def training_step(self, batch, batch_idx,optimizer_idx):
         x,adjs,c = batch['unlabelled']
         loss,pos_loss,neg_loss = self(x, adjs, c)
+        #loss = self.compute_loss(batch)
+
+        p_opt,n_opt = self.optimizers()
+        p_opt.zero_grad()
+        self.manual_backward(-pos_loss)
+        p_opt.step()
+
+        loss,pos_loss,neg_loss = self(x, adjs, c)
+        #loss = self.compute_loss(batch)
+
+        n_opt.zero_grad()
+        self.manual_backward(-neg_loss)
+        n_opt.step()
 
         if 'labelled' in batch:
             x, adjs, c = batch['labelled']
@@ -176,9 +198,9 @@ class SAGE(pl.LightningModule):
             self.log('labelled_loss',loss_labelled)
             loss += loss_labelled
 
-        self.log('Positive Loss',-pos_loss,on_step=True, on_epoch=True)
-        self.log('Negative Loss',-neg_loss,on_step=True, on_epoch=True)
-        self.log('train_loss', loss,on_step=True, on_epoch=True)
+        self.log('Positive Loss',-pos_loss,on_step=True, on_epoch=True,prog_bar=True)
+        self.log('Negative Loss',-neg_loss,on_step=True, on_epoch=True,prog_bar=True)
+        self.log('train_loss', loss,on_step=True, on_epoch=True,prog_bar=True)
         
         return loss
 
