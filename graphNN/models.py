@@ -119,7 +119,7 @@ class SAGE(pl.LightningModule):
         # Embedding sampled nodes
         z, qm, qv = self.neighborhood_forward(x, adjs)
         z, z_pos, z_neg = z.split(z.size(0) // 3, dim=0)
-        if qm != 0:
+        if type(qm) == int:
             qm, qm_pos, qm_neg = qm.split(qm.size(0) // 3, dim=0)
             qv, qv_pos, qv_neg = qv.split(qv.size(0) // 3, dim=0)
         # Embedding for neighbor nodes of sample nodes
@@ -134,7 +134,7 @@ class SAGE(pl.LightningModule):
 
         lambd = 2 / (1 + math.exp(-10 * self.progress/self.max_lambd)) - 1
         self.progress += 1
-        pos_loss = pos_loss.mean() * lambd
+        pos_loss = pos_loss.mean() #* lambd
         neg_loss = neg_loss.mean() #* 100
         n_loss = - pos_loss - neg_loss
 
@@ -160,7 +160,7 @@ class SAGE(pl.LightningModule):
         else:
             n_loss = n_loss #* 10
             
-        return n_loss, pos_loss,neg_loss
+        return n_loss, pos_loss, neg_loss
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=0.01)#,weight_decay=5e-4)
