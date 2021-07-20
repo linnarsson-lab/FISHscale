@@ -606,10 +606,8 @@ class NeighborSampler2(torch.utils.data.DataLoader):
     def sample(self, batch):
         #batch = torch.tensor(batch)
         row, col, _ = self.adj_t.coo()
-
         # For each node in `batch`, we sample a direct neighbor (as positive
         # example) and a random node (as negative example):
-
         batch = torch.tensor(batch)
         if self.evaluation:
             return self.sample_i(batch)
