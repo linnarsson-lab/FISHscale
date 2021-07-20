@@ -61,7 +61,7 @@ class SAGE(pl.LightningModule):
         self.loss_fn = loss_fn
         self.progress = 0
         self.max_lambd = max_lambd
-        self.automatic_optimization = False
+        #self.automatic_optimization = True
 
         for i in range(num_layers):
             in_channels = in_channels if i == 0 else hidden_channels
@@ -164,25 +164,27 @@ class SAGE(pl.LightningModule):
         return n_loss, pos_loss, neg_loss
 
     def configure_optimizers(self):
-        #optimizer = torch.optim.Adam(self.parameters(), lr=0.01)#,weight_decay=5e-4)
+        optimizer = torch.optim.Adam(self.parameters(), lr=0.01)#,weight_decay=5e-4)
 
-        pos_opt = torch.optim.Adam(self.parameters(), lr=0.001)
-        neg_opt = torch.optim.Adam(self.parameters(), lr=0.001)
-        return pos_opt, neg_opt
+        #pos_opt = torch.optim.Adam(self.parameters(), lr=0.001)
+        #neg_opt = torch.optim.Adam(self.parameters(), lr=0.001)
+        return optimizer#pos_opt, neg_opt
 
 
-    def training_step(self, batch, batch_idx,optimizer_idx):
+    def training_step(self, batch, batch_idx):#, optimizer_idx):
         x,adjs,c = batch['unlabelled']
         loss,pos_loss,neg_loss = self(x, adjs, c)
-        p_opt,n_opt = self.optimizers()
+        '''
+        p_opt= self.optimizers()
         p_opt.zero_grad()
-        self.manual_backward(pos_loss)
+        self.manual_backward(loss)
         p_opt.step()
+        
 
         loss,pos_loss,neg_loss = self(x, adjs, c)
         n_opt.zero_grad()
         self.manual_backward(neg_loss)
-        n_opt.step()
+        n_opt.step()'''
 
         if 'labelled' in batch:
             x, adjs, c = batch['labelled']
@@ -194,7 +196,7 @@ class SAGE(pl.LightningModule):
         self.log('Negative Loss', neg_loss,on_step=True, on_epoch=True,prog_bar=True)
         self.log('train_loss', loss,on_step=True, on_epoch=True,prog_bar=True)
         
-        #return loss
+        return loss
 
     def validation_step(self, batch, batch_idx):
         x, adjs, c = batch
