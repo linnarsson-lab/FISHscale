@@ -33,7 +33,7 @@ class SAGE(pl.LightningModule):
         output_channels:int=448,
         loss_fn:str='sigmoid',
         max_lambd:int=100000,
-
+        autoencoder_mode:bool=False,
         ):
         """
         __init__ [summary]
@@ -61,16 +61,17 @@ class SAGE(pl.LightningModule):
         self.loss_fn = loss_fn
         self.progress = 0
         self.max_lambd = max_lambd
-        #self.automatic_optimization = True
+        self.autoencoder_mode = autoencoder_mode
+        #self.automatic_optimization = False
 
         for i in range(num_layers):
-            in_channels = in_channels if i == 0 else hidden_channels
+            in_channels2 = in_channels if i == 0 else hidden_channels
             # L2 regularization
             if i == num_layers-1:
-                self.convs.append(SAGEConv(in_channels, hidden_channels,normalize=False))
+                self.convs.append(SAGEConv(in_channels2, hidden_channels,normalize=False))
                 #self.convs.append(GATConv(in_channels, hidden_channels, heads=8, dropout=0.1,concat=False))
             else:
-                self.convs.append(SAGEConv(in_channels, hidden_channels,normalize=self.normalize))
+                self.convs.append(SAGEConv(in_channels2, hidden_channels,normalize=self.normalize))
                 #self.convs.append(GATConv(in_channels, hidden_channels, heads=8, dropout=0.1,concat=False))
 
         '''        
@@ -85,6 +86,10 @@ class SAGE(pl.LightningModule):
         if self.supervised:
             self.classifier = Classifier(n_input=hidden_channels,n_labels=output_channels,softmax=False)
             self.train_acc = torchmetrics.Accuracy()
+        
+        if self.autoencoder_mode:
+            print('Autoencoder mode: activated!')
+            self.decoder = DecoderSCVI(n_input=hidden_channels,n_output=in_channels)
                 
     def neighborhood_forward(self,x,adjs):
         x = torch.log(x + 1)
@@ -132,6 +137,9 @@ class SAGE(pl.LightningModule):
             pos_loss = -torch.cosine_similarity(z,z_pos)
             neg_loss = torch.cosine_similarity(z,z_neg)
 
+        elif self.loss_fn == 'mse':
+            pos_loss = F.mse_loss(z,z_pos,reduction='sum')
+            neg_loss = F.mse_loss(z,-z_neg,reduction='sum')
 
         lambd = 2 / (1 + math.exp(-10 * self.progress/self.max_lambd)) - 1
         self.progress += 1
@@ -160,42 +168,50 @@ class SAGE(pl.LightningModule):
             self.log('train_acc', self.train_acc, prog_bar=True, on_step=True)
         else:
             n_loss = n_loss #* 10
-            
-        return n_loss, pos_loss, neg_loss
+
+        if self.autoencoder_mode:
+            neighbors = adjs[1].edge_index[1,:]#.unique()
+            neighbors = torch.split(adjs[1].edge_index[0,:], neighbors.unique(return_counts=True)[1].tolist())
+            collapsed_data = torch.stack([x[neighbors[r],:].sum(axis=0) for r in range(z.shape[0])],dim=0)
+            collapsed_data = F.log_softmax(collapsed_data,dim=-1)
+            decoded_data = self.decoder(z)
+            decoder_loss = F.mse_loss(collapsed_data,decoded_data,reduction='sum')#.mean()
+            n_loss += decoder_loss
+        else:
+            decoder_loss = 0
+
+        return n_loss, pos_loss, neg_loss, decoder_loss
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=0.01)#,weight_decay=5e-4)
+        optimizer = torch.optim.Adam(self.parameters(), lr=0.001)#,weight_decay=5e-4)
+        return optimizer
 
-        #pos_opt = torch.optim.Adam(self.parameters(), lr=0.001)
-        #neg_opt = torch.optim.Adam(self.parameters(), lr=0.001)
-        return optimizer#pos_opt, neg_opt
-
-
-    def training_step(self, batch, batch_idx):#, optimizer_idx):
+    def training_step(self, batch, batch_idx):
         x,adjs,c = batch['unlabelled']
-        loss,pos_loss,neg_loss = self(x, adjs, c)
+        loss,pos_loss,neg_loss,decoder_loss = self(x, adjs, c)
         '''
-        p_opt= self.optimizers()
+        p_opt,n_opt,a_opt = self.optimizers()
         p_opt.zero_grad()
         self.manual_backward(loss)
         p_opt.step()
         
 
-        loss,pos_loss,neg_loss = self(x, adjs, c)
+        loss,pos_loss,neg_loss,decoder_loss = self(x, adjs, c)
         n_opt.zero_grad()
         self.manual_backward(neg_loss)
-        n_opt.step()'''
+        n_opt.step()
+        '''
 
         if 'labelled' in batch:
             x, adjs, c = batch['labelled']
-            loss_labelled, _, _ = self(x, adjs, c)
+            loss_labelled, _, _, _ = self(x, adjs, c)
             self.log('labelled_loss',loss_labelled)
             loss += loss_labelled
 
-        self.log('Positive Loss', pos_loss,on_step=True, on_epoch=True,prog_bar=True)
-        self.log('Negative Loss', neg_loss,on_step=True, on_epoch=True,prog_bar=True)
-        self.log('train_loss', loss,on_step=True, on_epoch=True,prog_bar=True)
-        
+        self.log('Positive Loss', pos_loss, on_step=True, on_epoch=True, prog_bar=True)
+        self.log('Negative Loss', neg_loss, on_step=True, on_epoch=True, prog_bar=True)
+        self.log('Autoencoder_loss', decoder_loss, on_step=True, on_epoch=True, prog_bar=True)
+        self.log('train_loss', loss,on_step=True, on_epoch=True, prog_bar=True)
         return loss
 
     def validation_step(self, batch, batch_idx):
@@ -228,15 +244,14 @@ class DecoderSCVI(nn.Module):
         if softmax:
             self.px_scale_decoder = nn.Sequential(nn.Linear(n_hidden, n_output))
         else:
-            self.px_scale_decoder = nn.Sequential(nn.Linear(n_hidden, n_output),
-                nn.Softmax(dim=-1))
+            self.px_scale_decoder = nn.Sequential(nn.Linear(n_hidden, n_output))
 
     def forward(
         self, z: torch.Tensor
     ):
         # The decoder returns values for the parameters of the ZINB distribution
         px = self.px_decoder(z)
-        px= self.px_scale_decoder(px)
+        px= F.log_softmax(self.px_scale_decoder(px),dim=-1)
         return px
 
 class Classifier(nn.Module):
