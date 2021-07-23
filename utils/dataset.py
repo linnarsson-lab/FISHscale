@@ -121,6 +121,8 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
         self.x_offset = x_offset
         self.y_offset = y_offset
         self.z_offset = z_offset
+        if not isinstance(other_columns, list):
+            other_columns = [other_columns]
         self.other_columns = other_columns
         
         #Dask

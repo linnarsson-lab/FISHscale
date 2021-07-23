@@ -620,7 +620,7 @@ class RegionalizeMulti(Decomposition):
             r = dask.delayed(d.regionalize)(spacing, min_count, feature_selection, normalization_mode, 
                                             dimensionality_reduction, n_components, clust_dist_threshold, 
                                             n_clusters, clust_neighbor_rings, smooth, smooth_neighbor_rings, 
-                                            smooth_cycles, n_jobs=1)
+                                            smooth_cycles, order_labels=False, n_jobs=1)
             results[d.dataset_name] = ({'df_hex': r[0],
                                        'labels': r[1],
                                        'coordinates': r[2],

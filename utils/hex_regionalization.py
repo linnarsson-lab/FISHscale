@@ -230,7 +230,7 @@ class Regionalize(Iteration, Decomposition):
             
         #Set colors from an array of values
         else:
-            c = c / c.max()
+            #c = c / c.max()
             p.set_array(c)
             p.set_cmap(cm)
             p.set_linewidth(0.1) #To hide small white lines between the polygons
@@ -455,6 +455,9 @@ class Regionalize(Iteration, Decomposition):
             raise Exception('One of "distance_threshold" or "n_clusters" should be defined.')
 
         #Make graph to connect neighbours 
+        
+        #This should be radius_neighbours_graph because otherwise edge cases have weird neighbours
+        
         n_neighbors = (neighbor_rings * 6)
         Kgraph = kneighbors_graph(hex_coord, n_neighbors, include_self=False, n_jobs=n_jobs)
 
@@ -514,6 +517,8 @@ class Regionalize(Iteration, Decomposition):
                     #Set to new label
                     new_label.append(predominant_label[0])        
             return np.array(new_label)
+        
+        #This should be radius_neighbours_graph because otherwise edge cases have weird neighbours
 
         n_neighbors = 1 + (neighbor_rings * 6)
         Kgraph = kneighbors_graph(hex_coord, n_neighbors, include_self=True, n_jobs=n_jobs)
@@ -1027,6 +1032,7 @@ class Regionalize(Iteration, Decomposition):
                         smooth: bool = False,
                         smooth_neighbor_rings: int = 1, 
                         smooth_cycles: int = 1,
+                        order_labels: bool = True,
                         n_jobs=-1) -> Union[Any, np.ndarray, np.ndarray, Any]:
         """Regionalize dataset.
         
@@ -1074,6 +1080,8 @@ class Regionalize(Iteration, Decomposition):
                 18 neigbors, etc. Defaults to 1.
             smooth_cycles (int, optional): Number of smoothing cycles.
                 Defaults to 1.
+            order_labels (bool, optional): If True orders the cluster labels
+                based on similarity. Defaults to True.
             n_jobs (int, optional): Number op processes. If -1 uses the max 
                 number of CPUs. Defaults to -1.
 
@@ -1088,7 +1096,6 @@ class Regionalize(Iteration, Decomposition):
         """
         #Bin the data with a hexagonal grid
         df_hex, hex_coord = self.hexbin_make(spacing, min_count, feature_selection=feature_selection, n_jobs=n_jobs)
-        print(df_hex.shape)
         
         #Normalize data
         df_hex_norm = self.normalize(df_hex, mode=normalization_mode)
@@ -1115,6 +1122,15 @@ class Regionalize(Iteration, Decomposition):
         df_mean = self.cluster_mean_make(df_hex, labels)
         df_norm = self.cluster_mean_make(df_hex_norm, labels)
         
+        #Order cluster labels
+        if order_labels:
+            manifold = SpectralEmbedding(n_components=1, n_jobs=n_jobs).fit_transform(df_mean.T)
+            even_spaced = np.linspace(0, 1, manifold.shape[0])
+            even_spaced_dict = dict(zip(np.sort(manifold.ravel()), even_spaced))
+            manifold_even = np.array([even_spaced_dict[i] for i in manifold.ravel()])
+            manifold_even_dict = dict(zip(df_mean.columns, manifold_even))
+            labels = np.array([manifold_even_dict[i] for i in labels])
+        
         return df_hex, labels, hex_coord, df_mean, df_norm
 
     def geopandas_make(self, spacing: float, 
@@ -1126,7 +1142,7 @@ class Regionalize(Iteration, Decomposition):
                             smooth_polygon_degree:int = 7, 
                             recount: bool = False,
                             area_normalize: bool = True, 
-                            area_normalize_unit: str = 'millimeter') -> None:
+                            area_normalize_unit: str = 'millimeter') -> Any:
         """Make a GeoPandas dataframe of clustered hexbin data.
         
         Output is a GeoPandas dataframe which contains the (normalized) counts

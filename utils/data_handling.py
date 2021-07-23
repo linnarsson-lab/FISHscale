@@ -293,7 +293,7 @@ class DataLoader(DataLoader_base):
                 #Get function to open file
                 open_f = self._open_data_function(filename)
                 
-                #Get columns to open
+                #Get columns to open              
                 col_to_open = [[gene_label, x_label, y_label], other_columns]
                 col_to_open = list(itertools.chain.from_iterable(col_to_open))
                 rename_col = dict(zip([gene_label, x_label, y_label], ['g', 'x', 'y']))
