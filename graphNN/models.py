@@ -208,8 +208,9 @@ class SAGE(pl.LightningModule):
         '''
         p_opt,n_opt,a_opt = self.optimizers()
         p_opt.zero_grad()
-        self.manual_backward(pos_loss)
+        self.manual_backward(loss)
         p_opt.step()
+        
 
         loss,pos_loss,neg_loss,decoder_loss = self(x, adjs, c)
         n_opt.zero_grad()
