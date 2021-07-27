@@ -70,10 +70,10 @@ class SAGE(pl.LightningModule):
             interm_channels= 64
             # L2 regularization
             if i == num_layers-1:
-                self.convs.append(SAGEConv(interm_channels, hidden_channels,normalize=False))
+                self.convs.append(SAGEConv(interm_channels, hidden_channels,normalize=self.normalize))
                 #self.convs.append(GATConv(interm_channels, hidden_channels, heads=8, dropout=0.1,concat=False))
             else:
-                self.convs.append(SAGEConv(in_channels, interm_channels, normalize=self.normalize))
+                self.convs.append(SAGEConv(in_channels, interm_channels))
                 #self.convs.append(GATConv(in_channels, interm_channels, heads=8, dropout=0.1,concat=False))
 
       
