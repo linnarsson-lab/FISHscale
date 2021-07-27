@@ -1,240 +1,146 @@
-import torch
-from torch_geometric.nn import SAGEConv, GATConv
-import collections
-import torch.nn.functional as F
-from torch import nn
-from typing import Iterable
-from torch.distributions import Normal,Poisson
-from torch.distributions import Normal, kl_divergence as kl
 import pytorch_lightning as pl
 import torchmetrics
 import math
 import numpy as np
+import dgl
+import numpy as np
+import torch as th
+import torch.nn as nn
+import torch.nn.functional as F
+import torch.optim as optim
+import dgl.nn.pytorch as dglnn
+import dgl.function as fn
+import tqdm
+from pytorch_lightning.metrics import Accuracy
+from pytorch_lightning.callbacks import ModelCheckpoint, Callback
+from pytorch_lightning import LightningDataModule, LightningModule, Trainer
 
-def reparameterize_gaussian(mu, var):
-    return Normal(mu, var.sqrt()).rsample()
+class CrossEntropyLoss(nn.Module):
+    def forward(self, block_outputs, pos_graph, neg_graph):
+        with pos_graph.local_scope():
+            pos_graph.ndata['h'] = block_outputs
+            pos_graph.apply_edges(fn.u_dot_v('h', 'h', 'score'))
+            pos_score = pos_graph.edata['score']
+        with neg_graph.local_scope():
+            neg_graph.ndata['h'] = block_outputs
+            neg_graph.apply_edges(fn.u_dot_v('h', 'h', 'score'))
+            neg_score = neg_graph.edata['score']
 
-class SAGE(pl.LightningModule):
-    """
-    GraphSAGE based model in combination with scvi variational autoencoder.
+        score = th.cat([pos_score, neg_score])
+        label = th.cat([th.ones_like(pos_score), th.zeros_like(neg_score)]).long()
+        loss = F.binary_cross_entropy_with_logits(score, label.float())
+        return loss
 
-    SAGE will learn to encode neighbors to allow either the reconstruction of the original nodes data helped by neighbor data or 
-    to generate similar embedding for closeby nodes (i.e. regionalization).
-
- 
-    """     
-
-    def __init__(self, 
-        in_channels :int, 
-        hidden_channels:int,
-        num_layers:int=2,
-        normalize:bool=True,
-        apply_normal_latent:bool=False,
-        supervised:bool=False,
-        output_channels:int=448,
-        loss_fn:str='sigmoid',
-        max_lambd:int=100000,
-        autoencoder_mode:bool=False,
-        ):
-        """
-        __init__ [summary]
-
-        [extended_summary]
-
-        Args:
-            in_channels (int): [description]
-            hidden_channels (int): [description]
-            num_layers (int, optional): [description]. Defaults to 2.
-            normalize (bool, optional): [description]. Defaults to True.
-            apply_normal_latent (bool, optional): [description]. Defaults to False.
-            supervised (bool, optional): [description]. Defaults to False.
-            output_channels (int, optional): [description]. Defaults to 448.
-        """        
-
+class SAGELightning(LightningModule):
+    def __init__(self,
+                 in_feats,
+                 n_hidden,
+                 n_classes,
+                 n_layers,
+                 activation=F.relu,
+                 dropout=0.2,
+                 lr=0.003):
         super().__init__()
         self.save_hyperparameters()
-
-        self.num_layers = num_layers
-        self.normalize = normalize
-        self.convs = torch.nn.ModuleList()
-        self.apply_normal_latent = apply_normal_latent
-        self.supervised= supervised
-        self.loss_fn = loss_fn
-        self.progress = 0
-        self.max_lambd = max_lambd
-        self.autoencoder_mode = autoencoder_mode
-        #self.automatic_optimization = False
-
-        for i in range(num_layers):
-            #in_channels = in_channels if i == 0 else hidden_channels
-            interm_channels= 64
-            # L2 regularization
-            if i == num_layers-1:
-                self.convs.append(SAGEConv(interm_channels, hidden_channels,normalize=self.normalize))
-                #self.convs.append(GATConv(interm_channels, hidden_channels, heads=8, dropout=0.1,concat=False))
-            else:
-                self.convs.append(SAGEConv(in_channels, interm_channels))
-                #self.convs.append(GATConv(in_channels, interm_channels, heads=8, dropout=0.1,concat=False))
-
-      
-        self.bns = nn.ModuleList()
-        for _ in range(num_layers - 1):
-            if i == num_layers-1:
-                self.bns.append(nn.BatchNorm1d(interm_channels))    
-            self.bns.append(nn.BatchNorm1d(hidden_channels))
-
-        if self.apply_normal_latent:
-            self.mean_encoder = nn.Linear(hidden_channels, hidden_channels)
-            self.var_encoder = nn.Linear(hidden_channels, hidden_channels)
-
-        if self.supervised:
-            self.classifier = Classifier(n_input=hidden_channels,n_labels=output_channels,softmax=False)
-            self.train_acc = torchmetrics.Accuracy()
-        
-        if self.autoencoder_mode:
-            print('Autoencoder mode: activated!')
-            self.decoder = DecoderSCVI(n_input=hidden_channels,n_output=in_channels)
-                
-    def neighborhood_forward(self,x,adjs):
-        x = torch.log(x + 1)
-        for i, (edge_index, _, size) in enumerate(adjs):
-            x_target = x[:size[1]]  # Target nodes are always placed first.
-
-            x = self.convs[i]((x, x_target), edge_index)
-            #x = self.convs[i](x, edge_index)
-            if i != self.num_layers - 1:
-                x = self.bns[i](x)
-                x = x.relu()
-                x = F.dropout(x, p=0.2, training=self.training)
-
-        if self.apply_normal_latent:
-            q_m = self.mean_encoder(x)
-            q_v = torch.exp(self.var_encoder(x)) + 1e-4
-            x = reparameterize_gaussian(q_m, q_v)
-        else:
-            q_m = 0
-            q_v = 0
-
-        return x, q_m, q_v
-
-    def full_forward(self, x, edge_index):
-        for i, conv in enumerate(self.convs):
-            x = conv(x, edge_index)
-            if i != self.num_layers - 1:
-                x = x.relu()
-                x = F.dropout(x, p=0.2, training=self.training)
-        return x
-
-    def forward(self,b):
-        bs,x,adjs,classes= b
-        #part = np.isin(np.arange(bs),adjs[1].edge_index[1,:].unique()).sum()
-        #part_pos = np.isin(np.arange(bs,bs*2),adjs[1].edge_index[1,:].unique()).sum() + part
-        #z, z_pos, z_neg = z[:part,:],z[part:part_pos,:],z[part_pos:,:]
-
-        # Embedding sampled nodes
-        z, qm, qv = self.neighborhood_forward(x, adjs)
-        out = z.split(z.size(0) // (z.shape[0]//bs) , dim=0)
-        z = out[0]
-        z_pos = out[1]
-        z_neg = torch.cat(out[2:])
-        
-        # Embedding for neighbor nodes of sample nodes
-
-        if self.loss_fn == 'sigmoid':
-            pos_loss = -F.logsigmoid((z * z_pos).sum(-1))
-            extended = z_neg.shape[0]//z.shape[0]
-            z = torch.cat([z]*extended)
-            z_neg = z_neg[:z.shape[0],:]
-            neg_loss = -F.logsigmoid(-(z* z_neg).sum(-1))
-
-        elif self.loss_fn == 'cosine':
-            pos_loss = -torch.cosine_similarity(z,z_pos)
-            neg_loss = torch.cosine_similarity(z,z_neg)
-
-        elif self.loss_fn == 'mse':
-            pos_loss = F.mse_loss(z,z_pos,reduction='sum')
-            neg_loss = F.mse_loss(z,-z_neg,reduction='sum')
-
-        lambd = 2 / (1 + math.exp(-10 * self.progress/self.max_lambd)) - 1
-        self.progress += 1
-        pos_loss = pos_loss.mean() #* lambd
-        neg_loss = neg_loss.mean() #* 100
-        n_loss = pos_loss + neg_loss
-
-        # KL Divergence
-        if self.apply_normal_latent:
-            mean = torch.zeros_like(qm)
-            scale = torch.ones_like(qv)
-            kl_divergence_z = kl(Normal(qm, torch.sqrt(qv)), Normal(mean, scale)).sum(dim=1)
-            n_loss = n_loss + kl_divergence_z.mean()
-        
-        # Add loss if trying to reconstruct cell types
-        if type(classes) != type(None):
-            prediction = self.classifier(z)
-            cce = torch.nn.CrossEntropyLoss()
-            classifier_loss = cce(prediction,classes)
-            #self.train_acc(y_hat.softmax(dim=-1), y)
-            n_loss += classifier_loss #* 10
-            #print(supervised_loss)
-            self.log('Classifier Loss',classifier_loss)
-            #self.train_acc(prediction.softmax(dim=-1),F.one_hot(classes,num_classes=prediction.shape[1]))
-            self.train_acc(prediction.argsort(axis=-1)[:,-1],classes)
-            self.log('train_acc', self.train_acc, prog_bar=True, on_step=True)
-        else:
-            n_loss = n_loss #* 10
-
-        if self.autoencoder_mode:
-            neighbors = adjs[1].edge_index[1,:]#.unique()
-            neighbors = torch.split(adjs[1].edge_index[0,:], neighbors.unique(return_counts=True)[1].tolist())
-            collapsed_data = torch.stack([x[neighbors[r],:].sum(axis=0) for r in range(z.shape[0])],dim=0)
-            collapsed_data = F.log_softmax(collapsed_data,dim=-1)
-            decoded_data = self.decoder(z)
-            #decoder_loss = -F.logsigmoid((decoded_data*collapsed_data).sum(-1)).mean()
-            decoder_loss = F.mse_loss(collapsed_data,decoded_data,reduction='mean')#.mean()
-            #
-            n_loss += decoder_loss
-        else:
-            decoder_loss = 0
-
-        return n_loss, pos_loss, neg_loss, decoder_loss
-
-    def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=0.01,weight_decay=1e-4)
-        return optimizer
+        self.module = SAGE(in_feats, n_hidden, n_classes, n_layers, activation, dropout)
+        self.lr = lr
+        self.loss_fcn = CrossEntropyLoss()
 
     def training_step(self, batch, batch_idx):
-        b = batch['unlabelled']
-        loss,pos_loss,neg_loss,decoder_loss = self(b)
-        '''
-        p_opt,n_opt,a_opt = self.optimizers()
-        p_opt.zero_grad()
-        self.manual_backward(loss)
-        p_opt.step()
-        
-
-        loss,pos_loss,neg_loss,decoder_loss = self(x, adjs, c)
-        n_opt.zero_grad()
-        self.manual_backward(neg_loss)
-        n_opt.step()
-        '''
-
-        if 'labelled' in batch:
-            b = batch['labelled']
-            loss_labelled, _, _, _ = self(b)
-            self.log('labelled_loss',loss_labelled)
-            loss += loss_labelled
-
-        self.log('Positive Loss', pos_loss, on_step=True, prog_bar=True)
-        self.log('Negative Loss', neg_loss, on_step=True, prog_bar=True)
-        self.log('Autoencoder_loss', decoder_loss, on_step=True, prog_bar=True)
-        self.log('train_loss', loss,prog_bar=True)
+        input_nodes, pos_graph, neg_graph, mfgs = batch
+        mfgs = [mfg.int().to(device) for mfg in mfgs]
+        pos_graph = pos_graph.to(device)
+        neg_graph = neg_graph.to(device)
+        batch_inputs = mfgs[0].srcdata['genes']
+        #batch_labels = mfgs[-1].dstdata['labels']
+        batch_pred = self.module(mfgs, batch_inputs)
+        loss = self.loss_fcn(batch_pred, pos_graph, neg_graph)
+        self.log('train_loss', loss, prog_bar=True, on_step=False, on_epoch=True)
         return loss
 
     def validation_step(self, batch, batch_idx):
-        loss = self(batch)
-        self.log('val_loss', loss)
-        return loss
-    
+        input_nodes, output_nodes, mfgs = batch
+        mfgs = [mfg.int().to(device) for mfg in mfgs]
+        batch_inputs = mfgs[0].srcdata['genes']
+        #batch_labels = mfgs[-1].dstdata['labels']
+        batch_pred = self.module(mfgs, batch_inputs)
+        return batch_pred
+
+    def configure_optimizers(self):
+        optimizer = th.optim.Adam(self.parameters(), lr=self.lr)
+        return optimizer
+
+class SAGE(nn.Module):
+    def __init__(self, in_feats, n_hidden, n_classes, n_layers, activation, dropout):
+        super().__init__()
+        self.init(in_feats, n_hidden, n_classes, n_layers, activation, dropout)
+
+    def init(self, in_feats, n_hidden, n_classes, n_layers, activation, dropout):
+        self.n_layers = n_layers
+        self.n_hidden = n_hidden
+        self.n_classes = n_classes
+        self.layers = nn.ModuleList()
+        if n_layers > 1:
+            self.layers.append(dglnn.SAGEConv(in_feats, n_hidden, 'mean'))
+            for i in range(1, n_layers - 1):
+                self.layers.append(dglnn.SAGEConv(n_hidden, n_hidden, 'mean'))
+            self.layers.append(dglnn.SAGEConv(n_hidden, n_classes, 'mean'))
+        else:
+            self.layers.append(dglnn.SAGEConv(in_feats, n_classes, 'mean'))
+        self.dropout = nn.Dropout(dropout)
+        self.activation = activation
+
+    def forward(self, blocks, x):
+        h = x
+        for l, (layer, block) in enumerate(zip(self.layers, blocks)):
+            h = layer(block, h)
+            if l != len(self.layers) - 1:
+                h = self.activation(h)
+                h = self.dropout(h)
+        return h
+
+    def inference(self, g, x, device, batch_size, num_workers):
+        """
+        Inference with the GraphSAGE model on full neighbors (i.e. without neighbor sampling).
+        g : the entire graph.
+        x : the input of entire node set.
+        The inference code is written in a fashion that it could handle any number of nodes and
+        layers.
+        """
+        # During inference with sampling, multi-layer blocks are very inefficient because
+        # lots of computations in the first few layers are repeated.
+        # Therefore, we compute the representation of all nodes layer by layer.  The nodes
+        # on each layer are of course splitted in batches.
+        # TODO: can we standardize this?
+        for l, layer in enumerate(self.layers):
+            y = th.zeros(g.num_nodes(), self.n_hidden if l != len(self.layers) - 1 else self.n_classes)
+
+            sampler = dgl.dataloading.MultiLayerFullNeighborSampler(1)
+            dataloader = dgl.dataloading.NodeDataLoader(
+                g,
+                th.arange(g.num_nodes()).to(g.device),
+                sampler,
+                batch_size=batch_size,
+                shuffle=True,
+                drop_last=False,
+                num_workers=num_workers)
+
+            for input_nodes, output_nodes, blocks in tqdm.tqdm(dataloader):
+                block = blocks[0]
+
+                block = block.int().to(device)
+                h = x[input_nodes].to(device)
+                h = layer(block, h)
+                if l != len(self.layers) - 1:
+                    h = self.activation(h)
+                    h = self.dropout(h)
+
+                y[output_nodes] = h.cpu()
+
+            x = y
+        return y
+
+
 # Decoder
 class DecoderSCVI(nn.Module):
     def __init__(
@@ -262,7 +168,7 @@ class DecoderSCVI(nn.Module):
             self.px_scale_decoder = nn.Sequential(nn.Linear(n_hidden, n_output))
 
     def forward(
-        self, z: torch.Tensor
+        self, z: th.Tensor
     ):
         # The decoder returns values for the parameters of the ZINB distribution
         px = self.px_decoder(z)
