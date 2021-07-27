@@ -9,6 +9,7 @@ from torch.distributions import Normal, kl_divergence as kl
 import pytorch_lightning as pl
 import torchmetrics
 import math
+import numpy as np
 
 def reparameterize_gaussian(mu, var):
     return Normal(mu, var.sqrt()).rsample()
@@ -65,19 +66,22 @@ class SAGE(pl.LightningModule):
         #self.automatic_optimization = False
 
         for i in range(num_layers):
-            in_channels2 = in_channels if i == 0 else hidden_channels
+            #in_channels = in_channels if i == 0 else hidden_channels
+            interm_channels= 64
             # L2 regularization
             if i == num_layers-1:
-                self.convs.append(SAGEConv(in_channels2, hidden_channels,normalize=False))
-                #self.convs.append(GATConv(in_channels, hidden_channels, heads=8, dropout=0.1,concat=False))
+                self.convs.append(SAGEConv(interm_channels, hidden_channels,normalize=False))
+                #self.convs.append(GATConv(interm_channels, hidden_channels, heads=8, dropout=0.1,concat=False))
             else:
-                self.convs.append(SAGEConv(in_channels2, hidden_channels,normalize=self.normalize))
-                #self.convs.append(GATConv(in_channels, hidden_channels, heads=8, dropout=0.1,concat=False))
+                self.convs.append(SAGEConv(in_channels, interm_channels, normalize=self.normalize))
+                #self.convs.append(GATConv(in_channels, interm_channels, heads=8, dropout=0.1,concat=False))
 
-        '''        
+      
         self.bns = nn.ModuleList()
         for _ in range(num_layers - 1):
-            self.bns.append(nn.BatchNorm1d(hidden_channels))'''
+            if i == num_layers-1:
+                self.bns.append(nn.BatchNorm1d(interm_channels))    
+            self.bns.append(nn.BatchNorm1d(hidden_channels))
 
         if self.apply_normal_latent:
             self.mean_encoder = nn.Linear(hidden_channels, hidden_channels)
@@ -99,9 +103,9 @@ class SAGE(pl.LightningModule):
             x = self.convs[i]((x, x_target), edge_index)
             #x = self.convs[i](x, edge_index)
             if i != self.num_layers - 1:
-                #x = self.bns[i](x)
+                x = self.bns[i](x)
                 x = x.relu()
-                x = F.dropout(x, p=0.5, training=self.training)
+                x = F.dropout(x, p=0.2, training=self.training)
 
         if self.apply_normal_latent:
             q_m = self.mean_encoder(x)
@@ -118,21 +122,31 @@ class SAGE(pl.LightningModule):
             x = conv(x, edge_index)
             if i != self.num_layers - 1:
                 x = x.relu()
-                x = F.dropout(x, p=0.5, training=self.training)
+                x = F.dropout(x, p=0.2, training=self.training)
         return x
 
-    def forward(self,x,adjs,classes=None):
+    def forward(self,b):
+        bs,x,adjs,classes= b
+        #part = np.isin(np.arange(bs),adjs[1].edge_index[1,:].unique()).sum()
+        #part_pos = np.isin(np.arange(bs,bs*2),adjs[1].edge_index[1,:].unique()).sum() + part
+        #z, z_pos, z_neg = z[:part,:],z[part:part_pos,:],z[part_pos:,:]
+
         # Embedding sampled nodes
         z, qm, qv = self.neighborhood_forward(x, adjs)
-        z, z_pos, z_neg = z.split(z.size(0) // 3, dim=0)
-        if type(qm) != int:
-            qm, qm_pos, qm_neg = qm.split(qm.size(0) // 3, dim=0)
-            qv, qv_pos, qv_neg = qv.split(qv.size(0) // 3, dim=0)
+        out = z.split(z.size(0) // (z.shape[0]//bs) , dim=0)
+        z = out[0]
+        z_pos = out[1]
+        z_neg = torch.cat(out[2:])
+        
         # Embedding for neighbor nodes of sample nodes
 
         if self.loss_fn == 'sigmoid':
             pos_loss = -F.logsigmoid((z * z_pos).sum(-1))
-            neg_loss = -F.logsigmoid(-(z * z_neg).sum(-1))
+            extended = z_neg.shape[0]//z.shape[0]
+            z = torch.cat([z]*extended)
+            z_neg = z_neg[:z.shape[0],:]
+            neg_loss = -F.logsigmoid(-(z* z_neg).sum(-1))
+
         elif self.loss_fn == 'cosine':
             pos_loss = -torch.cosine_similarity(z,z_pos)
             neg_loss = torch.cosine_similarity(z,z_neg)
@@ -175,7 +189,9 @@ class SAGE(pl.LightningModule):
             collapsed_data = torch.stack([x[neighbors[r],:].sum(axis=0) for r in range(z.shape[0])],dim=0)
             collapsed_data = F.log_softmax(collapsed_data,dim=-1)
             decoded_data = self.decoder(z)
-            decoder_loss = F.mse_loss(collapsed_data,decoded_data,reduction='sum')#.mean()
+            #decoder_loss = -F.logsigmoid((decoded_data*collapsed_data).sum(-1)).mean()
+            decoder_loss = F.mse_loss(collapsed_data,decoded_data,reduction='mean')#.mean()
+            #
             n_loss += decoder_loss
         else:
             decoder_loss = 0
@@ -183,12 +199,12 @@ class SAGE(pl.LightningModule):
         return n_loss, pos_loss, neg_loss, decoder_loss
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=0.001)#,weight_decay=5e-4)
+        optimizer = torch.optim.Adam(self.parameters(), lr=0.01,weight_decay=1e-4)
         return optimizer
 
     def training_step(self, batch, batch_idx):
-        x,adjs,c = batch['unlabelled']
-        loss,pos_loss,neg_loss,decoder_loss = self(x, adjs, c)
+        b = batch['unlabelled']
+        loss,pos_loss,neg_loss,decoder_loss = self(b)
         '''
         p_opt,n_opt,a_opt = self.optimizers()
         p_opt.zero_grad()
@@ -202,20 +218,19 @@ class SAGE(pl.LightningModule):
         '''
 
         if 'labelled' in batch:
-            x, adjs, c = batch['labelled']
-            loss_labelled, _, _, _ = self(x, adjs, c)
+            b = batch['labelled']
+            loss_labelled, _, _, _ = self(b)
             self.log('labelled_loss',loss_labelled)
             loss += loss_labelled
 
-        self.log('Positive Loss', pos_loss, on_step=True, on_epoch=True, prog_bar=True)
-        self.log('Negative Loss', neg_loss, on_step=True, on_epoch=True, prog_bar=True)
-        self.log('Autoencoder_loss', decoder_loss, on_step=True, on_epoch=True, prog_bar=True)
-        self.log('train_loss', loss,on_step=True, on_epoch=True, prog_bar=True)
+        self.log('Positive Loss', pos_loss, on_step=True, prog_bar=True)
+        self.log('Negative Loss', neg_loss, on_step=True, prog_bar=True)
+        self.log('Autoencoder_loss', decoder_loss, on_step=True, prog_bar=True)
+        self.log('train_loss', loss,prog_bar=True)
         return loss
 
     def validation_step(self, batch, batch_idx):
-        x, adjs, c = batch
-        loss = self(x, adjs, c)
+        loss = self(batch)
         self.log('val_loss', loss)
         return loss
     

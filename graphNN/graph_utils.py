@@ -44,7 +44,8 @@ class GraphData(pl.LightningDataModule):
         save_to = '',
         subsample=1,
         ref_celltypes=None,
-        smooth:bool=False
+        smooth:bool=False,
+        negative_samples:int=5,
         ):
         """
         Initialize GraphData class
@@ -79,6 +80,7 @@ class GraphData(pl.LightningDataModule):
         self.save_to = save_to
         self.ref_celltypes = ref_celltypes 
         self.smooth = smooth
+        self.negative_samples = negative_samples
 
         self.folder = self.analysis_name+ '_' +datetime.now().strftime("%Y-%m-%d-%H%M%S")
         os.mkdir(self.folder)
@@ -143,8 +145,9 @@ class GraphData(pl.LightningDataModule):
     def train_dataloader(self):
         unlabelled=  NeighborSampler2(self.edges_tensor, node_idx=self.indices_train,data=self.d,
                                sizes=self.ngh_sizes, return_e_id=False,
-                               batch_size=self.batch_size,
-                               shuffle=True, num_workers=self.num_workers)
+                               batch_size=self.batch_size,drop_last=True,
+                               shuffle=True, num_workers=self.num_workers,
+                               negative_samples=self.negative_samples)
 
         if type(self.ref_celltypes) != type(None):
             #self.indices_labelled = torch.tensor(np.random.randint(0,self.cluster_nghs.shape[0],size=self.indices_train.shape[0]))
@@ -152,7 +155,9 @@ class GraphData(pl.LightningDataModule):
             labelled = NeighborSampler2(self.cluster_edges, node_idx=self.indices_labelled,
                             data=self.cluster_nghs, sizes=self.ngh_sizes,  
                             return_e_id=False, batch_size=self.batch_size,
-                            shuffle=True, num_workers=self.num_workers,cluster_labels=self.cluster_labels)
+                            shuffle=True, num_workers=self.num_workers,
+                            drop_last=True, cluster_labels=self.cluster_labels,
+                            negative_samples=self.negative_samples)
         else:
             labelled = None
 
@@ -171,7 +176,7 @@ class GraphData(pl.LightningDataModule):
         # set a big batch size, not all will be loaded in memory but it will loop relatively fast through large dataset
         return NeighborSampler2(self.edges_tensor, node_idx=self.indices_validation,data=self.d,
                                sizes=self.ngh_sizes, return_e_id=False,
-                               batch_size=self.batch_size*1,num_workers=10,
+                               batch_size=self.indices_validation.shape[0],num_workers=10,
                                shuffle=False, evaluation=True)
 
     def labelled_dataloader(self):
@@ -180,19 +185,20 @@ class GraphData(pl.LightningDataModule):
                         data=self.cluster_nghs, sizes=self.ngh_sizes,  
                         return_e_id=False, batch_size=self.batch_size,
                         shuffle=False, num_workers=self.num_workers,
-                        cluster_labels=self.cluster_labels,evaluation=True)
+                        cluster_labels=self.cluster_labels,evaluation=True,
+                        )
         return labelled
 
     def train(self,max_epochs=5,gpus=-1):     
-        trainer = pl.Trainer(gpus=gpus,callbacks=[self.checkpoint_callback,self.early_stop_callback],max_epochs=max_epochs)
-        trainer.fit(self.model, train_dataloader=self.train_dataloader(),val_dataloaders=self.validation_dataloader())
+        trainer = pl.Trainer(gpus=gpus,callbacks=[self.checkpoint_callback],max_epochs=max_epochs)
+        trainer.fit(self.model, train_dataloader=self.train_dataloader())
 
     def get_latent(self, deterministic=True,run_clustering=False,make_plot=False):
         print('Training done, generating embedding...')
         import matplotlib.pyplot as plt
         self.model.eval()
         embedding = []
-        for x,adjs,ref in self.latent_dataloader():
+        for bs, x,  adjs, ref in self.latent_dataloader():
             z,qm,_ = self.model.neighborhood_forward(x,adjs)
             if deterministic and self.model.apply_normal_latent:
                 z = qm
@@ -267,6 +273,7 @@ class GraphData(pl.LightningDataModule):
     
     def subsample_xy(self):
         if type(self.cells) == type(None):
+            print('None cells')
             #self.cells = self.data.df.index.compute()
             self.cells = np.arange(self.data.shape[0])
 
@@ -274,7 +281,7 @@ class GraphData(pl.LightningDataModule):
             self.cells = np.random.randint(0,self.data.shape[0], int(self.subsample*self.data.shape[0]))
         elif type(self.subsample) == dict:
             filt_x =  ((self.data.df.x > self.subsample['x'][0]) & (self.data.df.x < self.subsample['x'][1])).values.compute()
-            filt_y =  ((self.data.df.y > self.subsample['y'][0]) & (self.data.df.x < self.subsample['y'][1])).values.compute()
+            filt_y =  ((self.data.df.y > self.subsample['y'][0]) & (self.data.df.y < self.subsample['y'][1])).values.compute()
             self.cells = self.cells[filt_x & filt_y]
             #self.cells = np.random.choice(self.data.df.index.compute(),size=int(subsample*self.data.shape[0]),replace=False)
 
@@ -509,7 +516,7 @@ class NeighborSampler2(torch.utils.data.DataLoader):
                  sizes: List[int], node_idx: Optional[Tensor] = None,
                  num_nodes: Optional[int] = None, return_e_id: bool = True,
                  transform: Callable = None, cluster_labels:Optional[Tensor]=None, 
-                 evaluation:bool=False, **kwargs):
+                 evaluation:bool=False, negative_samples=5,**kwargs):
 
         edge_index = edge_index.to('cpu')
 
@@ -529,6 +536,7 @@ class NeighborSampler2(torch.utils.data.DataLoader):
         self.data = data
         self.cluster_labels = cluster_labels
         self.evaluation = evaluation
+        self.negative_samples=negative_samples
 
         # Obtain a *transposed* `SparseTensor` instance.
         if not self.is_sparse_tensor:
@@ -592,11 +600,12 @@ class NeighborSampler2(torch.utils.data.DataLoader):
 
         #out v2 using sparse tensor
         if type(self.cluster_labels) == type(None):
-            out = (torch.tensor(self.data[n_id].toarray(),dtype=torch.float32),
+
+            out = (self.batch_size, torch.tensor(self.data[n_id].toarray(),dtype=torch.float32),
                         adjs,
                         None)
         else:
-            out = (torch.tensor(self.data[n_id].toarray(),dtype=torch.float32),
+            out = (self.batch_size, torch.tensor(self.data[n_id].toarray(),dtype=torch.float32),
                     adjs,
                     torch.tensor(self.cluster_labels[n_id[:batch_size]],dtype=torch.long))
 
@@ -615,11 +624,15 @@ class NeighborSampler2(torch.utils.data.DataLoader):
             pos_batch = random_walk(row, col, batch, walk_length=1,
                                     coalesced=False)[:, 1]
 
-            neg_batch = torch.randint(0, self.adj_t.size(1), (batch.numel(), ),
+            neg_batch = torch.randint(0, self.adj_t.size(1), (batch.numel()*self.negative_samples, ),
                                     dtype=torch.long)
 
+            '''neg_batch = random_walk(row, col, batch, walk_length=10000,
+                        coalesced=False)[:, 1]
+                    '''
+
             batch = torch.cat([batch, pos_batch, neg_batch], dim=0)
-            return self.sample_i(batch)
+            return self.sample_i(batch) #, self.sample_i(pos_batch), self.sample_i(neg_batch)
             #return batch,pos_batch,neg_batch
 
     def __repr__(self):
