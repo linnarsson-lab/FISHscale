@@ -150,7 +150,7 @@ class GraphData(pl.LightningDataModule):
             self.knn_smooth()
 
         self.g= dgl.graph((edges[0,:],edges[1,:]))
-        self.g.ndata['gene'] = th.tensor(self.d.toarray())
+        self.g.ndata['gene'] = th.tensor(self.d.toarray(),dtype=th.float32)
 
         self.sampler = dgl.dataloading.MultiLayerNeighborSampler([int(_) for _ in self.ngh_sizes])
         self.device = th.device('cpu')
@@ -193,40 +193,38 @@ class GraphData(pl.LightningDataModule):
         self.indices_validation = th.tensor(np.arange(cells.shape[0]))
 
     def train_dataloader(self):
-        unlabelled= dgl.dataloading.EdgeDataLoader(
+        return dgl.dataloading.EdgeDataLoader(
                         self.g,
-                        np.arange(self.g.m),
+                        self.indices_train,
                         self.sampler,
-                        negative_sampler=NegativeSampler(self.g, self.negative_samples, False),
-                        device=self.device,
+                        negative_sampler=NegativeSampler(self.g, self.negative_samples, True),
+                        #device=self.device,
                         batch_size=self.batch_size,
                         shuffle=True,
                         drop_last=True,
                         num_workers=self.num_workers)
 
-
-        if type(self.ref_celltypes) != type(None):
+    def val_dataloader(self):
+        # Note that the validation data loader is a NodeDataLoader
+        # as we want to evaluate all the node embeddings.
+        return dgl.dataloading.NodeDataLoader(
+            self.g,
+            np.arange(self.g.num_nodes()),
+            self.sampler,
+            #device=self.device,
+            batch_size=self.batch_size,
+            shuffle=False,
+            drop_last=False,
+            num_workers=self.num_workers)
+        '''if type(self.ref_celltypes) != type(None):
             #self.indices_labelled = th.tensor(np.random.randint(0,self.cluster_nghs.shape[0],size=self.indices_train.shape[0]))
             self.indices_labelled = th.tensor(np.random.choice(self.cluster_edges.unique().numpy(),size=self.indices_train.shape[0]))
-            labelled = None
+        labelled = None
 
         if type(labelled) != type(None):
             return {'unlabelled':unlabelled,'labelled':labelled}
-        else:
-            return {'unlabelled':unlabelled}
-       
-    def validation_dataloader(self):
-        # set a big batch size, not all will be loaded in memory but it will loop relatively fast through large dataset
-        pass
-    def latent_dataloader(self):
-        # set a big batch size, not all will be loaded in memory but it will loop relatively fast through large dataset
-        pass
-
-    def labelled_dataloader(self):
-        indices_lab = th.tensor(np.arange(0,self.cluster_nghs.shape[0]))
-        pass
-                        
-        return labelled
+        else:'''
+        
 
     def train(self,max_epochs=5,gpus=-1):     
         trainer = pl.Trainer(gpus=gpus,callbacks=[self.checkpoint_callback],max_epochs=max_epochs)
@@ -312,10 +310,8 @@ class GraphData(pl.LightningDataModule):
     
     def subsample_xy(self):
         if type(self.cells) == type(None):
-            print('None cells')
             #self.cells = self.data.df.index.compute()
             self.cells = np.arange(self.data.shape[0])
-
         if type(self.subsample) == float and self.subsample < 1:
             self.cells = np.random.randint(0,self.data.shape[0], int(self.subsample*self.data.shape[0]))
         elif type(self.subsample) == dict:
