@@ -39,7 +39,8 @@ class SAGELightning(LightningModule):
                  n_layers,
                  activation=F.relu,
                  dropout=0.2,
-                 lr=0.003):
+                 lr=0.01,
+                 ):
         super().__init__()
         self.save_hyperparameters()
         self.module = SAGE(in_feats, n_hidden, n_classes, n_layers, activation, dropout)
@@ -48,10 +49,11 @@ class SAGELightning(LightningModule):
 
     def training_step(self, batch, batch_idx):
         input_nodes, pos_graph, neg_graph, mfgs = batch
-        mfgs = [mfg.int().to(device) for mfg in mfgs]
-        pos_graph = pos_graph.to(device)
-        neg_graph = neg_graph.to(device)
-        batch_inputs = mfgs[0].srcdata['genes']
+        mfgs = [mfg.int() for mfg in mfgs]
+        pos_graph = pos_graph#.to(self.device)
+        neg_graph = neg_graph#.to(self.device)
+        batch_inputs = mfgs[0].srcdata['gene']
+
         #batch_labels = mfgs[-1].dstdata['labels']
         batch_pred = self.module(mfgs, batch_inputs)
         loss = self.loss_fcn(batch_pred, pos_graph, neg_graph)
@@ -60,8 +62,8 @@ class SAGELightning(LightningModule):
 
     def validation_step(self, batch, batch_idx):
         input_nodes, output_nodes, mfgs = batch
-        mfgs = [mfg.int().to(device) for mfg in mfgs]
-        batch_inputs = mfgs[0].srcdata['genes']
+        mfgs = [mfg.int() for mfg in mfgs]
+        batch_inputs = mfgs[0].srcdata['gene']
         #batch_labels = mfgs[-1].dstdata['labels']
         batch_pred = self.module(mfgs, batch_inputs)
         return batch_pred
@@ -81,12 +83,12 @@ class SAGE(nn.Module):
         self.n_classes = n_classes
         self.layers = nn.ModuleList()
         if n_layers > 1:
-            self.layers.append(dglnn.SAGEConv(in_feats, n_hidden, 'mean'))
+            self.layers.append(dglnn.SAGEConv(in_feats, n_hidden, 'pool'))
             for i in range(1, n_layers - 1):
-                self.layers.append(dglnn.SAGEConv(n_hidden, n_hidden, 'mean'))
-            self.layers.append(dglnn.SAGEConv(n_hidden, n_classes, 'mean'))
+                self.layers.append(dglnn.SAGEConv(n_hidden, n_hidden, 'pool'))
+            self.layers.append(dglnn.SAGEConv(n_hidden, n_classes, 'pool'))
         else:
-            self.layers.append(dglnn.SAGEConv(in_feats, n_classes, 'mean'))
+            self.layers.append(dglnn.SAGEConv(in_feats, n_classes, 'pool'))
         self.dropout = nn.Dropout(dropout)
         self.activation = activation
 
@@ -112,7 +114,7 @@ class SAGE(nn.Module):
         # Therefore, we compute the representation of all nodes layer by layer.  The nodes
         # on each layer are of course splitted in batches.
         # TODO: can we standardize this?
-        for l, layer in enumerate(self.layers):
+        for l, layer in enumerate(self.layers[:-1]):
             y = th.zeros(g.num_nodes(), self.n_hidden if l != len(self.layers) - 1 else self.n_classes)
 
             sampler = dgl.dataloading.MultiLayerFullNeighborSampler(1)
@@ -121,7 +123,7 @@ class SAGE(nn.Module):
                 th.arange(g.num_nodes()).to(g.device),
                 sampler,
                 batch_size=batch_size,
-                shuffle=True,
+                shuffle=False,
                 drop_last=False,
                 num_workers=num_workers)
 
