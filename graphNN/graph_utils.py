@@ -152,6 +152,7 @@ class GraphData(pl.LightningDataModule):
         self.g= dgl.graph((edges[0,:],edges[1,:]))
         self.g.ndata['gene'] = th.tensor(self.d.toarray(),dtype=th.float32)
 
+
         self.sampler = dgl.dataloading.MultiLayerNeighborSampler([int(_) for _ in self.ngh_sizes])
         self.device = th.device('cpu')
 
@@ -197,7 +198,7 @@ class GraphData(pl.LightningDataModule):
                         self.g,
                         self.indices_train,
                         self.sampler,
-                        negative_sampler=NegativeSampler(self.g, self.negative_samples, True),
+                        negative_sampler=NegativeSampler(self.g, self.negative_samples, False),
                         #device=self.device,
                         batch_size=self.batch_size,
                         shuffle=True,
