@@ -82,6 +82,12 @@ class SAGE(nn.Module):
         self.n_hidden = n_hidden
         self.n_classes = n_classes
         self.layers = nn.ModuleList()
+        
+        self.last_layer = nn.Sequential(
+                            nn.Linear(n_hidden , n_hidden, bias=True),
+                            nn.BatchNorm1d(n_hidden),
+                            nn.ReLU())
+
         if n_layers > 1:
             self.layers.append(dglnn.SAGEConv(in_feats, n_hidden, 'pool'))
             for i in range(1, n_layers - 1):
@@ -91,14 +97,19 @@ class SAGE(nn.Module):
             self.layers.append(dglnn.SAGEConv(in_feats, n_classes, 'pool'))
         self.dropout = nn.Dropout(dropout)
         self.activation = activation
-
+        
     def forward(self, blocks, x):
         h = x
         for l, (layer, block) in enumerate(zip(self.layers, blocks)):
+            #print(l)
             h = layer(block, h)
-            if l != len(self.layers) - 1:
+
+            if l != len(self.layers) - 1 and l != len(self.layers) - 2:
                 h = self.activation(h)
                 h = self.dropout(h)
+            elif l == len(self.layers) - 2:
+                h = self.last_layer(h)
+
         return h
 
     def inference(self, g, x, device, batch_size, num_workers):
@@ -129,14 +140,15 @@ class SAGE(nn.Module):
 
             for input_nodes, output_nodes, blocks in tqdm.tqdm(dataloader):
                 block = blocks[0]
-
                 block = block.int().to(device)
                 h = x[input_nodes].to(device)
                 h = layer(block, h)
-                if l != len(self.layers) - 1:
+
+                if l != len(self.layers) - 1 and l != len(self.layers) - 2:
                     h = self.activation(h)
                     h = self.dropout(h)
-
+                elif l == len(self.layers) - 2:
+                    h = self.last_layer(h)
                 y[output_nodes] = h.cpu()
 
             x = y
