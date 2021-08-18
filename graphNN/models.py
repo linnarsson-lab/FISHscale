@@ -83,10 +83,10 @@ class SAGE(nn.Module):
         self.n_classes = n_classes
         self.layers = nn.ModuleList()
         
-        self.last_layer = nn.Sequential(
+        '''self.last_layer = nn.Sequential(
                             nn.Linear(n_hidden , n_hidden, bias=True),
                             nn.BatchNorm1d(n_hidden),
-                            nn.ReLU())
+                            nn.ReLU())'''
 
         if n_layers > 1:
             self.layers.append(dglnn.SAGEConv(in_feats, n_hidden, 'pool'))
@@ -104,11 +104,13 @@ class SAGE(nn.Module):
             #print(l)
             h = layer(block, h)
 
-            if l != len(self.layers) - 1 and l != len(self.layers) - 2:
+            if l != len(self.layers) - 1: #and l != len(self.layers) - 2:
                 h = self.activation(h)
                 h = self.dropout(h)
+            '''         
             elif l == len(self.layers) - 2:
                 h = self.last_layer(h)
+            '''
 
         return h
 
@@ -144,11 +146,11 @@ class SAGE(nn.Module):
                 h = x[input_nodes].to(device)
                 h = layer(block, h)
 
-                if l != len(self.layers) - 1 and l != len(self.layers) - 2:
+                if l != len(self.layers) - 1: #and l != len(self.layers) - 2:
                     h = self.activation(h)
                     h = self.dropout(h)
-                elif l == len(self.layers) - 2:
-                    h = self.last_layer(h)
+                '''elif l == len(self.layers) - 2:
+                    h = self.last_layer(h)'''
                 y[output_nodes] = h.cpu()
 
             x = y
