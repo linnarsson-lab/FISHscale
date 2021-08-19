@@ -25,10 +25,12 @@ class CrossEntropyLoss(nn.Module):
             neg_graph.ndata['h'] = block_outputs
             neg_graph.apply_edges(fn.u_dot_v('h', 'h', 'score'))
             neg_score = neg_graph.edata['score']
-
-        score = th.cat([pos_score, neg_score])
-        label = th.cat([th.ones_like(pos_score), th.zeros_like(neg_score)]).long()
-        loss = F.binary_cross_entropy_with_logits(score, label.float())
+        
+        print('pos_score', pos_score.shape)
+        loss = F.log_softmax(pos_score) + F.log_softmax(-neg_score)
+        #score = th.cat([pos_score, neg_score])
+        #label = th.cat([th.ones_like(pos_score), th.zeros_like(neg_score)]).long()
+        #loss = F.binary_cross_entropy_with_logits(score, label.float())
         return loss
 
 class SAGELightning(LightningModule):
@@ -82,7 +84,7 @@ class SAGE(nn.Module):
         self.n_hidden = n_hidden
         self.n_classes = n_classes
         self.layers = nn.ModuleList()
-
+        
         self.bns = nn.ModuleList()
         for i in range(n_layers - 1):
             if i == n_layers-1:
@@ -99,7 +101,8 @@ class SAGE(nn.Module):
             self.layers.append(dglnn.SAGEConv(in_feats, n_hidden, 'pool'))
             for i in range(1, n_layers - 1):
                 self.layers.append(dglnn.SAGEConv(n_hidden, n_hidden, 'pool'))
-            self.layers.append(dglnn.SAGEConv(n_hidden, n_classes, 'pool'))
+            
+            #self.layers.append(dglnn.SAGEConv(n_hidden, n_classes, 'pool'))
         else:
             self.layers.append(dglnn.SAGEConv(in_feats, n_classes, 'pool'))
         self.dropout = nn.Dropout(dropout)
@@ -112,13 +115,15 @@ class SAGE(nn.Module):
             #print(l)
             h = layer(block, h)
 
-            if l != len(self.layers) - 1 and l != len(self.layers) - 2:
+            if l != len(self.layers) - 1: #and l != len(self.layers) - 2:
                 h = self.bns[l](h)
                 h = self.activation(h)
                 h = self.dropout(h)
+            
+            h = self.last_layer(h)
       
-            elif l == len(self.layers) - 2:
-                h = self.last_layer(h)
+            '''elif l == len(self.layers) - 2:
+                h = self.last_layer(h)'''
 
         return h
 
@@ -158,8 +163,9 @@ class SAGE(nn.Module):
                     h = self.bns[l](h)
                     h = self.activation(h)
                     h = self.dropout(h)
-                elif l == len(self.layers) - 2:
-                    h = self.last_layer(h)
+                h = self.last_layer(h)
+                '''elif l == len(self.layers) - 2:
+                    h = self.last_layer(h)'''
                 y[output_nodes] = h.cpu()
 
             x = y
