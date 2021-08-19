@@ -98,8 +98,8 @@ class SAGE(nn.Module):
         if n_layers > 1:
             self.layers.append(dglnn.SAGEConv(in_feats, n_hidden, 'pool'))
             for i in range(1, n_layers - 1):
-                self.layers.append(dglnn.SAGEConv(n_hidden, n_hidden, 'lstm'))
-            self.layers.append(dglnn.SAGEConv(n_hidden, n_classes, 'lstm'))
+                self.layers.append(dglnn.SAGEConv(n_hidden, n_hidden, 'pool'))
+            self.layers.append(dglnn.SAGEConv(n_hidden, n_classes, 'pool'))
         else:
             self.layers.append(dglnn.SAGEConv(in_feats, n_classes, 'pool'))
         self.dropout = nn.Dropout(dropout)
