@@ -236,10 +236,10 @@ class GraphData(pl.LightningDataModule):
         import matplotlib.pyplot as plt
         self.model.eval()
         embedding = []
-        for bs, x,  adjs, ref in self.latent_dataloader():
-            z,qm,_ = self.model.neighborhood_forward(x,adjs)
-            if deterministic and self.model.apply_normal_latent:
-                z = qm
+        for bs, pos, mfgs in self.val_dataloader():
+            mfgs = [mfg.int() for mfg in mfgs]
+            batch_inputs = mfgs[0].srcdata['gene']
+            z = self.model.module(mfgs, batch_inputs)
             embedding.append(z.detach().numpy())
             
         self.embedding = np.concatenate(embedding)

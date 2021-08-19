@@ -85,10 +85,8 @@ class SAGE(nn.Module):
         self.layers = nn.ModuleList()
         
         self.bns = nn.ModuleList()
-        for _ in range(self.layers - 1):
-            if i == self.layers-1:
-                self.bns.append(nn.BatchNorm1d(interm_channels))    
-            self.bns.append(nn.BatchNorm1d(hidden_channels))
+        for _ in range(self.n_layers):
+            self.bns.append(nn.BatchNorm1d(n_hidden))
 
         '''self.last_layer = nn.Sequential(
                             nn.Linear(n_hidden , n_hidden, bias=True),
@@ -97,7 +95,7 @@ class SAGE(nn.Module):
 
         if n_layers > 1:
             self.layers.append(dglnn.SAGEConv(in_feats, n_hidden, 'pool'))
-            for i in range(n_layers):
+            for i in range(1,n_layers):
                 self.layers.append(dglnn.SAGEConv(n_hidden, n_hidden, 'pool'))
             
             #self.layers.append(dglnn.SAGEConv(n_hidden, n_classes, 'pool'))
@@ -139,7 +137,7 @@ class SAGE(nn.Module):
         # on each layer are of course splitted in batches.
         # TODO: can we standardize this?
         for l, layer in enumerate(self.layers[:]):
-            y = th.zeros(g.num_nodes(), self.n_hidden if l != len(self.layers) - 1 else self.n_classes)
+            y = th.zeros(g.num_nodes(), self.n_hidden)
 
             sampler = dgl.dataloading.MultiLayerFullNeighborSampler(1)
             dataloader = dgl.dataloading.NodeDataLoader(
@@ -157,7 +155,7 @@ class SAGE(nn.Module):
                 h = x[input_nodes].to(device)
                 h = layer(block, h)
 
-                if l != len(self.layers) - 1:# and l != len(self.layers) - 2:
+                if l != len(self.layers) -1:# and l != len(self.layers) - 2:
                     h = self.bns[l](h)
                     h = self.activation(h)
                     h = self.dropout(h)
