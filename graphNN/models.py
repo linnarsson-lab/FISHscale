@@ -91,10 +91,10 @@ class SAGE(nn.Module):
             self.bns.append(nn.BatchNorm1d(n_hidden))
 
         
-        self.last_layer = nn.Sequential(
+        '''self.last_layer = nn.Sequential(
                             nn.Linear(n_hidden , n_hidden, bias=True),
                             nn.BatchNorm1d(n_hidden),
-                            nn.ReLU())
+                            nn.ReLU())'''
 
         if n_layers > 1:
             self.layers.append(dglnn.SAGEConv(in_feats, n_hidden, 'pool'))
@@ -119,7 +119,7 @@ class SAGE(nn.Module):
                 h = self.activation(h)
                 h = self.dropout(h)
             
-            h = self.last_layer(h)
+            #h = self.last_layer(h)
       
             '''elif l == len(self.layers) - 2:
                 h = self.last_layer(h)'''
@@ -139,7 +139,7 @@ class SAGE(nn.Module):
         # Therefore, we compute the representation of all nodes layer by layer.  The nodes
         # on each layer are of course splitted in batches.
         # TODO: can we standardize this?
-        for l, layer in enumerate(self.layers[:-1]):
+        for l, layer in enumerate(self.layers[:]):
             y = th.zeros(g.num_nodes(), self.n_hidden if l != len(self.layers) - 1 else self.n_classes)
 
             sampler = dgl.dataloading.MultiLayerFullNeighborSampler(1)
@@ -158,11 +158,11 @@ class SAGE(nn.Module):
                 h = x[input_nodes].to(device)
                 h = layer(block, h)
 
-                if l != len(self.layers) - 1 and l != len(self.layers) - 2:
+                if l != len(self.layers) - 1:# and l != len(self.layers) - 2:
                     h = self.bns[l](h)
                     h = self.activation(h)
                     h = self.dropout(h)
-                h = self.last_layer(h)
+                #h = self.last_layer(h)
                 '''elif l == len(self.layers) - 2:
                     h = self.last_layer(h)'''
                 y[output_nodes] = h.cpu()
