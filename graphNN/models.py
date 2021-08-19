@@ -19,15 +19,14 @@ class CrossEntropyLoss(nn.Module):
     def forward(self, block_outputs, pos_graph, neg_graph):
         with pos_graph.local_scope():
             pos_graph.ndata['h'] = block_outputs
-            pos_graph.apply_edges(fn.u_dot_v('h', 'h', 'score'))
+            pos_graph.apply_edges(fn.u_mul_v('h', 'h', 'score'))
             pos_score = pos_graph.edata['score']
         with neg_graph.local_scope():
             neg_graph.ndata['h'] = block_outputs
-            neg_graph.apply_edges(fn.u_dot_v('h', 'h', 'score'))
+            neg_graph.apply_edges(fn.u_mul_v('h', 'h', 'score'))
             neg_score = neg_graph.edata['score']
         
-        print('pos_score', pos_score.shape)
-        loss = F.log_softmax(pos_score) + F.log_softmax(-neg_score)
+        loss = -F.logsigmoid(pos_score).mean() - F.logsigmoid(-neg_score).mean()
         #score = th.cat([pos_score, neg_score])
         #label = th.cat([th.ones_like(pos_score), th.zeros_like(neg_score)]).long()
         #loss = F.binary_cross_entropy_with_logits(score, label.float())
@@ -99,7 +98,7 @@ class SAGE(nn.Module):
 
         if n_layers > 1:
             self.layers.append(dglnn.SAGEConv(in_feats, n_hidden, 'pool'))
-            for i in range(1, n_layers - 1):
+            for i in range(n_layers):
                 self.layers.append(dglnn.SAGEConv(n_hidden, n_hidden, 'pool'))
             
             #self.layers.append(dglnn.SAGEConv(n_hidden, n_classes, 'pool'))
