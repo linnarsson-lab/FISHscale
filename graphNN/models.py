@@ -85,10 +85,10 @@ class SAGE(nn.Module):
         self.layers = nn.ModuleList()
         
         self.bns = nn.ModuleList()
-        for i in range(n_layers - 1):
-            if i == n_layers-1:
-                self.bns.append(nn.BatchNorm1d(n_hidden))    
-        self.bns.append(nn.BatchNorm1d(n_hidden))
+        for _ in range(self.layers - 1):
+            if i == self.layers-1:
+                self.bns.append(nn.BatchNorm1d(interm_channels))    
+            self.bns.append(nn.BatchNorm1d(hidden_channels))
 
         '''self.last_layer = nn.Sequential(
                             nn.Linear(n_hidden , n_hidden, bias=True),
