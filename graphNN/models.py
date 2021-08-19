@@ -98,20 +98,22 @@ class SAGE(nn.Module):
         if n_layers > 1:
             self.layers.append(dglnn.SAGEConv(in_feats, n_hidden, 'pool'))
             for i in range(1, n_layers - 1):
-                self.layers.append(dglnn.SAGEConv(n_hidden, n_hidden, 'pool'))
-            self.layers.append(dglnn.SAGEConv(n_hidden, n_classes, 'pool'))
+                self.layers.append(dglnn.SAGEConv(n_hidden, n_hidden, 'lstm'))
+            self.layers.append(dglnn.SAGEConv(n_hidden, n_classes, 'lstm'))
         else:
             self.layers.append(dglnn.SAGEConv(in_feats, n_classes, 'pool'))
         self.dropout = nn.Dropout(dropout)
         self.activation = activation
         
     def forward(self, blocks, x):
-        h = x
+        h = th.log(x+1)
+        
         for l, (layer, block) in enumerate(zip(self.layers, blocks)):
             #print(l)
             h = layer(block, h)
 
             if l != len(self.layers) - 1: #and l != len(self.layers) - 2:
+                h = self.bns[l](h)
                 h = self.activation(h)
                 h = self.dropout(h)
             '''         
@@ -154,6 +156,7 @@ class SAGE(nn.Module):
                 h = layer(block, h)
 
                 if l != len(self.layers) - 1: #and l != len(self.layers) - 2:
+                    h = self.bns[l](h)
                     h = self.activation(h)
                     h = self.dropout(h)
                 '''elif l == len(self.layers) - 2:
