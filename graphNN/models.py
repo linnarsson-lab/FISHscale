@@ -94,9 +94,9 @@ class SAGE(nn.Module):
                             nn.ReLU())'''
 
         if n_layers > 1:
-            self.layers.append(dglnn.SAGEConv(in_feats, n_hidden, 'pool'))
+            self.layers.append(dglnn.SAGEConv(in_feats, n_hidden, 'mean'))
             for i in range(1,n_layers):
-                self.layers.append(dglnn.SAGEConv(n_hidden, n_hidden, 'pool'))
+                self.layers.append(dglnn.SAGEConv(n_hidden, n_hidden, 'mean'))
             
             #self.layers.append(dglnn.SAGEConv(n_hidden, n_classes, 'pool'))
         else:
