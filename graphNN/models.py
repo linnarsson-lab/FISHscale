@@ -105,7 +105,7 @@ class SAGE(nn.Module):
         self.activation = activation
         
     def forward(self, blocks, x):
-        h = th.log(x+1)
+        h = x
         
         for l, (layer, block) in enumerate(zip(self.layers, blocks)):
             #print(l)

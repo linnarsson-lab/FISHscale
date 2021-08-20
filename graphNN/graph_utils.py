@@ -198,7 +198,7 @@ class GraphData(pl.LightningDataModule):
                         self.g,
                         self.indices_train,
                         self.sampler,
-                        negative_sampler=NegativeSampler(self.g, self.negative_samples, False),
+                        negative_sampler= dgl.dataloading.negative_sampler.Uniform(self.negative_samples), #NegativeSampler(self.g, self.negative_samples, False),
                         #device=self.device,
                         batch_size=self.batch_size,
                         shuffle=True,
