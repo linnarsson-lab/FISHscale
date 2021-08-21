@@ -101,7 +101,7 @@ class SAGE(nn.Module):
             #self.layers.append(dglnn.SAGEConv(n_hidden, n_classes, 'pool'))
         else:
             self.layers.append(dglnn.SAGEConv(in_feats, n_classes, 'pool'))
-        self.dropout = nn.Dropout(dropout)
+        self.dropout = dropout
         self.activation = activation
         
     def forward(self, blocks, x):
@@ -113,8 +113,8 @@ class SAGE(nn.Module):
 
             if l != len(self.layers) - 1: #and l != len(self.layers) - 2:
                 h = self.bns[l](h)
-                h = self.activation(h)
-                h = self.dropout(h)
+                h = h.relu()
+                h = F.dropout(h, p=0.2, training=self.training)
             
             #h = self.last_layer(h)
       
