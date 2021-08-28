@@ -194,13 +194,15 @@ class GraphData(pl.LightningDataModule):
         self.indices_validation = th.tensor(np.arange(cells.shape[0]))
 
     def train_dataloader(self):
+        edges = np.arange(self.g.num_edges())
+        random_edges = np.random.choice(edges,int(edges.shape[0]*self.train_p),replace=False)
         return dgl.dataloading.EdgeDataLoader(
                         self.g,
-                        self.indices_train,
+                        random_edges,
                         self.sampler,
-                        negative_sampler= dgl.dataloading.negative_sampler.Uniform(self.negative_samples), #NegativeSampler(self.g, self.negative_samples, False),
+                        negative_sampler=dgl.dataloading.negative_sampler.Uniform(self.negative_samples), # NegativeSampler(self.g, self.negative_samples, False),
                         #device=self.device,
-                        exclude='self',
+                        #exclude='self',
                         #reverse_eids=th.arange(self.g.num_edges()) ^ 1,
                         batch_size=self.batch_size,
                         shuffle=True,
@@ -330,7 +332,7 @@ class GraphData(pl.LightningDataModule):
             edge_file = os.path.join(self.save_to,'Edges-{}Nodes-Ngh{}-{}-dst{}'.format(self.cells.shape[0],self.ngh_sizes[0],self.ngh_sizes[1],self.distance_threshold))
             tree_file = os.path.join(self.save_to,'Tree-{}Nodes-Ngh{}-{}-dst{}.ann'.format(self.cells.shape[0],self.ngh_sizes[0],self.ngh_sizes[1],self.distance_threshold))
             coords = np.array([self.data.df.x.values.compute()[self.cells], self.data.df.y.values.compute()[self.cells]]).T
-            neighborhood_size = self.ngh_sizes[0] + 100
+            neighborhood_size = self.ngh_sizes[0] + 40
         else:
             supervised=True
             edge_file = os.path.join(self.save_to,'Supervised-Edges-{}Nodes-Ngh{}-{}-dst{}'.format(coords.shape[0],self.ngh_sizes[0],self.ngh_sizes[1],self.distance_threshold))

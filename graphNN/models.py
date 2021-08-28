@@ -26,7 +26,7 @@ class CrossEntropyLoss(nn.Module):
             neg_graph.apply_edges(fn.u_mul_v('h', 'h', 'score'))
             neg_score = neg_graph.edata['score']
         
-        loss = -F.logsigmoid(pos_score).mean() - F.logsigmoid(-neg_score).mean()
+        loss = -F.logsigmoid(pos_score.sum(-1)).mean() - F.logsigmoid(-neg_score.sum(-1)).mean()
         #score = th.cat([pos_score, neg_score])
         #label = th.cat([th.ones_like(pos_score), th.zeros_like(neg_score)]).long()
         #loss = F.binary_cross_entropy_with_logits(score, label.float())
@@ -88,19 +88,27 @@ class SAGE(nn.Module):
         for _ in range(self.n_layers):
             self.bns.append(nn.BatchNorm1d(n_hidden))
 
-        '''self.last_layer = nn.Sequential(
-                            nn.Linear(n_hidden , n_hidden, bias=True),
+        self.hidden = nn.Sequential(
+                            nn.Linear(n_hidden , n_hidden),
                             nn.BatchNorm1d(n_hidden),
-                            nn.ReLU())'''
+                            nn.ReLU())
+
+        self.latent = nn.Sequential(
+                    nn.Linear(n_hidden , n_hidden),
+                    nn.BatchNorm1d(n_hidden),
+                    nn.ReLU())
 
         if n_layers > 1:
             self.layers.append(dglnn.SAGEConv(in_feats, n_hidden, 'pool'))
             for i in range(1,n_layers):
                 self.layers.append(dglnn.SAGEConv(n_hidden, n_hidden, 'pool'))
-            
-            #self.layers.append(dglnn.SAGEConv(n_hidden, n_classes, 'pool'))
+            #self.layers.append(dglnn.SAGEConv(n_hidden, n_classes, 'mean'))
         else:
             self.layers.append(dglnn.SAGEConv(in_feats, n_classes, 'pool'))
+    
+        #self.hidden = dglnn.SAGEConv(n_hidden, n_hidden, 'pool')
+
+
         self.dropout = dropout
         self.activation = activation
         
@@ -110,17 +118,14 @@ class SAGE(nn.Module):
         for l, (layer, block) in enumerate(zip(self.layers, blocks)):
             #print(l)
             h = layer(block, h)
+            h = F.normalize(h)
 
             if l != len(self.layers) - 1: #and l != len(self.layers) - 2:
                 h = self.bns[l](h)
                 h = h.relu()
-                h = F.dropout(h, p=0.2, training=self.training)
-            
-            #h = self.last_layer(h)
-      
-            '''elif l == len(self.layers) - 2:
-                h = self.last_layer(h)'''
-
+                h = F.dropout(h, p=0.5, training=self.training)
+                h = self.hidden(h)
+        h = self.latent(h)
         return h
 
     def inference(self, g, x, device, batch_size, num_workers):
@@ -154,14 +159,16 @@ class SAGE(nn.Module):
                 block = block.int().to(device)
                 h = x[input_nodes].to(device)
                 h = layer(block, h)
+                h = F.normalize(h)
 
                 if l != len(self.layers) -1:# and l != len(self.layers) - 2:
                     h = self.bns[l](h)
-                    h = self.activation(h)
-                    h = self.dropout(h)
-                #h = self.last_layer(h)
-                '''elif l == len(self.layers) - 2:
-                    h = self.last_layer(h)'''
+                    h = h.relu()
+                    h = F.dropout(h, p=0.5, training=self.training)
+                    h =self.hidden(h)
+                elif l == len(self.layers) -1:
+                    h = self.latent(h)
+
                 y[output_nodes] = h.cpu()
 
             x = y
