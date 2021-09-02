@@ -41,10 +41,12 @@ class SAGELightning(LightningModule):
                  activation=F.relu,
                  dropout=0.2,
                  lr=0.01,
+                 supervised=False,
                  ):
         super().__init__()
+
         self.save_hyperparameters()
-        self.module = SAGE(in_feats, n_hidden, n_classes, n_layers, activation, dropout)
+        self.module = SAGE(in_feats, n_hidden, n_classes, n_layers, activation, dropout, supervised)
         self.lr = lr
         self.loss_fcn = CrossEntropyLoss()
 
@@ -74,11 +76,19 @@ class SAGELightning(LightningModule):
         return optimizer
 
 class SAGE(nn.Module):
-    def __init__(self, in_feats, n_hidden, n_classes, n_layers, activation, dropout):
+    '''def __init__(self, in_feats, n_hidden, n_classes, n_layers, activation, dropout):
         super().__init__()
-        self.init(in_feats, n_hidden, n_classes, n_layers, activation, dropout)
+        self.init(in_feats, n_hidden, n_classes, n_layers, activation, dropout)'''
 
-    def init(self, in_feats, n_hidden, n_classes, n_layers, activation, dropout):
+    def __init__(self, 
+                in_feats, 
+                n_hidden, 
+                n_classes, 
+                n_layers, 
+                activation, 
+                dropout,
+                supervised):
+                
         self.n_layers = n_layers
         self.n_hidden = n_hidden
         self.n_classes = n_classes
@@ -96,7 +106,8 @@ class SAGE(nn.Module):
         self.latent = nn.Sequential(
                     nn.Linear(n_hidden , n_hidden),
                     nn.BatchNorm1d(n_hidden),
-                    nn.ReLU())
+                    #nn.ReLU()
+                    )
 
         if n_layers > 1:
             self.layers.append(dglnn.SAGEConv(in_feats, n_hidden, 'pool'))
@@ -107,10 +118,6 @@ class SAGE(nn.Module):
             self.layers.append(dglnn.SAGEConv(in_feats, n_classes, 'pool'))
     
         #self.hidden = dglnn.SAGEConv(n_hidden, n_hidden, 'pool')
-
-
-        self.dropout = dropout
-        self.activation = activation
         
     def forward(self, blocks, x):
         h = x
