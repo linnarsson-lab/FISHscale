@@ -48,6 +48,7 @@ class SAGELightning(LightningModule):
         self.save_hyperparameters()
         self.module = SAGE(in_feats, n_hidden, n_classes, n_layers, activation, dropout, supervised)
         self.lr = lr
+        self.supervised= supervised
         self.loss_fcn = CrossEntropyLoss()
 
     def training_step(self, batch, batch_idx):

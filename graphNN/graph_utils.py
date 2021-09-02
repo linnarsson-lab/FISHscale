@@ -230,8 +230,15 @@ class GraphData(pl.LightningDataModule):
                             shuffle=True,
                             drop_last=True,
                             num_workers=self.num_workers)
-                            
 
+        else:
+            lab = None
+
+        if type(lab) != type(None):
+            return {'unlabelled':unlab,'labelled':lab}
+        else:
+            return {'unlabelled':unlab}
+                            
     def val_dataloader(self):
         # Note that the validation data loader is a NodeDataLoader
         # as we want to evaluate all the node embeddings.
@@ -244,6 +251,7 @@ class GraphData(pl.LightningDataModule):
             shuffle=False,
             drop_last=False,
             num_workers=self.num_workers)
+
         '''if type(self.ref_celltypes) != type(None):
             #self.indices_labelled = th.tensor(np.random.randint(0,self.cluster_nghs.shape[0],size=self.indices_train.shape[0]))
             self.indices_labelled = th.tensor(np.random.choice(self.cluster_edges.unique().numpy(),size=self.indices_train.shape[0]))
