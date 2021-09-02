@@ -52,6 +52,7 @@ class SAGELightning(LightningModule):
         self.loss_fcn = CrossEntropyLoss()
 
     def training_step(self, batch, batch_idx):
+        batch = batch['unlabelled']
         input_nodes, pos_graph, neg_graph, mfgs = batch
         mfgs = [mfg.int() for mfg in mfgs]
         pos_graph = pos_graph#.to(self.device)
@@ -61,6 +62,19 @@ class SAGELightning(LightningModule):
         #batch_labels = mfgs[-1].dstdata['labels']
         batch_pred = self.module(mfgs, batch_inputs)
         loss = self.loss_fcn(batch_pred, pos_graph, neg_graph)
+
+        if self.model.supervised:
+            batch = batch['labelled']
+            input_nodes, pos_graph, neg_graph, mfgs = batch
+            mfgs = [mfg.int() for mfg in mfgs]
+            pos_graph = pos_graph#.to(self.device)
+            neg_graph = neg_graph#.to(self.device)
+            batch_inputs = mfgs[0].srcdata['gene']
+
+            batch_labels = mfgs[-1].dstdata['labels']
+            batch_pred = self.module(mfgs, batch_inputs)
+            loss = self.loss_fcn(batch_pred, pos_graph, neg_graph)
+
         self.log('train_loss', loss, prog_bar=True, on_step=False, on_epoch=True)
 
         if self.supervised:
