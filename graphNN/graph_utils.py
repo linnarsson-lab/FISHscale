@@ -152,6 +152,11 @@ class GraphData(pl.LightningDataModule):
         self.g= dgl.graph((edges[0,:],edges[1,:]))
         self.g.ndata['gene'] = th.tensor(self.d.toarray(),dtype=th.float32)
 
+        if self.model.supervised:
+            self.molecules_labelled, edges_labelled, labels = self.cell_types_to_graph(self.ref_celltypes)
+            self.g_lab= dgl.graph((edges_labelled[0,:],edges_labelled[1,:]))
+            self.g_lab.ndata['gene'] = th.tensor(self.molecules_labelled,dtype=th.float32)
+            self.g_lab.ndata['label'] = th.tensor(labels, dtype=th.float32)
 
         self.sampler = dgl.dataloading.MultiLayerNeighborSampler([int(_) for _ in self.ngh_sizes])
         self.device = th.device('cpu')
@@ -196,7 +201,7 @@ class GraphData(pl.LightningDataModule):
     def train_dataloader(self):
         edges = np.arange(self.g.num_edges())
         random_edges = np.random.choice(edges,int(edges.shape[0]*self.train_p),replace=False)
-        return dgl.dataloading.EdgeDataLoader(
+        unlab = dgl.dataloading.EdgeDataLoader(
                         self.g,
                         random_edges,
                         self.sampler,
@@ -208,6 +213,24 @@ class GraphData(pl.LightningDataModule):
                         shuffle=True,
                         drop_last=True,
                         num_workers=self.num_workers)
+
+        if self.model.supervised:
+            edges = np.arange(self.g_lab.num_edges())
+            random_edges = np.random.choice(edges,int(edges.shape[0]*self.train_p),replace=False)
+    
+            lab = dgl.dataloading.EdgeDataLoader(
+                            self.g_lab,
+                            random_edges,
+                            self.sampler,
+                            negative_sampler=dgl.dataloading.negative_sampler.Uniform(self.negative_samples), # NegativeSampler(self.g, self.negative_samples, False),
+                            #device=self.device,
+                            #exclude='self',
+                            #reverse_eids=th.arange(self.g.num_edges()) ^ 1,
+                            batch_size=self.batch_size,
+                            shuffle=True,
+                            drop_last=True,
+                            num_workers=self.num_workers)
+                            
 
     def val_dataloader(self):
         # Note that the validation data loader is a NodeDataLoader

@@ -88,7 +88,7 @@ class SAGE(nn.Module):
                 activation, 
                 dropout,
                 supervised):
-                
+        super().__init__()
         self.n_layers = n_layers
         self.n_hidden = n_hidden
         self.n_classes = n_classes
@@ -106,7 +106,7 @@ class SAGE(nn.Module):
         self.latent = nn.Sequential(
                     nn.Linear(n_hidden , n_hidden),
                     nn.BatchNorm1d(n_hidden),
-                    #nn.ReLU()
+                    #nn.Softmax()
                     )
 
         if n_layers > 1:
