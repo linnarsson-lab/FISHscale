@@ -62,6 +62,10 @@ class SAGELightning(LightningModule):
         batch_pred = self.module(mfgs, batch_inputs)
         loss = self.loss_fcn(batch_pred, pos_graph, neg_graph)
         self.log('train_loss', loss, prog_bar=True, on_step=False, on_epoch=True)
+
+        if self.supervised:
+            labels = 
+
         return loss
 
     def validation_step(self, batch, batch_idx):
