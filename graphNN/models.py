@@ -72,12 +72,16 @@ class SAGELightning(LightningModule):
             pos_graph = pos_graph#.to(self.device)
             neg_graph = neg_graph#.to(self.device)
             batch_inputs = mfgs[0].srcdata['gene']
-
             batch_labels = mfgs[-1].dstdata['label']
+
             batch_pred = self.module(mfgs, batch_inputs)
+            print(batch_pred.shape)
+            print('lab',batch_labels.shape)
+
             loss = self.loss_fcn(batch_pred, pos_graph, neg_graph)
 
             cce = th.nn.CrossEntropyLoss()
+            
             classifier_loss = cce(batch_pred,batch_labels)
             #self.train_acc(y_hat.softmax(dim=-1), y)
             loss += classifier_loss #* 10

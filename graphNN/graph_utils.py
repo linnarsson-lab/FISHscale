@@ -156,7 +156,7 @@ class GraphData(pl.LightningDataModule):
             self.molecules_labelled, edges_labelled, labels = self.cell_types_to_graph(self.ref_celltypes)
             self.g_lab= dgl.graph((edges_labelled[0,:],edges_labelled[1,:]))
             self.g_lab.ndata['gene'] = th.tensor(self.molecules_labelled.toarray(),dtype=th.float32)
-            self.g_lab.ndata['label'] = th.tensor(labels, dtype=th.long)
+            self.g_lab.ndata['label'] = th.tensor(labels, dtype=th.int64)
 
         self.sampler = dgl.dataloading.MultiLayerNeighborSampler([int(_) for _ in self.ngh_sizes])
         self.device = th.device('cpu')
