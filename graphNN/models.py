@@ -54,8 +54,8 @@ class SAGELightning(LightningModule):
             self.train_acc = torchmetrics.Accuracy()
 
     def training_step(self, batch, batch_idx):
-        batch = batch['unlabelled']
-        input_nodes, pos_graph, neg_graph, mfgs = batch
+        batch1 = batch['unlabelled']
+        input_nodes, pos_graph, neg_graph, mfgs = batch1
         mfgs = [mfg.int() for mfg in mfgs]
         pos_graph = pos_graph#.to(self.device)
         neg_graph = neg_graph#.to(self.device)
@@ -66,8 +66,8 @@ class SAGELightning(LightningModule):
         loss = self.loss_fcn(batch_pred, pos_graph, neg_graph)
 
         if self.supervised:
-            batch = batch['labelled']
-            input_nodes, pos_graph, neg_graph, mfgs = batch
+            batch2 = batch['labelled']
+            input_nodes, pos_graph, neg_graph, mfgs = batch2
             mfgs = [mfg.int() for mfg in mfgs]
             pos_graph = pos_graph#.to(self.device)
             neg_graph = neg_graph#.to(self.device)
