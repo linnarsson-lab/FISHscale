@@ -71,14 +71,13 @@ class SAGELightning(LightningModule):
             neg_graph = neg_graph#.to(self.device)
             batch_inputs = mfgs[0].srcdata['gene']
 
-            batch_labels = mfgs[-1].dstdata['labels']
+            batch_labels = mfgs[-1].dstdata['label']
             batch_pred = self.module(mfgs, batch_inputs)
             loss = self.loss_fcn(batch_pred, pos_graph, neg_graph)
 
-        self.log('train_loss', loss, prog_bar=True, on_step=False, on_epoch=True)
+            
 
-        if self.supervised:
-            labels = 
+        self.log('train_loss', loss, prog_bar=True, on_step=False, on_epoch=True)
 
         return loss
 
