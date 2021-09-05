@@ -75,6 +75,16 @@ class SAGELightning(LightningModule):
             batch_pred = self.module(mfgs, batch_inputs)
             loss = self.loss_fcn(batch_pred, pos_graph, neg_graph)
 
+            cce = torch.nn.CrossEntropyLoss()
+            classifier_loss = cce(batch_pred,batch_labels)
+            #self.train_acc(y_hat.softmax(dim=-1), y)
+            loss += classifier_loss #* 10
+            #print(supervised_loss)
+            self.log('Classifier Loss',classifier_loss)
+            #self.train_acc(prediction.softmax(dim=-1),F.one_hot(classes,num_classes=prediction.shape[1]))
+            self.train_acc(prediction.argsort(axis=-1)[:,-1],classes)
+            self.log('train_acc', self.train_acc, prog_bar=True, on_step=True)
+
             
 
         self.log('train_loss', loss, prog_bar=True, on_step=False, on_epoch=True)
