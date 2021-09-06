@@ -74,7 +74,7 @@ class SAGELightning(LightningModule):
             batch_inputs = mfgs[0].srcdata['gene']
             batch_labels = mfgs[-1].dstdata['label']
 
-            batch_pred = self.module(mfgs, batch_inputs)
+            batch_pred = F.log_softmax(self.module(mfgs, batch_inputs),dim=-1)
             print(batch_pred.shape)
             print('lab',batch_labels.shape)
 
