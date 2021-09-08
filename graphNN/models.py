@@ -74,7 +74,8 @@ class SAGELightning(LightningModule):
             batch_inputs = mfgs[0].srcdata['gene']
             batch_labels = mfgs[-1].dstdata['label']
 
-            batch_pred = F.log_softmax(self.module(mfgs, batch_inputs),dim=-1)
+            #batch_pred = F.log_softmax(self.module(mfgs, batch_inputs),dim=-1)
+            batch_pred = self.module.classifier(self.module(mfgs, batch_inputs))
             loss = self.loss_fcn(batch_pred, pos_graph, neg_graph)
 
             cce = th.nn.CrossEntropyLoss()
@@ -125,7 +126,7 @@ class SAGE(nn.Module):
         self.layers = nn.ModuleList()
         self.supervised = supervised
         if self.supervised:
-            self.classifier = Classifier()
+            self.classifier = Classifier(n_input=n_hidden,n_labels=n_classes,softmax=False)
         
         self.bns = nn.ModuleList()
         for _ in range(self.n_layers):
