@@ -80,7 +80,6 @@ class SAGELightning(LightningModule):
 
             cce = th.nn.CrossEntropyLoss()
             classifier_loss = cce(batch_pred,batch_labels)
-            print(classifier_loss)
             #self.train_acc(y_hat.softmax(dim=-1), y)
             loss += classifier_loss #* 10
             #print(supervised_loss)
