@@ -122,6 +122,7 @@ class SAGE(nn.Module):
         self.n_hidden = n_hidden
         self.n_classes = n_classes
         self.layers = nn.ModuleList()
+        self.supervised = supervised
         
         self.bns = nn.ModuleList()
         for _ in range(self.n_layers):
@@ -180,7 +181,7 @@ class SAGE(nn.Module):
         # on each layer are of course splitted in batches.
         # TODO: can we standardize this?
         for l, layer in enumerate(self.layers[:]):
-            y = th.zeros(g.num_nodes(), self.n_hidden)
+            y = th.zeros(g.num_nodes(), self.n_hidden) if not self.supervised else th.zeros(g.num_nodes(), self.n_classes)
 
             sampler = dgl.dataloading.MultiLayerFullNeighborSampler(1)
             dataloader = dgl.dataloading.NodeDataLoader(
