@@ -18,7 +18,7 @@ class BoneFight:
         observations) which is the opposite of BoneFight itself.
         
         Args:
-            X_1 (Pandas dataframe ornp.ndarray): Preferred a Pandas dataframe 
+            X_1 (Pandas dataframe or np.ndarray): Preferred a Pandas dataframe 
                 with features as rows, with names in the index. And 
                 observations in columns. Alternatively a numpy array.
             volume_1 (np.ndarray): Volume prior for X_1 for each column of X_1.
@@ -47,17 +47,16 @@ class BoneFight:
             array.
         """
                 
-        if X_2 == None:
+        if type(X_2) == type(None):
             self.vp(f'No input given for X_2, making hexagonal binning of data with spacing {spacing} {self.unit_scale.units} and minimum count {min_count}.')
             X_2, centroids, polygon = self.hexbin_make(spacing=spacing, min_count=min_count)
         
-            if volume_2 == None:
+            if type(volume_2) == type(None):
                 self.vp('No input given for X_2, taking sum hexagonal tile count.')
                 volume_2 = X_2.sum().to_numpy()
         
         #handle pandas dataframes
         if isinstance(X_1, pd.core.frame.DataFrame) and isinstance(X_2, pd.core.frame.DataFrame):
-            print('got here')
             genes_1, genes_2 = X_1.index.to_numpy(), X_2.index.to_numpy()
             
             print(X_1.shape, X_2.shape)
@@ -67,13 +66,11 @@ class BoneFight:
                 genes_2 = genes_2[gene_filt_2]
                 self.vp(f'{len(genes_2)} matching features between X_1 and X_2')
                 #missing = [g for g in genes_1 if g not in genes_2]
-                #print(f'Genes present in X_1 but not in X_2: {missing}')
                 X_1 = X_1.loc[genes_2, :].to_numpy()
                 X_2 = X_2.loc[genes_2, :].to_numpy()
             
             #Dataset 1 has more rows
             else:
-                print('got to this')
                 gene_filt_1 = np.isin(genes_1, genes_2)
                 genes_1 = genes_1[gene_filt_1]
                 self.vp(f'{len(genes_1)} matching features between X_1 and X_2')
@@ -84,7 +81,7 @@ class BoneFight:
             print(X_1.shape, X_2.shape)
         
         else:
-            if X_1.shape[1] != X_2.shape[1]:
+            if X_1.shape[0] != X_2.shape[0]:
                 raise Exception('Both datasets should have the same number of rows')
             else:
                 print('Continuing with un-indexed input, make sure feature order is identical')

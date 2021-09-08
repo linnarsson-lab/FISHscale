@@ -10,7 +10,6 @@ import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
 import pandas as pd
-import psutil
 from joblib import Parallel, delayed
 from matplotlib.pyplot import axes, hexbin, xcorr
 from shapely.geometry import MultiLineString, MultiPolygon, Polygon
@@ -846,7 +845,7 @@ class MultiRegionalize:
         dataset_keys = list(spots.keys())
         
         if n_jobs == None:
-            n_jobs = cpu_count()
+            n_jobs = self.cpu_count()
         with Parallel(n_jobs=n_cores, backend='loky') as parallel:
             result = parallel(delayed(make_hexbin)(spacing, spots[k], min_count, unique_genes) for k in dataset_keys)
             

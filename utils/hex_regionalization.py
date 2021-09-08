@@ -18,7 +18,6 @@ from FISHscale.utils.inside_polygon import inside_multi_polygons
 #Mypy types
 from typing import Tuple, Union, Any, List
 import gc
-from memory_profiler import profile
 from scipy.spatial import KDTree
 from collections import Counter
 from matplotlib.patches import Polygon as mpl_polygon
@@ -189,7 +188,7 @@ class Regionalize(Iteration, Decomposition):
                 
     def hexbin_plot(self, c: Union[np.ndarray, list], cm=None, ax:Any=None, 
                     figsize=None, save:bool=False, savename:str='',
-                    vmin:float=None, vmax:float=None):
+                    vmin:float=None, vmax:float=None, linewidth:float=0.1):
         """Plot hexbin results. 
 
         Args:
@@ -206,6 +205,8 @@ class Regionalize(Iteration, Decomposition):
                 Defaults to None.
             vmax (float, optional): If c is an Array you can set vmax.
                 Defaults to None.
+            linewidth (float, optional): When saving you might see gaps between
+                the hexagons. Increase the linewidth to hide them
         """
         #Input handling
         colorbar=False
@@ -225,7 +226,7 @@ class Regionalize(Iteration, Decomposition):
         #Set colors from an RGB list
         if type(c) == list:
             p.set_color(c)
-            p.set_linewidth(0.1) #To hide small white lines between the polygons
+            p.set_linewidth(linewidth) #To hide small white lines between the polygons
             p.set_edgecolor(c)
             
         #Set colors from an array of values
@@ -233,7 +234,7 @@ class Regionalize(Iteration, Decomposition):
             #c = c / c.max()
             p.set_array(c)
             p.set_cmap(cm)
-            p.set_linewidth(0.1) #To hide small white lines between the polygons
+            p.set_linewidth(linewidth) #To hide small white lines between the polygons
             if vmin!= None and vmax!=None:
                 p.set_clim(vmin=vmin, vmax=vmax)
                 c_scaled = c - vmin
@@ -1098,7 +1099,7 @@ class Regionalize(Iteration, Decomposition):
         df_hex, hex_coord = self.hexbin_make(spacing, min_count, feature_selection=feature_selection, n_jobs=n_jobs)
         
         #Normalize data
-        df_hex_norm = self.normalize(df_hex, mode=normalization_mode)
+        df_hex_norm = self.normalize(df_hex, mode=normalization_mode, clip=30)
         
         #Dimensionality reduction
         if dimensionality_reduction.lower() == 'pca':
