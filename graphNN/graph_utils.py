@@ -368,7 +368,7 @@ class GraphData(pl.LightningDataModule):
             supervised=True
             edge_file = os.path.join(self.save_to,'Supervised-Edges-{}Nodes-Ngh{}-{}-dst{}'.format(coords.shape[0],self.ngh_sizes[0],self.ngh_sizes[1],self.distance_threshold))
             tree_file = os.path.join(self.save_to,'Supervised-Tree-{}Nodes-Ngh{}-{}-dst{}.ann'.format(coords.shape[0],self.ngh_sizes[0],self.ngh_sizes[1],self.distance_threshold))
-            neighborhood_size = self.ngh_sizes[0]
+            neighborhood_size = self.ngh_sizes[0] + 40
 
         if not os.path.isfile(edge_file):
             t = AnnoyIndex(2, 'euclidean')  # Length of item vector that will be indexed
@@ -447,7 +447,7 @@ class GraphData(pl.LightningDataModule):
             molecules = []
             # Reduce number of cells by Ncells.min() to avoid having a huge dataframe, since it is actually simulated data
             cl_i = data[:,i]#*(Ncells[i]/(Ncells.min()*100)).astype('int')
-            random_molecules = np.random.choice(data.shape[0],size=500,p=cl_i)
+            random_molecules = np.random.choice(data.shape[0],size=2500,p=cl_i)
 
             '''            
             for x in range(cl_i.shape[0]):
