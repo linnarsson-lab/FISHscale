@@ -200,7 +200,7 @@ class GraphData(pl.LightningDataModule):
 
     def train_dataloader(self):
         edges = np.arange(self.g.num_edges())
-        random_edges = np.random.choice(edges,int(edges.shape[0]*self.train_p),replace=False)
+        random_edges = np.random.choice(edges,int(edges.shape[0]*0.75),replace=False)
         unlab = dgl.dataloading.EdgeDataLoader(
                         self.g,
                         random_edges,
@@ -447,7 +447,8 @@ class GraphData(pl.LightningDataModule):
             molecules = []
             # Reduce number of cells by Ncells.min() to avoid having a huge dataframe, since it is actually simulated data
             cl_i = data[:,i]#*(Ncells[i]/(Ncells.min()*100)).astype('int')
-            random_molecules = np.random.choice(data.shape[0],size=2500,p=cl_i)
+            random_molecules = np.random.choice(data.shape[0],size=5000,p=cl_i)
+            
 
             '''            
             for x in range(cl_i.shape[0]):
@@ -471,10 +472,11 @@ class GraphData(pl.LightningDataModule):
                     pass
 
             molecules = np.stack(molecules)
+            print(molecules.shape)
             #molecules = np.concatenate(molecules)
             all_molecules.append(molecules)
             
-            all_coords.append(np.random.normal(loc=i*1000,scale=25,size=[molecules.shape[0],2]))
+            all_coords.append(np.random.normal(loc=i*1000,scale=10,size=[molecules.shape[0],2]))
             #all_coords.append(np.ones_like(molecules)*50*i)
             all_cl.append(np.ones(molecules.shape[0])*i)
 
