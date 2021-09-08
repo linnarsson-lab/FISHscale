@@ -79,6 +79,7 @@ class SAGELightning(LightningModule):
 
             cce = th.nn.CrossEntropyLoss()
             classifier_loss = cce(batch_pred,batch_labels)
+            print(classifier_loss)
             #self.train_acc(y_hat.softmax(dim=-1), y)
             loss += classifier_loss #* 10
             #print(supervised_loss)
@@ -123,6 +124,8 @@ class SAGE(nn.Module):
         self.n_classes = n_classes
         self.layers = nn.ModuleList()
         self.supervised = supervised
+        if self.supervised:
+            self.classifier = Classifier()
         
         self.bns = nn.ModuleList()
         for _ in range(self.n_layers):
@@ -136,8 +139,8 @@ class SAGE(nn.Module):
                         
 
         self.latent = nn.Sequential(
-                    nn.Linear(n_hidden , n_hidden) if not supervised else nn.Linear(n_hidden , self.n_classes),
-                    nn.BatchNorm1d(n_hidden) if not supervised else  nn.BatchNorm1d(self.n_classes),
+                    nn.Linear(n_hidden , n_hidden), #if not supervised else nn.Linear(n_hidden , self.n_classes),
+                    nn.BatchNorm1d(n_hidden), #if not supervised else  nn.BatchNorm1d(self.n_classes),
                     #nn.Softmax()
                     )
 
@@ -182,6 +185,7 @@ class SAGE(nn.Module):
         # TODO: can we standardize this?
         for l, layer in enumerate(self.layers[:]):
             y = th.zeros(g.num_nodes(), self.n_hidden) if not self.supervised else th.zeros(g.num_nodes(), self.n_classes)
+            print(y.shape)
 
             sampler = dgl.dataloading.MultiLayerFullNeighborSampler(1)
             dataloader = dgl.dataloading.NodeDataLoader(
