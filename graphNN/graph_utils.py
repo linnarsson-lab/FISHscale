@@ -472,7 +472,6 @@ class GraphData(pl.LightningDataModule):
                     pass
 
             molecules = np.stack(molecules)
-            print(molecules.shape)
             #molecules = np.concatenate(molecules)
             all_molecules.append(molecules)
             
