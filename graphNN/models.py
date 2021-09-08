@@ -75,9 +75,6 @@ class SAGELightning(LightningModule):
             batch_labels = mfgs[-1].dstdata['label']
 
             batch_pred = F.log_softmax(self.module(mfgs, batch_inputs),dim=-1)
-            print(batch_pred.shape)
-            print('lab',batch_labels.shape)
-
             loss = self.loss_fcn(batch_pred, pos_graph, neg_graph)
 
             cce = th.nn.CrossEntropyLoss()
@@ -135,9 +132,11 @@ class SAGE(nn.Module):
                             nn.BatchNorm1d(n_hidden),
                             nn.ReLU())
 
+                        
+
         self.latent = nn.Sequential(
-                    nn.Linear(n_hidden , n_hidden),
-                    nn.BatchNorm1d(n_hidden),
+                    nn.Linear(n_hidden , n_hidden) if not supervised else nn.Linear(n_hidden , self.n_classes),
+                    nn.BatchNorm1d(n_hidden) if not supervised else  nn.BatchNorm1d(self.n_classes),
                     #nn.Softmax()
                     )
 
