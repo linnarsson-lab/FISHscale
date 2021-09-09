@@ -55,7 +55,7 @@ class SAGELightning(LightningModule):
 
     def training_step(self, batch, batch_idx):
         batch1 = batch['unlabelled']
-        input_nodes, pos_graph, neg_graph, mfgs = batch1
+        _, pos_graph, neg_graph, mfgs = batch1
         mfgs = [mfg.int() for mfg in mfgs]
         pos_graph = pos_graph#.to(self.device)
         neg_graph = neg_graph#.to(self.device)
@@ -66,16 +66,18 @@ class SAGELightning(LightningModule):
         print('unalab',loss)
         if self.supervised:
             batch2 = batch['labelled']
-            input_nodes, pos_graph, neg_graph, mfgs = batch2
+            _, pos_graph, neg_graph, mfgs = batch2
             mfgs = [mfg.int() for mfg in mfgs]
             pos_graph = pos_graph#.to(self.device)
             neg_graph = neg_graph#.to(self.device)
             batch_inputs = mfgs[0].srcdata['gene']
             batch_labels = mfgs[-1].dstdata['label']
-            batch_pred = self.module.classifier(self.module(mfgs, batch_inputs))
-            
+            batch_pred = self.module(mfgs, batch_inputs)
             supervised_loss = self.loss_fcn(batch_pred, pos_graph, neg_graph)
+
+            
             # Label prediction loss
+            labels_pred = self.module.classifier(batch_pred)
             cce = th.nn.CrossEntropyLoss()
             classifier_loss = cce(batch_pred,batch_labels)
             print('lab',supervised_loss)
