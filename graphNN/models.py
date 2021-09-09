@@ -75,11 +75,10 @@ class SAGELightning(LightningModule):
             batch_pred = self.module(mfgs, batch_inputs)
             supervised_loss = self.loss_fcn(batch_pred, pos_graph, neg_graph)
 
-            
             # Label prediction loss
             labels_pred = self.module.classifier(batch_pred)
             cce = th.nn.CrossEntropyLoss()
-            classifier_loss = cce(batch_pred,batch_labels)
+            classifier_loss = cce(labels_pred,batch_labels)
             print('lab',supervised_loss)
             print('classifier', classifier_loss)
             loss += classifier_loss + supervised_loss #* 10

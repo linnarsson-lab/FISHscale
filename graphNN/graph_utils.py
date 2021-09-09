@@ -363,8 +363,8 @@ class GraphData(pl.LightningDataModule):
             neighborhood_size = self.ngh_sizes[0] + 40
         else:
             supervised=True
-            edge_file = os.path.join(self.save_to,'Supervised-Edges-{}Nodes-Ngh{}-{}-dst{}'.format(coords.shape[0],self.ngh_sizes[0],self.ngh_sizes[1],self.distance_threshold))
-            tree_file = os.path.join(self.save_to,'Supervised-Tree-{}Nodes-Ngh{}-{}-dst{}.ann'.format(coords.shape[0],self.ngh_sizes[0],self.ngh_sizes[1],self.distance_threshold))
+            edge_file = os.path.join(self.save_to,'DGL-Supervised-Edges-{}Nodes-Ngh{}-{}-dst{}'.format(coords.shape[0],self.ngh_sizes[0],self.ngh_sizes[1],self.distance_threshold))
+            tree_file = os.path.join(self.save_to,'DGL-Supervised-Tree-{}Nodes-Ngh{}-{}-dst{}.ann'.format(coords.shape[0],self.ngh_sizes[0],self.ngh_sizes[1],self.distance_threshold))
             neighborhood_size = self.ngh_sizes[0] + 40
 
         if not os.path.isfile(edge_file):
