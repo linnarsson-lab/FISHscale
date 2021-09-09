@@ -138,10 +138,6 @@ class GraphData(pl.LightningDataModule):
 
         self.subsample = subsample
         self.subsample_xy()
-
-        if type(self.ref_celltypes) != type(None):
-            self.cluster_nghs, self.cluster_edges, self.cluster_labels = self.cell_types_to_graph(self.ref_celltypes)
-        
         # Save random cell selection
         edges = self.buildGraph(self.distance_threshold)
         self.compute_size()
@@ -447,7 +443,7 @@ class GraphData(pl.LightningDataModule):
             molecules = []
             # Reduce number of cells by Ncells.min() to avoid having a huge dataframe, since it is actually simulated data
             cl_i = data[:,i]#*(Ncells[i]/(Ncells.min()*100)).astype('int')
-            random_molecules = np.random.choice(data.shape[0],size=5000,p=cl_i)
+            random_molecules = np.random.choice(data.shape[0],size=500,p=cl_i)
             
 
             '''            
@@ -475,7 +471,7 @@ class GraphData(pl.LightningDataModule):
             #molecules = np.concatenate(molecules)
             all_molecules.append(molecules)
             
-            all_coords.append(np.random.normal(loc=i*1000,scale=10,size=[molecules.shape[0],2]))
+            all_coords.append(np.random.normal(loc=i*1000,scale=25,size=[molecules.shape[0],2]))
             #all_coords.append(np.ones_like(molecules)*50*i)
             all_cl.append(np.ones(molecules.shape[0])*i)
 
