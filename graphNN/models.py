@@ -164,8 +164,8 @@ class SAGE(nn.Module):
                 h = self.bns[l](h)
                 h = h.relu()
                 h = F.dropout(h, p=0.5, training=self.training)
-                h = self.hidden(h)
-        h = self.latent(h)
+                #h = self.hidden(h)
+        #h = self.latent(h)
         return h
 
     def inference(self, g, x, device, batch_size, num_workers):
