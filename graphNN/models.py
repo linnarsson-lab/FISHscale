@@ -76,7 +76,7 @@ class SAGELightning(LightningModule):
 
             #batch_pred = F.log_softmax(self.module(mfgs, batch_inputs),dim=-1)
             batch_pred = self.module.classifier(self.module(mfgs, batch_inputs))
-            loss = self.loss_fcn(batch_pred, pos_graph, neg_graph)
+            supervised_loss = self.loss_fcn(batch_pred, pos_graph, neg_graph)
 
             cce = th.nn.CrossEntropyLoss()
             classifier_loss = cce(batch_pred,batch_labels)
