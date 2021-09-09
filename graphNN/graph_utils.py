@@ -150,6 +150,7 @@ class GraphData(pl.LightningDataModule):
 
         if self.model.supervised:
             self.molecules_labelled, edges_labelled, labels = self.cell_types_to_graph(self.ref_celltypes)
+            print(edges_labelled.shape)
             self.g_lab= dgl.graph((edges_labelled[0,:],edges_labelled[1,:]))
             self.g_lab.ndata['gene'] = th.tensor(self.molecules_labelled.toarray(),dtype=th.float32)
             self.g_lab.ndata['label'] = th.tensor(labels, dtype=th.long)
@@ -443,7 +444,7 @@ class GraphData(pl.LightningDataModule):
             molecules = []
             # Reduce number of cells by Ncells.min() to avoid having a huge dataframe, since it is actually simulated data
             cl_i = data[:,i]#*(Ncells[i]/(Ncells.min()*100)).astype('int')
-            random_molecules = np.random.choice(data.shape[0],size=500,p=cl_i)
+            random_molecules = np.random.choice(data.shape[0],size=2500,p=cl_i)
             
 
             '''            
