@@ -163,7 +163,7 @@ class SAGE(nn.Module):
             if l != len(self.layers) - 1: #and l != len(self.layers) - 2:
                 h = self.bns[l](h)
                 h = h.relu()
-                h = F.dropout(h, p=0.5, training=self.training)
+                h = F.dropout(h, p=0.2, training=self.training)
                 #h = self.hidden(h)
         #h = self.latent(h)
         return h
