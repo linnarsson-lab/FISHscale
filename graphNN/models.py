@@ -60,11 +60,9 @@ class SAGELightning(LightningModule):
         pos_graph = pos_graph#.to(self.device)
         neg_graph = neg_graph#.to(self.device)
         batch_inputs = mfgs[0].srcdata['gene']
-
-        #batch_labels = mfgs[-1].dstdata['labels']
         batch_pred = self.module(mfgs, batch_inputs)
         loss = self.loss_fcn(batch_pred, pos_graph, neg_graph)
-
+        print('unalab',loss)
         if self.supervised:
             batch2 = batch['labelled']
             input_nodes, pos_graph, neg_graph, mfgs = batch2
@@ -73,19 +71,17 @@ class SAGELightning(LightningModule):
             neg_graph = neg_graph#.to(self.device)
             batch_inputs = mfgs[0].srcdata['gene']
             batch_labels = mfgs[-1].dstdata['label']
-
-            #batch_pred = F.log_softmax(self.module(mfgs, batch_inputs),dim=-1)
             batch_pred = self.module.classifier(self.module(mfgs, batch_inputs))
             supervised_loss = self.loss_fcn(batch_pred, pos_graph, neg_graph)
-
+            # Label prediction loss
             cce = th.nn.CrossEntropyLoss()
             classifier_loss = cce(batch_pred,batch_labels)
+            print('lab',supervised_loss)
+            print('classifier', classifier_loss)
             loss += classifier_loss + supervised_loss #* 10
-            self.log('Classifier Loss',classifier_loss)
-            #self.train_acc(prediction.softmax(dim=-1),F.one_hot(classes,num_classes=prediction.shape[1]))
             self.train_acc(batch_pred.argsort(axis=-1)[:,-1],batch_labels)
+            self.log('Classifier Loss',classifier_loss)
             self.log('train_acc', self.train_acc, prog_bar=True, on_step=True)
-
 
         self.log('train_loss', loss, prog_bar=True, on_step=False, on_epoch=True)
 
