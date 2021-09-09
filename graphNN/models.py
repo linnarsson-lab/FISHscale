@@ -62,8 +62,6 @@ class SAGELightning(LightningModule):
         batch_inputs = mfgs[0].srcdata['gene']
         batch_pred = self.module(mfgs, batch_inputs)
         loss = self.loss_fcn(batch_pred, pos_graph, neg_graph)
-
-        print('unalab',loss)
         if self.supervised:
             batch2 = batch['labelled']
             _, pos_graph, neg_graph, mfgs = batch2
@@ -83,7 +81,6 @@ class SAGELightning(LightningModule):
             self.train_acc(batch_pred.argsort(axis=-1)[:,-1],batch_labels)
             self.log('Classifier Loss',classifier_loss)
             self.log('train_acc', self.train_acc, prog_bar=True, on_step=True)
-
 
         self.log('train_loss', loss, prog_bar=True, on_step=False, on_epoch=True)
 
@@ -212,41 +209,6 @@ class SAGE(nn.Module):
 
             x = y
         return y
-
-
-# Decoder
-class DecoderSCVI(nn.Module):
-    def __init__(
-        self,
-        n_input: int,
-        n_output: int,
-        n_hidden: int = 48,
-        use_batch_norm: bool=True,
-        use_relu:bool=True,
-        dropout_rate: float=0.1,
-        bias: bool=True,
-        softmax:bool = True,
-    ):
-        super().__init__()
-
-        self.px_decoder = nn.Sequential(
-                            nn.Linear(n_input , n_hidden, bias=bias),
-                            nn.BatchNorm1d(n_hidden, momentum=0.01, eps=0.001) if use_batch_norm else None,
-                            nn.ReLU() if use_relu else None,
-                            nn.Dropout(p=dropout_rate) if dropout_rate > 0 else None)
-
-        if softmax:
-            self.px_scale_decoder = nn.Sequential(nn.Linear(n_hidden, n_output))
-        else:
-            self.px_scale_decoder = nn.Sequential(nn.Linear(n_hidden, n_output))
-
-    def forward(
-        self, z: th.Tensor
-    ):
-        # The decoder returns values for the parameters of the ZINB distribution
-        px = self.px_decoder(z)
-        px= F.log_softmax(self.px_scale_decoder(px),dim=-1)
-        return px
 
 class Classifier(nn.Module):
     """Basic fully-connected NN classifier
