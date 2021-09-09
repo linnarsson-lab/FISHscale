@@ -227,7 +227,7 @@ class Classifier(nn.Module):
         use_relu:bool=True,
     ):
         super().__init__()
-        self.layers = [nn.Sequential(
+        layers = [nn.Sequential(
                             nn.Linear(n_input , n_hidden, bias=bias),
                             nn.BatchNorm1d(n_hidden, momentum=0.01, eps=0.001) if use_batch_norm else None,
                             nn.ReLU() if use_relu else None,
@@ -235,9 +235,9 @@ class Classifier(nn.Module):
             nn.Linear(n_hidden, n_labels),]
 
         if softmax:
-            self.layers.append(nn.Softmax(dim=-1))
+            layers.append(nn.Softmax(dim=-1))
 
-        #self.classifier = nn.Sequential(*layers,nn.ReLU())
+        self.classifier = nn.Sequential(*layers)
 
     def forward(self, x):
-        return F.log_softmax(self.layers(x),dim=-1)
+        return F.log_softmax(self.classifier(x),dim=-1)
