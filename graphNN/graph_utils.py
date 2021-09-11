@@ -197,7 +197,7 @@ class GraphData(pl.LightningDataModule):
 
     def train_dataloader(self):
         edges = np.arange(self.g.num_edges())
-        random_edges = np.random.choice(edges,int(edges.shape[0]*0.75),replace=False)
+        random_edges = np.random.choice(edges,int(edges.shape[0]*self.train_p),replace=False)
         unlab = dgl.dataloading.EdgeDataLoader(
                         self.g,
                         random_edges,
@@ -213,7 +213,7 @@ class GraphData(pl.LightningDataModule):
 
         if self.model.supervised:
             edges = np.arange(self.g_lab.num_edges())
-            random_edges = np.random.choice(edges,int(edges.shape[0]*self.train_p),replace=False)
+            random_edges = np.random.choice(edges,random_edges.shape[0],replace=True)
     
             lab = dgl.dataloading.EdgeDataLoader(
                             self.g_lab,
