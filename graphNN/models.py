@@ -177,7 +177,7 @@ class SAGE(nn.Module):
         # on each layer are of course splitted in batches.
         # TODO: can we standardize this?
         for l, layer in enumerate(self.layers[:]):
-            y = th.zeros(g.num_nodes(), self.n_hidden) if not self.supervised else th.zeros(g.num_nodes(), self.n_classes)
+            y = th.zeros(g.num_nodes(), self.n_hidden) #if not self.supervised else th.zeros(g.num_nodes(), self.n_classes)
             print(y.shape)
 
             sampler = dgl.dataloading.MultiLayerFullNeighborSampler(1)
