@@ -152,14 +152,14 @@ class SAGE(nn.Module):
         for l, (layer, block) in enumerate(zip(self.layers, blocks)):
             #print(l)
             h = layer(block, h)
-            h = F.normalize(h)
+            #h = F.normalize(h)
 
             if l != len(self.layers) - 1: #and l != len(self.layers) - 2:
                 h = self.bns[l](h)
                 h = h.relu()
                 h = F.dropout(h, p=0.2, training=self.training)
-                #h = self.hidden(h)
-        #h = self.latent(h)
+                h = self.hidden(h)
+        h = self.latent(h)
         return h
 
     def inference(self, g, x, device, batch_size, num_workers):
@@ -194,7 +194,7 @@ class SAGE(nn.Module):
                 block = block.int().to(device)
                 h = x[input_nodes].to(device)
                 h = layer(block, h)
-                h = F.normalize(h)
+                #h = F.normalize(h)
 
                 if l != len(self.layers) -1:# and l != len(self.layers) - 2:
                     h = self.bns[l](h)
@@ -228,7 +228,7 @@ class Classifier(nn.Module):
         super().__init__()
         layers = [nn.Sequential(
                             nn.Linear(n_input , n_hidden, bias=bias),
-                            nn.BatchNorm1d(n_hidden, momentum=0.01, eps=0.001) if use_batch_norm else None,
+                            nn.BatchNorm1d(n_hidden) if use_batch_norm else None,
                             nn.ReLU() if use_relu else None,
                             nn.Dropout(p=dropout_rate) if dropout_rate > 0 else None),
             nn.Linear(n_hidden, n_labels),]

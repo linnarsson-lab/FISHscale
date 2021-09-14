@@ -444,7 +444,7 @@ class GraphData(pl.LightningDataModule):
             molecules = []
             # Reduce number of cells by Ncells.min() to avoid having a huge dataframe, since it is actually simulated data
             cl_i = data[:,i]#*(Ncells[i]/(Ncells.min()*100)).astype('int')
-            random_molecules = np.random.choice(data.shape[0],size=2500,p=cl_i)
+            random_molecules = np.random.choice(data.shape[0],size=500,p=cl_i)
             
 
             '''            
@@ -479,7 +479,11 @@ class GraphData(pl.LightningDataModule):
         all_molecules = sparse.csr_matrix(np.concatenate(all_molecules))
         all_coords = np.concatenate(all_coords)
         all_cl = np.concatenate(all_cl)
+<<<<<<< HEAD
         edges = self.buildGraph(15,coords=all_coords)
+=======
+        edges = self.buildGraph(75,coords=all_coords)
+>>>>>>> 626e7004f88c775531c7eea9fb8c134ffb866707
         print('Fake Molecules: ',all_molecules.shape)
         return all_molecules, edges, all_cl
 
