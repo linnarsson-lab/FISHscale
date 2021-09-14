@@ -78,7 +78,7 @@ class SAGELightning(LightningModule):
             cce = th.nn.CrossEntropyLoss()
             classifier_loss = cce(labels_pred,batch_labels)
             loss += classifier_loss + supervised_loss #* 10
-            self.train_acc(batch_pred.argsort(axis=-1)[:,-1],batch_labels)
+            self.train_acc(labels_pred.argsort(axis=-1)[:,-1],batch_labels)
             self.log('Classifier Loss',classifier_loss)
             self.log('train_acc', self.train_acc, prog_bar=True, on_step=True)
 
@@ -90,7 +90,6 @@ class SAGELightning(LightningModule):
         input_nodes, output_nodes, mfgs = batch
         mfgs = [mfg.int() for mfg in mfgs]
         batch_inputs = mfgs[0].srcdata['gene']
-        #batch_labels = mfgs[-1].dstdata['labels']
         batch_pred = self.module(mfgs, batch_inputs)
         return batch_pred
 
@@ -177,7 +176,7 @@ class SAGE(nn.Module):
         # on each layer are of course splitted in batches.
         # TODO: can we standardize this?
         for l, layer in enumerate(self.layers[:]):
-            y = th.zeros(g.num_nodes(), self.n_hidden) if not self.supervised else th.zeros(g.num_nodes(), self.n_classes)
+            y = th.zeros(g.num_nodes(), self.n_hidden) #if not self.supervised else th.zeros(g.num_nodes(), self.n_classes)
             print(y.shape)
 
             sampler = dgl.dataloading.MultiLayerFullNeighborSampler(1)
@@ -200,7 +199,7 @@ class SAGE(nn.Module):
                 if l != len(self.layers) -1:# and l != len(self.layers) - 2:
                     h = self.bns[l](h)
                     h = h.relu()
-                    h = F.dropout(h, p=0.5, training=self.training)
+                    h = F.dropout(h, p=0.2, training=self.training)
                     h =self.hidden(h)
                 elif l == len(self.layers) -1:
                     h = self.latent(h)

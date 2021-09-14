@@ -86,8 +86,8 @@ class GraphData(pl.LightningDataModule):
         model, # GraphSAGE model
         analysis_name:str,
         cells=None, # Array with cell_ids of shape (Cells)
-        distance_threshold = 250,
-        minimum_nodes_connected = 25,
+        distance_threshold = 50,
+        minimum_nodes_connected = 5,
         ngh_sizes = [20, 10],
         train_p = 0.25,
         batch_size= 1024,
@@ -479,7 +479,7 @@ class GraphData(pl.LightningDataModule):
         all_molecules = sparse.csr_matrix(np.concatenate(all_molecules))
         all_coords = np.concatenate(all_coords)
         all_cl = np.concatenate(all_cl)
-        edges = self.buildGraph(5,coords=all_coords)
+        edges = self.buildGraph(15,coords=all_coords)
         print('Fake Molecules: ',all_molecules.shape)
         return all_molecules, edges, all_cl
 
