@@ -120,7 +120,6 @@ class SAGELightning(LightningModule):
         input_nodes, output_nodes, mfgs = batch
         mfgs = [mfg.int() for mfg in mfgs]
         batch_inputs = mfgs[0].srcdata['gene']
-        #batch_labels = mfgs[-1].dstdata['labels']
         batch_pred = self.module(mfgs, batch_inputs)
         return batch_pred
 
@@ -267,7 +266,7 @@ class SAGE(nn.Module):
                 if l != len(self.layers) -1:# and l != len(self.layers) - 2:
                     h = self.bns[l](h)
                     h = h.relu()
-                    h = F.dropout(h, p=0.5, training=self.training)
+                    h = F.dropout(h, p=0.2, training=self.training)
                     h =self.hidden(h)
                 elif l == len(self.layers) -1:
                     h = self.latent(h)
