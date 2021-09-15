@@ -32,6 +32,17 @@ class CrossEntropyLoss(nn.Module):
         #loss = F.binary_cross_entropy_with_logits(score, label.float())
         return loss
 
+'''
+class SemanticLoss(nn.Module):
+
+    self.centroids_true = th.randn([48])
+    self.centroids_pseudo = th.rndn([48])
+    def semantic_loss(self,pseudo_labels, unlabelled_latent, true_labels, labelled_latent):
+
+
+        return semantic_loss'''
+
+
 class SAGELightning(LightningModule):
     def __init__(self,
                  in_feats,
@@ -51,17 +62,22 @@ class SAGELightning(LightningModule):
         self.supervised= supervised
         self.loss_fcn = CrossEntropyLoss()
         if self.supervised:
+            self.automatic_optimization = False
             self.train_acc = torchmetrics.Accuracy()
 
-    def training_step(self, batch, batch_idx):
+    def training_step(self, batch, batch_idx,optimizer_idx):
+        if self.supervised:
+            (opt, d_opt) = self.optimizers()
+
         batch1 = batch['unlabelled']
         _, pos_graph, neg_graph, mfgs = batch1
         mfgs = [mfg.int() for mfg in mfgs]
         pos_graph = pos_graph#.to(self.device)
         neg_graph = neg_graph#.to(self.device)
         batch_inputs = mfgs[0].srcdata['gene']
-        batch_pred = self.module(mfgs, batch_inputs)
-        loss = self.loss_fcn(batch_pred, pos_graph, neg_graph)
+        batch_pred_unlab = self.module(mfgs, batch_inputs)
+        loss = self.loss_fcn(batch_pred_unlab, pos_graph, neg_graph)
+
         if self.supervised:
             batch2 = batch['labelled']
             _, pos_graph, neg_graph, mfgs = batch2
@@ -70,17 +86,31 @@ class SAGELightning(LightningModule):
             neg_graph = neg_graph#.to(self.device)
             batch_inputs = mfgs[0].srcdata['gene']
             batch_labels = mfgs[-1].dstdata['label']
-            batch_pred = self.module(mfgs, batch_inputs)
-            supervised_loss = self.loss_fcn(batch_pred, pos_graph, neg_graph)
+            batch_pred_lab = self.module(mfgs, batch_inputs)
+            supervised_loss = self.loss_fcn(batch_pred_lab, pos_graph, neg_graph)
 
             # Label prediction loss
-            labels_pred = self.module.classifier(batch_pred)
+            labels_pred = self.module.classifier(batch_pred_lab)
             cce = th.nn.CrossEntropyLoss()
             classifier_loss = cce(labels_pred,batch_labels)
             loss += classifier_loss + supervised_loss #* 10
             self.train_acc(labels_pred.argsort(axis=-1)[:,-1],batch_labels)
             self.log('Classifier Loss',classifier_loss)
             self.log('train_acc', self.train_acc, prog_bar=True, on_step=True)
+
+            #Domain Adaptation Loss
+            classifier_domain_loss = self.loss_discriminator([batch_pred_unlab, batch_pred_lab],predict_true_class=True)
+
+            d_opt.zero_grad()
+            self.manual_backward(classifier_domain_loss)
+            d_opt.step()
+
+            domain_loss_fake = self.loss_discriminator([batch_pred_unlab, batch_pred_lab],predict_true_class=False)
+            loss += domain_loss_fake
+
+            opt.zero_grad()
+            self.manual_backward(loss)
+            opt.step()
 
         self.log('train_loss', loss, prog_bar=True, on_step=False, on_epoch=True)
 
@@ -96,7 +126,43 @@ class SAGELightning(LightningModule):
 
     def configure_optimizers(self):
         optimizer = th.optim.Adam(self.parameters(), lr=self.lr)
-        return optimizer
+        if self.supervised:
+            d_opt = th.optim.Adam(self.module.domain_adaptation.parameters(), lr=1e-3)
+            return {'opt':optimizer, 'd_opt':d_opt}
+        else:
+            return {'opt':optimizer}
+
+    def loss_discriminator(self, latent_tensors, 
+        predict_true_class: bool = True,
+        return_details: bool = False,
+        ):
+
+        n_classes = 2
+        losses = []
+        for i, z in enumerate(latent_tensors):
+            cls_logits = self.module.domain_adaptation(z)
+
+            if predict_true_class:
+                cls_target = th.zeros(
+                    n_classes, dtype=th.float32, device=z.device
+                )
+                cls_target[i] = 1.0
+            else:
+                cls_target = th.ones(
+                    n_classes, dtype=th.float32, device=z.device
+                ) / (n_classes - 1)
+                cls_target[i] = 0.0
+
+            l_soft = cls_logits * cls_target
+            cls_loss = -l_soft.sum(dim=1).mean()
+            losses.append(cls_loss)
+
+        if return_details:
+            return losses
+
+        total_loss = th.stack(losses).sum()
+        return total_loss
+
 
 class SAGE(nn.Module):
     '''def __init__(self, in_feats, n_hidden, n_classes, n_layers, activation, dropout):
@@ -119,6 +185,7 @@ class SAGE(nn.Module):
         self.supervised = supervised
         if self.supervised:
             self.classifier = Classifier(n_input=n_hidden,n_labels=n_classes,softmax=False)
+            self.domain_adaptation = Classifier(n_input=n_hidden,n_labels=n_classes,softmax=False)
         
         self.bns = nn.ModuleList()
         for _ in range(self.n_layers):
@@ -153,7 +220,7 @@ class SAGE(nn.Module):
         for l, (layer, block) in enumerate(zip(self.layers, blocks)):
             #print(l)
             h = layer(block, h)
-            #h = F.normalize(h)
+            h = F.normalize(h)
 
             if l != len(self.layers) - 1: #and l != len(self.layers) - 2:
                 h = self.bns[l](h)
@@ -195,7 +262,7 @@ class SAGE(nn.Module):
                 block = block.int().to(device)
                 h = x[input_nodes].to(device)
                 h = layer(block, h)
-                #h = F.normalize(h)
+                h = F.normalize(h)
 
                 if l != len(self.layers) -1:# and l != len(self.layers) - 2:
                     h = self.bns[l](h)
@@ -241,3 +308,5 @@ class Classifier(nn.Module):
 
     def forward(self, x):
         return F.log_softmax(self.classifier(x),dim=-1)
+
+
