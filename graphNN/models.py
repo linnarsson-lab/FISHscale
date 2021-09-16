@@ -1,4 +1,5 @@
 import pytorch_lightning as pl
+from pytorch_lightning.metrics.classification import accuracy
 import torchmetrics
 import math
 import numpy as np
@@ -61,13 +62,14 @@ class SAGELightning(LightningModule):
         self.lr = lr
         self.supervised= supervised
         self.loss_fcn = CrossEntropyLoss()
+        #self.automatic_optimization = True
         if self.supervised:
             self.automatic_optimization = False
             self.train_acc = torchmetrics.Accuracy()
 
-    def training_step(self, batch, batch_idx,optimizer_idx):
+    def training_step(self, batch, batch_idx):
         if self.supervised:
-            (opt, d_opt) = self.optimizers()
+            opt, d_opt = self.optimizers()
 
         batch1 = batch['unlabelled']
         _, pos_graph, neg_graph, mfgs = batch1
@@ -76,7 +78,10 @@ class SAGELightning(LightningModule):
         neg_graph = neg_graph#.to(self.device)
         batch_inputs = mfgs[0].srcdata['gene']
         batch_pred_unlab = self.module(mfgs, batch_inputs)
+        
         loss = self.loss_fcn(batch_pred_unlab, pos_graph, neg_graph)
+        '''if self.supervised:
+            loss = 0'''
 
         if self.supervised:
             batch2 = batch['labelled']
@@ -87,30 +92,38 @@ class SAGELightning(LightningModule):
             batch_inputs = mfgs[0].srcdata['gene']
             batch_labels = mfgs[-1].dstdata['label']
             batch_pred_lab = self.module(mfgs, batch_inputs)
-            supervised_loss = self.loss_fcn(batch_pred_lab, pos_graph, neg_graph)
+            #supervised_loss = self.loss_fcn(batch_pred_lab, pos_graph, neg_graph)
 
             # Label prediction loss
             labels_pred = self.module.classifier(batch_pred_lab)
             cce = th.nn.CrossEntropyLoss()
             classifier_loss = cce(labels_pred,batch_labels)
-            loss += classifier_loss + supervised_loss #* 10
+            loss += classifier_loss*10 #+ supervised_loss #* 10
             self.train_acc(labels_pred.argsort(axis=-1)[:,-1],batch_labels)
+            acc = 0 
+            for x,y in zip(labels_pred.argsort(axis=-1)[:,-1],batch_labels):
+                if x == y:
+                    acc += 1
+            
             self.log('Classifier Loss',classifier_loss)
-            self.log('train_acc', self.train_acc, prog_bar=True, on_step=True)
+            self.log('train_acc', acc/labels_pred.shape[0], prog_bar=True, on_step=True)
 
             #Domain Adaptation Loss
-            classifier_domain_loss = self.loss_discriminator([batch_pred_unlab, batch_pred_lab],predict_true_class=True)
-
+        
+            classifier_domain_loss = self.loss_discriminator([batch_pred_unlab.detach(), batch_pred_lab.detach()],predict_true_class=True)
+            self.log('Classifier_true', classifier_domain_loss, prog_bar=True, on_step=True)
             d_opt.zero_grad()
             self.manual_backward(classifier_domain_loss)
             d_opt.step()
 
             domain_loss_fake = self.loss_discriminator([batch_pred_unlab, batch_pred_lab],predict_true_class=False)
+            self.log('Classifier_fake', domain_loss_fake, prog_bar=True, on_step=True)
             loss += domain_loss_fake
-
             opt.zero_grad()
             self.manual_backward(loss)
             opt.step()
+
+
 
         self.log('train_loss', loss, prog_bar=True, on_step=False, on_epoch=True)
 
@@ -127,9 +140,9 @@ class SAGELightning(LightningModule):
         optimizer = th.optim.Adam(self.parameters(), lr=self.lr)
         if self.supervised:
             d_opt = th.optim.Adam(self.module.domain_adaptation.parameters(), lr=1e-3)
-            return {'opt':optimizer, 'd_opt':d_opt}
+            return [optimizer, d_opt]
         else:
-            return {'opt':optimizer}
+            return optimizer
 
     def loss_discriminator(self, latent_tensors, 
         predict_true_class: bool = True,
@@ -184,7 +197,7 @@ class SAGE(nn.Module):
         self.supervised = supervised
         if self.supervised:
             self.classifier = Classifier(n_input=n_hidden,n_labels=n_classes,softmax=False)
-            self.domain_adaptation = Classifier(n_input=n_hidden,n_labels=n_classes,softmax=False)
+            self.domain_adaptation = Classifier(n_input=n_hidden,n_labels=2,softmax=False)
         
         self.bns = nn.ModuleList()
         for _ in range(self.n_layers):
