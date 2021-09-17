@@ -54,6 +54,7 @@ class SAGELightning(LightningModule):
                  dropout=0.2,
                  lr=0.01,
                  supervised=False,
+                 kappa=1,
                  ):
         super().__init__()
 
@@ -62,9 +63,11 @@ class SAGELightning(LightningModule):
         self.lr = lr
         self.supervised= supervised
         self.loss_fcn = CrossEntropyLoss()
+        self.kappa = kappa
         #self.automatic_optimization = True
         if self.supervised:
             self.automatic_optimization = False
+            self.sl = SemanticLoss(n_hidden,n_classes)
             self.train_acc = torchmetrics.Accuracy()
 
     def training_step(self, batch, batch_idx):
@@ -78,10 +81,7 @@ class SAGELightning(LightningModule):
         neg_graph = neg_graph#.to(self.device)
         batch_inputs = mfgs[0].srcdata['gene']
         batch_pred_unlab = self.module(mfgs, batch_inputs)
-        
         loss = self.loss_fcn(batch_pred_unlab, pos_graph, neg_graph)
-        '''if self.supervised:
-            loss = 0'''
 
         if self.supervised:
             batch2 = batch['labelled']
@@ -92,38 +92,42 @@ class SAGELightning(LightningModule):
             batch_inputs = mfgs[0].srcdata['gene']
             batch_labels = mfgs[-1].dstdata['label']
             batch_pred_lab = self.module(mfgs, batch_inputs)
-            #supervised_loss = self.loss_fcn(batch_pred_lab, pos_graph, neg_graph)
+            supervised_loss = self.loss_fcn(batch_pred_lab, pos_graph, neg_graph)
 
             # Label prediction loss
-            labels_pred = self.module.classifier(batch_pred_lab)
+            labels_pred = self.module.encoder.encoder_dict['CF'](batch_pred_lab)
             cce = th.nn.CrossEntropyLoss()
             classifier_loss = cce(labels_pred,batch_labels)
-            loss += classifier_loss*10 #+ supervised_loss #* 10
+            loss += classifier_loss + supervised_loss #* 10
             self.train_acc(labels_pred.argsort(axis=-1)[:,-1],batch_labels)
-            acc = 0 
+            
+            '''acc = 0 
             for x,y in zip(labels_pred.argsort(axis=-1)[:,-1],batch_labels):
                 if x == y:
-                    acc += 1
+                    acc += 1'''
             
             self.log('Classifier Loss',classifier_loss)
-            self.log('train_acc', acc/labels_pred.shape[0], prog_bar=True, on_step=True)
+            self.log('train_acc', self.train_acc, prog_bar=True, on_step=True)
 
             #Domain Adaptation Loss
-        
-            classifier_domain_loss = self.loss_discriminator([batch_pred_unlab.detach(), batch_pred_lab.detach()],predict_true_class=True)
-            self.log('Classifier_true', classifier_domain_loss, prog_bar=True, on_step=True)
+            classifier_domain_loss = self.loss_discriminator([batch_pred_unlab.detach(), batch_pred_lab.detach()],predict_true_class=True)*self.kappa
+            self.log('Classifier_true', classifier_domain_loss, prog_bar=False, on_step=True)
             d_opt.zero_grad()
             self.manual_backward(classifier_domain_loss)
             d_opt.step()
 
-            domain_loss_fake = self.loss_discriminator([batch_pred_unlab, batch_pred_lab],predict_true_class=False)
-            self.log('Classifier_fake', domain_loss_fake, prog_bar=True, on_step=True)
+            domain_loss_fake = self.loss_discriminator([batch_pred_unlab, batch_pred_lab],predict_true_class=False)*self.kappa
+            self.log('Classifier_fake', domain_loss_fake, prog_bar=False, on_step=True)
             loss += domain_loss_fake
             opt.zero_grad()
             self.manual_backward(loss)
             opt.step()
 
-
+            #Semantic Loss
+            labels_unlab = self.module.encoder.encoder_dict['CF'](batch_pred_unlab).argsort(axis=-1)[:,-1]
+            semantic_loss = self.sl.semantic_loss(pseudo_latent=batch_pred_unlab, pseudo_labels=labels_unlab ,true_latent=batch_pred_lab,true_labels=batch_labels)
+            loss += semantic_loss
+            self.log('Semantic_loss', semantic_loss, prog_bar=True, on_step=True)
 
         self.log('train_loss', loss, prog_bar=True, on_step=False, on_epoch=True)
 
@@ -137,7 +141,7 @@ class SAGELightning(LightningModule):
         return batch_pred
 
     def configure_optimizers(self):
-        optimizer = th.optim.Adam(self.parameters(), lr=self.lr)
+        optimizer = th.optim.Adam(self.module.encoder.parameters(), lr=self.lr)
         if self.supervised:
             d_opt = th.optim.Adam(self.module.domain_adaptation.parameters(), lr=1e-3)
             return [optimizer, d_opt]
@@ -176,6 +180,38 @@ class SAGELightning(LightningModule):
         return total_loss
 
 
+class SemanticLoss(nn.Module):
+    def __init__(self , 
+        n_hidden,
+        n_labels):
+        self.centroids_pseudo = th.randn([n_hidden,n_labels])
+        self.centroids_true = th.randn([n_hidden, n_labels])
+        super().__init__()
+    def semantic_loss(self, 
+            pseudo_latent, 
+            pseudo_labels, 
+            true_latent, 
+            true_labels):
+        
+        for pl in pseudo_labels.unique():
+            filt = pseudo_labels == pl
+            if filt.sum() > 2:
+                centroid_pl = pseudo_latent[filt,:].mean(axis=0)
+                new_avg_pl = self.centroids_pseudo[:,pl] + centroid_pl
+                self.centroids_pseudo[:,pl] = new_avg_pl/2
+
+        for tl in true_labels.unique():
+            filt = true_labels == tl
+            if filt.sum() > 2:
+                centroid_tl = true_latent[filt,:].mean(axis=0)
+                new_avg_tl = self.centroids_pseudo[:,tl] + centroid_tl
+                self.centroids_true[:,tl] = new_avg_tl/2
+            
+        semantic_loss = nn.MSELoss()(self.centroids_pseudo, self.centroids_true)*100
+        return semantic_loss
+
+
+
 class SAGE(nn.Module):
     '''def __init__(self, in_feats, n_hidden, n_classes, n_layers, activation, dropout):
         super().__init__()
@@ -193,53 +229,26 @@ class SAGE(nn.Module):
         self.n_layers = n_layers
         self.n_hidden = n_hidden
         self.n_classes = n_classes
-        self.layers = nn.ModuleList()
         self.supervised = supervised
-        if self.supervised:
-            self.classifier = Classifier(n_input=n_hidden,n_labels=n_classes,softmax=False)
-            self.domain_adaptation = Classifier(n_input=n_hidden,n_labels=2,softmax=False)
         
-        self.bns = nn.ModuleList()
-        for _ in range(self.n_layers):
-            self.bns.append(nn.BatchNorm1d(n_hidden))
+        if self.supervised:
+            self.domain_adaptation = Classifier(n_input=n_hidden,n_labels=2,softmax=False)
 
-        self.hidden = nn.Sequential(
-                            nn.Linear(n_hidden , n_hidden),
-                            nn.BatchNorm1d(n_hidden),
-                            nn.ReLU())
-
-                        
-
-        self.latent = nn.Sequential(
-                    nn.Linear(n_hidden , n_hidden), #if not supervised else nn.Linear(n_hidden , self.n_classes),
-                    nn.BatchNorm1d(n_hidden), #if not supervised else  nn.BatchNorm1d(self.n_classes),
-                    #nn.Softmax()
-                    )
-
-        if n_layers > 1:
-            self.layers.append(dglnn.SAGEConv(in_feats, n_hidden, 'pool'))
-            for i in range(1,n_layers):
-                self.layers.append(dglnn.SAGEConv(n_hidden, n_hidden, 'pool'))
-            #self.layers.append(dglnn.SAGEConv(n_hidden, n_classes, 'mean'))
-        else:
-            self.layers.append(dglnn.SAGEConv(in_feats, n_classes, 'pool'))
-    
-        #self.hidden = dglnn.SAGEConv(n_hidden, n_hidden, 'pool')
+        self.encoder = Encoder(in_feats,n_hidden,n_classes,n_layers,supervised)
         
     def forward(self, blocks, x):
-        h = x
-        
-        for l, (layer, block) in enumerate(zip(self.layers, blocks)):
+        h = x   
+        for l, (layer, block) in enumerate(zip(self.encoder.encoder_dict['GS'], blocks)):
             #print(l)
             h = layer(block, h)
             h = F.normalize(h)
 
-            if l != len(self.layers) - 1: #and l != len(self.layers) - 2:
-                h = self.bns[l](h)
+            if l != len(self.encoder.encoder_dict['GS']) - 1: #and l != len(self.layers) - 2:
+                h = self.encoder.encoder_dict['BN'][l](h)
                 h = h.relu()
                 h = F.dropout(h, p=0.2, training=self.training)
-                h = self.hidden(h)
-        h = self.latent(h)
+                h = self.encoder.encoder_dict['FC'][0](h)
+        h = self.encoder.encoder_dict['FC'][1](h)
         return h
 
     def inference(self, g, x, device, batch_size, num_workers):
@@ -255,7 +264,7 @@ class SAGE(nn.Module):
         # Therefore, we compute the representation of all nodes layer by layer.  The nodes
         # on each layer are of course splitted in batches.
         # TODO: can we standardize this?
-        for l, layer in enumerate(self.layers[:]):
+        for l, layer in enumerate(self.encoder.encoder_dict['GS']):
             y = th.zeros(g.num_nodes(), self.n_hidden) #if not self.supervised else th.zeros(g.num_nodes(), self.n_classes)
             print(y.shape)
 
@@ -276,18 +285,60 @@ class SAGE(nn.Module):
                 h = layer(block, h)
                 h = F.normalize(h)
 
-                if l != len(self.layers) -1:# and l != len(self.layers) - 2:
-                    h = self.bns[l](h)
+                if l != len(self.encoder.encoder_dict['GS']) -1:# and l != len(self.layers) - 2:
+                    h = self.encoder.encoder_dict['BN'][l](h)
                     h = h.relu()
                     h = F.dropout(h, p=0.2, training=self.training)
-                    h =self.hidden(h)
-                elif l == len(self.layers) -1:
-                    h = self.latent(h)
+                    h =self.encoder.encoder_dict['FC'][0](h)
+                elif l == len(self.encoder.encoder_dict['GS']) -1:
+                    h = self.encoder.encoder_dict['FC'][1](h)
 
                 y[output_nodes] = h.cpu()
-
             x = y
         return y
+
+class Encoder(nn.Module):
+        def __init__(
+            self,
+            in_feats,
+            n_hidden,
+            n_classes,
+            n_layers,
+            supervised,
+            ):
+            super().__init__()
+        
+            bns = nn.ModuleList()
+            for _ in range(n_layers):
+                bns.append(nn.BatchNorm1d(n_hidden))
+
+            hidden = nn.Sequential(
+                                nn.Linear(n_hidden , n_hidden),
+                                nn.BatchNorm1d(n_hidden),
+                                nn.ReLU())
+
+            latent = nn.Sequential(
+                        nn.Linear(n_hidden , n_hidden), #if not supervised else nn.Linear(n_hidden , self.n_classes),
+                        nn.BatchNorm1d(n_hidden), #if not supervised else  nn.BatchNorm1d(self.n_classes),
+                        #nn.Softmax()
+                        )
+            layers = nn.ModuleList()
+            if n_layers > 1:
+                layers.append(dglnn.SAGEConv(in_feats, n_hidden, 'pool'))
+                for i in range(1,n_layers):
+                    layers.append(dglnn.SAGEConv(n_hidden, n_hidden, 'pool'))
+            else:
+                layers.append(dglnn.SAGEConv(in_feats, n_classes, 'pool'))
+
+            if supervised:
+                classifier = Classifier(n_input=n_hidden,n_labels=n_classes,softmax=False)
+            else:
+                classifier = None
+
+            self.encoder_dict = nn.ModuleDict({'GS': layers, 
+                                                'BN':bns,
+                                                'FC': nn.ModuleList([hidden,latent]),
+                                                'CF':classifier})
 
 class Classifier(nn.Module):
     """Basic fully-connected NN classifier
