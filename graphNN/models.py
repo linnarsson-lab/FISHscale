@@ -345,7 +345,6 @@ class Classifier(nn.Module):
 
         if softmax:
             layers.append(nn.Softmax(dim=-1))
-
         self.classifier = nn.Sequential(*layers)
 
     def forward(self, x):

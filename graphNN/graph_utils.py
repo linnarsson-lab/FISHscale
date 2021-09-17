@@ -156,7 +156,7 @@ class GraphData(pl.LightningDataModule):
             self.g_lab.ndata['label'] = th.tensor(labels, dtype=th.long)
 
         self.sampler = dgl.dataloading.MultiLayerNeighborSampler([int(_) for _ in self.ngh_sizes])
-        self.device = th.device('cpu')
+        #self.device = th.device('cpu')
 
         self.checkpoint_callback = ModelCheckpoint(
             monitor='train_loss',
@@ -178,7 +178,6 @@ class GraphData(pl.LightningDataModule):
         pass
 
     def setup(self, stage: Optional[str] = None):
-        #self.d = th.tensor(self.molecules_df(),dtype=th.float32) #works
         self.d = self.molecules_df()
 
     def compute_size(self):
@@ -248,16 +247,6 @@ class GraphData(pl.LightningDataModule):
             shuffle=False,
             drop_last=False,
             num_workers=self.num_workers)
-
-        '''if type(self.ref_celltypes) != type(None):
-            #self.indices_labelled = th.tensor(np.random.randint(0,self.cluster_nghs.shape[0],size=self.indices_train.shape[0]))
-            self.indices_labelled = th.tensor(np.random.choice(self.cluster_edges.unique().numpy(),size=self.indices_train.shape[0]))
-        labelled = None
-
-        if type(labelled) != type(None):
-            return {'unlabelled':unlabelled,'labelled':labelled}
-        else:'''
-        
 
     def train(self,max_epochs=5,gpus=-1):     
         trainer = pl.Trainer(gpus=gpus,callbacks=[self.checkpoint_callback],max_epochs=max_epochs)
