@@ -33,17 +33,6 @@ class CrossEntropyLoss(nn.Module):
         #loss = F.binary_cross_entropy_with_logits(score, label.float())
         return loss
 
-'''
-class SemanticLoss(nn.Module):
-
-    self.centroids_true = th.randn([48])
-    self.centroids_pseudo = th.rndn([48])
-    def semantic_loss(self,pseudo_labels, unlabelled_latent, true_labels, labelled_latent):
-
-
-        return semantic_loss'''
-
-
 class SAGELightning(LightningModule):
     def __init__(self,
                  in_feats,
@@ -100,12 +89,6 @@ class SAGELightning(LightningModule):
             classifier_loss = cce(labels_pred,batch_labels)
             loss += classifier_loss + supervised_loss #* 10
             self.train_acc(labels_pred.argsort(axis=-1)[:,-1],batch_labels)
-            
-            '''acc = 0 
-            for x,y in zip(labels_pred.argsort(axis=-1)[:,-1],batch_labels):
-                if x == y:
-                    acc += 1'''
-            
             self.log('Classifier Loss',classifier_loss)
             self.log('train_acc', self.train_acc, prog_bar=True, on_step=True)
 
@@ -130,7 +113,6 @@ class SAGELightning(LightningModule):
             self.log('Semantic_loss', semantic_loss, prog_bar=True, on_step=True)
 
         self.log('train_loss', loss, prog_bar=True, on_step=False, on_epoch=True)
-
         return loss
 
     def validation_step(self, batch, batch_idx):
@@ -179,7 +161,6 @@ class SAGELightning(LightningModule):
         total_loss = th.stack(losses).sum()
         return total_loss
 
-
 class SemanticLoss(nn.Module):
     def __init__(self , 
         n_hidden,
@@ -209,8 +190,6 @@ class SemanticLoss(nn.Module):
             
         semantic_loss = nn.MSELoss()(self.centroids_pseudo, self.centroids_true)*100
         return semantic_loss
-
-
 
 class SAGE(nn.Module):
     '''def __init__(self, in_feats, n_hidden, n_classes, n_layers, activation, dropout):
