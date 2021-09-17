@@ -108,7 +108,10 @@ class SAGELightning(LightningModule):
 
             #Semantic Loss
             labels_unlab = self.module.encoder.encoder_dict['CF'](batch_pred_unlab).argsort(axis=-1)[:,-1]
-            semantic_loss = self.sl.semantic_loss(pseudo_latent=batch_pred_unlab, pseudo_labels=labels_unlab ,true_latent=batch_pred_lab,true_labels=batch_labels)
+            semantic_loss = self.sl.semantic_loss(pseudo_latent=batch_pred_unlab, 
+                                                    pseudo_labels=labels_unlab ,
+                                                    true_latent=batch_pred_lab,
+                                                    true_labels=labels_pred)
             loss += semantic_loss
             self.log('Semantic_loss', semantic_loss, prog_bar=True, on_step=True)
 
