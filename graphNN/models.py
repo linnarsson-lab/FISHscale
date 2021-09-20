@@ -111,7 +111,7 @@ class SAGELightning(LightningModule):
             semantic_loss = self.sl.semantic_loss(pseudo_latent=batch_pred_unlab, 
                                                     pseudo_labels=labels_unlab ,
                                                     true_latent=batch_pred_lab,
-                                                    true_labels=labels_pred)
+                                                    true_labels=labels_pred.argsort(axis=-1)[:,-1])
             loss += semantic_loss
             self.log('Semantic_loss', semantic_loss, prog_bar=True, on_step=True)
 
@@ -128,7 +128,7 @@ class SAGELightning(LightningModule):
     def configure_optimizers(self):
         optimizer = th.optim.Adam(self.module.encoder.parameters(), lr=self.lr)
         if self.supervised:
-            d_opt = th.optim.Adam(self.module.domain_adaptation.parameters(), lr=1e-3)
+            d_opt = th.optim.Adam(self.module.domain_adaptation.parameters(), lr=self.lr)
             return [optimizer, d_opt]
         else:
             return optimizer
@@ -169,7 +169,9 @@ class SemanticLoss(nn.Module):
         n_hidden,
         n_labels):
         self.centroids_pseudo = th.randn([n_hidden,n_labels])
+        self.pseudo_count = th.ones([n_labels])
         self.centroids_true = th.randn([n_hidden, n_labels])
+        self.true_count = th.ones([n_labels])
         super().__init__()
     def semantic_loss(self, 
             pseudo_latent, 
@@ -179,19 +181,27 @@ class SemanticLoss(nn.Module):
         
         for pl in pseudo_labels.unique():
             filt = pseudo_labels == pl
-            if filt.sum() > 2:
-                centroid_pl = pseudo_latent[filt,:].mean(axis=0)
-                new_avg_pl = self.centroids_pseudo[:,pl] + centroid_pl
-                self.centroids_pseudo[:,pl] = new_avg_pl/2
+            if filt.sum() > 10:
+                centroid_pl = pseudo_latent[filt,:]
+                dispersion_p = th.mean(th.tensor([nn.MSELoss()(centroid_pl[cell,:], self.centroids_pseudo[:,pl]) for cell in range(centroid_pl.shape[0])]))
+                centroid_pl = centroid_pl.mean(axis=0)
+                new_avg_pl = self.centroids_pseudo[:,pl] * self.pseudo_count[pl] + centroid_pl *filt.sum()
+                new_avg_pl = new_avg_pl/(self.pseudo_count[pl] +filt.sum())
+                self.pseudo_count[pl] += filt.sum()
+                self.centroids_pseudo[:,pl] = new_avg_pl
 
         for tl in true_labels.unique():
             filt = true_labels == tl
-            if filt.sum() > 2:
-                centroid_tl = true_latent[filt,:].mean(axis=0)
-                new_avg_tl = self.centroids_pseudo[:,tl] + centroid_tl
-                self.centroids_true[:,tl] = new_avg_tl/2
-            
-        semantic_loss = nn.MSELoss()(self.centroids_pseudo, self.centroids_true)*100
+            if filt.sum() > 10:
+                centroid_tl = true_latent[filt,:]
+                dispersion_t = th.mean(th.tensor([nn.MSELoss()(centroid_tl[cell,:], self.centroids_true[:,tl]) for cell in range(centroid_tl.shape[0])]))
+                centroid_tl = centroid_tl.mean(axis=0)
+                new_avg_tl = self.centroids_true[:,tl]* self.true_count[tl] + centroid_tl*filt.sum()
+                new_avg_tl = new_avg_tl/(self.true_count[tl] +filt.sum())
+                self.true_count[tl] += filt.sum()
+                self.centroids_true[:,tl] = new_avg_tl
+        
+        semantic_loss = nn.MSELoss()(self.centroids_pseudo, self.centroids_true) + dispersion_p
         return semantic_loss
 
 class SAGE(nn.Module):
