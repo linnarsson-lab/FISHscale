@@ -23,8 +23,6 @@ from PyQt5.QtCore import *
 
 import sys
 import os
-
-from torch_geometric import data 
 try:
     import open3d as o3d
 except:
