@@ -235,7 +235,11 @@ class Regionalize(Iteration, Decomposition):
             p.set_array(c)
             p.set_cmap(cm)
             p.set_linewidth(linewidth) #To hide small white lines between the polygons
-            if vmin!= None and vmax!=None:
+            if vmin!= None or vmax!=None:
+                if vmin == None:
+                    raise Exception('If "vmax" is set, also "vmin" needs to be specified.')
+                if vmax == None:
+                    raise Exception('If "vmin" is set, also "vmax" needs to be specified.')
                 p.set_clim(vmin=vmin, vmax=vmax)
                 c_scaled = c - vmin
                 c_scaled[c_scaled < 0] = 0
@@ -414,8 +418,9 @@ class Regionalize(Iteration, Decomposition):
         if save:
             plt.savefig(f'{savename}_hexbin_decomposition_[{components[0]}, {components[1]}].png', dpi=200)
 
-    def clust_hex_connected(self, df_hex, hex_coord: np.ndarray, distance_threshold: float = None, 
-                            n_clusters:int = None, neighbor_rings:int = 1, n_jobs:int=-1) -> np.ndarray:
+    def clust_hex_connected(self, df_hex, hex_coord: np.ndarray, spacing: float,
+                            distance_threshold: float = None, n_clusters:int = None, 
+                            neighbor_rings:int = 1, n_jobs:int=-1) -> np.ndarray:
         """Cluster hex-bin data, with a neighborhood embedding.
 
         Clusters with AggolmerativeClustering that uses a distance matrix 
@@ -431,6 +436,7 @@ class Regionalize(Iteration, Decomposition):
                 each hexagonal tile
             hex_coord (np.array): Numpy Array with XY coordinates of the
                 centroids of the hexagonal tiles. 
+            spacing (float): distance between hexagon tile centers.
             distance_threshold (float, optional): Distance threshold for Scipy
                 Agglomerative clustering. Defaults to None.
             n_clusters (int, optional): Number of desired clusters. 
@@ -456,11 +462,11 @@ class Regionalize(Iteration, Decomposition):
             raise Exception('One of "distance_threshold" or "n_clusters" should be defined.')
 
         #Make graph to connect neighbours 
-        
-        #This should be radius_neighbours_graph because otherwise edge cases have weird neighbours
-        
-        n_neighbors = (neighbor_rings * 6)
-        Kgraph = kneighbors_graph(hex_coord, n_neighbors, include_self=False, n_jobs=n_jobs)
+        if neighbor_rings > 0:
+            r_neighbors = neighbor_rings * spacing + (0.1 * spacing) #Some extra to be sure there are no rounding errors.
+            Kgraph = radius_neighbors_graph(hex_coord, r_neighbors, include_self=False, n_jobs=n_jobs)
+        else:
+            Kgraph = None
 
         #Cluster
         clust_result = AgglomerativeClustering(n_clusters=n_clusters,
@@ -1111,6 +1117,7 @@ class Regionalize(Iteration, Decomposition):
             
         #Cluster dataset
         labels = self.clust_hex_connected(dr[:, n_components[0] : n_components[1]], hex_coord, 
+                                          spacing = spacing,
                                           distance_threshold=clust_dist_threshold,
                                           n_clusters = n_clusters,
                                           neighbor_rings=clust_neighbor_rings, n_jobs=n_jobs)

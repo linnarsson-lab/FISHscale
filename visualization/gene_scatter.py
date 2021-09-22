@@ -132,8 +132,8 @@ class GeneScatter(AxSize):
 
     def scatter_plot(self, genes: Union[List, np.ndarray], s: float=0.1, ax_scale_factor: int=10, 
                     view: Union[Any, List] = None, scalebar: bool=True, show_axes: bool=False,
-                    show_legend: bool = True, title: str = None, save: bool=False, save_name: str='', dpi: int=300, 
-                    file_format: str='.eps') -> None:
+                    show_legend: bool = True, title: str = None, ax = None, save: bool=False, 
+                    save_name: str='', dpi: int=300, file_format: str='.eps') -> None:
         """Make a scatter plot of the data.
 
         Uses a black background. Plots in real size if `ax_scale_factor` is 1. 
@@ -160,6 +160,8 @@ class GeneScatter(AxSize):
             show_legend (bool, optional): Show the gene legend. Can not show
                 more than 15 genes.
             title (str, optional): Add a title to the figure. Defaults to None.
+            ax (matplotlib ax object, optional): If given put plot in ax of 
+                existing figure. Defaults to None
             save (bool, optional): If True saves the plot. Defaults to False.
             save_name (str, optional): Name of the plot. If not given will have
                 the format: "Scatter_plot_<dataset_name>_<timestamp>"
@@ -175,9 +177,10 @@ class GeneScatter(AxSize):
             genes = [genes]
 
         #Make figure
-        fig = plt.figure(figsize=(20,10))
-        ax = fig.add_subplot(111)#, rasterized=True)
-        ax.set_rasterization_zorder(1)
+        if type(ax) == type(None):
+            fig = plt.figure(figsize=(20,10))
+            ax = fig.add_subplot(111)#, rasterized=True)
+            ax.set_rasterization_zorder(1)
 
         #Plot points
         for g in genes:
@@ -204,6 +207,8 @@ class GeneScatter(AxSize):
         x_scale = self._to_inch(x_extent * ax_scale_factor, unit = self.pixel_size.units)
         y_scale = self._to_inch(y_extent * ax_scale_factor, unit = self.pixel_size.units)
         self._set_ax_size(x_scale, y_scale)
+        
+        ax.set_aspect('equal')
 
         #Add scale bar
         if scalebar:   
@@ -321,8 +326,8 @@ class MultiGeneScatter(AxSize):
         #Rescale
         x_extent = x_max - x_min
         y_extent = y_max - y_min
-        x_scale = self._to_inch(x_extent * ax_scale_factor, unit = self.pixel_size.units)
-        y_scale = self._to_inch(y_extent * ax_scale_factor, unit = self.pixel_size.units)
+        x_scale = self._to_inch(x_extent * ax_scale_factor, unit = self.unit_scale)
+        y_scale = self._to_inch(y_extent * ax_scale_factor, unit = self.unit_scale)
         self._set_ax_size(x_scale, y_scale)
         if flip_y:
             ax.invert_yaxis()            
