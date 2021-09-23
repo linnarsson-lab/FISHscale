@@ -201,7 +201,7 @@ class SemanticLoss(nn.Module):
             filt = true_labels == tl
             if filt.sum() > 5:
                 centroid_tl = true_latent[filt,:]
-                dispersion_t = th.mean(th.tensor([nn.MSELoss()(centroid_tl[cell,:], self.centroids_true[:,tl]) for cell in range(centroid_tl.shape[0])]))
+                '''dispersion_t = th.mean(th.tensor([nn.MSELoss()(centroid_tl[cell,:], self.centroids_true[:,tl]) for cell in range(centroid_tl.shape[0])],device='cuda'))'''
                 centroid_tl = centroid_tl.mean(axis=0)
                 new_avg_tl = self.centroids_true[:,tl]* self.true_count[tl] + centroid_tl*filt.sum()
                 new_avg_tl = new_avg_tl/(self.true_count[tl] +filt.sum())
