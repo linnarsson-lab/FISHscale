@@ -97,6 +97,7 @@ class GraphData(pl.LightningDataModule):
         ref_celltypes=None,
         smooth:bool=False,
         negative_samples:int=5,
+        device='cpu',
         ):
         """
         Initialize GraphData class
@@ -132,10 +133,11 @@ class GraphData(pl.LightningDataModule):
         self.ref_celltypes = ref_celltypes 
         self.smooth = smooth
         self.negative_samples = negative_samples
+        
 
         self.folder = self.analysis_name+ '_' +datetime.now().strftime("%Y-%m-%d-%H%M%S")
         os.mkdir(self.folder)
-        self.device = th.device('cuda')
+        self.device = th.device(device)
 
         self.subsample = subsample
         self.subsample_xy()
