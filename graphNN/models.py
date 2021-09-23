@@ -43,7 +43,7 @@ class SAGELightning(LightningModule):
                  dropout=0.2,
                  lr=0.01,
                  supervised=False,
-                 kappa=1,
+                 kappa=0,
                  ):
         super().__init__()
 
@@ -70,7 +70,7 @@ class SAGELightning(LightningModule):
         neg_graph = neg_graph#.to(self.device)
         batch_inputs = mfgs[0].srcdata['gene']
         batch_pred_unlab = self.module(mfgs, batch_inputs)
-        loss = self.loss_fcn(batch_pred_unlab, pos_graph, neg_graph) * 10
+        loss = self.loss_fcn(batch_pred_unlab, pos_graph, neg_graph) #* 5
 
         if self.supervised:
             batch2 = batch['labelled']
@@ -87,24 +87,19 @@ class SAGELightning(LightningModule):
             labels_pred = self.module.encoder.encoder_dict['CF'](batch_pred_lab)
             cce = th.nn.CrossEntropyLoss()
             classifier_loss = cce(labels_pred,batch_labels)
-            loss += classifier_loss + supervised_loss
             self.train_acc(labels_pred.argsort(axis=-1)[:,-1],batch_labels)
             self.log('Classifier Loss',classifier_loss)
             self.log('train_acc', self.train_acc, prog_bar=True, on_step=True)
 
             #Domain Adaptation Loss
-            '''classifier_domain_loss = self.loss_discriminator([batch_pred_unlab.detach(), batch_pred_lab.detach()],predict_true_class=True)*self.kappa
+            classifier_domain_loss = self.loss_discriminator([batch_pred_unlab.detach(), batch_pred_lab.detach()],predict_true_class=True)
             self.log('Classifier_true', classifier_domain_loss, prog_bar=False, on_step=True)
             d_opt.zero_grad()
             self.manual_backward(classifier_domain_loss)
-            d_opt.step()'''
+            d_opt.step()
 
-            domain_loss_fake = self.loss_discriminator([batch_pred_unlab, batch_pred_lab],predict_true_class=False)*self.kappa
+            domain_loss_fake = self.loss_discriminator([batch_pred_unlab, batch_pred_lab],predict_true_class=False)
             self.log('Classifier_fake', domain_loss_fake, prog_bar=False, on_step=True)
-            loss += domain_loss_fake
-            opt.zero_grad()
-            self.manual_backward(loss)
-            opt.step()
 
             #Semantic Loss
             labels_unlab = self.module.encoder.encoder_dict['CF'](batch_pred_unlab).argsort(axis=-1)[:,-1]
@@ -112,8 +107,20 @@ class SAGELightning(LightningModule):
                                                     pseudo_labels=labels_unlab ,
                                                     true_latent=batch_pred_lab,
                                                     true_labels=labels_pred.argsort(axis=-1)[:,-1])
-            loss += semantic_loss
             self.log('Semantic_loss', semantic_loss, prog_bar=True, on_step=True)
+
+            
+            # Will increasingly apply supervised loss, domain adaptation loss
+            # from 0 to 1, from iteration 0 to 200, focusing first on unsupervised 
+            # graphsage task
+            kappa = 2/(1+10**(-1*((1*self.kappa)/200)))-1
+            self.kappa += 1
+            loss += kappa*(domain_loss_fake + supervised_loss + classifier_loss + semantic_loss.detach())
+
+
+            opt.zero_grad()
+            self.manual_backward(loss)
+            opt.step()
 
         self.log('train_loss', loss, prog_bar=True, on_step=False, on_epoch=True)
         return loss
@@ -181,7 +188,7 @@ class SemanticLoss(nn.Module):
         
         for pl in pseudo_labels.unique():
             filt = pseudo_labels == pl
-            if filt.sum() > 10:
+            if filt.sum() > 5:
                 centroid_pl = pseudo_latent[filt,:]
                 dispersion_p = th.mean(th.tensor([nn.MSELoss()(centroid_pl[cell,:], self.centroids_pseudo[:,pl]) for cell in range(centroid_pl.shape[0])]))
                 centroid_pl = centroid_pl.mean(axis=0)
@@ -192,7 +199,7 @@ class SemanticLoss(nn.Module):
 
         for tl in true_labels.unique():
             filt = true_labels == tl
-            if filt.sum() > 10:
+            if filt.sum() > 5:
                 centroid_tl = true_latent[filt,:]
                 '''dispersion_t = th.mean(th.tensor([nn.MSELoss()(centroid_tl[cell,:], self.centroids_true[:,tl]) for cell in range(centroid_tl.shape[0])],device='cuda'))'''
                 centroid_tl = centroid_tl.mean(axis=0)

@@ -448,7 +448,7 @@ class GraphData(pl.LightningDataModule):
             molecules = []
             # Reduce number of cells by Ncells.min() to avoid having a huge dataframe, since it is actually simulated data
             cl_i = data[:,i]#*(Ncells[i]/(Ncells.min()*100)).astype('int')
-            random_molecules = np.random.choice(data.shape[0],size=500,p=cl_i)
+            random_molecules = np.random.choice(data.shape[0],size=2500,p=cl_i)
             
 
             '''            
