@@ -93,11 +93,11 @@ class SAGELightning(LightningModule):
             self.log('train_acc', self.train_acc, prog_bar=True, on_step=True)
 
             #Domain Adaptation Loss
-            classifier_domain_loss = self.loss_discriminator([batch_pred_unlab.detach(), batch_pred_lab.detach()],predict_true_class=True)*self.kappa
+            '''classifier_domain_loss = self.loss_discriminator([batch_pred_unlab.detach(), batch_pred_lab.detach()],predict_true_class=True)*self.kappa
             self.log('Classifier_true', classifier_domain_loss, prog_bar=False, on_step=True)
             d_opt.zero_grad()
             self.manual_backward(classifier_domain_loss)
-            d_opt.step()
+            d_opt.step()'''
 
             domain_loss_fake = self.loss_discriminator([batch_pred_unlab, batch_pred_lab],predict_true_class=False)*self.kappa
             self.log('Classifier_fake', domain_loss_fake, prog_bar=False, on_step=True)
@@ -183,7 +183,7 @@ class SemanticLoss(nn.Module):
             filt = pseudo_labels == pl
             if filt.sum() > 10:
                 centroid_pl = pseudo_latent[filt,:]
-                dispersion_p = th.mean(th.tensor([nn.MSELoss()(centroid_pl[cell,:], self.centroids_pseudo[:,pl]) for cell in range(centroid_pl.shape[0])]))
+                dispersion_p = th.mean(th.tensor([nn.MSELoss()(centroid_pl[cell,:], self.centroids_pseudo[:,pl]) for cell in range(centroid_pl.shape[0])],device='cuda'))
                 centroid_pl = centroid_pl.mean(axis=0)
                 new_avg_pl = self.centroids_pseudo[:,pl] * self.pseudo_count[pl] + centroid_pl *filt.sum()
                 new_avg_pl = new_avg_pl/(self.pseudo_count[pl] +filt.sum())
@@ -194,7 +194,7 @@ class SemanticLoss(nn.Module):
             filt = true_labels == tl
             if filt.sum() > 10:
                 centroid_tl = true_latent[filt,:]
-                dispersion_t = th.mean(th.tensor([nn.MSELoss()(centroid_tl[cell,:], self.centroids_true[:,tl]) for cell in range(centroid_tl.shape[0])]))
+                '''dispersion_t = th.mean(th.tensor([nn.MSELoss()(centroid_tl[cell,:], self.centroids_true[:,tl]) for cell in range(centroid_tl.shape[0])],device='cuda'))'''
                 centroid_tl = centroid_tl.mean(axis=0)
                 new_avg_tl = self.centroids_true[:,tl]* self.true_count[tl] + centroid_tl*filt.sum()
                 new_avg_tl = new_avg_tl/(self.true_count[tl] +filt.sum())

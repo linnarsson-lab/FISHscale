@@ -135,6 +135,7 @@ class GraphData(pl.LightningDataModule):
 
         self.folder = self.analysis_name+ '_' +datetime.now().strftime("%Y-%m-%d-%H%M%S")
         os.mkdir(self.folder)
+        self.device = th.device('cuda')
 
         self.subsample = subsample
         self.subsample_xy()
@@ -147,6 +148,7 @@ class GraphData(pl.LightningDataModule):
 
         self.g= dgl.graph((edges[0,:],edges[1,:]))
         self.g.ndata['gene'] = th.tensor(self.d.toarray(),dtype=th.float32)
+        self.g.to(self.device)
 
         if self.model.supervised:
             self.molecules_labelled, edges_labelled, labels = self.cell_types_to_graph(self.ref_celltypes)
@@ -154,9 +156,9 @@ class GraphData(pl.LightningDataModule):
             self.g_lab= dgl.graph((edges_labelled[0,:],edges_labelled[1,:]))
             self.g_lab.ndata['gene'] = th.tensor(self.molecules_labelled.toarray(),dtype=th.float32)
             self.g_lab.ndata['label'] = th.tensor(labels, dtype=th.long)
+            self.g_lab.to(self.device)
 
         self.sampler = dgl.dataloading.MultiLayerNeighborSampler([int(_) for _ in self.ngh_sizes])
-        self.device = th.device('cpu')
 
         self.checkpoint_callback = ModelCheckpoint(
             monitor='train_loss',
@@ -203,7 +205,7 @@ class GraphData(pl.LightningDataModule):
                         random_edges,
                         self.sampler,
                         negative_sampler=dgl.dataloading.negative_sampler.Uniform(self.negative_samples), # NegativeSampler(self.g, self.negative_samples, False),
-                        #device=self.device,
+                        device=self.device,
                         #exclude='self',
                         #reverse_eids=th.arange(self.g.num_edges()) ^ 1,
                         batch_size=self.batch_size,
@@ -220,7 +222,7 @@ class GraphData(pl.LightningDataModule):
                             random_edges,
                             self.sampler,
                             negative_sampler=dgl.dataloading.negative_sampler.Uniform(self.negative_samples), # NegativeSampler(self.g, self.negative_samples, False),
-                            #device=self.device,
+                            device=self.device,
                             #exclude='self',
                             #reverse_eids=th.arange(self.g.num_edges()) ^ 1,
                             batch_size=self.batch_size,
