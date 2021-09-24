@@ -239,97 +239,10 @@ class GraphData(pl.LightningDataModule):
             return {'unlabelled':unlab,'labelled':lab}
         else:
             return {'unlabelled':unlab}
-                            
-    def val_dataloader(self):
-        # Note that the validation data loader is a NodeDataLoader
-        # as we want to evaluate all the node embeddings.
-        return dgl.dataloading.NodeDataLoader(
-            self.g,
-            np.arange(self.g.num_nodes()),
-            self.sampler,
-            #device=self.device,
-            batch_size=self.batch_size,
-            shuffle=False,
-            drop_last=False,
-            num_workers=self.num_workers)
-
-        '''if type(self.ref_celltypes) != type(None):
-            #self.indices_labelled = th.tensor(np.random.randint(0,self.cluster_nghs.shape[0],size=self.indices_train.shape[0]))
-            self.indices_labelled = th.tensor(np.random.choice(self.cluster_edges.unique().numpy(),size=self.indices_train.shape[0]))
-        labelled = None
-
-        if type(labelled) != type(None):
-            return {'unlabelled':unlabelled,'labelled':labelled}
-        else:'''
-        
 
     def train(self,max_epochs=5,gpus=-1):     
         trainer = pl.Trainer(gpus=gpus,callbacks=[self.checkpoint_callback],max_epochs=max_epochs)
         trainer.fit(self.model, train_dataloader=self.train_dataloader())
-
-    def get_latent(self, deterministic=True,run_clustering=False,make_plot=False):
-        print('Training done, generating embedding...')
-        import matplotlib.pyplot as plt
-        self.model.eval()
-        embedding = []
-        for bs, pos, mfgs in self.val_dataloader():
-            mfgs = [mfg.int() for mfg in mfgs]
-            batch_inputs = mfgs[0].srcdata['gene']
-            z = self.model.module(mfgs, batch_inputs)
-            embedding.append(z.detach().numpy())
-            
-        self.embedding = np.concatenate(embedding)
-        np.save(self.folder+'/loadings.npy',self.embedding)
-
-        if run_clustering:
-            self.data.clustering_scanpy(self.embedding)
-    
-        if make_plot:
-            ### Plot spatial dots with assigned cluster
-            fig=plt.figure(figsize=(6,6),dpi=1000)
-            ax = fig.add_subplot(1, 1, 1)
-            ax.set_facecolor("black")
-            width_cutoff = 1640 # um
-            plt.scatter(self.data.df.x.compute(), self.data.df.y.compute(), c=self.data.dask_attrs['leiden'].compute().astype('int64'), s=0.2,marker='.',linewidths=0, edgecolors=None, cmap='rainbow')
-            plt.xticks(fontsize=4)
-            plt.yticks(fontsize=4)
-            plt.axis('scaled')
-            plt.savefig("{}/spatial_umap_embedding.png".format(self.folder), bbox_inches='tight', dpi=500)
-
-    def make_umap(self,make_plot=True):
-        print('Embedding done, generating umap and plots...')
-        import matplotlib.pyplot as plt
-        import umap
-
-        reducer = umap.UMAP(
-            n_neighbors=150,
-            n_components=3,
-            n_epochs=250,
-            init='spectral',
-            min_dist=0.1,
-            spread=1,
-            random_state=1,
-            verbose=True,
-            n_jobs=-1
-        )
-        umap_embedding = reducer.fit_transform(self.embedding)
-        np.save(self.folder+'/umap.npy',umap_embedding)
-
-        if make_plot:
-            Y_umap = umap_embedding
-            Y_umap -= np.min(Y_umap, axis=0)
-            Y_umap /= np.max(Y_umap, axis=0)
-            Y_umap.shape
-
-            fig=plt.figure(figsize=(7,4),dpi=500)
-            cycled = [0,1,2,0]
-            for i in range(3):
-                plt.subplot(1,3,i+1)
-                plt.scatter(Y_umap[:,cycled[i]], Y_umap[:,cycled[i+1]], c=Y_umap,  s=5, marker='.', linewidths=0, edgecolors=None)
-                plt.xlabel("Y"+str(cycled[i]))
-                plt.ylabel("Y"+str(cycled[i+1]))
-            plt.tight_layout()
-            plt.savefig("{}/umap_embedding.png".format(self.folder), bbox_inches='tight', dpi=500)
 
     def molecules_df(self):
         rows,cols = [],[]
@@ -509,3 +422,153 @@ class GraphData(pl.LightningDataModule):
         smoothed_dataframe= np.concatenate(smoothed_dataframe)
         self.d = sparse.csr_matrix(smoothed_dataframe)
         self.molecules_connected = np.array(molecules_connected)
+
+    #### plotting and latent factors #####
+
+    def get_latents(self):
+        self.model.eval()
+        latent_unlabelled = self.model.module.inference(self.g,self.g.ndata['gene'],'cpu',1040,0)#.detach().numpy()
+        if self.model.supervised:
+            latent_labelled = self.model.module.inference(self.g_lab,self.g_lab.ndata['gene'],'cpu',1040,0)#.detach().numpy()
+            self.prediction_labelled = self.model.module.encoder.encoder_dict['CF'](latent_labelled).detach().numpy()
+            self.prediction_unlabelled = self.model.module.encoder.encoder_dict['CF'](latent_unlabelled).detach().numpy()
+            self.latent_labelled = latent_labelled.detach().numpy()
+
+        self.latent_unlabelled = latent_unlabelled.detach().numpy()
+        
+
+    def get_umap(self,random_n=50000):
+        import umap
+        import matplotlib.pyplot as plt
+
+        reducer = umap.UMAP(
+                n_neighbors=15,
+                n_components=3,
+                n_epochs=250,
+                init='spectral',
+                metric='euclidean',
+                min_dist=0.1,
+                spread=1,
+                random_state=1,
+                verbose=True,
+                n_jobs=6
+            )
+
+        if self.model.supervised:
+
+            mixed = np.concatenate([self.latent_unlabelled,self.latent_labelled])
+            batch = np.concatenate([np.zeros(self.latent_unlabelled.shape[0]),np.ones(self.latent_labelled.shape[0])])
+            some_mixed = np.random.choice(np.arange(mixed.shape[0]),int(random_n/2),replace=False)
+            print(some_mixed.shape,batch.shape)
+            umap_embedding = reducer.fit_transform(mixed[some_mixed])
+
+            Y_umap_mixed = umap_embedding
+            Y_umap_mixed -= np.min(Y_umap_mixed, axis=0)
+            Y_umap_mixed /= np.max(Y_umap_mixed, axis=0)
+
+            fig=plt.figure(figsize=(7,4),dpi=500)
+            cycled = [0,1,2,0]
+            for i in range(3):
+                plt.subplot(1,3,i+1)
+                plt.scatter(Y_umap_mixed[:,cycled[i]], Y_umap_mixed[:,cycled[i+1]], c=batch[some_mixed],  s=0.25, marker='.', linewidths=0, edgecolors=None)
+                plt.xlabel("Y"+str(cycled[i]))
+                plt.ylabel("Y"+str(cycled[i+1]))
+            plt.tight_layout()
+            plt.savefig("{}/umap_supervised.png".format(self.folder), bbox_inches='tight', dpi=500)
+
+            some = np.random.choice(np.arange(self.latent_unlabelled.shape[0]),random_n,replace=False)
+            umap_embedding = reducer.fit_transform(self.latent_unlabelled[some])
+            Y_umap = umap_embedding
+            Y_umap -= np.min(Y_umap, axis=0)
+            Y_umap /= np.max(Y_umap, axis=0)
+
+            fig=plt.figure(figsize=(7,4),dpi=500)
+            cycled = [0,2,1,0]
+            for i in range(3):
+                plt.subplot(1,3,i+1)
+                plt.scatter(Y_umap[:,cycled[i]], Y_umap[:,cycled[i+1]], c=Y_umap,  s=0.5, marker='.', linewidths=0, edgecolors=None)
+                plt.xlabel("Y"+str(cycled[i]))
+                plt.ylabel("Y"+str(cycled[i+1]))
+            plt.tight_layout()
+            plt.savefig("{}/umap.png".format(self.folder), bbox_inches='tight', dpi=500)
+
+            fig=plt.figure(figsize=(2,2),dpi=1000,)
+            ax = fig.add_subplot(1, 1, 1)
+            ax.set_facecolor("black")
+            width_cutoff = 1640 # um
+            #plt.scatter(DS.df.x.values.compute()[GD.cells], DS.df.y.values.compute()[GD.cells], c=torch.argmax(pred.softmax(dim=-1),dim=-1).numpy(), s=0.2,marker='.',linewidths=0, edgecolors=None,cmap='rainbow')
+            plt.scatter(self.data.df.x.values.compute()[self.cells][some], self.data.df.y.values.compute()[self.cells][some], c=Y_umap, s=0.05,marker='.',linewidths=0, edgecolors=None)
+            plt.xticks(fontsize=2)
+            plt.yticks(fontsize=2)
+            plt.axis('scaled')
+            plt.savefig("{}/spatial_umap_embedding.png".format(self.folder), bbox_inches='tight', dpi=5000)
+
+            clusters= self.prediction_unlabelled.argsort(axis=-1)[:,-1]
+            import random
+            r = lambda: random.randint(0,255)
+            color_dic = {}
+            for x in np.unique(clusters):
+                color_dic[x] = (r()/255,r()/255,r()/255)
+            clusters_colors = np.array([color_dic[x] for x in clusters])
+
+            fig=plt.figure(figsize=(7,4),dpi=500)
+            cycled = [0,1,2,0]
+            for i in range(3):
+                plt.subplot(1,3,i+1)
+                plt.scatter(Y_umap[:,cycled[i]], Y_umap[:,cycled[i+1]], c=clusters_colors[some],  s=2, marker='.', linewidths=0, edgecolors=None,cmap='rainbow')
+                plt.xlabel("Y"+str(cycled[i]))
+                plt.ylabel("Y"+str(cycled[i+1]))
+                plt.xticks(fontsize=2)
+                plt.yticks(fontsize=2)
+            plt.tight_layout()
+            plt.savefig("{}/umap_clusters.png".format(self.folder), bbox_inches='tight', dpi=500)
+
+            fig=plt.figure(figsize=(6,6),dpi=1000,)
+            ax = fig.add_subplot(1, 1, 1)
+            ax.set_facecolor("black")
+            width_cutoff = 1640 # um
+            plt.scatter(self.data.df.x.values.compute()[self.cells], self.data.df.y.values.compute()[self.cells], c=clusters_colors, alpha=0.9,s=0.05,marker='.',linewidths=0, edgecolors=None)
+            plt.xticks(fontsize=2)
+            plt.yticks(fontsize=2)
+            plt.axis('scaled')
+            plt.savefig("{}/spatial_umap_embedding_clusters.png".format(self.folder), bbox_inches='tight', dpi=5000)
+
+        else:
+            import scanpy as sc
+            adata = sc.AnnData(X=self.latent_unlabelled)
+            sc.pp.neighbors(adata, n_neighbors=10)
+            sc.tl.leiden(adata, random_state=42)
+            #        self.add_dask_attribute('leiden',adata.obs['leiden'].values.tolist())
+            clusters= adata.obs['leiden'].values.astype('int')
+
+            import random
+            r = lambda: random.randint(0,255)
+            color_dic = {}
+            for x in np.unique(clusters):
+                color_dic[x] = (r()/255,r()/255,r()/255)
+            clusters_colors = np.array([color_dic[x] for x in clusters])
+
+            umap_embedding = reducer.fit_transform(self.latent_unlabelled)
+            Y_umap = umap_embedding
+            Y_umap -= np.min(Y_umap, axis=0)
+            Y_umap /= np.max(Y_umap, axis=0)
+
+            fig=plt.figure(figsize=(7,4),dpi=500)
+            cycled = [0,2,1,0]
+            for i in range(3):
+                plt.subplot(1,3,i+1)
+                plt.scatter(Y_umap[:,cycled[i]], Y_umap[:,cycled[i+1]], c=Y_umap,  s=0.5, marker='.', linewidths=0, edgecolors=None)
+                plt.xlabel("Y"+str(cycled[i]))
+                plt.ylabel("Y"+str(cycled[i+1]))
+            plt.tight_layout()
+            plt.savefig("{}/umap.png".format(self.folder), bbox_inches='tight', dpi=500)
+
+            fig=plt.figure(figsize=(2,2),dpi=1000,)
+            ax = fig.add_subplot(1, 1, 1)
+            ax.set_facecolor("black")
+            #plt.scatter(DS.df.x.values.compute()[GD.cells], DS.df.y.values.compute()[GD.cells], c=torch.argmax(pred.softmax(dim=-1),dim=-1).numpy(), s=0.2,marker='.',linewidths=0, edgecolors=None,cmap='rainbow')
+            plt.scatter(self.data.df.x.values.compute()[self.cells], self.data.df.y.values.compute()[self.cells], c=clusters_colors, s=0.05,marker='.',linewidths=0, edgecolors=None)
+            plt.xticks(fontsize=2)
+            plt.yticks(fontsize=2)
+            plt.axis('scaled')
+            plt.savefig("{}/spatial_umap_embedding.png".format(self.folder), bbox_inches='tight', dpi=5000)
