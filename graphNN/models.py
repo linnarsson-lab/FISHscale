@@ -27,11 +27,12 @@ class CrossEntropyLoss(nn.Module):
             neg_graph.apply_edges(fn.u_mul_v('h', 'h', 'score'))
             neg_score = neg_graph.edata['score']
         
-        loss = -F.logsigmoid(pos_score.sum(-1)).mean() - F.logsigmoid(-neg_score.sum(-1)).mean()
+        pos_loss, neg_loss=  -F.logsigmoid(pos_score.sum(-1)).mean(), - F.logsigmoid(-neg_score.sum(-1)).mean()
+        loss = pos_loss + neg_loss
         #score = th.cat([pos_score, neg_score])
         #label = th.cat([th.ones_like(pos_score), th.zeros_like(neg_score)]).long()
         #loss = F.binary_cross_entropy_with_logits(score, label.float())
-        return loss
+        return loss, pos_loss, neg_loss
 
 class SAGELightning(LightningModule):
     def __init__(self,
@@ -72,7 +73,8 @@ class SAGELightning(LightningModule):
         neg_graph = neg_graph#.to(self.device)
         batch_inputs = mfgs[0].srcdata['gene']
         batch_pred_unlab = self.module(mfgs, batch_inputs)
-        loss = self.loss_fcn(batch_pred_unlab, pos_graph, neg_graph) #* 5
+        loss,pos, neg = self.loss_fcn(batch_pred_unlab, pos_graph, neg_graph) #* 5
+
 
         if self.supervised:
             batch2 = batch['labelled']
@@ -125,6 +127,8 @@ class SAGELightning(LightningModule):
             self.manual_backward(loss)
             opt.step()
 
+        if self.supervised == False:
+            self.log('balance', pos/neg, prog_bar=True,on_step=True, on_epoch=True,)
         self.log('train_loss', loss, prog_bar=True, on_step=False, on_epoch=True)
         return loss
 

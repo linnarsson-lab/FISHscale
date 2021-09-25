@@ -170,11 +170,11 @@ class GraphData(pl.LightningDataModule):
             mode='min',
             )
         self.early_stop_callback = EarlyStopping(
-            monitor='val_loss',
-            min_delta=0.1,
-            patience=50,
+            monitor='balance',
+            patience=3,
             verbose=True,
             mode='min',
+            stopping_threshold=0.35,
             )
     
     def prepare_data(self):
@@ -241,7 +241,7 @@ class GraphData(pl.LightningDataModule):
             return {'unlabelled':unlab}
 
     def train(self,max_epochs=5,gpus=-1):     
-        trainer = pl.Trainer(gpus=gpus,callbacks=[self.checkpoint_callback],max_epochs=max_epochs)
+        trainer = pl.Trainer(gpus=gpus,callbacks=[self.checkpoint_callback, self.early_stop_callback], max_epochs=max_epochs)
         trainer.fit(self.model, train_dataloader=self.train_dataloader())
 
     def molecules_df(self):
@@ -538,17 +538,19 @@ class GraphData(pl.LightningDataModule):
             adata = sc.AnnData(X=self.latent_unlabelled)
             sc.pp.neighbors(adata, n_neighbors=10)
             sc.tl.leiden(adata, random_state=42)
-            #        self.add_dask_attribute('leiden',adata.obs['leiden'].values.tolist())
-            clusters= adata.obs['leiden'].values.astype('int')
-
+            #self.data.add_dask_attribute('leiden',adata.obs['leiden'].values.tolist())
+            self.clusters= adata.obs['leiden'].values.astype('int')
+            
             import random
             r = lambda: random.randint(0,255)
             color_dic = {}
-            for x in np.unique(clusters):
+            for x in np.unique(self.clusters):
                 color_dic[x] = (r()/255,r()/255,r()/255)
-            clusters_colors = np.array([color_dic[x] for x in clusters])
+            clusters_colors = np.array([color_dic[x] for x in self.clusters])
 
-            umap_embedding = reducer.fit_transform(self.latent_unlabelled)
+            some = np.random.choice(np.arange(self.latent_unlabelled.shape[0]),random_n,replace=False)
+            umap_embedding = reducer.fit_transform(self.latent_unlabelled[some])
+
             Y_umap = umap_embedding
             Y_umap -= np.min(Y_umap, axis=0)
             Y_umap /= np.max(Y_umap, axis=0)
@@ -567,7 +569,7 @@ class GraphData(pl.LightningDataModule):
             ax = fig.add_subplot(1, 1, 1)
             ax.set_facecolor("black")
             #plt.scatter(DS.df.x.values.compute()[GD.cells], DS.df.y.values.compute()[GD.cells], c=torch.argmax(pred.softmax(dim=-1),dim=-1).numpy(), s=0.2,marker='.',linewidths=0, edgecolors=None,cmap='rainbow')
-            plt.scatter(self.data.df.x.values.compute()[self.cells], self.data.df.y.values.compute()[self.cells], c=clusters_colors, s=0.05,marker='.',linewidths=0, edgecolors=None)
+            plt.scatter(self.data.df.x.values.compute()[self.cells][some], self.data.df.y.values.compute()[self.cells][some], c=clusters_colors[some], s=0.05,marker='.',linewidths=0, edgecolors=None)
             plt.xticks(fontsize=2)
             plt.yticks(fontsize=2)
             plt.axis('scaled')
