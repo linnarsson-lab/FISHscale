@@ -201,6 +201,7 @@ class SemanticLoss(nn.Module):
             true_latent, 
             true_labels):
         
+        
         for pl in pseudo_labels.unique():
             filt = pseudo_labels == pl
             if filt.sum() > 5:
