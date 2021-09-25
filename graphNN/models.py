@@ -192,6 +192,7 @@ class SemanticLoss(nn.Module):
         if type(ncells) == type(0):
             self.ncells = self.true_count/self.true_count.sum()
         else:
+            self.ncells_max = ncells.max()
             self.ncells = th.tensor(ncells/ncells.sum())
 
         super().__init__()
@@ -201,7 +202,9 @@ class SemanticLoss(nn.Module):
             true_latent, 
             true_labels):
         
-        
+        if self.pseudo_count.max() >= self.ncells_max:
+            self.pseudo_count = th.ones([self.pseudo_count.shape[0]])
+
         for pl in pseudo_labels.unique():
             filt = pseudo_labels == pl
             if filt.sum() > 5:
@@ -224,10 +227,10 @@ class SemanticLoss(nn.Module):
                 self.true_count[tl] += filt.sum()
                 self.centroids_true[:,tl] = new_avg_tl
         
-        kl_density = th.nn.functional.kl_div(self.ncells.log(),self.true_count/self.true_count.sum())
-
-        semantic_loss = -F.logsigmoid((self.centroids_pseudo*self.centroids_true).sum(-1)).mean() + kl_density
-        #semantic_loss = nn.MSELoss()(self.centroids_pseudo, self.centroids_true) + dispersion_p + kl_density
+        kl_density = th.nn.functional.kl_div(self.ncells.log(),self.pseudo_count/self.pseudo_count.sum())
+        #kl_density =  -F.logsigmoid((self.ncells*self.true_count).sum(-1)).mean()
+        #semantic_loss = -F.logsigmoid((self.centroids_pseudo*self.centroids_true).sum(-1)).mean() + kl_density
+        semantic_loss = nn.MSELoss()(self.centroids_pseudo, self.centroids_true) + kl_density
         return semantic_loss
 
 class SAGE(nn.Module):

@@ -240,7 +240,7 @@ class GraphData(pl.LightningDataModule):
         else:
             return {'unlabelled':unlab}
 
-    def train(self,max_epochs=5,gpus=-1):
+    def train(self,max_epochs=5,gpus=-1):     
         if self.model.supervised: 
             trainer = pl.Trainer(gpus=gpus,callbacks=[self.checkpoint_callback], max_epochs=max_epochs)
         else:
