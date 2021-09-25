@@ -27,12 +27,11 @@ class CrossEntropyLoss(nn.Module):
             neg_graph.apply_edges(fn.u_mul_v('h', 'h', 'score'))
             neg_score = neg_graph.edata['score']
         
-        pos_loss, neg_loss=  -F.logsigmoid(pos_score.sum(-1)).mean(), - F.logsigmoid(-neg_score.sum(-1)).mean()
-        loss = pos_loss + neg_loss
+        loss = -F.logsigmoid(pos_score.sum(-1)).mean() - F.logsigmoid(-neg_score.sum(-1)).mean()
         #score = th.cat([pos_score, neg_score])
         #label = th.cat([th.ones_like(pos_score), th.zeros_like(neg_score)]).long()
         #loss = F.binary_cross_entropy_with_logits(score, label.float())
-        return loss, pos_loss, neg_loss
+        return loss
 
 class SAGELightning(LightningModule):
     def __init__(self,
@@ -45,7 +44,6 @@ class SAGELightning(LightningModule):
                  lr=0.01,
                  supervised=False,
                  kappa=0,
-                 Ncells=0
                  ):
         super().__init__()
 
@@ -58,9 +56,8 @@ class SAGELightning(LightningModule):
         #self.automatic_optimization = True
         if self.supervised:
             self.automatic_optimization = False
-            self.sl = SemanticLoss(n_hidden,n_classes,ncells=Ncells)
+            self.sl = SemanticLoss(n_hidden,n_classes)
             self.train_acc = torchmetrics.Accuracy()
-            
 
     def training_step(self, batch, batch_idx):
         if self.supervised:
@@ -73,8 +70,7 @@ class SAGELightning(LightningModule):
         neg_graph = neg_graph#.to(self.device)
         batch_inputs = mfgs[0].srcdata['gene']
         batch_pred_unlab = self.module(mfgs, batch_inputs)
-        loss,pos, neg = self.loss_fcn(batch_pred_unlab, pos_graph, neg_graph) #* 5
-
+        loss = self.loss_fcn(batch_pred_unlab, pos_graph, neg_graph) #* 5
 
         if self.supervised:
             batch2 = batch['labelled']
@@ -110,8 +106,7 @@ class SAGELightning(LightningModule):
             semantic_loss = self.sl.semantic_loss(pseudo_latent=batch_pred_unlab, 
                                                     pseudo_labels=labels_unlab ,
                                                     true_latent=batch_pred_lab,
-                                                    true_labels=labels_pred.argsort(axis=-1)[:,-1],
-                                                    )
+                                                    true_labels=labels_pred.argsort(axis=-1)[:,-1])
             self.log('Semantic_loss', semantic_loss, prog_bar=True, on_step=True)
 
             
@@ -122,13 +117,10 @@ class SAGELightning(LightningModule):
             self.kappa += 1
             loss += kappa*(domain_loss_fake + supervised_loss + classifier_loss + semantic_loss.detach())
 
-
             opt.zero_grad()
             self.manual_backward(loss)
             opt.step()
 
-        if self.supervised == False:
-            self.log('balance', pos/neg, prog_bar=True,on_step=True, on_epoch=True,)
         self.log('train_loss', loss, prog_bar=True, on_step=False, on_epoch=True)
         return loss
 
@@ -181,18 +173,11 @@ class SAGELightning(LightningModule):
 class SemanticLoss(nn.Module):
     def __init__(self , 
         n_hidden,
-        n_labels,
-        ncells=0):
+        n_labels):
         self.centroids_pseudo = th.randn([n_hidden,n_labels])
         self.pseudo_count = th.ones([n_labels])
         self.centroids_true = th.randn([n_hidden, n_labels])
         self.true_count = th.ones([n_labels])
-        
-        if type(ncells) == type(0):
-            self.ncells = self.true_count/self.true_count.sum()
-        else:
-            self.ncells = th.tensor(ncells/ncells.sum())
-
         super().__init__()
     def semantic_loss(self, 
             pseudo_latent, 
@@ -222,10 +207,7 @@ class SemanticLoss(nn.Module):
                 self.true_count[tl] += filt.sum()
                 self.centroids_true[:,tl] = new_avg_tl
         
-        kl_density = th.nn.functional.kl_div(self.ncells.log(),self.true_count/self.true_count.sum())
-
-        semantic_loss = -F.logsigmoid((self.centroids_pseudo*self.centroids_true).sum(-1)).mean() + kl_density
-        #semantic_loss = nn.MSELoss()(self.centroids_pseudo, self.centroids_true) + dispersion_p + kl_density
+        semantic_loss = nn.MSELoss()(self.centroids_pseudo, self.centroids_true) + dispersion_p
         return semantic_loss
 
 class SAGE(nn.Module):
