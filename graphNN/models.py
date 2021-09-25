@@ -85,7 +85,7 @@ class SAGELightning(LightningModule):
             batch_inputs = mfgs[0].srcdata['gene']
             batch_labels = mfgs[-1].dstdata['label']
             batch_pred_lab = self.module(mfgs, batch_inputs)
-            supervised_loss = self.loss_fcn(batch_pred_lab, pos_graph, neg_graph)
+            supervised_loss,_,_ = self.loss_fcn(batch_pred_lab, pos_graph, neg_graph)
 
             # Label prediction loss
             labels_pred = self.module.encoder.encoder_dict['CF'](batch_pred_lab)
@@ -120,6 +120,7 @@ class SAGELightning(LightningModule):
             # graphsage task
             kappa = 2/(1+10**(-1*((1*self.kappa)/200)))-1
             self.kappa += 1
+
             loss += kappa*(domain_loss_fake + supervised_loss + classifier_loss + semantic_loss.detach())
 
 
