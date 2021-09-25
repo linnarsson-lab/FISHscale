@@ -240,8 +240,11 @@ class GraphData(pl.LightningDataModule):
         else:
             return {'unlabelled':unlab}
 
-    def train(self,max_epochs=5,gpus=-1):     
-        trainer = pl.Trainer(gpus=gpus,callbacks=[self.checkpoint_callback, self.early_stop_callback], max_epochs=max_epochs)
+    def train(self,max_epochs=5,gpus=-1):
+        if self.model.supervised: 
+            trainer = pl.Trainer(gpus=gpus,callbacks=[self.checkpoint_callback], max_epochs=max_epochs)
+        else:
+            trainer = pl.Trainer(gpus=gpus,callbacks=[self.checkpoint_callback, self.early_stop_callback], max_epochs=max_epochs)
         trainer.fit(self.model, train_dataloader=self.train_dataloader())
 
     def molecules_df(self):
