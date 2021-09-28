@@ -120,7 +120,8 @@ class SAGELightning(LightningModule):
             # graphsage task
             #kappa = 2/(1+10**(-1*((1*self.kappa)/200)))-1
             #self.kappa += 1
-            loss += domain_loss_fake + supervised_loss + classifier_loss*10 + semantic_loss.detach()
+
+            loss += domain_loss_fake + supervised_loss + classifier_loss + semantic_loss.detach()
 
 
             opt.zero_grad()
@@ -142,7 +143,7 @@ class SAGELightning(LightningModule):
     def configure_optimizers(self):
         optimizer = th.optim.Adam(self.module.encoder.parameters(), lr=self.lr)
         if self.supervised:
-            d_opt = th.optim.Adam(self.module.domain_adaptation.parameters(), lr=self.lr)
+            d_opt = th.optim.Adam(self.module.domain_adaptation.parameters(), lr=0.1)
             return [optimizer, d_opt]
         else:
             return optimizer
@@ -227,8 +228,8 @@ class SemanticLoss(nn.Module):
                 self.centroids_true[:,tl] = new_avg_tl
         
         kl_density = th.nn.functional.kl_div(self.ncells.log(),self.pseudo_count/self.pseudo_count.sum())
-        #kl_density =  -F.logsigmoid((self.ncells*self.pseudo_count).sum(-1)).mean() *100
-        semantic_loss = -F.logsigmoid((self.centroids_pseudo*self.centroids_true).sum(-1)).mean() + kl_density*100
+        #kl_density =  -F.logsigmoid((self.ncells*self.pseudo_count).sum(-1)).sum()*100
+        semantic_loss = -F.logsigmoid((self.centroids_pseudo*self.centroids_true).sum(-1)).mean() + kl_density + dispersion_p
         #semantic_loss = nn.MSELoss()(self.centroids_pseudo, self.centroids_true) + kl_density
         return semantic_loss
 
