@@ -87,6 +87,7 @@ class GraphData(pl.LightningDataModule):
         analysis_name:str,
         cells=None, # Array with cell_ids of shape (Cells)
         distance_threshold = 50,
+        ngh_size = 40,
         minimum_nodes_connected = 5,
         ngh_sizes = [20, 10],
         train_p = 0.25,
@@ -133,6 +134,7 @@ class GraphData(pl.LightningDataModule):
         self.ref_celltypes = ref_celltypes 
         self.smooth = smooth
         self.negative_samples = negative_samples
+        self.ngh_size = ngh_size
         
 
         self.folder = self.analysis_name+ '_' +datetime.now().strftime("%Y-%m-%d-%H%M%S")
@@ -280,12 +282,12 @@ class GraphData(pl.LightningDataModule):
             edge_file = os.path.join(self.save_to,'Edges-{}Nodes-Ngh{}-{}-dst{}'.format(self.cells.shape[0],self.ngh_sizes[0],self.ngh_sizes[1],self.distance_threshold))
             tree_file = os.path.join(self.save_to,'Tree-{}Nodes-Ngh{}-{}-dst{}.ann'.format(self.cells.shape[0],self.ngh_sizes[0],self.ngh_sizes[1],self.distance_threshold))
             coords = np.array([self.data.df.x.values.compute()[self.cells], self.data.df.y.values.compute()[self.cells]]).T
-            neighborhood_size = self.ngh_sizes[0] + 40
+            neighborhood_size = self.ngh_size
         else:
             supervised=True
             edge_file = os.path.join(self.save_to,'DGL-Supervised-Edges-{}Nodes-Ngh{}-{}-dst{}'.format(coords.shape[0],self.ngh_sizes[0],self.ngh_sizes[1],self.distance_threshold))
             tree_file = os.path.join(self.save_to,'DGL-Supervised-Tree-{}Nodes-Ngh{}-{}-dst{}.ann'.format(coords.shape[0],self.ngh_sizes[0],self.ngh_sizes[1],self.distance_threshold))
-            neighborhood_size = self.ngh_sizes[0] + 40
+            neighborhood_size = self.ngh_size
 
         if not os.path.isfile(edge_file):
             t = AnnoyIndex(2, 'euclidean')  # Length of item vector that will be indexed
@@ -438,7 +440,6 @@ class GraphData(pl.LightningDataModule):
             self.latent_labelled = latent_labelled.detach().numpy()
 
         self.latent_unlabelled = latent_unlabelled.detach().numpy()
-        
 
     def get_umap(self,random_n=50000):
         import umap
