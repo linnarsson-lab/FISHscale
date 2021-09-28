@@ -1,5 +1,6 @@
 # FISHscale
 Spatial analysis of FISH data
+Edit
 
 Various functions for spatial analysis of point based data. Developed for image based in situ transcriptomics, where the data are sets of points.  
 Many functions will generalize to other point based data.  
