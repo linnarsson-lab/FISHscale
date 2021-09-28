@@ -345,6 +345,7 @@ class DataLoader(DataLoader_base):
         makedirs(self.FISHscale_data_folder, exist_ok=True)
         if filter_genes:
             self.df = dd.read_parquet(filter_filelist)
+            self.shape = (self.df.shape[0].compute(),self.shape[1])
         else:
             self.df = dd.read_parquet(path.join(self.FISHscale_data_folder, '*.parquet'))
         
