@@ -66,24 +66,31 @@ class Normalization:
         Based on: https://doi.org/10.1101/2020.12.01.405886
 
         Args:
-            df ([pd.DataFrame]): Pandas dataframe with features as rows and 
-                samples as columns.
+            df ([pd.DataFrame, np.ndarray]): Pandas dataframe or numpy array 
+                with features as rows and samples as columns.
             clip (float, optional): If given data below -`clip` and above
                 `clip` will be set to -`clip` and `clip` respectively.
                 
         Returns:
             [pd.DataFrame]: Pandas dataframe with results.
         """
-        
-        totals = df.sum(axis=0).to_numpy()
-        gene_totals = df.sum(axis=1).to_numpy()
-        overall_total = df.to_numpy().sum()
+        pandas = False
+        if type(df) == pd.core.frame.DataFrame:
+            pandas = True
+            index = df.index
+            columns = df.columns
+            df = df.to_numpy()
+                    
+        totals = df.sum(axis=0)
+        gene_totals = df.sum(axis=1)
+        overall_total = df.sum()
         
         expected = totals[:, None] @ self.div0(gene_totals[None, :], overall_total)
         expected = expected.T
-        residuals = self.div0((df.to_numpy() - expected), np.sqrt(expected + np.power(expected, 2) / 100))
+        result = self.div0((df - expected), np.sqrt(expected + np.power(expected, 2) / 100))
         
-        result = pd.DataFrame(data=residuals, index=df.index, columns=df.columns)
+        if pandas:
+            result = pd.DataFrame(data=result, index=index, columns=columns)
         
         if clip != None:
             result = result.clip(lower=-clip, upper=clip)

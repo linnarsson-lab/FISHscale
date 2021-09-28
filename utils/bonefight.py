@@ -14,7 +14,7 @@ class BoneFight:
         For more advanced features, use Bonefight directly.
         Observations could be cells, clusters, groups, tiles, FOVs etc.
         
-        WARNING: This function requires input for X_1 and X_2 as (genes, 
+        WARNING: This function requires input for X_1 and X_2 as (genes x 
         observations) which is the opposite of BoneFight itself.
         
         Args:
@@ -40,21 +40,27 @@ class BoneFight:
                 with this spacing. Defaults to 100.
             min_count (int, optional): If X_2 is None, makes hexagonal bins
                 with min_count. Defaults to 10.
+        
+        Kwargs:
+            Bonefight takes the following keyword arguments:
+            num_epochs (int): Defaults to 100, 
+            learning_rate (float): Defaults to 0.1
 
         Returns:
             [bone_fight.bone_fight.BoneFight]: Resulting BoneFight model.
             if transform is True it also return the transform tensor as numpy
             array.
         """
+        
                 
         if type(X_2) == type(None):
             self.vp(f'No input given for X_2, making hexagonal binning of data with spacing {spacing} {self.unit_scale.units} and minimum count {min_count}.')
-            X_2, centroids, polygon = self.hexbin_make(spacing=spacing, min_count=min_count)
+            X_2, centroids = self.hexbin_make(spacing=spacing, min_count=min_count)
         
             if type(volume_2) == type(None):
                 self.vp('No input given for X_2, taking sum hexagonal tile count.')
                 volume_2 = X_2.sum().to_numpy()
-        
+                
         #handle pandas dataframes
         if isinstance(X_1, pd.core.frame.DataFrame) and isinstance(X_2, pd.core.frame.DataFrame):
             genes_1, genes_2 = X_1.index.to_numpy(), X_2.index.to_numpy()
@@ -88,7 +94,7 @@ class BoneFight:
                 
         if X_1.shape[1] == volume_1.shape:
             raise Exception('X_1 columns should match the volume_1')
-        
+
         if X_2.shape[1] == volume_2.shape:
             raise Exception('X_2 columns should match the volume_2')
               
@@ -97,7 +103,8 @@ class BoneFight:
         view_2 = bf.View(X_2.T, volume_2) 
                 
         #make the model
-        model = bf.BoneFight(view_1, view_2, *kwargs).fit()
+        #print(kwargs)
+        model = bf.BoneFight(view_1, view_2).fit(**kwargs)
         
         #Plot losses
         if plot:

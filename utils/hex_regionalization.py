@@ -1105,7 +1105,7 @@ class Regionalize(Iteration, Decomposition):
         df_hex, hex_coord = self.hexbin_make(spacing, min_count, feature_selection=feature_selection, n_jobs=n_jobs)
         
         #Normalize data
-        df_hex_norm = self.normalize(df_hex, mode=normalization_mode, clip=30)
+        df_hex_norm = self.normalize(df_hex, mode=normalization_mode, clip=None)
         
         #Dimensionality reduction
         if dimensionality_reduction.lower() == 'pca':
