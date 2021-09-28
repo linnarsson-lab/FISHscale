@@ -34,6 +34,7 @@ import time, threading
 import FISHscale
 import functools
 from datetime import datetime, timedelta
+from math import ceil
 
 class Window: 
 
@@ -135,9 +136,9 @@ class Visualizer:
 
         points,maxx,minx,maxy,miny= 0,0,0,0,0
         for d in self.data:
-            points += d.df.compute().shape[0]
-            Mx,mx = d.x_max,d.x_min
-            My,my = d.y_max,d.y_min
+            points += d.shape[0]
+            Mx,mx = d.x_max, d.x_min
+            My,my = d.y_max, d.y_min
             if Mx > maxx:
                 maxx = Mx
             if mx < minx:
@@ -146,19 +147,23 @@ class Visualizer:
                 maxy = My
             if my < miny:
                 miny= my
-
-        x= np.random.random_integers(int(minx),int(maxx),points)
-        y = np.random.random_integers(int(miny),int(maxy),points)
-        z = np.zeros(points)
+                
+        if points > 10000000:
+            points = 10000000
+       
+        x = np.linspace(int(minx), ceil(maxx), 2, dtype='int32')
+        y = np.linspace(int(miny), ceil(maxy), 2, dtype='int32')
+        z = np.zeros_like(x)
 
         self.allgenes = np.stack([x,y,z]).T
-        self.allcolors = np.ones([points,3])*0#np.concatenate(colors)[:,0,:]
-
+        self.allcolors = np.ones([2, 3])*0#np.concatenate(colors)[:,0,:]
+        
         self.pcd = o3d.geometry.PointCloud()
         self.pcd.points = o3d.utility.Vector3dVector(self.allgenes)
         self.pcd.colors = o3d.utility.Vector3dVector(self.allcolors)   
 
         self.visM.add_geometry(self.pcd)
+        print('Data loaded')
         opt = self.visM.get_render_option()
 
         if show_axis:
@@ -241,8 +246,7 @@ class ListWidget(QWidget):
                         for g in self.selected:
                             #d = grpg[g]
                             g= str(g)
-                            #ps = d.get_gene_sample(g, include_z=True, frac=0.1, minimum=1000000) #Changse to this when datasets get large
-                            ps = d.get_gene(g, include_z=True)
+                            ps = d.get_gene_sample(g, include_z=True, frac=0.1, minimum=2000000)
                             points.append(ps)
                             cs= np.array([[self.vis.color_dic[g]] *(ps.shape[0])])[0,:,:]
                             colors.append(cs)
