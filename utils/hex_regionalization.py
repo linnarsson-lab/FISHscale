@@ -18,7 +18,6 @@ from FISHscale.utils.inside_polygon import inside_multi_polygons
 #Mypy types
 from typing import Tuple, Union, Any, List
 import gc
-from memory_profiler import profile
 from scipy.spatial import KDTree
 from collections import Counter
 from matplotlib.patches import Polygon as mpl_polygon
@@ -189,7 +188,7 @@ class Regionalize(Iteration, Decomposition):
                 
     def hexbin_plot(self, c: Union[np.ndarray, list], cm=None, ax:Any=None, 
                     figsize=None, save:bool=False, savename:str='',
-                    vmin:float=None, vmax:float=None):
+                    vmin:float=None, vmax:float=None, linewidth:float=0.1):
         """Plot hexbin results. 
 
         Args:
@@ -206,6 +205,8 @@ class Regionalize(Iteration, Decomposition):
                 Defaults to None.
             vmax (float, optional): If c is an Array you can set vmax.
                 Defaults to None.
+            linewidth (float, optional): When saving you might see gaps between
+                the hexagons. Increase the linewidth to hide them
         """
         #Input handling
         colorbar=False
@@ -225,16 +226,20 @@ class Regionalize(Iteration, Decomposition):
         #Set colors from an RGB list
         if type(c) == list:
             p.set_color(c)
-            p.set_linewidth(0.1) #To hide small white lines between the polygons
+            p.set_linewidth(linewidth) #To hide small white lines between the polygons
             p.set_edgecolor(c)
             
         #Set colors from an array of values
         else:
-            c = c / c.max()
+            #c = c / c.max()
             p.set_array(c)
             p.set_cmap(cm)
-            p.set_linewidth(0.1) #To hide small white lines between the polygons
-            if vmin!= None and vmax!=None:
+            p.set_linewidth(linewidth) #To hide small white lines between the polygons
+            if vmin!= None or vmax!=None:
+                if vmin == None:
+                    raise Exception('If "vmax" is set, also "vmin" needs to be specified.')
+                if vmax == None:
+                    raise Exception('If "vmin" is set, also "vmax" needs to be specified.')
                 p.set_clim(vmin=vmin, vmax=vmax)
                 c_scaled = c - vmin
                 c_scaled[c_scaled < 0] = 0
@@ -413,8 +418,9 @@ class Regionalize(Iteration, Decomposition):
         if save:
             plt.savefig(f'{savename}_hexbin_decomposition_[{components[0]}, {components[1]}].png', dpi=200)
 
-    def clust_hex_connected(self, df_hex, hex_coord: np.ndarray, distance_threshold: float = None, 
-                            n_clusters:int = None, neighbor_rings:int = 1, n_jobs:int=-1) -> np.ndarray:
+    def clust_hex_connected(self, df_hex, hex_coord: np.ndarray, spacing: float,
+                            distance_threshold: float = None, n_clusters:int = None, 
+                            neighbor_rings:int = 1, n_jobs:int=-1) -> np.ndarray:
         """Cluster hex-bin data, with a neighborhood embedding.
 
         Clusters with AggolmerativeClustering that uses a distance matrix 
@@ -430,6 +436,7 @@ class Regionalize(Iteration, Decomposition):
                 each hexagonal tile
             hex_coord (np.array): Numpy Array with XY coordinates of the
                 centroids of the hexagonal tiles. 
+            spacing (float): distance between hexagon tile centers.
             distance_threshold (float, optional): Distance threshold for Scipy
                 Agglomerative clustering. Defaults to None.
             n_clusters (int, optional): Number of desired clusters. 
@@ -455,8 +462,11 @@ class Regionalize(Iteration, Decomposition):
             raise Exception('One of "distance_threshold" or "n_clusters" should be defined.')
 
         #Make graph to connect neighbours 
-        n_neighbors = (neighbor_rings * 6)
-        Kgraph = kneighbors_graph(hex_coord, n_neighbors, include_self=False, n_jobs=n_jobs)
+        if neighbor_rings > 0:
+            r_neighbors = neighbor_rings * spacing + (0.1 * spacing) #Some extra to be sure there are no rounding errors.
+            Kgraph = radius_neighbors_graph(hex_coord, r_neighbors, include_self=False, n_jobs=n_jobs)
+        else:
+            Kgraph = None
 
         #Cluster
         clust_result = AgglomerativeClustering(n_clusters=n_clusters,
@@ -514,6 +524,8 @@ class Regionalize(Iteration, Decomposition):
                     #Set to new label
                     new_label.append(predominant_label[0])        
             return np.array(new_label)
+        
+        #This should be radius_neighbours_graph because otherwise edge cases have weird neighbours
 
         n_neighbors = 1 + (neighbor_rings * 6)
         Kgraph = kneighbors_graph(hex_coord, n_neighbors, include_self=True, n_jobs=n_jobs)
@@ -1027,6 +1039,7 @@ class Regionalize(Iteration, Decomposition):
                         smooth: bool = False,
                         smooth_neighbor_rings: int = 1, 
                         smooth_cycles: int = 1,
+                        order_labels: bool = True,
                         n_jobs=-1) -> Union[Any, np.ndarray, np.ndarray, Any]:
         """Regionalize dataset.
         
@@ -1074,6 +1087,8 @@ class Regionalize(Iteration, Decomposition):
                 18 neigbors, etc. Defaults to 1.
             smooth_cycles (int, optional): Number of smoothing cycles.
                 Defaults to 1.
+            order_labels (bool, optional): If True orders the cluster labels
+                based on similarity. Defaults to True.
             n_jobs (int, optional): Number op processes. If -1 uses the max 
                 number of CPUs. Defaults to -1.
 
@@ -1088,10 +1103,9 @@ class Regionalize(Iteration, Decomposition):
         """
         #Bin the data with a hexagonal grid
         df_hex, hex_coord = self.hexbin_make(spacing, min_count, feature_selection=feature_selection, n_jobs=n_jobs)
-        print(df_hex.shape)
         
         #Normalize data
-        df_hex_norm = self.normalize(df_hex, mode=normalization_mode)
+        df_hex_norm = self.normalize(df_hex, mode=normalization_mode, clip=None)
         
         #Dimensionality reduction
         if dimensionality_reduction.lower() == 'pca':
@@ -1103,6 +1117,7 @@ class Regionalize(Iteration, Decomposition):
             
         #Cluster dataset
         labels = self.clust_hex_connected(dr[:, n_components[0] : n_components[1]], hex_coord, 
+                                          spacing = spacing,
                                           distance_threshold=clust_dist_threshold,
                                           n_clusters = n_clusters,
                                           neighbor_rings=clust_neighbor_rings, n_jobs=n_jobs)
@@ -1115,6 +1130,15 @@ class Regionalize(Iteration, Decomposition):
         df_mean = self.cluster_mean_make(df_hex, labels)
         df_norm = self.cluster_mean_make(df_hex_norm, labels)
         
+        #Order cluster labels
+        if order_labels:
+            manifold = SpectralEmbedding(n_components=1, n_jobs=n_jobs).fit_transform(df_mean.T)
+            even_spaced = np.linspace(0, 1, manifold.shape[0])
+            even_spaced_dict = dict(zip(np.sort(manifold.ravel()), even_spaced))
+            manifold_even = np.array([even_spaced_dict[i] for i in manifold.ravel()])
+            manifold_even_dict = dict(zip(df_mean.columns, manifold_even))
+            labels = np.array([manifold_even_dict[i] for i in labels])
+        
         return df_hex, labels, hex_coord, df_mean, df_norm
 
     def geopandas_make(self, spacing: float, 
@@ -1126,7 +1150,7 @@ class Regionalize(Iteration, Decomposition):
                             smooth_polygon_degree:int = 7, 
                             recount: bool = False,
                             area_normalize: bool = True, 
-                            area_normalize_unit: str = 'millimeter') -> None:
+                            area_normalize_unit: str = 'millimeter') -> Any:
         """Make a GeoPandas dataframe of clustered hexbin data.
         
         Output is a GeoPandas dataframe which contains the (normalized) counts

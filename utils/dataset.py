@@ -1,3 +1,6 @@
+from multiprocessing import cpu_count
+from os import path, makedirs, environ
+environ['NUMEXPR_MAX_THREADS'] = str(cpu_count())
 
 from typing import Union, Optional
 import pandas as pd
@@ -15,6 +18,8 @@ from FISHscale.utils.clustering import Clustering
 from FISHscale.utils.bonefight import BoneFight
 from FISHscale.utils.regionalization_multi import RegionalizeMulti
 from FISHscale.utils.decomposition import Decomposition
+from FISHscale.spatial.boundaries import Boundaries
+from FISHscale.spatial.gene_order import Gene_order
 from PyQt5 import QtWidgets
 import sys
 from datetime import datetime
@@ -26,11 +31,9 @@ import numpy as np
 import loompy
 from pint import UnitRegistry
 from os import name as os_name
-from os import path, makedirs
 from glob import glob
 from time import strftime
 from math import ceil
-from multiprocessing import cpu_count
 from dask import dataframe as dd
 import dask
 from dask.distributed import Client, LocalCluster
@@ -40,9 +43,8 @@ except ModuleNotFoundError as e:
     print(f'Please install "pyarrow" to load ".parquet" files. Without only .csv files are supported which are memory inefficient. Error: {e}')
 from tqdm import tqdm
 
-
 class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, SpatialMetrics, DataLoader, Normalization, 
-              Density1D, Clustering, BoneFight, Decomposition):
+              Density1D, Clustering, BoneFight, Decomposition, Boundaries, Gene_order):
     """
     Base Class for FISHscale, still under development
 
@@ -121,6 +123,8 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
         self.x_offset = x_offset
         self.y_offset = y_offset
         self.z_offset = z_offset
+        if not isinstance(other_columns, list):
+            other_columns = [other_columns]
         self.other_columns = other_columns
         
         #Dask
