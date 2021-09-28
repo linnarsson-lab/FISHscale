@@ -118,10 +118,9 @@ class SAGELightning(LightningModule):
             # Will increasingly apply supervised loss, domain adaptation loss
             # from 0 to 1, from iteration 0 to 200, focusing first on unsupervised 
             # graphsage task
-            kappa = 2/(1+10**(-1*((1*self.kappa)/200)))-1
-            self.kappa += 1
-
-            loss += kappa*(domain_loss_fake + supervised_loss + classifier_loss + semantic_loss.detach())
+            #kappa = 2/(1+10**(-1*((1*self.kappa)/200)))-1
+            #self.kappa += 1
+            loss += domain_loss_fake + supervised_loss + classifier_loss*10 + semantic_loss.detach()
 
 
             opt.zero_grad()
@@ -228,9 +227,9 @@ class SemanticLoss(nn.Module):
                 self.centroids_true[:,tl] = new_avg_tl
         
         kl_density = th.nn.functional.kl_div(self.ncells.log(),self.pseudo_count/self.pseudo_count.sum())
-        #kl_density =  -F.logsigmoid((self.ncells*self.true_count).sum(-1)).mean()
-        #semantic_loss = -F.logsigmoid((self.centroids_pseudo*self.centroids_true).sum(-1)).mean() + kl_density
-        semantic_loss = nn.MSELoss()(self.centroids_pseudo, self.centroids_true) + kl_density
+        #kl_density =  -F.logsigmoid((self.ncells*self.pseudo_count).sum(-1)).mean() *100
+        semantic_loss = -F.logsigmoid((self.centroids_pseudo*self.centroids_true).sum(-1)).mean() + kl_density*100
+        #semantic_loss = nn.MSELoss()(self.centroids_pseudo, self.centroids_true) + kl_density
         return semantic_loss
 
 class SAGE(nn.Module):
