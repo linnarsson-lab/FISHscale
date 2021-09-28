@@ -325,8 +325,12 @@ class DataLoader(DataLoader_base):
 
                 #unique genes
                 if not isinstance(unique_genes, np.ndarray):
+                    filter_genes = 0
                     self.unique_genes = np.unique(data.g)
                 else:
+                    filter_genes = 1
+                    p = path.join(self.dataset_folder,self.dataset_name+'_FISHscale_Data',self.dataset_name)
+                    filter_filelist = [f'{p}_{g}.parquet' for g in unique_genes]
                     self.unique_genes = unique_genes
                 self._metadatafile_add({'unique_genes': self.unique_genes})
                 self._metadatafile_add({'shape': self.shape})
@@ -339,7 +343,10 @@ class DataLoader(DataLoader_base):
                    
         #Load Dask Dataframe from the parsed gene dataframes
         makedirs(self.FISHscale_data_folder, exist_ok=True)
-        self.df = dd.read_parquet(path.join(self.FISHscale_data_folder, '*.parquet'))
+        if filter_genes:
+            self.df = dd.read_parquet(filter_filelist)
+        else:
+            self.df = dd.read_parquet(path.join(self.FISHscale_data_folder, '*.parquet'))
         
         if new_parse == True:
             self.dask_attrs = dd.from_pandas(pd.DataFrame(index=self.df.index),npartitions=self.df.npartitions,sort=False)
