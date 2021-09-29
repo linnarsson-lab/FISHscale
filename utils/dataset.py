@@ -15,11 +15,12 @@ from FISHscale.utils.normalization import Normalization
 from FISHscale.visualization.gene_scatter import GeneScatter, MultiGeneScatter
 from FISHscale.utils.data_handling import DataLoader, DataLoader_base
 from FISHscale.utils.clustering import Clustering
-from FISHscale.utils.bonefight import BoneFight
+from FISHscale.utils.bonefight import BoneFight, BoneFightMulti
 from FISHscale.utils.regionalization_multi import RegionalizeMulti
 from FISHscale.utils.decomposition import Decomposition
 from FISHscale.spatial.boundaries import Boundaries
 from FISHscale.spatial.gene_order import Gene_order
+from FISHscale.segmentation.cellpose import Cellpose
 from PyQt5 import QtWidgets
 import sys
 from datetime import datetime
@@ -44,7 +45,7 @@ except ModuleNotFoundError as e:
 from tqdm import tqdm
 
 class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, SpatialMetrics, DataLoader, Normalization, 
-              Density1D, Clustering, BoneFight, Decomposition, Boundaries, Gene_order):
+              Density1D, Clustering, BoneFight, Decomposition, Boundaries, Gene_order, Cellpose):
     """
     Base Class for FISHscale, still under development
 
@@ -247,7 +248,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
         
 
 class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base, Normalization, RegionalizeMulti,
-                   Decomposition):
+                   Decomposition, BoneFightMulti):
     """Load multiple datasets as Dataset objects.
     """
 

@@ -766,7 +766,7 @@ class MultiRegionalize:
         """
         Parallel wrapper around make_hexbin()
         
-        Can consume 
+        Can consume
         
         Input:
         `spacing`(int): distance between tile centers, in same units as the data. 
