@@ -44,7 +44,6 @@ class Gene_order:
         If the most clustered genes turn out to be genes with low expression,
         increase the spacing.
         
-
         Args:
             df_hex (pandas DataFrame): Dataframe with the hexagonal binning 
                 of the data. If not given it will be calculated with the

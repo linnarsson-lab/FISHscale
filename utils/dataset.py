@@ -86,6 +86,9 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
                 that need to be loaded. Data will stored under "self.other"
                 as Pandas Dataframe. Defaults to None.
             unique_genes (np.ndarray, optional): Array with unique gene names.
+                This can also be a selection of genes to load. After a
+                selection is made data needs to be re-parsed to include all
+                genes.                
                 If not provided it will find the unique genes from the 
                 gene_column. This is slow for > 10e6 rows. 
                 Defaults to None.
