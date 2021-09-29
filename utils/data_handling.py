@@ -302,9 +302,6 @@ class DataLoader(DataLoader_base):
                 data = open_f(filename, col_to_open) 
                 data = data.rename(columns = rename_col)
                 
-                #Get data shape
-                self.shape = data.shape
-                
                 #Offset data
                 if x_offset !=0 or y_offset != 0:
                     data.loc[:, ['x', 'y']] += [x_offset, y_offset]
@@ -324,55 +321,64 @@ class DataLoader(DataLoader_base):
                 self._coordinate_properties(data)
 
                 #unique genes
-                if not isinstance(unique_genes, np.ndarray):
-                    filter_genes = 0
+                if not isinstance(unique_genes, (np.ndarray, list)):
                     self.unique_genes = np.unique(data.g)
                 else:
-                    filter_genes = 1
-                    p = path.join(self.dataset_folder,self.dataset_name+'_FISHscale_Data',self.dataset_name)
-                    filter_filelist = [f'{p}_{g}.parquet' for g in unique_genes]
-                    self.unique_genes = unique_genes
-                self._metadatafile_add({'unique_genes': self.unique_genes})
+                    self.unique_genes = np.asarray(unique_genes)
+                    #Select requested genes
+                    data = data.loc[data.g.isin(unique_genes)]
+                self._metadatafile_add({'unique_genes': self.unique_genes})    
+                
+                #Get data shape
+                self.shape = data.shape
                 self._metadatafile_add({'shape': self.shape})
-
+                
                 #Group the data by gene and save
                 data.groupby('g').apply(lambda x: self._dump_to_parquet(x, self.dataset_name, self.FISHscale_data_folder))#, meta=('float64')).compute()
                 
             else:
                 raise IOError (f'Invalid file type: {filename}, should be in ".parquet" or ".csv" format.') 
-                   
+        
         #Load Dask Dataframe from the parsed gene dataframes
         makedirs(self.FISHscale_data_folder, exist_ok=True)
-        if filter_genes:
+        if isinstance(unique_genes, (np.ndarray, list)):
+            #Make selected genes file list         
+            p = path.join(self.FISHscale_data_folder, self.dataset_name)
+            filter_filelist = [f'{p}_{g}.parquet' for g in unique_genes]
+            #Load selected genes        
             self.df = dd.read_parquet(filter_filelist)
-            self.shape = (self.df.shape[0].compute(),self.shape[1])
+            self.shape = self.df.shape
         else:
+            #Load all genes
             self.df = dd.read_parquet(path.join(self.FISHscale_data_folder, '*.parquet'))
-        
+                   
+        #Handle metadata        
         if new_parse == True:
-            self.dask_attrs = dd.from_pandas(pd.DataFrame(index=self.df.index),npartitions=self.df.npartitions,sort=False)
+            self.dask_attrs = dd.from_pandas(pd.DataFrame(index=self.df.index), npartitions=self.df.npartitions, sort=False)
             for c in other_columns:
-                self.add_dask_attribute(c,self.df[c])
-            self.dask_attrs.to_parquet(path.join(self.dataset_folder,self.FISHscale_data_folder,'attributes'))
+                self.add_dask_attribute(c, self.df[c])
+            self.dask_attrs.to_parquet(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes'))
         else:
             #Get coordinate properties from metadata
             self._get_coordinate_properties()
             #Unique genes
             unique_genes_metadata = self._metadatafile_get('unique_genes')
             #Attributes
-            self.dask_attrs = dd.read_parquet(path.join(self.dataset_folder,self.FISHscale_data_folder,'attributes','*.parquet'))
+            self.dask_attrs = dd.read_parquet(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes', '*.parquet'))
             
             #Check if unique_genes are given by user
-            if isinstance(unique_genes, np.ndarray):
-                self.unique_genes = unique_genes
+            if isinstance(unique_genes, (np.ndarray, list)):
+                self.unique_genes = np.asarray(unique_genes)
                 self._metadatafile_add({'unique_genes': self.unique_genes})
             #Check if unique genes could be found in metadata
-            elif isinstance(unique_genes_metadata, np.ndarray): 
+            elif isinstance(unique_genes_metadata, (np.ndarray, list)): 
                 self.unique_genes = unique_genes_metadata
             #Calcualte the unique genes, slow
             else:
                 self.unique_genes = self.df.g.drop_duplicates().compute().to_numpy()
                 self._metadatafile_add({'unique_genes': self.unique_genes})
+                
+        
     
     def _get_gene_n_points(self) -> Dict:
         """Get number of points per gene.

@@ -160,15 +160,15 @@ class Boundaries:
     def boundaries_make(self, bin_size: int = 100, radius: int = 200, n_angles: int = 6,
                 normalize: bool = False, normalization_mode: str = 'log', gene_selection: any = None, 
                 n_jobs: int = -1) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-        """Calculate local correlation to investigate border strenth.
+        """Calculate local similarity to investigate border strenth.
         
         Overlays the sample with a grid of points. For each point the molecules
         within the radius are selected. This circle is then devided in two 
-        halves, at different angles. The Spearman correlation between the 
-        molecule counts of the two halves is correlated and the value and angle
-        of the angle with the lowest correlation is returned.
+        halves, at different angles. The Euclidian distance between the 
+        molecule counts of the two halves is calcuated and the value and angle
+        of the angle with the highest distance is returned.
         
-        The lower the correlation the stronger the border is, and the angle 
+        The higher the distance the stronger the border is, and the angle 
         indicates the direction of the (potential) border.
 
         Args:
