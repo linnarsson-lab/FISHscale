@@ -158,7 +158,7 @@ class Boundaries:
         return grid, Xi, Yi
 
     def boundaries_make(self, bin_size: int = 100, radius: int = 200, n_angles: int = 6,
-                normalize: bool = False, normalization_mode: str = 'log', 
+                normalize: bool = False, normalization_mode: str = 'log', gene_selection: any = None, 
                 n_jobs: int = -1) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """Calculate local correlation to investigate border strenth.
         
@@ -181,6 +181,7 @@ class Boundaries:
                 Defaults to False.
             normalization_mode (str, optional): Normalization method to use.
                 Defaults to 'log'.
+            gene_selection (list, np.ndarray, optional): Genes 
             n_jobs (int, optional): Number of processes to use. If None, 
                 the max number of cpus is used. Defaults to None.
 
@@ -193,7 +194,6 @@ class Boundaries:
             grid_filt: XY coordinates of valid grid points.
             filt_grid: boolean filter to filter the `grid` to get `grid_filt`
         """
-        
         if n_jobs == None:
             n_jobs = self.cpu_count()
         
@@ -204,9 +204,15 @@ class Boundaries:
         #make lines that bisect a circle for each required angle
         lines = [self.bisect(radius, a) for a in np.linspace(0, 180 - (180 / n_angles), n_angles)]
 
+        #Fetch genes to run
+        if type(gene_selection) == type(None):
+            genes = self.unique_genes
+        else:
+            genes = gene_selection
+        
         #Find number of molecules in each division
         results = []
-        for g in self.unique_genes:
+        for g in genes:
             points = self.get_gene(g)
             y = dask.delayed(_worker_bisect)(points, grid, radius, lines, n_angles)
             results.append(y)
