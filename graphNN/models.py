@@ -202,7 +202,10 @@ class SemanticLoss(nn.Module):
             pseudo_labels, 
             true_latent, 
             true_labels):
+<<<<<<< HEAD
         
+=======
+>>>>>>> 86cff4c4cae5f5888b3399300bb0da7096960ce2
 
         if self.pseudo_count.max() >= self.ncells_max:
             self.pseudo_count = th.ones([self.pseudo_count.shape[0]])
