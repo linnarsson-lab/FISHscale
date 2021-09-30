@@ -198,8 +198,15 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
         self.y_extent = self.y_max - self.y_min 
         self.xy_center = (self.x_max - 0.5*self.x_extent, self.y_max - 0.5*self.y_extent)
 
-
-    def visualize(self,columns:list=[],width=2000,height=2000,show_axis=False):
+    def visualize(self,
+                columns:list=[],
+                width=2000,
+                height=2000,
+                show_axis=False,
+                color_dic=None,
+                x=None,
+                y=None,
+                c=None):
         """
         Run open3d visualization on self.data
         Pass to columns a list of strings, each string will be the class of the dots to be colored by. example: color by gene
@@ -208,20 +215,20 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
             columns (list, optional): List of columns to be plotted with different colors by visualizer. Defaults to [].
             width (int, optional): Frame width. Defaults to 2000.
             height (int, optional): Frame height. Defaults to 2000.
-            color_dic ([type], optional): Dictionary of colors if None it will assign random colors. Defaults to None.
         """        
 
-        QtWidgets.QApplication.setStyle('Fusion')
-        App = QtWidgets.QApplication.instance()
-        if App is None:
-            App = QtWidgets.QApplication(sys.argv)
-        else:
-            print('QApplication instance already exists: %s' % str(App))
+        if self.color_dict:
+            color_dic = self.color_dict
 
-        window = Window(self,columns,width,height)
-        App.exec_()
-        App.quit()
-
+        window = Window(self,
+                        columns,
+                        width,
+                        height,
+                        color_dic,
+                        x_alt=x,
+                        y_alt=y,
+                        c_alt=c) 
+        
     def DBsegment(self,eps=25,min_samples=5,cutoff=250):
         """
         Run DBscan segmentation on self.data, this will reassign a column on self.data with column_name
@@ -663,7 +670,15 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
                 z_offset = 0
             d.offset_data_temp(x_offset, y_offset, z_offset)
         
-    def visualize(self,columns:list=[],width=2000,height=2000,show_axis=False,color_dic=None):
+    def visualize(self,
+                columns:list=[],
+                width=2000,
+                height=2000,
+                show_axis=False,
+                color_dic=None,
+                x=None,
+                y=None,
+                c=None):
         """
         Run open3d visualization on self.data
         Pass to columns a list of strings, each string will be the class of the dots to be colored by. example: color by gene
@@ -674,15 +689,14 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
             height (int, optional): Frame height. Defaults to 2000.
         """        
 
-        QtWidgets.QApplication.setStyle('Fusion')
-        App = QtWidgets.QApplication.instance()
-        if App is None:
-            App = QtWidgets.QApplication(sys.argv)
-        else:
-            print('QApplication instance already exists: %s' % str(App))
         if self.color_dict:
             color_dic = self.color_dict
-        window = Window(self,columns,width,height,color_dic) 
-        
-        App.exec_()
-        App.quit()
+
+        window = Window(self,
+                        columns,
+                        width,
+                        height,
+                        color_dic,
+                        x_alt=x,
+                        y_alt=y,
+                        c_alt=c) 
