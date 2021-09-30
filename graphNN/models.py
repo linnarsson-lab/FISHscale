@@ -292,7 +292,7 @@ class SAGE(nn.Module):
             sampler = dgl.dataloading.MultiLayerFullNeighborSampler(1)
             dataloader = dgl.dataloading.NodeDataLoader(
                 g,
-                th.arange(g.num_nodes()).to(g.device),
+                th.arange(g.num_nodes()),#.to(g.device),
                 sampler,
                 batch_size=batch_size,
                 shuffle=False,
@@ -301,8 +301,8 @@ class SAGE(nn.Module):
 
             for input_nodes, output_nodes, blocks in tqdm.tqdm(dataloader):
                 block = blocks[0]
-                block = block.int().to(device)
-                h = x[input_nodes].to(device)
+                block = block.int()#.to(device)
+                h = x[input_nodes]#.to(device)
                 h = layer(block, h)
                 h = F.normalize(h)
 

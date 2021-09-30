@@ -430,14 +430,16 @@ class GraphData(pl.LightningDataModule):
 
     #### plotting and latent factors #####
 
-    def get_latents(self):
+    def get_latents(self,labelled=True):
         self.model.eval()
         latent_unlabelled = self.model.module.inference(self.g,self.g.ndata['gene'],'cpu',1040,0)#.detach().numpy()
         if self.model.supervised:
-            latent_labelled = self.model.module.inference(self.g_lab,self.g_lab.ndata['gene'],'cpu',1040,0)#.detach().numpy()
-            self.prediction_labelled = self.model.module.encoder.encoder_dict['CF'](latent_labelled).detach().numpy()
+            if labelled:
+                latent_labelled = self.model.module.inference(self.g_lab,self.g_lab.ndata['gene'],'cpu',1040,0)#.detach().numpy()
+                self.prediction_labelled = self.model.module.encoder.encoder_dict['CF'](latent_labelled).detach().numpy()
+                self.latent_labelled = latent_labelled.detach().numpy()
             self.prediction_unlabelled = self.model.module.encoder.encoder_dict['CF'](latent_unlabelled).detach().numpy()
-            self.latent_labelled = latent_labelled.detach().numpy()
+            
 
         self.latent_unlabelled = latent_unlabelled.detach().numpy()
 
