@@ -38,7 +38,16 @@ from math import ceil
 
 class Window: 
 
-    def __init__(self,dataset,columns:list=[],width=2000,height=2000,show_axis=False): 
+    def __init__(self,
+                dataset,
+                columns:list=[],
+                width=2000,
+                height=2000,
+                show_axis=False,
+                x_alt=None,
+                y_alt=None,
+                c_alt={},
+                plot_type={}): 
         
         """
         GUI for Open3D Make Plots Fast Again
@@ -46,11 +55,21 @@ class Window:
         dataframe: Pass the pandas dataframe, column names must be 'c_px_microscope_stitched','r_px_microscope_stitched' and gene
         color_dic: pass dictionary of desired color in RGB for each unique gene in the parquet_file
         
+        
         """
+
+        QtWidgets.QApplication.setStyle('Fusion')
+        self.App = QtWidgets.QApplication.instance()
+        if self.App is None:
+            self.App = QtWidgets.QApplication(sys.argv)
+        else:
+            print('QApplication instance already exists: %s' % str(self.App))
+        
         
         r = lambda: random.randint(0,255)
         self.columns= columns
         self.dataset = dataset
+        self.x_alt,self.y_alt,self.c_alt, self.plot_type = x_alt,y_alt,c_alt, plot_type
 
         self.color_dic = self.dataset.color_dict
         for g in self.dataset.unique_genes:
@@ -71,7 +90,6 @@ class Window:
             for x in self.dataset:
                 self.dic_pointclouds['File'].append(str(x.filename))
             self.pass_multi_data()
-            print('Data Loaded')
 
         #elif str(self.dataset.__class__) == str(FISHscale.utils.dataset.MultiDataset):
         elif isinstance(self.dataset, FISHscale.utils.dataset.MultiDataset):
@@ -82,11 +100,22 @@ class Window:
             for x in self.dataset:
                 self.dic_pointclouds['File'].append(str(x.filename))
             self.pass_multi_data()
-            print('Data Loaded')
 
         self.show_axis= show_axis
-        self.vis = Visualizer(self.dataset,self.dic_pointclouds, color_dic=self.color_dic,width=2000, height=2000, show_axis=self.show_axis)
-        self.collapse = CollapsibleDialog(self.dic_pointclouds,vis=self.vis)
+
+        self.vis = Visualizer(self.dataset,
+                                self.dic_pointclouds, 
+                                color_dic=self.color_dic,
+                                width=2000, 
+                                height=2000, 
+                                show_axis=self.show_axis,
+                                x_alt=self.x_alt,
+                                y_alt=self.y_alt,
+                                alt=self.c_alt)
+
+        self.collapse = CollapsibleDialog(self.dic_pointclouds,
+                                            vis=self.vis)
+
         self.widget_lists = self.collapse.widget_lists
         self.collapse.show()
         self.vis.collapse = self.collapse
@@ -101,10 +130,15 @@ class Window:
         self.collapse.qbutton.clicked.connect(self.quit)
         self.vis.execute()
             
+        self.App.exec_()
+        self.App.quit()
     def quit(self):
         self.collapse.break_loop = True
         self.vis.break_loop = True
         self.vis.visM.destroy_window()
+        #QApplication.quit()
+        #
+
 
     def pass_multi_data(self):
         r = lambda: random.randint(0,255)
@@ -121,18 +155,39 @@ class Window:
                     else:
                         col = (r()/255,r()/255,r()/255)
                         self.color_dic[str(ca)] = col
-
             ds.append(dataframe)
+        
+        if type(self.c_alt) != type(None):
+            for c in self.c_alt:
+                #unique_ca = np.unique(self.c_alt[c])
+                self.dic_pointclouds[c]= self.c_alt[c]
+                '''for ca in unique_ca:
+                    if ca in self.color_dic:
+                        pass
+                    else:
+                        col = (r()/255,r()/255,r()/255)
+                        self.color_dic[str(ca)] = col'''
+
         self.dataset = ds
 
 class Visualizer:
-    def __init__(self,data,dic_pointclouds,color_dic,width=2000,height=2000,show_axis=False):
-        
+    def __init__(self,
+                data,
+                dic_pointclouds,
+                color_dic,
+                width=2000,
+                height=2000,
+                show_axis=False,
+                x_alt=None,
+                y_alt=None,
+                alt={}):
+
         self.data = data
         self.color_dic = color_dic
         self.visM = o3d.visualization.Visualizer()
         self.visM.create_window(height=height,width=width,top=0,left=500)
         self.dic_pointclouds= dic_pointclouds
+        self.x_alt, self.y_alt, self.alt = x_alt,y_alt,alt
 
         points,maxx,minx,maxy,miny= 0,0,0,0,0
         for d in self.data:
@@ -154,7 +209,6 @@ class Visualizer:
         x = np.linspace(int(minx), ceil(maxx), 2, dtype='int32')
         y = np.linspace(int(miny), ceil(maxy), 2, dtype='int32')
         z = np.zeros_like(x)
-
         self.allgenes = np.stack([x,y,z]).T
         self.allcolors = np.ones([2, 3])*0#np.concatenate(colors)[:,0,:]
         
@@ -259,6 +313,13 @@ class ListWidget(QWidget):
                         points.append(ps)
                         colors.append(cs)
 
+                    elif self.section in self.vis.alt:
+                        ps = np.array([self.vis.x_alt, self.vis.y_alt, np.zeros_like(self.vis.x_alt)]).T
+                        #cs = np.array([d.color_dict[str(x)] for x in selected_features])
+                        cs = self.vis.alt[self.section]
+                        points.append(ps)
+                        colors.append(cs)
+
                     else:
                         #selected_indices = d.dask_attrs[d.dask_attrs['labels'].isin(self.selected)].index.compute() #.index.compute()
                         selected_features = d.dask_attrs[d.dask_attrs[self.section].isin(self.selected)].compute()
@@ -330,7 +391,10 @@ class CollapsibleDialog(QDialog,QObject):
         layout = QHBoxLayout(widget)
 
         #layout.addWidget(QLabel("Bla"))
-        lw = ListWidget(self.dic[title],title,self.vis)
+        if title in self.vis.alt:
+            lw = ListWidget(['plot'],title,self.vis)
+        else:
+            lw = ListWidget(self.dic[title],title,self.vis)
         list_widget = lw.list_widget
         layout.addWidget(list_widget)
         self.sections[title]= widget
