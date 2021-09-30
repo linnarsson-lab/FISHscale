@@ -191,8 +191,9 @@ class SemanticLoss(nn.Module):
         
         if type(ncells) == type(0):
             self.ncells = self.true_count/self.true_count.sum()
+            self.ncells_max = self.true_count.sum()*1000
         else:
-            self.ncells_max = ncells.max()
+            self.ncells_max = ncells.sum()
             self.ncells = th.tensor(ncells/ncells.sum())
 
         super().__init__()
@@ -201,12 +202,9 @@ class SemanticLoss(nn.Module):
             pseudo_labels, 
             true_latent, 
             true_labels):
-        
-        try:
-            if self.pseudo_count.max() >= self.ncells_max:
-                self.pseudo_count = th.ones([self.pseudo_count.shape[0]])
-        except:
-            pass
+
+        if self.pseudo_count.max() >= self.ncells_max:
+            self.pseudo_count = th.ones([self.pseudo_count.shape[0]])
 
         for pl in pseudo_labels.unique():
             filt = pseudo_labels == pl
