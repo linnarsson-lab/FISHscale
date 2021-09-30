@@ -210,7 +210,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
                 color_dic=None,
                 x=None,
                 y=None,
-                c=None):
+                c={}):
         """
         Run open3d visualization on self.data
         Pass to columns a list of strings, each string will be the class of the dots to be colored by. example: color by gene

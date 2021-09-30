@@ -157,7 +157,7 @@ class Window:
                         self.color_dic[str(ca)] = col
             ds.append(dataframe)
         
-        if type(self.c_alt) != type(None):
+        if self.c_alt != {}:
             for c in self.c_alt:
                 #unique_ca = np.unique(self.c_alt[c])
                 self.dic_pointclouds[c]= self.c_alt[c]

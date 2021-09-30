@@ -347,7 +347,7 @@ class DataLoader(DataLoader_base):
             filter_filelist = [f'{p}_{g}.parquet' for g in unique_genes]
             #Load selected genes        
             self.df = dd.read_parquet(filter_filelist)
-            self.shape = self.df.shape
+            self.shape = data.shape
         else:
             #Load all genes
             self.df = dd.read_parquet(path.join(self.FISHscale_data_folder, '*.parquet'))
