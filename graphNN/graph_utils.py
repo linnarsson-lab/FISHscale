@@ -148,14 +148,14 @@ class GraphData(pl.LightningDataModule):
         self.compute_size()
         self.setup()
         if self.smooth:
-            self.knn_smooth()
+            self.knn_smooth(neighborhood_size=self.ngh_size)
 
         self.g= dgl.graph((edges[0,:],edges[1,:]))
         self.g.ndata['gene'] = th.tensor(self.d.toarray(),dtype=th.float32)
         self.g.to(self.device)
 
         if self.model.supervised:
-            self.molecules_labelled, edges_labelled, labels = self.cell_types_to_graph(self.ref_celltypes)
+            self.molecules_labelled, edges_labelled, labels = self.cell_types_to_graph(self.ref_celltypes,smooth=self.smooth)
             print(edges_labelled.shape)
             self.g_lab= dgl.graph((edges_labelled[0,:],edges_labelled[1,:]))
             self.g_lab.ndata['gene'] = th.tensor(self.molecules_labelled.toarray(),dtype=th.float32)
@@ -246,7 +246,7 @@ class GraphData(pl.LightningDataModule):
         if self.model.supervised: 
             trainer = pl.Trainer(gpus=gpus,callbacks=[self.checkpoint_callback], max_epochs=max_epochs)
         else:
-            trainer = pl.Trainer(gpus=gpus,callbacks=[self.checkpoint_callback, self.early_stop_callback], max_epochs=max_epochs)
+            trainer = pl.Trainer(gpus=gpus,callbacks=[self.checkpoint_callback], max_epochs=max_epochs)
         trainer.fit(self.model, train_dataloader=self.train_dataloader())
 
     def molecules_df(self):
@@ -342,7 +342,7 @@ class GraphData(pl.LightningDataModule):
         else:
             return edges
 
-    def cell_types_to_graph(self, data):
+    def cell_types_to_graph(self, data,smooth=False):
         """
         cell_types_to_graph [summary]
 
@@ -366,29 +366,24 @@ class GraphData(pl.LightningDataModule):
             molecules = []
             # Reduce number of cells by Ncells.min() to avoid having a huge dataframe, since it is actually simulated data
             cl_i = data[:,i]#*(Ncells[i]/(Ncells.min()*100)).astype('int')
-            random_molecules = np.random.choice(data.shape[0],size=2500,p=cl_i)
-            
 
-            '''            
-            for x in range(cl_i.shape[0]):
-                dot = np.zeros_like(cl_i)
-                dot[x] = 1
-                try:
-                    dot = np.stack([dot]*int(cl_i[x]))
+            if smooth == False:
+                random_molecules = np.random.choice(data.shape[0],size=2500,p=cl_i)
+                for x in random_molecules:
+                    dot = np.zeros_like(cl_i)
+                    dot[x] = 1
+                    try:
+                        #dot = np.stack([dot]*int(cl_i[x]))
+                        molecules.append(dot)
+                    except:
+                        pass
+            else:
+                for x in range(500):
+                    random_molecules = np.random.choice(data.shape[0],size=75,p=cl_i)
+                    dot = np.zeros_like(cl_i)
+                    for x in random_molecules:
+                        dot[x] = dot[x]+1
                     molecules.append(dot)
-
-                except:
-                    pass
-            '''
-
-            for x in random_molecules:
-                dot = np.zeros_like(cl_i)
-                dot[x] = 1
-                try:
-                    #dot = np.stack([dot]*int(cl_i[x]))
-                    molecules.append(dot)
-                except:
-                    pass
 
             molecules = np.stack(molecules)
             #molecules = np.concatenate(molecules)
@@ -410,6 +405,7 @@ class GraphData(pl.LightningDataModule):
         
         u = AnnoyIndex(2, 'euclidean')
         u.load(os.path.join(self.save_to,'Tree-{}Nodes-Ngh{}-{}-dst{}.ann'.format(self.cells.shape[0],self.ngh_sizes[0],self.ngh_sizes[1],self.distance_threshold)))
+
         smoothed_dataframe = []
         molecules_connected = []
         for i in trange(self.d.shape[0]):
@@ -575,7 +571,7 @@ class GraphData(pl.LightningDataModule):
             ax = fig.add_subplot(1, 1, 1)
             ax.set_facecolor("black")
             #plt.scatter(DS.df.x.values.compute()[GD.cells], DS.df.y.values.compute()[GD.cells], c=torch.argmax(pred.softmax(dim=-1),dim=-1).numpy(), s=0.2,marker='.',linewidths=0, edgecolors=None,cmap='rainbow')
-            plt.scatter(self.data.df.x.values.compute()[self.cells][some], self.data.df.y.values.compute()[self.cells][some], c=clusters_colors[some], s=0.05,marker='.',linewidths=0, edgecolors=None)
+            plt.scatter(self.data.df.x.values.compute()[self.cells], self.data.df.y.values.compute()[self.cells], c=clusters_colors, s=0.05,marker='.',linewidths=0, edgecolors=None)
             plt.xticks(fontsize=2)
             plt.yticks(fontsize=2)
             plt.axis('scaled')

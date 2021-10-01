@@ -143,7 +143,7 @@ class SAGELightning(LightningModule):
     def configure_optimizers(self):
         optimizer = th.optim.Adam(self.module.encoder.parameters(), lr=self.lr)
         if self.supervised:
-            d_opt = th.optim.Adam(self.module.domain_adaptation.parameters(), lr=0.001)
+            d_opt = th.optim.Adam(self.module.domain_adaptation.parameters(), lr=5e-4)
             return [optimizer, d_opt]
         else:
             return optimizer
