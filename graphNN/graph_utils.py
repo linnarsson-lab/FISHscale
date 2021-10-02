@@ -19,6 +19,7 @@ import h5py
 import sklearn.linear_model as lm
 import sklearn.metrics as skm
 import dgl
+import dgl.function as fn
 
 class UnsupervisedClassification(Callback):
     def on_validation_epoch_start(self, trainer, pl_module):
@@ -147,12 +148,16 @@ class GraphData(pl.LightningDataModule):
         edges = self.buildGraph(self.distance_threshold)
         self.compute_size()
         self.setup()
-        if self.smooth:
-            self.knn_smooth(neighborhood_size=self.ngh_size)
+        #if self.smooth:
+            #self.knn_smooth(neighborhood_size=self.ngh_size)
 
         self.g= dgl.graph((edges[0,:],edges[1,:]))
         self.g.ndata['gene'] = th.tensor(self.d.toarray(),dtype=th.float32)
         self.g.to(self.device)
+
+        if self.smooth:
+            #self.g.update_all(fn.copy_u('gene', 'g2'), fn.sum('g2', 'gene'))
+            self.g.update_all(fn.u_add_v('gene','gene','a'),fn.sum('a','gene'))
 
         if self.model.supervised:
             self.molecules_labelled, edges_labelled, labels = self.cell_types_to_graph(self.ref_celltypes,smooth=self.smooth)
