@@ -122,8 +122,6 @@ class SAGELightning(LightningModule):
             #self.kappa += 1
 
             loss += domain_loss_fake + supervised_loss + classifier_loss + semantic_loss.detach()
-
-
             opt.zero_grad()
             self.manual_backward(loss)
             opt.step()
