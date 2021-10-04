@@ -99,7 +99,6 @@ class GraphData(pl.LightningDataModule):
         ref_celltypes=None,
         smooth:bool=False,
         negative_samples:int=5,
-        device='cpu',
         ):
         """
         Initialize GraphData class
@@ -140,7 +139,7 @@ class GraphData(pl.LightningDataModule):
 
         self.folder = self.analysis_name+ '_' +datetime.now().strftime("%Y-%m-%d-%H%M%S")
         os.mkdir(self.folder)
-        self.device = th.device(device)
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
         self.subsample = subsample
         self.subsample_xy()
@@ -247,7 +246,9 @@ class GraphData(pl.LightningDataModule):
         else:
             return {'unlabelled':unlab}
 
-    def train(self,max_epochs=5,gpus=-1):     
+    def train(self,max_epochs=5,gpus=-1):
+        if self.device.type == 'cuda':
+            gpus=1
         if self.model.supervised: 
             trainer = pl.Trainer(gpus=gpus,callbacks=[self.checkpoint_callback], max_epochs=max_epochs)
         else:
