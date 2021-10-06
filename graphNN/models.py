@@ -58,7 +58,7 @@ class SAGELightning(LightningModule):
         #self.automatic_optimization = True
         if self.supervised:
             self.automatic_optimization = False
-            self.sl = SemanticLoss(n_hidden,n_classes,ncells=Ncells)
+            #self.sl = SemanticLoss(n_hidden,n_classes,device=self.device,ncells=Ncells)
             self.train_acc = torchmetrics.Accuracy()
             
 
@@ -107,12 +107,12 @@ class SAGELightning(LightningModule):
 
             #Semantic Loss
             labels_unlab = self.module.encoder.encoder_dict['CF'](batch_pred_unlab).argsort(axis=-1)[:,-1]
-            semantic_loss = self.sl.semantic_loss(pseudo_latent=batch_pred_unlab, 
+            '''semantic_loss = self.sl.semantic_loss(pseudo_latent=batch_pred_unlab, 
                                                     pseudo_labels=labels_unlab ,
                                                     true_latent=batch_pred_lab,
                                                     true_labels=labels_pred.argsort(axis=-1)[:,-1],
                                                     )
-            self.log('Semantic_loss', semantic_loss, prog_bar=True, on_step=True)
+            self.log('Semantic_loss', semantic_loss, prog_bar=True, on_step=True)'''
 
             
             # Will increasingly apply supervised loss, domain adaptation loss
@@ -121,7 +121,7 @@ class SAGELightning(LightningModule):
             #kappa = 2/(1+10**(-1*((1*self.kappa)/200)))-1
             #self.kappa += 1
 
-            loss += domain_loss_fake + supervised_loss + classifier_loss + semantic_loss.detach()
+            loss += domain_loss_fake + supervised_loss + classifier_loss #+ semantic_loss.detach()
             opt.zero_grad()
             self.manual_backward(loss)
             opt.step()
@@ -181,18 +181,22 @@ class SemanticLoss(nn.Module):
     def __init__(self , 
         n_hidden,
         n_labels,
-        ncells=0):
-        self.centroids_pseudo = th.randn([n_hidden,n_labels])
-        self.pseudo_count = th.ones([n_labels])
-        self.centroids_true = th.randn([n_hidden, n_labels])
-        self.true_count = th.ones([n_labels])
+        device,
+        ncells=0,
+        ):
+        self.device = device
+        print('Deviceeeee',self.device)
+        self.centroids_pseudo = th.randn([n_hidden,n_labels],device=self.device)
+        self.pseudo_count = th.ones([n_labels],device=self.device)
+        self.centroids_true = th.randn([n_hidden, n_labels],device=self.device)
+        self.true_count = th.ones([n_labels],device=self.device)
         
         if type(ncells) == type(0):
             self.ncells = self.true_count/self.true_count.sum()
             self.ncells_max = self.true_count.sum()*1000
         else:
             self.ncells_max = ncells.sum()
-            self.ncells = th.tensor(ncells/ncells.sum())
+            self.ncells = th.tensor(ncells/ncells.sum(),device=self.device)
 
         super().__init__()
     def semantic_loss(self, 
@@ -202,13 +206,14 @@ class SemanticLoss(nn.Module):
             true_labels):
 
         if self.pseudo_count.max() >= self.ncells_max:
-            self.pseudo_count = th.ones([self.pseudo_count.shape[0]])
+            self.pseudo_count = th.ones([self.pseudo_count.shape[0]],device=self.device)
 
         for pl in pseudo_labels.unique():
             filt = pseudo_labels == pl
             if filt.sum() > 5:
                 centroid_pl = pseudo_latent[filt,:]
-                dispersion_p = th.mean(th.tensor([nn.MSELoss()(centroid_pl[cell,:], self.centroids_pseudo[:,pl]) for cell in range(centroid_pl.shape[0])]))
+                dp = th.tensor([nn.MSELoss()(centroid_pl[cell,:], self.centroids_pseudo[:,pl]) for cell in range(centroid_pl.shape[0])],device=self.device)
+                dispersion_p = th.mean(dp)
                 centroid_pl = centroid_pl.mean(axis=0)
                 new_avg_pl = self.centroids_pseudo[:,pl] * self.pseudo_count[pl] + centroid_pl *filt.sum()
                 new_avg_pl = new_avg_pl/(self.pseudo_count[pl] +filt.sum())
@@ -228,7 +233,7 @@ class SemanticLoss(nn.Module):
         
         kl_density = th.nn.functional.kl_div(self.ncells.log(),self.pseudo_count/self.pseudo_count.sum())
         #kl_density =  -F.logsigmoid((self.ncells*self.pseudo_count).sum(-1)).sum()*100
-        semantic_loss = -F.logsigmoid((self.centroids_pseudo*self.centroids_true).sum(-1)).mean() + kl_density + dispersion_p
+        semantic_loss = -F.logsigmoid((self.centroids_pseudo*self.centroids_true).sum(-1)).mean() + kl_density #+ dispersion_p
         #semantic_loss = nn.MSELoss()(self.centroids_pseudo, self.centroids_true) + kl_density
         return semantic_loss
 
