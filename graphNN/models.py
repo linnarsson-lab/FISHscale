@@ -58,7 +58,7 @@ class SAGELightning(LightningModule):
         #self.automatic_optimization = True
         if self.supervised:
             self.automatic_optimization = False
-            #self.sl = SemanticLoss(n_hidden,n_classes,device=self.device,ncells=Ncells)
+            self.sl = SemanticLoss(n_hidden,n_classes,device=self.device,ncells=Ncells)
             self.train_acc = torchmetrics.Accuracy()
             
 
@@ -70,6 +70,7 @@ class SAGELightning(LightningModule):
         _, pos_graph, neg_graph, mfgs = batch1
         mfgs = [mfg.int().to(self.device) for mfg in mfgs]
         pos_graph = pos_graph.to(self.device)
+        
         neg_graph = neg_graph.to(self.device)
         batch_inputs = mfgs[0].srcdata['gene']
         batch_pred_unlab = self.module(mfgs, batch_inputs)
@@ -184,8 +185,7 @@ class SemanticLoss(nn.Module):
         device,
         ncells=0,
         ):
-        self.device = 'cuda'
-        print('Deviceeeee',self.device)
+        self.device = device
         self.centroids_pseudo = th.randn([n_hidden,n_labels],device=self.device)
         self.pseudo_count = th.ones([n_labels],device=self.device)
         self.centroids_true = th.randn([n_hidden, n_labels],device=self.device)
