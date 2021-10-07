@@ -46,8 +46,7 @@ except ModuleNotFoundError as e:
 from tqdm import tqdm
 
 class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, SpatialMetrics, DataLoader, Normalization, 
-              Density1D, Clustering, BoneFight, Decomposition, Boundaries, Gene_order, Cellpose,
-              Regionalization_Gradient):
+              Density1D, Clustering, BoneFight, Decomposition, Boundaries, Gene_order, Cellpose, Regionalization_Gradient):
     """
     Base Class for FISHscale, still under development
 
@@ -70,7 +69,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
         color_input: Optional[Union[str, dict]] = None,
         verbose: bool = False,
         part_of_multidataset: bool = False):
-        """initiate PandasDataset
+        """initiate Dataset
 
         Args:
             filename (str): Name (and  optionally path) of the saved Pandas 
