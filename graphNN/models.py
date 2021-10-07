@@ -65,13 +65,11 @@ class SAGELightning(LightningModule):
     def training_step(self, batch, batch_idx):
         if self.supervised:
             opt, d_opt = self.optimizers()
-
         batch1 = batch['unlabelled']
         _, pos_graph, neg_graph, mfgs = batch1
-        mfgs = [mfg.int().to(self.device) for mfg in mfgs]
-        pos_graph = pos_graph.to(self.device)
-        
-        neg_graph = neg_graph.to(self.device)
+        mfgs = [mfg.int()for mfg in mfgs]
+        #pos_graph = pos_graph.to(self.device)
+        #neg_graph = neg_graph.to(self.device)
         batch_inputs = mfgs[0].srcdata['gene']
         batch_pred_unlab = self.module(mfgs, batch_inputs)
         loss,pos, neg = self.loss_fcn(batch_pred_unlab, pos_graph, neg_graph) #* 5
@@ -80,9 +78,9 @@ class SAGELightning(LightningModule):
         if self.supervised:
             batch2 = batch['labelled']
             _, pos_graph, neg_graph, mfgs = batch2
-            mfgs = [mfg.int().to(self.device) for mfg in mfgs]
-            pos_graph = pos_graph.to(self.device)
-            neg_graph = neg_graph.to(self.device)
+            mfgs = [mfg.int() for mfg in mfgs]
+            #pos_graph = pos_graph.to(self.device)
+            #neg_graph = neg_graph.to(self.device)
             batch_inputs = mfgs[0].srcdata['gene']
             batch_labels = mfgs[-1].dstdata['label']
             batch_pred_lab = self.module(mfgs, batch_inputs)
@@ -185,7 +183,7 @@ class SemanticLoss(nn.Module):
         device,
         ncells=0,
         ):
-        self.device = device
+        self.device = 'cuda'
         self.centroids_pseudo = th.randn([n_hidden,n_labels],device=self.device)
         self.pseudo_count = th.ones([n_labels],device=self.device)
         self.centroids_true = th.randn([n_hidden, n_labels],device=self.device)

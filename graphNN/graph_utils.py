@@ -149,7 +149,7 @@ class GraphData(pl.LightningDataModule):
         self.setup()
         # Save random cell selection
         
-        dgluns = self.save_to+'graph/Unsupervised.graph'
+        dgluns = self.save_to+'graph/{}Unsupervised.graph'.format(self.cells.shape[0])
         if not os.path.isfile(dgluns):
             d = self.molecules_df()
             edges = self.buildGraph(self.distance_threshold)
@@ -160,13 +160,14 @@ class GraphData(pl.LightningDataModule):
                 self.g.update_all(fn.u_add_v('gene','gene','a'),fn.sum('a','gene'))
             #self.g.update_all(fn.copy_u('gene', 'g2'), fn.sum('g2', 'gene'))
             dgl.data.utils.save_graphs(dgluns, [self.g], graph_labels)
-            self.g.to(self.device)
+            #self.g = self.g.to(self.device)
         else:
             glist, _ = dgl.data.utils.load_graphs(dgluns) # glist will be [g1, g2]
-            self.g = glist[0].to(self.device)
+            self.g = glist[0]
+            #self.g = self.g.to(self.device)
 
         if self.model.supervised:
-            dglsup =self.save_to+'graph/Supervised.graph'
+            dglsup =self.save_to+'graph/{}Supervised.graph'.format(self.cells.shape[0])
             if not os.path.isfile(dglsup):
                 self.molecules_labelled, edges_labelled, labels = self.cell_types_to_graph(self.ref_celltypes,smooth=self.smooth)
                 self.g_lab= dgl.graph((edges_labelled[0,:],edges_labelled[1,:]))
@@ -174,10 +175,11 @@ class GraphData(pl.LightningDataModule):
                 self.g_lab.ndata['label'] = th.tensor(labels, dtype=th.long)
                 graph_labels = {"SupervisedDGL": th.tensor([0])}
                 dgl.data.utils.save_graphs(dglsup, [self.g_lab], graph_labels)
-                self.g_lab.to(self.device)
+                #self.g_lab = self.g_lab.to(self.device)
             else:
                 glist, _ = dgl.data.utils.load_graphs(dglsup) # glist will be [g1, g2]
-                self.g_lab = glist[0].to(self.device)
+                self.g_lab = glist[0]
+                #self.g_lab = self.g_lab.to(self.device)
 
     def prepare_data(self):
         # do-something
@@ -248,10 +250,8 @@ class GraphData(pl.LightningDataModule):
                             shuffle=True,
                             drop_last=True,
                             num_workers=self.num_workers)
-
         else:
             lab = None
-
         if type(lab) != type(None):
             return {'unlabelled':unlab,'labelled':lab}
         else:
@@ -260,7 +260,8 @@ class GraphData(pl.LightningDataModule):
     def train(self,max_epochs=5,gpus=-1):
         if self.device.type == 'cuda':
             gpus=1
-        if self.model.supervised: 
+            trainer = pl.Trainer(gpus=gpus,callbacks=[self.checkpoint_callback], max_epochs=max_epochs,precision=16)
+        elif self.model.supervised and self.device.type != 'cuda': 
             trainer = pl.Trainer(gpus=gpus,callbacks=[self.checkpoint_callback], max_epochs=max_epochs)
         else:
             trainer = pl.Trainer(gpus=gpus,callbacks=[self.checkpoint_callback], max_epochs=max_epochs)
