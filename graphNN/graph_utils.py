@@ -137,25 +137,28 @@ class GraphData(pl.LightningDataModule):
         self.ngh_size = ngh_size
         
 
-        self.folder = self.analysis_name+ '_' +datetime.now().strftime("%Y-%m-%d-%H%M%S")
+        self.folder = self.save_to+self.analysis_name+ '_' +datetime.now().strftime("%Y-%m-%d-%H%M%S")
         os.mkdir(self.folder)
+        if not os.path.isdir(self.save_to+'graph'):
+            os.mkdir(self.save_to+'graph')
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         print('Device is: ',self.device)
         self.subsample = subsample
         self.subsample_xy()
-        # Save random cell selection
         self.compute_size()
         self.setup()
-
-        dgluns = os.path.join(self.save_to,self.analysis_name+'.unsDGL')
+        # Save random cell selection
+        
+        dgluns = self.save_to+'graph/Unsupervised.graph'
         if not os.path.isfile(dgluns):
+            d = self.molecules_df()
             edges = self.buildGraph(self.distance_threshold)
             self.g= dgl.graph((edges[0,:],edges[1,:]))
-            self.g.ndata['gene'] = th.tensor(self.d.toarray(),dtype=th.float32)
+            self.g.ndata['gene'] = th.tensor(d.toarray(), dtype=th.float32)
             graph_labels = {"UnsupervisedDGL": th.tensor([0])}
             if self.smooth:
-            #self.g.update_all(fn.copy_u('gene', 'g2'), fn.sum('g2', 'gene'))
                 self.g.update_all(fn.u_add_v('gene','gene','a'),fn.sum('a','gene'))
+            #self.g.update_all(fn.copy_u('gene', 'g2'), fn.sum('g2', 'gene'))
             dgl.data.utils.save_graphs(dgluns, [self.g], graph_labels)
             self.g.to(self.device)
         else:
@@ -163,7 +166,7 @@ class GraphData(pl.LightningDataModule):
             self.g = glist[0].to(self.device)
 
         if self.model.supervised:
-            dglsup = os.path.join(self.save_to,self.analysis_name+'.supDGL')
+            dglsup =self.save_to+'graph/Supervised.graph'
             if not os.path.isfile(dglsup):
                 self.molecules_labelled, edges_labelled, labels = self.cell_types_to_graph(self.ref_celltypes,smooth=self.smooth)
                 self.g_lab= dgl.graph((edges_labelled[0,:],edges_labelled[1,:]))
@@ -176,6 +179,12 @@ class GraphData(pl.LightningDataModule):
                 glist, _ = dgl.data.utils.load_graphs(dglsup) # glist will be [g1, g2]
                 self.g_lab = glist[0].to(self.device)
 
+    def prepare_data(self):
+        # do-something
+        pass
+
+    def setup(self, stage: Optional[str] = None):
+        #self.d = th.tensor(self.molecules_df(),dtype=th.float32) #works
         self.sampler = dgl.dataloading.MultiLayerNeighborSampler([int(_) for _ in self.ngh_sizes])
 
         self.checkpoint_callback = ModelCheckpoint(
@@ -192,14 +201,6 @@ class GraphData(pl.LightningDataModule):
             mode='min',
             stopping_threshold=0.35,
             )
-    
-    def prepare_data(self):
-        # do-something
-        pass
-
-    def setup(self, stage: Optional[str] = None):
-        #self.d = th.tensor(self.molecules_df(),dtype=th.float32) #works
-        self.d = self.molecules_df()
 
     def compute_size(self):
         cells = self.cells
@@ -295,14 +296,14 @@ class GraphData(pl.LightningDataModule):
         print('Building graph...')
         if type(coords)  == type(None):
             supervised = False
-            edge_file = os.path.join(self.save_to,'Edges-{}Nodes-Ngh{}-{}-dst{}'.format(self.cells.shape[0],self.ngh_sizes[0],self.ngh_sizes[1],self.distance_threshold))
-            tree_file = os.path.join(self.save_to,'Tree-{}Nodes-Ngh{}-{}-dst{}.ann'.format(self.cells.shape[0],self.ngh_sizes[0],self.ngh_sizes[1],self.distance_threshold))
+            edge_file = os.path.join(self.save_to,'graph/DGL-Edges-{}Nodes-dst{}'.format(self.cells.shape[0],self.distance_threshold))
+            tree_file = os.path.join(self.save_to,'graph/DGL-Tree-{}Nodes-dst{}.ann'.format(self.cells.shape[0],self.distance_threshold))
             coords = np.array([self.data.df.x.values.compute()[self.cells], self.data.df.y.values.compute()[self.cells]]).T
             neighborhood_size = self.ngh_size
         else:
             supervised=True
-            edge_file = os.path.join(self.save_to,'DGL-Supervised-Edges-{}Nodes-Ngh{}-{}-dst{}'.format(coords.shape[0],self.ngh_sizes[0],self.ngh_sizes[1],self.distance_threshold))
-            tree_file = os.path.join(self.save_to,'DGL-Supervised-Tree-{}Nodes-Ngh{}-{}-dst{}.ann'.format(coords.shape[0],self.ngh_sizes[0],self.ngh_sizes[1],self.distance_threshold))
+            edge_file = os.path.join(self.save_to,'graph/DGL-Supervised-Edges-{}Nodes-dst{}'.format(coords.shape[0],self.distance_threshold))
+            tree_file = os.path.join(self.save_to,'graph/DGL-Supervised-Tree-{}Nodes-dst{}.ann'.format(coords.shape[0],self.distance_threshold))
             neighborhood_size = self.ngh_size
 
         if not os.path.isfile(edge_file):
