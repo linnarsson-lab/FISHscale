@@ -141,47 +141,39 @@ class GraphData(pl.LightningDataModule):
         os.mkdir(self.folder)
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         print('Device is: ',self.device)
-
         self.subsample = subsample
         self.subsample_xy()
         # Save random cell selection
-        edges = self.buildGraph(self.distance_threshold)
         self.compute_size()
         self.setup()
-        #if self.smooth:
-            #self.knn_smooth(neighborhood_size=self.ngh_size)
 
         dgluns = os.path.join(self.save_to,self.analysis_name+'.unsDGL')
         if not os.path.isfile(dgluns):
+            edges = self.buildGraph(self.distance_threshold)
             self.g= dgl.graph((edges[0,:],edges[1,:]))
             self.g.ndata['gene'] = th.tensor(self.d.toarray(),dtype=th.float32)
             graph_labels = {"UnsupervisedDGL": th.tensor([0])}
-
             if self.smooth:
             #self.g.update_all(fn.copy_u('gene', 'g2'), fn.sum('g2', 'gene'))
                 self.g.update_all(fn.u_add_v('gene','gene','a'),fn.sum('a','gene'))
-
-            dgl.utils.save_graphs(dgluns, [self.g], graph_labels)
+            dgl.data.utils.save_graphs(dgluns, [self.g], graph_labels)
             self.g.to(self.device)
         else:
-            glist, _ = dgl.utils.load_graphs(dgluns) # glist will be [g1, g2]
+            glist, _ = dgl.data.utils.load_graphs(dgluns) # glist will be [g1, g2]
             self.g = glist[0].to(self.device)
 
-
-
         if self.model.supervised:
-            dglsup = os.path.join(self.save_to,self.analysis_name+'.unsDGL')
-        
+            dglsup = os.path.join(self.save_to,self.analysis_name+'.supDGL')
             if not os.path.isfile(dglsup):
                 self.molecules_labelled, edges_labelled, labels = self.cell_types_to_graph(self.ref_celltypes,smooth=self.smooth)
                 self.g_lab= dgl.graph((edges_labelled[0,:],edges_labelled[1,:]))
                 self.g_lab.ndata['gene'] = th.tensor(self.molecules_labelled.toarray(),dtype=th.float32)
                 self.g_lab.ndata['label'] = th.tensor(labels, dtype=th.long)
                 graph_labels = {"SupervisedDGL": th.tensor([0])}
-                dgl.utils.save_graphs(dglsup, [self.g_lab], graph_labels)
+                dgl.data.utils.save_graphs(dglsup, [self.g_lab], graph_labels)
                 self.g_lab.to(self.device)
             else:
-                glist, _ = dgl.utils.load_graphs(dglsup) # glist will be [g1, g2]
+                glist, _ = dgl.data.utils.load_graphs(dglsup) # glist will be [g1, g2]
                 self.g_lab = glist[0].to(self.device)
 
         self.sampler = dgl.dataloading.MultiLayerNeighborSampler([int(_) for _ in self.ngh_sizes])
