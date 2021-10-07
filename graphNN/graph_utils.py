@@ -260,8 +260,7 @@ class GraphData(pl.LightningDataModule):
     def train(self,max_epochs=5,gpus=-1):
         if self.device.type == 'cuda':
             gpus=1
-            trainer = pl.Trainer(gpus=gpus,callbacks=[self.checkpoint_callback], max_epochs=max_epochs,precision=16)
-        elif self.model.supervised and self.device.type != 'cuda': 
+        if self.model.supervised: 
             trainer = pl.Trainer(gpus=gpus,callbacks=[self.checkpoint_callback], max_epochs=max_epochs)
         else:
             trainer = pl.Trainer(gpus=gpus,callbacks=[self.checkpoint_callback], max_epochs=max_epochs)
