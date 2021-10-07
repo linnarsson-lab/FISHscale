@@ -5,19 +5,15 @@ import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
 import pandas as pd
-from matplotlib.pyplot import hexbin
 from shapely.geometry import  MultiPolygon, Polygon
 from shapely.ops import unary_union
 from skimage.measure import subdivide_polygon
 from sklearn.cluster import AgglomerativeClustering
 from sklearn.neighbors import kneighbors_graph, radius_neighbors_graph
-from pint import UnitRegistry
 from FISHscale.utils.fast_iteration import Iteration
 from FISHscale.utils.decomposition import Decomposition
 from FISHscale.utils.inside_polygon import inside_multi_polygons
-#Mypy types
 from typing import Tuple, Union, Any, List
-import gc
 from scipy.spatial import KDTree
 from collections import Counter
 from matplotlib.patches import Polygon as mpl_polygon
@@ -166,8 +162,8 @@ class Regionalize(Iteration, Decomposition):
 
         return df_hex, coordinates
                   
-    @lru_cache(maxsize=1)
-    def _hexbin_PatchCollection_make(self, params: str):
+    @lru_cache(maxsize=5)
+    def _hexbin_PatchCollection_make(self, params: str, filter = None):
         """Generate hexbin patch collection for plotting
 
         Args:
@@ -175,27 +171,38 @@ class Regionalize(Iteration, Decomposition):
                 self._hexbin_params. This is used to check if the patch 
                 collection needs to be recalculated when the hexbin function 
                 has been run with different parameters.
+            filter (str): String representation of a boolean array of ones and
+                zeros. Example '1101' for [True, True, Flase, True].
+                (Needed because lru_cache does not take arrays)
 
         Returns:
             Matplotlib patch collection
         """
+        if type(filter) == type(None):
+            filter = np.ones(self.hexbin_coordinates.shape[0]).astype('bool')
+        else:
+            filter = np.array([int(i) for i in filter]).astype('bool')
+        
         patches = []
-        for i in self.hexbin_coordinates:
+        coordinates = self.hexbin_coordinates[filter]
+        for i in coordinates:
             pol = mpl_polygon(self.hexbin_hexagon_shape + i, closed=True)
             patches.append(pol)
         self._hexbin_PatchCollection = PatchCollection(patches)
-        return PatchCollection(patches)
+        return PatchCollection(patches), coordinates.min(axis=0), coordinates.max(axis=0)
                 
-    def hexbin_plot(self, c: Union[np.ndarray, list], cm=None, ax:Any=None, 
+    def hexbin_plot(self, c: Union[np.ndarray, list], cm:Any=None, 
+                    filter: np.ndarray = None, ax:Any=None, 
                     figsize=None, save:bool=False, savename:str='',
                     vmin:float=None, vmax:float=None, linewidth:float=0.1):
         """Plot hexbin results. 
 
         Args:
             c (np.ndarray, list): Eiter an Array with color values as a float
-                between 0 an 1. Or a list of RGB color values.
+                between 0 an 1. Or a list of RGB color values between 0 and 1.
             cm (plt color map): The color map to use when c is an array.
                 Defaults to plt.cm.viridis.
+            filter (np.ndarray): Boolean array to filter hexbin coordinates.
             ax (Any, optional): Axes object to plot on. Defaults to None.
             figsize (tuple): Size of figure if not defined by ax. 
                 If None uses: (10,10). Defaults to None.
@@ -221,7 +228,10 @@ class Regionalize(Iteration, Decomposition):
         #Get PatchCollection, patchCollection can only be added once to a figue so make a deep copy.
         if not hasattr(self, '_hexbin_params'):
             raise Exception('Hexbin has not been calculated yet. Please make using: self.hexbin_make()')
-        p = copy.deepcopy(self._hexbin_PatchCollection_make(self._hexbin_params))
+        #Format filter to be hasable for lru_cache
+        if type(filter) != type(None):
+            filter = ''.join(map(str, filter.astype('int')))
+        p, plot_min, plot_max = copy.deepcopy(self._hexbin_PatchCollection_make(self._hexbin_params, filter=filter))
         ax.add_collection(p)
         #Set colors from an RGB list
         if type(c) == list:
@@ -256,8 +266,10 @@ class Regionalize(Iteration, Decomposition):
             
         #Scale
         d = 0.5 * int(self._hexbin_params.split('_')[1])
-        ax.set_xlim(self.x_min - d, self.x_max + d)
-        ax.set_ylim(self.y_min - d, self.y_max + d)
+        ax.set_xlim(plot_min[0] - d, plot_max[0] + d)
+        ax.set_ylim(plot_min[1] - d, plot_max[1] + d)
+        #ax.set_xlim(self.x_min - d, self.x_max + d)
+        #ax.set_ylim(self.y_min - d, self.y_max + d)
         ax.set_aspect('equal')
         
         #Save
@@ -561,7 +573,7 @@ class Regionalize(Iteration, Decomposition):
         for l in unique_labels:
             filt = labels == l
             #Get mean expression of cluster
-            cluster_mean.loc[:, l] = df_hex.loc[:, filt].mean(axis=1)
+            cluster_mean.loc[df_hex.index, l] = df_hex.loc[df_hex.index, filt].mean(axis=1)
 
         return cluster_mean
 
@@ -1133,11 +1145,14 @@ class Regionalize(Iteration, Decomposition):
         #Order cluster labels
         if order_labels:
             manifold = SpectralEmbedding(n_components=1, n_jobs=n_jobs).fit_transform(df_mean.T)
-            even_spaced = np.linspace(0, 1, manifold.shape[0])
+            even_spaced = np.arange(manifold.shape[0])
             even_spaced_dict = dict(zip(np.sort(manifold.ravel()), even_spaced))
             manifold_even = np.array([even_spaced_dict[i] for i in manifold.ravel()])
             manifold_even_dict = dict(zip(df_mean.columns, manifold_even))
             labels = np.array([manifold_even_dict[i] for i in labels])
+            #labels = (labels * manifold.shape[0]).astype('int')
+            df_mean.rename(columns=manifold_even_dict, inplace=True)
+            df_norm.rename(columns=manifold_even_dict, inplace=True)
         
         return df_hex, labels, hex_coord, df_mean, df_norm
 

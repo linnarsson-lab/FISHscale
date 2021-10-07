@@ -70,7 +70,7 @@ def _worker_bisect(points: np.ndarray, grid: np.ndarray, radius: float,
     return angle_counts, count 
 
 def _worker_angle(n_angles: int, d1: np.ndarray, d2: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-    """Calculate Spearman r for all devisions of the points in a circle.
+    """Calculate euclidian distance for all devisions of the points in a circle.
 
     Args:
         n_angles (int): Number of angles to devide the circle by.
@@ -86,10 +86,9 @@ def _worker_angle(n_angles: int, d1: np.ndarray, d2: np.ndarray) -> Tuple[np.nda
         #Catch warnings
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
-            r[j] = (spearmanr(d1[:,j], d2[:,j]))[0]
             dist[j] = distance.euclidean(d1[:,j], d2[:,j])
     
-    return r.min(), r.argmin(), dist.max(), dist.argmax()
+    return dist.max(), dist.argmax()
 
 class Boundaries:
     
@@ -268,6 +267,6 @@ class Boundaries:
         #Convert angle index to angle in degree
         angle_used = (np.linspace(0, 180 - (180/n_angles), n_angles))
         results2[:,1] = [angle_used[int(i)] for i in results2[:,1]]
-        results2[:,3] = [angle_used[int(i)] for i in results2[:,3]]
+        #results2[:,3] = [angle_used[int(i)] for i in results2[:,3]]
         
         return results2, grid, grid_filt, filt_grid

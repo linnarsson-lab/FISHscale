@@ -21,6 +21,7 @@ from FISHscale.utils.decomposition import Decomposition
 from FISHscale.spatial.boundaries import Boundaries
 from FISHscale.spatial.gene_order import Gene_order
 from FISHscale.segmentation.cellpose import Cellpose
+from FISHscale.utils.regionalization_gradient import Regionalization_Gradient
 from PyQt5 import QtWidgets
 import sys
 from datetime import datetime
@@ -45,7 +46,8 @@ except ModuleNotFoundError as e:
 from tqdm import tqdm
 
 class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, SpatialMetrics, DataLoader, Normalization, 
-              Density1D, Clustering, BoneFight, Decomposition, Boundaries, Gene_order, Cellpose):
+              Density1D, Clustering, BoneFight, Decomposition, Boundaries, Gene_order, Cellpose,
+              Regionalization_Gradient):
     """
     Base Class for FISHscale, still under development
 
