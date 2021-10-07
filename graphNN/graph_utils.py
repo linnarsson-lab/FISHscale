@@ -203,8 +203,8 @@ class GraphData(pl.LightningDataModule):
 
     def compute_size(self):
         cells = self.cells
-        if self.smooth:
-            cells = self.molecules_connected
+        #if self.smooth:
+        #    cells = self.molecules_connected
         np.save(self.folder +'/cells.npy', cells)
 
         self.train_size = int((cells.shape[0])*self.train_p)
@@ -338,9 +338,7 @@ class GraphData(pl.LightningDataModule):
 
         G = nx.Graph()
         G.add_nodes_from(np.arange(coords.shape[0]))
-            # Add edges
         G.add_edges_from(edges)
-
         node_removed = []
         for component in tqdm(list(nx.connected_components(G))):
             if len(component) < self.minimum_nodes_connected:
@@ -352,7 +350,6 @@ class GraphData(pl.LightningDataModule):
         cells = th.tensor(list(G.nodes))
 
         if supervised==False:
-            #self.edges_tensor = edges
             self.molecules_connected = cells
             return edges
         else:
@@ -416,7 +413,7 @@ class GraphData(pl.LightningDataModule):
         print('Fake Molecules: ',all_molecules.shape)
         return all_molecules, edges, all_cl
 
-    def knn_smooth(self,neighborhood_size=75):
+    '''def knn_smooth(self,neighborhood_size=75):
         print('Smoothing neighborhoods with kernel size: {}'.format(neighborhood_size))
         
         u = AnnoyIndex(2, 'euclidean')
@@ -438,7 +435,7 @@ class GraphData(pl.LightningDataModule):
 
         smoothed_dataframe= np.concatenate(smoothed_dataframe)
         self.d = sparse.csr_matrix(smoothed_dataframe)
-        self.molecules_connected = np.array(molecules_connected)
+        self.molecules_connected = np.array(molecules_connected)'''
 
     #### plotting and latent factors #####
 
