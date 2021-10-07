@@ -220,13 +220,13 @@ class GraphData(pl.LightningDataModule):
 
     def train_dataloader(self):
         edges = np.arange(self.g.num_edges())
-        random_edges = np.random.choice(edges,int(edges.shape[0]*self.train_p),replace=False)
+        random_edges = torch.tensor(np.random.choice(edges,int(edges.shape[0]*self.train_p),replace=False))
         unlab = dgl.dataloading.EdgeDataLoader(
                         self.g,
                         random_edges,
                         self.sampler,
                         negative_sampler=dgl.dataloading.negative_sampler.Uniform(self.negative_samples), # NegativeSampler(self.g, self.negative_samples, False),
-                        device=self.device,
+                        #device=self.device,
                         #exclude='self',
                         #reverse_eids=th.arange(self.g.num_edges()) ^ 1,
                         batch_size=self.batch_size,
@@ -236,14 +236,14 @@ class GraphData(pl.LightningDataModule):
 
         if self.model.supervised:
             edges = np.arange(self.g_lab.num_edges())
-            random_edges = np.random.choice(edges,random_edges.shape[0],replace=True)
+            random_edges = torch.tensor(np.random.choice(edges,random_edges.shape[0],replace=True))
     
             lab = dgl.dataloading.EdgeDataLoader(
                             self.g_lab,
                             random_edges,
                             self.sampler,
                             negative_sampler=dgl.dataloading.negative_sampler.Uniform(self.negative_samples), # NegativeSampler(self.g, self.negative_samples, False),
-                            device=self.device,
+                            #device=self.device,
                             #exclude='self',
                             #reverse_eids=th.arange(self.g.num_edges()) ^ 1,
                             batch_size=self.batch_size,
@@ -257,9 +257,9 @@ class GraphData(pl.LightningDataModule):
         else:
             return {'unlabelled':unlab}
 
-    def train(self,max_epochs=5,gpus=-1):
+    def train(self,max_epochs=5,gpus=0):
         if self.device.type == 'cuda':
-            gpus=1
+            gpus=0
         if self.model.supervised: 
             trainer = pl.Trainer(gpus=gpus,callbacks=[self.checkpoint_callback], max_epochs=max_epochs)
         else:
