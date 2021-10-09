@@ -231,8 +231,8 @@ class SemanticLoss(nn.Module):
         
         kl_density = th.nn.functional.kl_div(self.ncells.log(),self.pseudo_count/self.pseudo_count.sum())
         #kl_density =  -F.logsigmoid((self.ncells*self.pseudo_count).sum(-1)).sum()*100
-        semantic_loss = -F.logsigmoid((self.centroids_pseudo*self.centroids_true).sum(-1)).mean() + kl_density + dispersion_p
-        #semantic_loss = nn.MSELoss()(self.centroids_pseudo, self.centroids_true) + kl_density
+        #semantic_loss = -F.logsigmoid((self.centroids_pseudo*self.centroids_true).sum(-1)).mean() + kl_density #+ dispersion_p
+        semantic_loss = nn.MSELoss()(self.centroids_pseudo, self.centroids_true) + kl_density
         return semantic_loss
 
 class SAGE(nn.Module):
