@@ -321,10 +321,9 @@ class ListWidget(QWidget):
                         colors.append(cs)
 
                     else:
-                        #selected_indices = d.dask_attrs[d.dask_attrs['labels'].isin(self.selected)].index.compute() #.index.compute()
-                        selected_features = d.dask_attrs[d.dask_attrs[self.section].isin(self.selected)].compute()
-                        ps = d.df.loc[lambda x: x.index.isin(selected_features.index)].loc[:,['x','y','z']].values.compute()
-                        cs = np.array([x for x in selected_features[self.section].apply(lambda x: d.color_dict[str(x)])])
+                        selected = d.dask_attrs[d.dask_attrs[self.section].isin(self.selected)].compute() #.index.compute()
+                        ps =  selected.loc[:,['x','y','z']].values
+                        cs = np.array([x for x in selected[self.section].apply(lambda x: d.color_dict[str(x)])])
                         points.append(ps)
                         colors.append(cs)
                     

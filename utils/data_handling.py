@@ -347,18 +347,12 @@ class DataLoader(DataLoader_base):
             filter_filelist = [f'{p}_{g}.parquet' for g in unique_genes]
             #Load selected genes        
             self.df = dd.read_parquet(filter_filelist)
-            self.shape = data.shape
+            self.shape = (self.df.shape[0].compute(),self.df.shape[1])
         else:
             #Load all genes
             self.df = dd.read_parquet(path.join(self.FISHscale_data_folder, '*.parquet'))
-                   
-        #Handle metadata        
-        if new_parse == True:
-            self.dask_attrs = dd.from_pandas(pd.DataFrame(index=self.df.index), npartitions=self.df.npartitions, sort=False)
-            for c in other_columns:
-                self.add_dask_attribute(c, self.df[c])
-            self.dask_attrs.to_parquet(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes'))
-        else:
+
+        if new_parse ==False:
             #Get coordinate properties from metadata
             self._get_coordinate_properties()
             #Unique genes
@@ -377,9 +371,16 @@ class DataLoader(DataLoader_base):
             else:
                 self.unique_genes = self.df.g.drop_duplicates().compute().to_numpy()
                 self._metadatafile_add({'unique_genes': self.unique_genes})
-                
-        
-    
+
+        #Handle metadata
+        else: 
+            makedirs(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes'),exist_ok=True)
+            '''self.dask_attrs = dd.from_pandas(pd.DataFrame(index=self.df.index), npartitions=self.df.npartitions, sort=False)
+            for c in other_columns:
+                self.add_dask_attribute(c, self.df[c])
+            self.dask_attrs.to_parquet(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes'))'''
+
+
     def _get_gene_n_points(self) -> Dict:
         """Get number of points per gene.
         
@@ -443,8 +444,14 @@ class DataLoader(DataLoader_base):
             name (str): column name
             l (list): list of features
         """        
-        self.dask_attrs = self.dask_attrs.merge(pd.DataFrame({name:l}))
-        self.dask_attrs.to_parquet(path.join(self.dataset_folder,self.FISHscale_data_folder,'attributes'))
+        da = pd.DataFrame({'x':self.df.x.compute(),
+                                'y':self.df.y.compute(),
+                                'z':self.df.z.compute(),
+                                name:l})
+
+        da.groupby(name).apply(lambda x: self._dump_to_parquet(x, self.dataset_name, self.FISHscale_data_folder+'/attributes'))#, meta=('float64')).compute()
+        self.dask_attrs = dd.read_parquet(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes/', '*.parquet'))   
+        #self.dask_attrs.to_parquet(path.join(self.dataset_folder,self.FISHscale_data_folder,'attributes'))
 
         
         
