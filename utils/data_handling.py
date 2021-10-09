@@ -1,4 +1,4 @@
-from os import path, makedirs
+from os import path, makedirs,listdir
 from glob import glob
 import re
 from dask import dataframe as dd
@@ -347,24 +347,19 @@ class DataLoader(DataLoader_base):
             filter_filelist = [f'{p}_{g}.parquet' for g in unique_genes]
             #Load selected genes        
             self.df = dd.read_parquet(filter_filelist)
-            self.shape = data.shape
+            self.shape = (self.df.shape[0].compute(),self.df.shape[1])
         else:
             #Load all genes
             self.df = dd.read_parquet(path.join(self.FISHscale_data_folder, '*.parquet'))
-                   
-        #Handle metadata        
-        if new_parse == True:
-            self.dask_attrs = dd.from_pandas(pd.DataFrame(index=self.df.index), npartitions=self.df.npartitions, sort=False)
-            for c in other_columns:
-                self.add_dask_attribute(c, self.df[c])
-            self.dask_attrs.to_parquet(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes'))
-        else:
+
+        if new_parse ==False:
             #Get coordinate properties from metadata
             self._get_coordinate_properties()
             #Unique genes
             unique_genes_metadata = self._metadatafile_get('unique_genes')
             #Attributes
-            self.dask_attrs = dd.read_parquet(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes', '*.parquet'))
+            p = path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes')
+            self.dask_attrs = {x :dd.read_parquet(path.join(p,x,'*.parquet'), )  for x in listdir(p)}
             
             #Check if unique_genes are given by user
             if isinstance(unique_genes, (np.ndarray, list)):
@@ -377,9 +372,17 @@ class DataLoader(DataLoader_base):
             else:
                 self.unique_genes = self.df.g.drop_duplicates().compute().to_numpy()
                 self._metadatafile_add({'unique_genes': self.unique_genes})
-                
-        
-    
+
+        #Handle metadata
+        else: 
+            makedirs(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes'),exist_ok=True)
+            self.dask_attrs = {}
+            '''self.dask_attrs = dd.from_pandas(pd.DataFrame(index=self.df.index), npartitions=self.df.npartitions, sort=False)
+            for c in other_columns:
+                self.add_dask_attribute(c, self.df[c])
+            self.dask_attrs.to_parquet(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes'))'''
+
+
     def _get_gene_n_points(self) -> Dict:
         """Get number of points per gene.
         
@@ -443,8 +446,15 @@ class DataLoader(DataLoader_base):
             name (str): column name
             l (list): list of features
         """        
-        self.dask_attrs = self.dask_attrs.merge(pd.DataFrame({name:l}))
-        self.dask_attrs.to_parquet(path.join(self.dataset_folder,self.FISHscale_data_folder,'attributes'))
+        da = pd.DataFrame({'x':self.df.x.compute(),
+                                'y':self.df.y.compute(),
+                                'z':self.df.z.compute(),
+                                name:l})
+
+        makedirs(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes',name),exist_ok=True)
+        da.groupby(name).apply(lambda x: self._dump_to_parquet(x, self.dataset_name, self.FISHscale_data_folder+'/attributes/{}'.format(name)))#, meta=('float64')).compute()
+        self.dask_attrs[name] = dd.read_parquet(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes/{}'.format(name), '*.parquet'))   
+        #self.dask_attrs.to_parquet(path.join(self.dataset_folder,self.FISHscale_data_folder,'attributes'))
 
         
         

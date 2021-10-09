@@ -147,7 +147,7 @@ class Window:
             print(dataframe.filename)
 
             for c in self.columns:
-                unique_ca = dataframe.dask_attrs[c].unique().values.compute()
+                unique_ca = dataframe.dask_attrs[c][c].unique().values.compute()
                 self.dic_pointclouds[c]= unique_ca
                 for ca in unique_ca:
                     if ca in self.color_dic:
@@ -321,10 +321,10 @@ class ListWidget(QWidget):
                         colors.append(cs)
 
                     else:
-                        #selected_indices = d.dask_attrs[d.dask_attrs['labels'].isin(self.selected)].index.compute() #.index.compute()
-                        selected_features = d.dask_attrs[d.dask_attrs[self.section].isin(self.selected)].compute()
-                        ps = d.df.loc[lambda x: x.index.isin(selected_features.index)].loc[:,['x','y','z']].values.compute()
-                        cs = np.array([x for x in selected_features[self.section].apply(lambda x: d.color_dict[str(x)])])
+                        da = d.dask_attrs[self.section]
+                        selected = da[da[self.section].isin(self.selected)].compute() #.index.compute()
+                        ps =  selected.loc[:,['x','y','z']].values
+                        cs = np.array([x for x in selected[self.section].apply(lambda x: d.color_dict[str(x)])])
                         points.append(ps)
                         colors.append(cs)
                     
