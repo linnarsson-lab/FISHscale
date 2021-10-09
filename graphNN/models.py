@@ -140,7 +140,7 @@ class SAGELightning(LightningModule):
     def configure_optimizers(self):
         optimizer = th.optim.Adam(self.module.encoder.parameters(), lr=self.lr)
         if self.supervised:
-            d_opt = th.optim.Adam(self.module.domain_adaptation.parameters(), lr=5e-4)
+            d_opt = th.optim.Adam(self.module.domain_adaptation.parameters(), lr=1e-3)
             return [optimizer, d_opt]
         else:
             return optimizer
@@ -231,7 +231,7 @@ class SemanticLoss(nn.Module):
         
         kl_density = th.nn.functional.kl_div(self.ncells.log(),self.pseudo_count/self.pseudo_count.sum())
         #kl_density =  -F.logsigmoid((self.ncells*self.pseudo_count).sum(-1)).sum()*100
-        semantic_loss = -F.logsigmoid((self.centroids_pseudo*self.centroids_true).sum(-1)).mean() + kl_density #+ dispersion_p
+        semantic_loss = -F.logsigmoid((self.centroids_pseudo*self.centroids_true).sum(-1)).mean() + kl_density + dispersion_p
         #semantic_loss = nn.MSELoss()(self.centroids_pseudo, self.centroids_true) + kl_density
         return semantic_loss
 
@@ -316,7 +316,7 @@ class SAGE(nn.Module):
                 elif l == len(self.encoder.encoder_dict['GS']) -1:
                     h = self.encoder.encoder_dict['FC'][1](h)
 
-                y[output_nodes] = h.cpu()
+                y[output_nodes] = h.cpu().detach()#.numpy()
             x = y
         return y
 

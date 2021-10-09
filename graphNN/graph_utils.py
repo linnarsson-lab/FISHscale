@@ -442,16 +442,21 @@ class GraphData(pl.LightningDataModule):
 
     def get_latents(self,labelled=True):
         self.model.eval()
-        latent_unlabelled = self.model.module.inference(self.g,self.g.ndata['gene'],'cpu',1040,0)#.detach().numpy()
+        latent_unlabelled = self.model.module.inference(self.g,self.g.ndata['gene'],'cpu',512,0)#.detach().numpy()
+        
         if self.model.supervised:
             if labelled:
-                latent_labelled = self.model.module.inference(self.g_lab,self.g_lab.ndata['gene'],'cpu',1040,0)#.detach().numpy()
+                latent_labelled = self.model.module.inference(self.g_lab,self.g_lab.ndata['gene'],'cpu',512,0)#.detach().numpy()
                 self.prediction_labelled = self.model.module.encoder.encoder_dict['CF'](latent_labelled).detach().numpy()
+                np.save(self.folder+'/probabilities_labelled',self.prediction_labelled)
                 self.latent_labelled = latent_labelled.detach().numpy()
+                np.save(self.folder+'/latent_labelled',self.latent_labelled)
             self.prediction_unlabelled = self.model.module.encoder.encoder_dict['CF'](latent_unlabelled).detach().numpy()
-            
+            np.save(self.folder+'/probabilities_unlabelled',self.prediction_unlabelled)
 
         self.latent_unlabelled = latent_unlabelled.detach().numpy()
+        np.save(self.folder+'/latent_unlabelled',latent_unlabelled)
+
 
     def get_umap(self,random_n=50000):
         import umap
@@ -551,11 +556,15 @@ class GraphData(pl.LightningDataModule):
 
         else:
             import scanpy as sc
+            print('Running leiden clustering from scanpy...')
             adata = sc.AnnData(X=self.latent_unlabelled)
             sc.pp.neighbors(adata, n_neighbors=10)
             sc.tl.leiden(adata, random_state=42)
             #self.data.add_dask_attribute('leiden',adata.obs['leiden'].values.tolist())
             self.clusters= adata.obs['leiden'].values.astype('int')
+            np.save(self.folder+'/clusters',self.clusters)
+            print('Clustering done.')
+            print('Generating umap embedding...')
             
             import random
             r = lambda: random.randint(0,255)
