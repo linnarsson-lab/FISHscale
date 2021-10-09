@@ -1,4 +1,4 @@
-from os import path, makedirs
+from os import path, makedirs,listdir
 from glob import glob
 import re
 from dask import dataframe as dd
@@ -358,7 +358,8 @@ class DataLoader(DataLoader_base):
             #Unique genes
             unique_genes_metadata = self._metadatafile_get('unique_genes')
             #Attributes
-            self.dask_attrs = dd.read_parquet(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes', '*.parquet'))
+            p = path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes')
+            self.dask_attrs = {x :dd.read_parquet(path.join(p,x,'*.parquet'), )  for x in listdir(p)}
             
             #Check if unique_genes are given by user
             if isinstance(unique_genes, (np.ndarray, list)):
@@ -375,6 +376,7 @@ class DataLoader(DataLoader_base):
         #Handle metadata
         else: 
             makedirs(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes'),exist_ok=True)
+            self.dask_attrs = {}
             '''self.dask_attrs = dd.from_pandas(pd.DataFrame(index=self.df.index), npartitions=self.df.npartitions, sort=False)
             for c in other_columns:
                 self.add_dask_attribute(c, self.df[c])
@@ -449,8 +451,9 @@ class DataLoader(DataLoader_base):
                                 'z':self.df.z.compute(),
                                 name:l})
 
-        da.groupby(name).apply(lambda x: self._dump_to_parquet(x, self.dataset_name, self.FISHscale_data_folder+'/attributes'))#, meta=('float64')).compute()
-        self.dask_attrs = dd.read_parquet(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes/', '*.parquet'))   
+        makedirs(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes',name),exist_ok=True)
+        da.groupby(name).apply(lambda x: self._dump_to_parquet(x, self.dataset_name, self.FISHscale_data_folder+'/attributes/{}'.format(name)))#, meta=('float64')).compute()
+        self.dask_attrs[name] = dd.read_parquet(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes/{}'.format(name), '*.parquet'))   
         #self.dask_attrs.to_parquet(path.join(self.dataset_folder,self.FISHscale_data_folder,'attributes'))
 
         
