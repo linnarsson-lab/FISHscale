@@ -149,7 +149,7 @@ class GraphData(pl.LightningDataModule):
         self.setup()
         # Save random cell selection
         
-        dgluns = self.save_to+'graph/{}Unsupervised.graph'.format(self.cells.shape[0])
+        dgluns = self.save_to+'graph/{}Unsupervised_smooth{}.graph'.format(self.cells.shape[0],self.smooth)
         if not os.path.isfile(dgluns):
             d = self.molecules_df()
             edges = self.buildGraph(self.distance_threshold)
@@ -167,7 +167,7 @@ class GraphData(pl.LightningDataModule):
             #self.g = self.g.to(self.device)
 
         if self.model.supervised:
-            dglsup =self.save_to+'graph/{}Supervised.graph'.format(self.cells.shape[0])
+            dglsup =self.save_to+'graph/{}Supervised_smooth{}.graph'.format(self.cells.shape[0],self.smooth)
             if not os.path.isfile(dglsup):
                 molecules_labelled, edges_labelled, labels = self.cell_types_to_graph(self.ref_celltypes,smooth=self.smooth)
                 self.g_lab= dgl.graph((edges_labelled[0,:],edges_labelled[1,:]))
@@ -180,6 +180,8 @@ class GraphData(pl.LightningDataModule):
                 glist, _ = dgl.data.utils.load_graphs(dglsup) # glist will be [g1, g2]
                 self.g_lab = glist[0]
                 #self.g_lab = self.g_lab.to(self.device)
+        
+        print(self.g)
 
     def prepare_data(self):
         # do-something
@@ -393,8 +395,8 @@ class GraphData(pl.LightningDataModule):
                     except:
                         pass
             else:
-                for x in range(500):
-                    random_molecules = np.random.choice(data.shape[0],size=75,p=cl_i)
+                for x in range(1000):
+                    random_molecules = np.random.choice(data.shape[0],size=50,p=cl_i)
                     dot = np.zeros_like(cl_i)
                     for x in random_molecules:
                         dot[x] = dot[x]+1
