@@ -142,15 +142,15 @@ class GraphData(pl.LightningDataModule):
         os.mkdir(self.folder)
         if not os.path.isdir(self.save_to+'graph'):
             os.mkdir(self.save_to+'graph')
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        print('Device is: ',self.device)
+        #self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        #print('Device is: ',self.device)
         self.subsample = subsample
         self.subsample_xy()
         self.compute_size()
         self.setup()
         # Save random cell selection
         
-        dgluns = self.save_to+'graph/{}Unsupervised.graph'.format(self.cells.shape[0])
+        dgluns = self.save_to+'graph/{}Unsupervised_smooth{}.graph'.format(self.cells.shape[0],self.smooth)
         if not os.path.isfile(dgluns):
             d = self.molecules_df()
             edges = self.buildGraph(self.distance_threshold)
@@ -169,11 +169,11 @@ class GraphData(pl.LightningDataModule):
             #self.g = self.g.to(self.device)
 
         if self.model.supervised:
-            dglsup =self.save_to+'graph/{}Supervised.graph'.format(self.cells.shape[0])
+            dglsup =self.save_to+'graph/{}Supervised_smooth{}.graph'.format(self.cells.shape[0],self.smooth)
             if not os.path.isfile(dglsup):
                 self.molecules_labelled, edges_labelled, labels = self.cell_types_to_graph(smooth=self.smooth)
                 self.g_lab= dgl.graph((edges_labelled[0,:],edges_labelled[1,:]))
-                self.g_lab.ndata['gene'] = th.tensor(self.molecules_labelled.toarray(),dtype=th.float32)
+                self.g_lab.ndata['gene'] = th.tensor(molecules_labelled.toarray(),dtype=th.float32)
                 self.g_lab.ndata['label'] = th.tensor(labels, dtype=th.long)
                 graph_labels = {"SupervisedDGL": th.tensor([0])}
                 dgl.data.utils.save_graphs(dglsup, [self.g_lab], graph_labels)
@@ -182,6 +182,8 @@ class GraphData(pl.LightningDataModule):
                 glist, _ = dgl.data.utils.load_graphs(dglsup) # glist will be [g1, g2]
                 self.g_lab = glist[0]
                 #self.g_lab = self.g_lab.to(self.device)
+        
+        print(self.g)
 
     def prepare_data(self):
         # do-something
@@ -234,7 +236,8 @@ class GraphData(pl.LightningDataModule):
                         batch_size=self.batch_size,
                         shuffle=True,
                         drop_last=True,
-                        num_workers=self.num_workers)
+                        num_workers=self.num_workers,
+                        )
 
         if self.model.supervised:
             edges = np.arange(self.g_lab.num_edges())
@@ -260,13 +263,13 @@ class GraphData(pl.LightningDataModule):
             return {'unlabelled':unlab}
 
     def train(self,max_epochs=5,gpus=0):
-        if self.device.type == 'cuda':
-            gpus=0
+        #if self.device.type == 'cuda':
+        #    gpus=0
         if self.model.supervised: 
             trainer = pl.Trainer(gpus=gpus,callbacks=[self.checkpoint_callback], max_epochs=max_epochs)
         else:
             trainer = pl.Trainer(gpus=gpus,callbacks=[self.checkpoint_callback], max_epochs=max_epochs)
-        trainer.fit(self.model, train_dataloader=self.train_dataloader())
+        trainer.fit(self.model, train_dataloaders=self.train_dataloader())
 
     def molecules_df(self):
         rows,cols = [],[]
