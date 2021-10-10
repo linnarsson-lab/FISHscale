@@ -73,7 +73,7 @@ class SAGELightning(LightningModule):
         batch_inputs = mfgs[0].srcdata['gene']
         batch_pred_unlab = self.module(mfgs, batch_inputs)
         loss,pos, neg = self.loss_fcn(batch_pred_unlab, pos_graph, neg_graph) #* 5
-
+        
 
         if self.supervised:
             batch2 = batch['labelled']
@@ -89,29 +89,29 @@ class SAGELightning(LightningModule):
             # Label prediction loss
             labels_pred = self.module.encoder.encoder_dict['CF'](batch_pred_lab)
             cce = th.nn.CrossEntropyLoss()
-            classifier_loss = cce(labels_pred,batch_labels)
+            classifier_loss = cce(labels_pred,batch_labels) #* 0.05
             self.train_acc(labels_pred.argsort(axis=-1)[:,-1],batch_labels)
             self.log('Classifier Loss',classifier_loss)
             self.log('train_acc', self.train_acc, prog_bar=True, on_step=True)
 
             #Domain Adaptation Loss
-            classifier_domain_loss = self.loss_discriminator([batch_pred_unlab.detach(), batch_pred_lab.detach()],predict_true_class=True)
+            classifier_domain_loss = 10*self.loss_discriminator([batch_pred_unlab.detach(), batch_pred_lab.detach()],predict_true_class=True)
             self.log('Classifier_true', classifier_domain_loss, prog_bar=False, on_step=True)
             d_opt.zero_grad()
             self.manual_backward(classifier_domain_loss)
             d_opt.step()
 
-            domain_loss_fake = self.loss_discriminator([batch_pred_unlab, batch_pred_lab],predict_true_class=False)
+            domain_loss_fake = 10*self.loss_discriminator([batch_pred_unlab, batch_pred_lab],predict_true_class=False)
             self.log('Classifier_fake', domain_loss_fake, prog_bar=False, on_step=True)
 
             #Semantic Loss
             labels_unlab = self.module.encoder.encoder_dict['CF'](batch_pred_unlab).argsort(axis=-1)[:,-1]
-            semantic_loss = self.sl.semantic_loss(pseudo_latent=batch_pred_unlab, 
+            '''semantic_loss = self.sl.semantic_loss(pseudo_latent=batch_pred_unlab, 
                                                     pseudo_labels=labels_unlab ,
                                                     true_latent=batch_pred_lab,
                                                     true_labels=labels_pred.argsort(axis=-1)[:,-1],
                                                     )
-            self.log('Semantic_loss', semantic_loss, prog_bar=True, on_step=True)
+            self.log('Semantic_loss', semantic_loss, prog_bar=True, on_step=True)'''
 
             
             # Will increasingly apply supervised loss, domain adaptation loss
@@ -119,8 +119,8 @@ class SAGELightning(LightningModule):
             # graphsage task
             #kappa = 2/(1+10**(-1*((1*self.kappa)/200)))-1
             #self.kappa += 1
-
-            loss += domain_loss_fake + supervised_loss + classifier_loss + semantic_loss.detach()
+            loss = loss*0.005
+            loss += domain_loss_fake + supervised_loss*0.005 + classifier_loss #+ semantic_loss.detach()
             opt.zero_grad()
             self.manual_backward(loss)
             opt.step()
