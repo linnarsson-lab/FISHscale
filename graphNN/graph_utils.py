@@ -96,7 +96,7 @@ class GraphData(pl.LightningDataModule):
         num_workers=1,
         save_to = '',
         subsample=1,
-        ref_celltypes=None,
+        ref_celltypes=(None,None),
         smooth:bool=False,
         negative_samples:int=5,
         ):
@@ -131,7 +131,8 @@ class GraphData(pl.LightningDataModule):
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.save_to = save_to
-        self.ref_celltypes = ref_celltypes 
+        self.ref_celltypes = ref_celltypes[0]
+        self.var_celltypes = ref_celltypes[1] 
         self.smooth = smooth
         self.negative_samples = negative_samples
         self.ngh_size = ngh_size
@@ -157,7 +158,8 @@ class GraphData(pl.LightningDataModule):
             self.g.ndata['gene'] = th.tensor(d.toarray(), dtype=th.float32)
             graph_labels = {"UnsupervisedDGL": th.tensor([0])}
             if self.smooth:
-                self.g.update_all(fn.u_add_v('gene','gene','a'),fn.sum('a','gene'))
+                #self.g.update_all(fn.u_add_v('gene','gene','a'),fn.sum('a','gene'))
+                self.g.update_all(fn.copy_u('gene', 'm'), fn.sum('m', 'gene'))
             #self.g.update_all(fn.copy_u('gene', 'g2'), fn.sum('g2', 'gene'))
             dgl.data.utils.save_graphs(dgluns, [self.g], graph_labels)
             #self.g = self.g.to(self.device)
@@ -169,7 +171,7 @@ class GraphData(pl.LightningDataModule):
         if self.model.supervised:
             dglsup =self.save_to+'graph/{}Supervised_smooth{}.graph'.format(self.cells.shape[0],self.smooth)
             if not os.path.isfile(dglsup):
-                molecules_labelled, edges_labelled, labels = self.cell_types_to_graph(self.ref_celltypes,smooth=self.smooth)
+                self.molecules_labelled, edges_labelled, labels = self.cell_types_to_graph(smooth=self.smooth)
                 self.g_lab= dgl.graph((edges_labelled[0,:],edges_labelled[1,:]))
                 self.g_lab.ndata['gene'] = th.tensor(molecules_labelled.toarray(),dtype=th.float32)
                 self.g_lab.ndata['label'] = th.tensor(labels, dtype=th.long)
@@ -359,7 +361,7 @@ class GraphData(pl.LightningDataModule):
         else:
             return edges
 
-    def cell_types_to_graph(self, data,smooth=False):
+    def cell_types_to_graph(self,smooth=False):
         """
         cell_types_to_graph [summary]
 
@@ -375,16 +377,16 @@ class GraphData(pl.LightningDataModule):
         all_molecules = []
         all_coords = []
         all_cl = []
-        data = data/data.sum(axis=0)
-        #data = (data*1000).astype('int')
+        data = self.ref_celltypes#/data.sum(axis=0)
 
+        #data = (data*1000).astype('int')
         print('Converting clusters into simulated molecule neighborhoods...')
         for i in trange(data.shape[1]):
             molecules = []
             # Reduce number of cells by Ncells.min() to avoid having a huge dataframe, since it is actually simulated data
             cl_i = data[:,i]#*(Ncells[i]/(Ncells.min()*100)).astype('int')
-
-            if smooth == True:
+            cl_v = self.var_celltypes[:,i]
+            if smooth == False:
                 random_molecules = np.random.choice(data.shape[0],size=2500,p=cl_i)
                 for x in random_molecules:
                     dot = np.zeros_like(cl_i)
@@ -395,8 +397,12 @@ class GraphData(pl.LightningDataModule):
                     except:
                         pass
             else:
-                for x in range(1000):
-                    random_molecules = np.random.choice(data.shape[0],size=50,p=cl_i)
+                for x in range(2500):
+                    #p = np.random.normal(cl_i,cl_v)[0,:]
+                    p = np.random.poisson(cl_i,size=(1,cl_i.shape[0]))[0,:]
+                    p[p < 0] = 0
+                    p = p/p.sum()
+                    random_molecules = np.random.choice(data.shape[0],size=10,p=p)
                     dot = np.zeros_like(cl_i)
                     for x in random_molecules:
                         dot[x] = dot[x]+1
