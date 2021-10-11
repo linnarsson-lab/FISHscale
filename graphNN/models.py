@@ -58,30 +58,30 @@ class SAGELightning(LightningModule):
         #self.automatic_optimization = True
         if self.supervised:
             self.automatic_optimization = False
-            self.sl = SemanticLoss(n_hidden,n_classes,ncells=Ncells)
+            self.sl = SemanticLoss(n_hidden,n_classes,device=self.device,ncells=Ncells)
             self.train_acc = torchmetrics.Accuracy()
             
 
     def training_step(self, batch, batch_idx):
         if self.supervised:
             opt, d_opt = self.optimizers()
-
         batch1 = batch['unlabelled']
         _, pos_graph, neg_graph, mfgs = batch1
         mfgs = [mfg.int() for mfg in mfgs]
-        pos_graph = pos_graph#.to(self.device)
-        neg_graph = neg_graph#.to(self.device)
+        #pos_graph = pos_graph.to(self.device)
+        #neg_graph = neg_graph.to(self.device)
         batch_inputs = mfgs[0].srcdata['gene']
+        
         batch_pred_unlab = self.module(mfgs, batch_inputs)
         loss,pos, neg = self.loss_fcn(batch_pred_unlab, pos_graph, neg_graph) #* 5
-
+        
 
         if self.supervised:
             batch2 = batch['labelled']
             _, pos_graph, neg_graph, mfgs = batch2
             mfgs = [mfg.int() for mfg in mfgs]
-            pos_graph = pos_graph#.to(self.device)
-            neg_graph = neg_graph#.to(self.device)
+            #pos_graph = pos_graph.to(self.device)
+            #neg_graph = neg_graph.to(self.device)
             batch_inputs = mfgs[0].srcdata['gene']
             batch_labels = mfgs[-1].dstdata['label']
             batch_pred_lab = self.module(mfgs, batch_inputs)
@@ -90,40 +90,38 @@ class SAGELightning(LightningModule):
             # Label prediction loss
             labels_pred = self.module.encoder.encoder_dict['CF'](batch_pred_lab)
             cce = th.nn.CrossEntropyLoss()
-            classifier_loss = cce(labels_pred,batch_labels)
+            classifier_loss = cce(labels_pred,batch_labels) #* 0.05
             self.train_acc(labels_pred.argsort(axis=-1)[:,-1],batch_labels)
             self.log('Classifier Loss',classifier_loss)
             self.log('train_acc', self.train_acc, prog_bar=True, on_step=True)
 
             #Domain Adaptation Loss
-            classifier_domain_loss = self.loss_discriminator([batch_pred_unlab.detach(), batch_pred_lab.detach()],predict_true_class=True)
+            classifier_domain_loss = 1*self.loss_discriminator([batch_pred_unlab.detach(), batch_pred_lab.detach()],predict_true_class=True)
             self.log('Classifier_true', classifier_domain_loss, prog_bar=False, on_step=True)
             d_opt.zero_grad()
             self.manual_backward(classifier_domain_loss)
             d_opt.step()
 
-            domain_loss_fake = self.loss_discriminator([batch_pred_unlab, batch_pred_lab],predict_true_class=False)
+            domain_loss_fake = 1*self.loss_discriminator([batch_pred_unlab, batch_pred_lab],predict_true_class=False)
             self.log('Classifier_fake', domain_loss_fake, prog_bar=False, on_step=True)
 
             #Semantic Loss
             labels_unlab = self.module.encoder.encoder_dict['CF'](batch_pred_unlab).argsort(axis=-1)[:,-1]
-            semantic_loss = self.sl.semantic_loss(pseudo_latent=batch_pred_unlab, 
+            '''semantic_loss = self.sl.semantic_loss(pseudo_latent=batch_pred_unlab, 
                                                     pseudo_labels=labels_unlab ,
                                                     true_latent=batch_pred_lab,
                                                     true_labels=labels_pred.argsort(axis=-1)[:,-1],
                                                     )
-            self.log('Semantic_loss', semantic_loss, prog_bar=True, on_step=True)
+            self.log('Semantic_loss', semantic_loss, prog_bar=True, on_step=True)'''
 
             
             # Will increasingly apply supervised loss, domain adaptation loss
             # from 0 to 1, from iteration 0 to 200, focusing first on unsupervised 
             # graphsage task
-            #kappa = 2/(1+10**(-1*((1*self.kappa)/200)))-1
-            #self.kappa += 1
-
-            loss += domain_loss_fake + supervised_loss + classifier_loss + semantic_loss.detach()
-
-
+            kappa = 2/(1+10**(-1*((1*self.kappa)/2000)))-1
+            self.kappa += 1
+            loss = loss*kappa
+            loss += domain_loss_fake + supervised_loss*kappa + classifier_loss #+ semantic_loss.detach()
             opt.zero_grad()
             self.manual_backward(loss)
             opt.step()
@@ -143,7 +141,7 @@ class SAGELightning(LightningModule):
     def configure_optimizers(self):
         optimizer = th.optim.Adam(self.module.encoder.parameters(), lr=self.lr)
         if self.supervised:
-            d_opt = th.optim.Adam(self.module.domain_adaptation.parameters(), lr=0.001)
+            d_opt = th.optim.Adam(self.module.domain_adaptation.parameters(), lr=1e-3)
             return [optimizer, d_opt]
         else:
             return optimizer
@@ -183,17 +181,21 @@ class SemanticLoss(nn.Module):
     def __init__(self , 
         n_hidden,
         n_labels,
-        ncells=0):
-        self.centroids_pseudo = th.randn([n_hidden,n_labels])
-        self.pseudo_count = th.ones([n_labels])
-        self.centroids_true = th.randn([n_hidden, n_labels])
-        self.true_count = th.ones([n_labels])
+        device,
+        ncells=0,
+        ):
+        self.device = 'cpu'
+        self.centroids_pseudo = th.randn([n_hidden,n_labels],device=self.device)
+        self.pseudo_count = th.ones([n_labels],device=self.device)
+        self.centroids_true = th.randn([n_hidden, n_labels],device=self.device)
+        self.true_count = th.ones([n_labels],device=self.device)
         
         if type(ncells) == type(0):
             self.ncells = self.true_count/self.true_count.sum()
+            self.ncells_max = self.true_count.sum()*1000
         else:
-            self.ncells_max = ncells.max()
-            self.ncells = th.tensor(ncells/ncells.sum())
+            self.ncells_max = ncells.sum()
+            self.ncells = th.tensor(ncells/ncells.sum(),device=self.device)
 
         super().__init__()
     def semantic_loss(self, 
@@ -201,15 +203,16 @@ class SemanticLoss(nn.Module):
             pseudo_labels, 
             true_latent, 
             true_labels):
-        
+
         if self.pseudo_count.max() >= self.ncells_max:
-            self.pseudo_count = th.ones([self.pseudo_count.shape[0]])
+            self.pseudo_count = th.ones([self.pseudo_count.shape[0]],device=self.device)
 
         for pl in pseudo_labels.unique():
             filt = pseudo_labels == pl
             if filt.sum() > 5:
                 centroid_pl = pseudo_latent[filt,:]
-                dispersion_p = th.mean(th.tensor([nn.MSELoss()(centroid_pl[cell,:], self.centroids_pseudo[:,pl]) for cell in range(centroid_pl.shape[0])]))
+                dp = th.tensor([nn.MSELoss()(centroid_pl[cell,:], self.centroids_pseudo[:,pl]) for cell in range(centroid_pl.shape[0])],device=self.device)
+                dispersion_p = th.mean(dp)
                 centroid_pl = centroid_pl.mean(axis=0)
                 new_avg_pl = self.centroids_pseudo[:,pl] * self.pseudo_count[pl] + centroid_pl *filt.sum()
                 new_avg_pl = new_avg_pl/(self.pseudo_count[pl] +filt.sum())
@@ -229,8 +232,8 @@ class SemanticLoss(nn.Module):
         
         kl_density = th.nn.functional.kl_div(self.ncells.log(),self.pseudo_count/self.pseudo_count.sum())
         #kl_density =  -F.logsigmoid((self.ncells*self.pseudo_count).sum(-1)).sum()*100
-        semantic_loss = -F.logsigmoid((self.centroids_pseudo*self.centroids_true).sum(-1)).mean() + kl_density + dispersion_p
-        #semantic_loss = nn.MSELoss()(self.centroids_pseudo, self.centroids_true) + kl_density
+        #semantic_loss = -F.logsigmoid((self.centroids_pseudo*self.centroids_true).sum(-1)).mean() + kl_density #+ dispersion_p
+        semantic_loss = nn.MSELoss()(self.centroids_pseudo, self.centroids_true) + kl_density
         return semantic_loss
 
 class SAGE(nn.Module):
@@ -258,7 +261,7 @@ class SAGE(nn.Module):
         self.encoder = Encoder(in_feats,n_hidden,n_classes,n_layers,supervised)
         
     def forward(self, blocks, x):
-        h = x   
+        h = th.log(x+1)   
         for l, (layer, block) in enumerate(zip(self.encoder.encoder_dict['GS'], blocks)):
             #print(l)
             h = layer(block, h)
@@ -292,7 +295,7 @@ class SAGE(nn.Module):
             sampler = dgl.dataloading.MultiLayerFullNeighborSampler(1)
             dataloader = dgl.dataloading.NodeDataLoader(
                 g,
-                th.arange(g.num_nodes()).to(g.device),
+                th.arange(g.num_nodes()),#.to(g.device),
                 sampler,
                 batch_size=batch_size,
                 shuffle=False,
@@ -301,8 +304,8 @@ class SAGE(nn.Module):
 
             for input_nodes, output_nodes, blocks in tqdm.tqdm(dataloader):
                 block = blocks[0]
-                block = block.int().to(device)
-                h = x[input_nodes].to(device)
+                block = block.int()#.to(device)
+                h = x[input_nodes]#.to(device)
                 h = layer(block, h)
                 h = F.normalize(h)
 
@@ -314,7 +317,7 @@ class SAGE(nn.Module):
                 elif l == len(self.encoder.encoder_dict['GS']) -1:
                     h = self.encoder.encoder_dict['FC'][1](h)
 
-                y[output_nodes] = h.cpu()
+                y[output_nodes] = h.cpu().detach()#.numpy()
             x = y
         return y
 

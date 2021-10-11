@@ -136,7 +136,7 @@ class GeneScatter(AxSize):
                     scalebar: bool=True, show_axes: bool=False, 
                     show_legend: bool = True, title: str = None, 
                     ax = None, save: bool=False, save_name: str='', 
-                    dpi: int=300, file_format: str='.eps') -> None:
+                    dpi: int=300, file_format: str='.eps', alpha=1) -> None:
         """Make a scatter plot of the data.
 
         Uses a black background. Plots in real size if `ax_scale_factor` is 1. 
@@ -177,6 +177,7 @@ class GeneScatter(AxSize):
             file_format (str, optional): Format of the plot including the 
                 point. Even if vector format is given the points will be 
                 rasterized. Defaults to '.eps'.
+            alpha (float, optional): transparency. Defaults to 1.
         """        
         #Check input
         if not isinstance(genes, list) and not isinstance(genes, np.ndarray):
@@ -201,7 +202,7 @@ class GeneScatter(AxSize):
                 filt = filt_x & filt_y
                 x = x[filt]
                 y = y[filt]
-            ax.scatter(x, y, s=s, color=c, zorder=0, label=g)
+            ax.scatter(x, y, s=s, color=c, zorder=0, label=g, alpha=alpha)
             del data
         
         #Rescale
@@ -254,7 +255,7 @@ class MultiGeneScatter(AxSize):
     def scatter_plot(self, genes: Union[List, np.ndarray], s: float=0.1, ax_scale_factor: int=10, 
                     scalebar: bool=True, show_axes: bool=False, flip_y: bool=False, show_legend=True,
                     show_title=False, save: bool=False, save_name: str='', dpi: int=300, 
-                    file_format: str='.eps'):
+                    file_format: str='.eps',alpha=1):
         """Make a scatter plot of all data.
 
         Use self.arange_grid_ffset() to arrange datasets in a grid.   
@@ -292,6 +293,7 @@ class MultiGeneScatter(AxSize):
             file_format (str, optional): Format of the plot including the 
                 point. Even if vector format is given the points will be 
                 rasterized. Defaults to '.eps'.
+            alpha (float, optional): transparency. Defaults to 1.
         """   
 
         #Check input
@@ -323,9 +325,9 @@ class MultiGeneScatter(AxSize):
                 y_max = y_max_g if y_max_g > y_max else y_max
                 
                 if i == 0:
-                    ax.scatter(x, y, s=s, color=self.color_dict[g], zorder=0, label=g)
+                    ax.scatter(x, y, s=s, color=self.color_dict[g], zorder=0, label=g,alpha=alpha)
                 else:
-                    ax.scatter(x, y, s=s, color=self.color_dict[g], zorder=0)
+                    ax.scatter(x, y, s=s, color=self.color_dict[g], zorder=0,alphad=alpha)
                     
             if show_title:
                 lw, fs = self._line_font_size(ax)

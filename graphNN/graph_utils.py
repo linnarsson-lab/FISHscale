@@ -19,6 +19,7 @@ import h5py
 import sklearn.linear_model as lm
 import sklearn.metrics as skm
 import dgl
+import dgl.function as fn
 
 class UnsupervisedClassification(Callback):
     def on_validation_epoch_start(self, trainer, pl_module):
@@ -95,10 +96,9 @@ class GraphData(pl.LightningDataModule):
         num_workers=1,
         save_to = '',
         subsample=1,
-        ref_celltypes=None,
+        ref_celltypes=(None,None),
         smooth:bool=False,
         negative_samples:int=5,
-        device='cpu',
         ):
         """
         Initialize GraphData class
@@ -131,37 +131,66 @@ class GraphData(pl.LightningDataModule):
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.save_to = save_to
-        self.ref_celltypes = ref_celltypes 
+        self.ref_celltypes = ref_celltypes[0]
+        self.var_celltypes = ref_celltypes[1] 
         self.smooth = smooth
         self.negative_samples = negative_samples
         self.ngh_size = ngh_size
         
 
-        self.folder = self.analysis_name+ '_' +datetime.now().strftime("%Y-%m-%d-%H%M%S")
+        self.folder = self.save_to+self.analysis_name+ '_' +datetime.now().strftime("%Y-%m-%d-%H%M%S")
         os.mkdir(self.folder)
-        self.device = th.device(device)
-
+        if not os.path.isdir(self.save_to+'graph'):
+            os.mkdir(self.save_to+'graph')
+        #self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        #print('Device is: ',self.device)
         self.subsample = subsample
         self.subsample_xy()
-        # Save random cell selection
-        edges = self.buildGraph(self.distance_threshold)
         self.compute_size()
         self.setup()
-        if self.smooth:
-            self.knn_smooth()
-
-        self.g= dgl.graph((edges[0,:],edges[1,:]))
-        self.g.ndata['gene'] = th.tensor(self.d.toarray(),dtype=th.float32)
-        self.g.to(self.device)
+        # Save random cell selection
+        
+        dgluns = self.save_to+'graph/{}Unsupervised_smooth{}.graph'.format(self.cells.shape[0],self.smooth)
+        if not os.path.isfile(dgluns):
+            d = self.molecules_df()
+            edges = self.buildGraph(self.distance_threshold)
+            self.g= dgl.graph((edges[0,:],edges[1,:]))
+            self.g.ndata['gene'] = th.tensor(d.toarray(), dtype=th.float32)
+            graph_labels = {"UnsupervisedDGL": th.tensor([0])}
+            if self.smooth:
+                #self.g.update_all(fn.u_add_v('gene','gene','a'),fn.sum('a','gene'))
+                self.g.update_all(fn.copy_u('gene', 'm'), fn.sum('m', 'gene'))
+            #self.g.update_all(fn.copy_u('gene', 'g2'), fn.sum('g2', 'gene'))
+            dgl.data.utils.save_graphs(dgluns, [self.g], graph_labels)
+            #self.g = self.g.to(self.device)
+        else:
+            glist, _ = dgl.data.utils.load_graphs(dgluns) # glist will be [g1, g2]
+            self.g = glist[0]
+            #self.g = self.g.to(self.device)
 
         if self.model.supervised:
-            self.molecules_labelled, edges_labelled, labels = self.cell_types_to_graph(self.ref_celltypes)
-            print(edges_labelled.shape)
-            self.g_lab= dgl.graph((edges_labelled[0,:],edges_labelled[1,:]))
-            self.g_lab.ndata['gene'] = th.tensor(self.molecules_labelled.toarray(),dtype=th.float32)
-            self.g_lab.ndata['label'] = th.tensor(labels, dtype=th.long)
-            self.g_lab.to(self.device)
+            dglsup =self.save_to+'graph/{}Supervised_smooth{}.graph'.format(self.cells.shape[0],self.smooth)
+            if not os.path.isfile(dglsup):
+                molecules_labelled, edges_labelled, labels = self.cell_types_to_graph(smooth=self.smooth)
+                self.g_lab= dgl.graph((edges_labelled[0,:],edges_labelled[1,:]))
+                self.g_lab.ndata['gene'] = th.tensor(molecules_labelled.toarray(),dtype=th.float32)
+                self.g_lab.ndata['label'] = th.tensor(labels, dtype=th.long)
+                graph_labels = {"SupervisedDGL": th.tensor([0])}
+                dgl.data.utils.save_graphs(dglsup, [self.g_lab], graph_labels)
+                #self.g_lab = self.g_lab.to(self.device)
+            else:
+                glist, _ = dgl.data.utils.load_graphs(dglsup) # glist will be [g1, g2]
+                self.g_lab = glist[0]
+                #self.g_lab = self.g_lab.to(self.device)
+        
+        print(self.g)
 
+    def prepare_data(self):
+        # do-something
+        pass
+
+    def setup(self, stage: Optional[str] = None):
+        #self.d = th.tensor(self.molecules_df(),dtype=th.float32) #works
         self.sampler = dgl.dataloading.MultiLayerNeighborSampler([int(_) for _ in self.ngh_sizes])
 
         self.checkpoint_callback = ModelCheckpoint(
@@ -178,19 +207,11 @@ class GraphData(pl.LightningDataModule):
             mode='min',
             stopping_threshold=0.35,
             )
-    
-    def prepare_data(self):
-        # do-something
-        pass
-
-    def setup(self, stage: Optional[str] = None):
-        #self.d = th.tensor(self.molecules_df(),dtype=th.float32) #works
-        self.d = self.molecules_df()
 
     def compute_size(self):
         cells = self.cells
-        if self.smooth:
-            cells = self.molecules_connected
+        #if self.smooth:
+        #    cells = self.molecules_connected
         np.save(self.folder +'/cells.npy', cells)
 
         self.train_size = int((cells.shape[0])*self.train_p)
@@ -203,51 +224,52 @@ class GraphData(pl.LightningDataModule):
 
     def train_dataloader(self):
         edges = np.arange(self.g.num_edges())
-        random_edges = np.random.choice(edges,int(edges.shape[0]*self.train_p),replace=False)
+        random_edges = torch.tensor(np.random.choice(edges,int(edges.shape[0]*self.train_p),replace=False))
         unlab = dgl.dataloading.EdgeDataLoader(
                         self.g,
                         random_edges,
                         self.sampler,
                         negative_sampler=dgl.dataloading.negative_sampler.Uniform(self.negative_samples), # NegativeSampler(self.g, self.negative_samples, False),
-                        device=self.device,
+                        #device=self.device,
                         #exclude='self',
                         #reverse_eids=th.arange(self.g.num_edges()) ^ 1,
                         batch_size=self.batch_size,
                         shuffle=True,
                         drop_last=True,
-                        num_workers=self.num_workers)
+                        num_workers=self.num_workers,
+                        )
 
         if self.model.supervised:
             edges = np.arange(self.g_lab.num_edges())
-            random_edges = np.random.choice(edges,random_edges.shape[0],replace=True)
+            random_edges = torch.tensor(np.random.choice(edges,random_edges.shape[0],replace=True))
     
             lab = dgl.dataloading.EdgeDataLoader(
                             self.g_lab,
                             random_edges,
                             self.sampler,
                             negative_sampler=dgl.dataloading.negative_sampler.Uniform(self.negative_samples), # NegativeSampler(self.g, self.negative_samples, False),
-                            device=self.device,
+                            #device=self.device,
                             #exclude='self',
                             #reverse_eids=th.arange(self.g.num_edges()) ^ 1,
                             batch_size=self.batch_size,
                             shuffle=True,
                             drop_last=True,
                             num_workers=self.num_workers)
-
         else:
             lab = None
-
         if type(lab) != type(None):
             return {'unlabelled':unlab,'labelled':lab}
         else:
             return {'unlabelled':unlab}
 
-    def train(self,max_epochs=5,gpus=-1):     
+    def train(self,max_epochs=5,gpus=0):
+        #if self.device.type == 'cuda':
+        #    gpus=0
         if self.model.supervised: 
             trainer = pl.Trainer(gpus=gpus,callbacks=[self.checkpoint_callback], max_epochs=max_epochs)
         else:
-            trainer = pl.Trainer(gpus=gpus,callbacks=[self.checkpoint_callback, self.early_stop_callback], max_epochs=max_epochs)
-        trainer.fit(self.model, train_dataloader=self.train_dataloader())
+            trainer = pl.Trainer(gpus=gpus,callbacks=[self.checkpoint_callback], max_epochs=max_epochs)
+        trainer.fit(self.model, train_dataloaders=self.train_dataloader())
 
     def molecules_df(self):
         rows,cols = [],[]
@@ -279,14 +301,14 @@ class GraphData(pl.LightningDataModule):
         print('Building graph...')
         if type(coords)  == type(None):
             supervised = False
-            edge_file = os.path.join(self.save_to,'Edges-{}Nodes-Ngh{}-{}-dst{}'.format(self.cells.shape[0],self.ngh_sizes[0],self.ngh_sizes[1],self.distance_threshold))
-            tree_file = os.path.join(self.save_to,'Tree-{}Nodes-Ngh{}-{}-dst{}.ann'.format(self.cells.shape[0],self.ngh_sizes[0],self.ngh_sizes[1],self.distance_threshold))
+            edge_file = os.path.join(self.save_to,'graph/DGL-Edges-{}Nodes-dst{}'.format(self.cells.shape[0],self.distance_threshold))
+            tree_file = os.path.join(self.save_to,'graph/DGL-Tree-{}Nodes-dst{}.ann'.format(self.cells.shape[0],self.distance_threshold))
             coords = np.array([self.data.df.x.values.compute()[self.cells], self.data.df.y.values.compute()[self.cells]]).T
             neighborhood_size = self.ngh_size
         else:
             supervised=True
-            edge_file = os.path.join(self.save_to,'DGL-Supervised-Edges-{}Nodes-Ngh{}-{}-dst{}'.format(coords.shape[0],self.ngh_sizes[0],self.ngh_sizes[1],self.distance_threshold))
-            tree_file = os.path.join(self.save_to,'DGL-Supervised-Tree-{}Nodes-Ngh{}-{}-dst{}.ann'.format(coords.shape[0],self.ngh_sizes[0],self.ngh_sizes[1],self.distance_threshold))
+            edge_file = os.path.join(self.save_to,'graph/DGL-Supervised-Edges-{}Nodes-dst{}'.format(coords.shape[0],self.distance_threshold))
+            tree_file = os.path.join(self.save_to,'graph/DGL-Supervised-Tree-{}Nodes-dst{}.ann'.format(coords.shape[0],self.distance_threshold))
             neighborhood_size = self.ngh_size
 
         if not os.path.isfile(edge_file):
@@ -322,9 +344,7 @@ class GraphData(pl.LightningDataModule):
 
         G = nx.Graph()
         G.add_nodes_from(np.arange(coords.shape[0]))
-            # Add edges
         G.add_edges_from(edges)
-
         node_removed = []
         for component in tqdm(list(nx.connected_components(G))):
             if len(component) < self.minimum_nodes_connected:
@@ -336,13 +356,12 @@ class GraphData(pl.LightningDataModule):
         cells = th.tensor(list(G.nodes))
 
         if supervised==False:
-            #self.edges_tensor = edges
             self.molecules_connected = cells
             return edges
         else:
             return edges
 
-    def cell_types_to_graph(self, data):
+    def cell_types_to_graph(self,smooth=False):
         """
         cell_types_to_graph [summary]
 
@@ -358,37 +377,36 @@ class GraphData(pl.LightningDataModule):
         all_molecules = []
         all_coords = []
         all_cl = []
-        data = data/data.sum(axis=0)
-        #data = (data*1000).astype('int')
+        data = self.ref_celltypes#/data.sum(axis=0)
 
+        #data = (data*1000).astype('int')
         print('Converting clusters into simulated molecule neighborhoods...')
         for i in trange(data.shape[1]):
             molecules = []
             # Reduce number of cells by Ncells.min() to avoid having a huge dataframe, since it is actually simulated data
             cl_i = data[:,i]#*(Ncells[i]/(Ncells.min()*100)).astype('int')
-            random_molecules = np.random.choice(data.shape[0],size=2500,p=cl_i)
-            
-
-            '''            
-            for x in range(cl_i.shape[0]):
-                dot = np.zeros_like(cl_i)
-                dot[x] = 1
-                try:
-                    dot = np.stack([dot]*int(cl_i[x]))
+            cl_v = self.var_celltypes[:,i]
+            if smooth == False:
+                random_molecules = np.random.choice(data.shape[0],size=2500,p=cl_i)
+                for x in random_molecules:
+                    dot = np.zeros_like(cl_i)
+                    dot[x] = 1
+                    try:
+                        #dot = np.stack([dot]*int(cl_i[x]))
+                        molecules.append(dot)
+                    except:
+                        pass
+            else:
+                for x in range(2500):
+                    #p = np.random.normal(cl_i,cl_v)[0,:]
+                    p = np.random.poisson(cl_i,size=(1,cl_i.shape[0]))[0,:]
+                    p[p < 0] = 0
+                    p = p/p.sum()
+                    random_molecules = np.random.choice(data.shape[0],size=5,p=p)
+                    dot = np.zeros_like(cl_i)
+                    for x in random_molecules:
+                        dot[x] = dot[x]+1
                     molecules.append(dot)
-
-                except:
-                    pass
-            '''
-
-            for x in random_molecules:
-                dot = np.zeros_like(cl_i)
-                dot[x] = 1
-                try:
-                    #dot = np.stack([dot]*int(cl_i[x]))
-                    molecules.append(dot)
-                except:
-                    pass
 
             molecules = np.stack(molecules)
             #molecules = np.concatenate(molecules)
@@ -405,11 +423,12 @@ class GraphData(pl.LightningDataModule):
         print('Fake Molecules: ',all_molecules.shape)
         return all_molecules, edges, all_cl
 
-    def knn_smooth(self,neighborhood_size=75):
+    '''def knn_smooth(self,neighborhood_size=75):
         print('Smoothing neighborhoods with kernel size: {}'.format(neighborhood_size))
         
         u = AnnoyIndex(2, 'euclidean')
         u.load(os.path.join(self.save_to,'Tree-{}Nodes-Ngh{}-{}-dst{}.ann'.format(self.cells.shape[0],self.ngh_sizes[0],self.ngh_sizes[1],self.distance_threshold)))
+
         smoothed_dataframe = []
         molecules_connected = []
         for i in trange(self.d.shape[0]):
@@ -426,20 +445,28 @@ class GraphData(pl.LightningDataModule):
 
         smoothed_dataframe= np.concatenate(smoothed_dataframe)
         self.d = sparse.csr_matrix(smoothed_dataframe)
-        self.molecules_connected = np.array(molecules_connected)
+        self.molecules_connected = np.array(molecules_connected)'''
 
     #### plotting and latent factors #####
 
-    def get_latents(self):
+    def get_latents(self,labelled=True):
         self.model.eval()
-        latent_unlabelled = self.model.module.inference(self.g,self.g.ndata['gene'],'cpu',1040,0)#.detach().numpy()
+        latent_unlabelled = self.model.module.inference(self.g,self.g.ndata['gene'],'cpu',512,0)#.detach().numpy()
+        
         if self.model.supervised:
-            latent_labelled = self.model.module.inference(self.g_lab,self.g_lab.ndata['gene'],'cpu',1040,0)#.detach().numpy()
-            self.prediction_labelled = self.model.module.encoder.encoder_dict['CF'](latent_labelled).detach().numpy()
+            if labelled:
+                latent_labelled = self.model.module.inference(self.g_lab,self.g_lab.ndata['gene'],'cpu',512,0)#.detach().numpy()
+                self.prediction_labelled = self.model.module.encoder.encoder_dict['CF'](latent_labelled).detach().numpy()
+                #np.save(self.folder+'/probabilities_labelled',self.prediction_labelled)
+                self.latent_labelled = latent_labelled.detach().numpy()
+                #np.save(self.folder+'/latent_labelled',self.latent_labelled)
             self.prediction_unlabelled = self.model.module.encoder.encoder_dict['CF'](latent_unlabelled).detach().numpy()
-            self.latent_labelled = latent_labelled.detach().numpy()
+            np.save(self.folder+'/labels_unlabelled',self.prediction_unlabelled.argsort(axis=-1)[:,-1].astype('str'))
+            np.save(self.folder+'/probabilities_unlabelled',self.prediction_unlabelled)
 
         self.latent_unlabelled = latent_unlabelled.detach().numpy()
+        np.save(self.folder+'/latent_unlabelled',latent_unlabelled)
+
 
     def get_umap(self,random_n=50000):
         import umap
@@ -539,11 +566,15 @@ class GraphData(pl.LightningDataModule):
 
         else:
             import scanpy as sc
+            print('Running leiden clustering from scanpy...')
             adata = sc.AnnData(X=self.latent_unlabelled)
             sc.pp.neighbors(adata, n_neighbors=10)
             sc.tl.leiden(adata, random_state=42)
             #self.data.add_dask_attribute('leiden',adata.obs['leiden'].values.tolist())
             self.clusters= adata.obs['leiden'].values.astype('int')
+            np.save(self.folder+'/clusters',self.clusters)
+            print('Clustering done.')
+            print('Generating umap embedding...')
             
             import random
             r = lambda: random.randint(0,255)
@@ -573,7 +604,7 @@ class GraphData(pl.LightningDataModule):
             ax = fig.add_subplot(1, 1, 1)
             ax.set_facecolor("black")
             #plt.scatter(DS.df.x.values.compute()[GD.cells], DS.df.y.values.compute()[GD.cells], c=torch.argmax(pred.softmax(dim=-1),dim=-1).numpy(), s=0.2,marker='.',linewidths=0, edgecolors=None,cmap='rainbow')
-            plt.scatter(self.data.df.x.values.compute()[self.cells][some], self.data.df.y.values.compute()[self.cells][some], c=clusters_colors[some], s=0.05,marker='.',linewidths=0, edgecolors=None)
+            plt.scatter(self.data.df.x.values.compute()[self.cells], self.data.df.y.values.compute()[self.cells], c=clusters_colors, s=0.05,marker='.',linewidths=0, edgecolors=None)
             plt.xticks(fontsize=2)
             plt.yticks(fontsize=2)
             plt.axis('scaled')
