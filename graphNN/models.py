@@ -71,6 +71,7 @@ class SAGELightning(LightningModule):
         #pos_graph = pos_graph.to(self.device)
         #neg_graph = neg_graph.to(self.device)
         batch_inputs = mfgs[0].srcdata['gene']
+        
         batch_pred_unlab = self.module(mfgs, batch_inputs)
         loss,pos, neg = self.loss_fcn(batch_pred_unlab, pos_graph, neg_graph) #* 5
         
@@ -95,13 +96,13 @@ class SAGELightning(LightningModule):
             self.log('train_acc', self.train_acc, prog_bar=True, on_step=True)
 
             #Domain Adaptation Loss
-            classifier_domain_loss = 10*self.loss_discriminator([batch_pred_unlab.detach(), batch_pred_lab.detach()],predict_true_class=True)
+            classifier_domain_loss = 1*self.loss_discriminator([batch_pred_unlab.detach(), batch_pred_lab.detach()],predict_true_class=True)
             self.log('Classifier_true', classifier_domain_loss, prog_bar=False, on_step=True)
             d_opt.zero_grad()
             self.manual_backward(classifier_domain_loss)
             d_opt.step()
 
-            domain_loss_fake = 10*self.loss_discriminator([batch_pred_unlab, batch_pred_lab],predict_true_class=False)
+            domain_loss_fake = 1*self.loss_discriminator([batch_pred_unlab, batch_pred_lab],predict_true_class=False)
             self.log('Classifier_fake', domain_loss_fake, prog_bar=False, on_step=True)
 
             #Semantic Loss
@@ -117,10 +118,10 @@ class SAGELightning(LightningModule):
             # Will increasingly apply supervised loss, domain adaptation loss
             # from 0 to 1, from iteration 0 to 200, focusing first on unsupervised 
             # graphsage task
-            #kappa = 2/(1+10**(-1*((1*self.kappa)/200)))-1
-            #self.kappa += 1
-            loss = loss*0.005
-            loss += domain_loss_fake + supervised_loss*0.005 + classifier_loss #+ semantic_loss.detach()
+            kappa = 2/(1+10**(-1*((1*self.kappa)/2000)))-1
+            self.kappa += 1
+            loss = loss*kappa
+            loss += domain_loss_fake + supervised_loss*kappa + classifier_loss #+ semantic_loss.detach()
             opt.zero_grad()
             self.manual_backward(loss)
             opt.step()
@@ -260,7 +261,7 @@ class SAGE(nn.Module):
         self.encoder = Encoder(in_feats,n_hidden,n_classes,n_layers,supervised)
         
     def forward(self, blocks, x):
-        h = x   
+        h = th.log(x+1)   
         for l, (layer, block) in enumerate(zip(self.encoder.encoder_dict['GS'], blocks)):
             #print(l)
             h = layer(block, h)
