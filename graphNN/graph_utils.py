@@ -171,7 +171,7 @@ class GraphData(pl.LightningDataModule):
         if self.model.supervised:
             dglsup =self.save_to+'graph/{}Supervised_smooth{}.graph'.format(self.cells.shape[0],self.smooth)
             if not os.path.isfile(dglsup):
-                self.molecules_labelled, edges_labelled, labels = self.cell_types_to_graph(smooth=self.smooth)
+                molecules_labelled, edges_labelled, labels = self.cell_types_to_graph(smooth=self.smooth)
                 self.g_lab= dgl.graph((edges_labelled[0,:],edges_labelled[1,:]))
                 self.g_lab.ndata['gene'] = th.tensor(molecules_labelled.toarray(),dtype=th.float32)
                 self.g_lab.ndata['label'] = th.tensor(labels, dtype=th.long)
@@ -457,10 +457,11 @@ class GraphData(pl.LightningDataModule):
             if labelled:
                 latent_labelled = self.model.module.inference(self.g_lab,self.g_lab.ndata['gene'],'cpu',512,0)#.detach().numpy()
                 self.prediction_labelled = self.model.module.encoder.encoder_dict['CF'](latent_labelled).detach().numpy()
-                np.save(self.folder+'/probabilities_labelled',self.prediction_labelled)
+                #np.save(self.folder+'/probabilities_labelled',self.prediction_labelled)
                 self.latent_labelled = latent_labelled.detach().numpy()
-                np.save(self.folder+'/latent_labelled',self.latent_labelled)
+                #np.save(self.folder+'/latent_labelled',self.latent_labelled)
             self.prediction_unlabelled = self.model.module.encoder.encoder_dict['CF'](latent_unlabelled).detach().numpy()
+            np.save(self.folder+'/labels_unlabelled',self.prediction_unlabelled.argsort(axis=-1)[:,-1].astype('str'))
             np.save(self.folder+'/probabilities_unlabelled',self.prediction_unlabelled)
 
         self.latent_unlabelled = latent_unlabelled.detach().numpy()
