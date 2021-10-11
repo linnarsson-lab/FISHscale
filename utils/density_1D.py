@@ -4,6 +4,7 @@ import math
 from matplotlib.patches import Polygon
 from sklearn.neighbors import KernelDensity
 from typing import Tuple
+from numpy.lib.stride_tricks import sliding_window_view
 
 class Density1D:
 
@@ -97,7 +98,7 @@ class Density1D:
         
         return probability, sample_space
 
-    def calc_density(self, points: np.ndarray, line: list, width: float, bandwidth: float=1, kernel: str='gaussian', 
+    def density_probability(self, points: np.ndarray, line: list, width: float, bandwidth: float=1, kernel: str='gaussian', 
                     resolution: int=50, plot: bool=False, bandwidth_extention: bool=False, s: float=2) -> Tuple[np.ndarray,
                                                                                                                 np.ndarray,
                                                                                                                 np.ndarray,
@@ -210,3 +211,70 @@ class Density1D:
             ax1.set_xlabel('Position')
         
         return probability, sample_space, filt, y_coords
+    
+    
+    def density_count(self, points: np.ndarray, line: list, width: float, nbins: int=20, plot: bool=False, s: float=2):
+        
+        x1, y1, x2, y2 = line
+        
+        #get angle of line
+        angle = self.get_rotation_rad(x1, y1, x2, y2)
+
+        #Get angle to rotate to turn line straight
+        angle_to_rotate = self.to_rotate(angle)
+
+        #Rotate points
+        rotated = self.rotate(points, origin=(0,0), angle=angle_to_rotate)
+        #Rotate line
+        line_rotated = self.rotate(np.column_stack(([x1, x2], [y1, y2])), origin=(0,0), angle=angle_to_rotate)
+        
+        #Get min an max to select points
+        x_min = line_rotated[0][0] - 0.5*width
+        x_max = line_rotated[0][0] + 0.5*width
+        y_min = line_rotated[0][1]
+        y_max = line_rotated[1][1]
+        
+        #Select points
+        filt = ((rotated >= [x_min, y_min]) & (rotated <= [x_max, y_max])).all(axis=1)
+        rotated_select = rotated[filt,:]
+               
+        #Bin the data
+        y_coords = rotated_select[:,1]
+        hist, bin_edges = np.histogram(y_coords, bins=nbins)
+        
+        if plot:
+            fig, ax = plt.subplots(ncols=2, figsize=(20,10))
+            
+            ax0 = ax[0]
+            #Plot all points
+            ax0.scatter(points[:,0], points[:,1], s=s, color='gray')
+
+            #Plot original line
+            ax0.plot([x1, x2], [y1, y2], color='r')
+
+            #Shift line up and down a half width
+            line_min = line_rotated.copy()
+            line_min[:,0] = line_min[:,0] - (0.5*width) 
+            line_max = line_rotated.copy()
+            line_max[:,0] = line_max[:,0] + (0.5*width) 
+
+            #Rotate the shifted angles back
+            rotate_back_angle = 2*np.pi - self.to_rotate(angle)
+            line_min_rotate_back = self.rotate(line_min, angle=rotate_back_angle)
+            line_max_rotate_back = self.rotate(line_max, angle=rotate_back_angle)
+
+            #Plot the area as a polygon
+            rectangle = Polygon(np.row_stack((line_min_rotate_back, np.flipud(line_max_rotate_back))), alpha=0.5)
+            ax0.add_patch(rectangle)
+            ax0.set_aspect('equal')
+            ax0.set_title('Coordinates with sample line')
+            
+            ax1 = ax[1]
+            x = list(map(np.mean, sliding_window_view(bin_edges, window_shape=2)))
+            ax1.plot(x, hist)
+            ax1.set_title('Histogram')
+            ax1.set_ylabel('Count')
+            ax1.set_xlabel('Position')
+        
+        return hist, bin_edges
+        

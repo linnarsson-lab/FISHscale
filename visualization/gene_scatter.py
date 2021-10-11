@@ -130,10 +130,13 @@ class AxSize:
 
 class GeneScatter(AxSize):
 
-    def scatter_plot(self, genes: Union[List, np.ndarray], s: float=0.1, ax_scale_factor: int=10, 
-                    view: Union[Any, List] = None, scalebar: bool=True, show_axes: bool=False,
-                    show_legend: bool = True, title: str = None, ax = None, save: bool=False, 
-                    save_name: str='', dpi: int=300, file_format: str='.eps',alpha=1) -> None:
+    def scatter_plot(self, genes: Union[List, np.ndarray], s: float=0.1, 
+                    colors: Union[List, np.ndarray] = None, 
+                    ax_scale_factor: int=10, view: Union[Any, List] = None, 
+                    scalebar: bool=True, show_axes: bool=False, 
+                    show_legend: bool = True, title: str = None, 
+                    ax = None, save: bool=False, save_name: str='', 
+                    dpi: int=300, file_format: str='.eps', alpha=1) -> None:
         """Make a scatter plot of the data.
 
         Uses a black background. Plots in real size if `ax_scale_factor` is 1. 
@@ -145,6 +148,9 @@ class GeneScatter(AxSize):
             genes (Union[List, np.ndarray]): List of genes to plot. First gene
                 will be plotted first and thus be on the bottom of the stack.
             s (float, optional): Size of the points. Defaults to 0.1.
+            colors (Union[List, np.ndarray]): Iterable with colors for the
+                selected genes. If None given, defaults to internal gene-
+                color dictionary. Defaults to None.
             ax_scale_factor (int, optional): Scale factor of the plot. If 1,
                 the plot will be in real size. Carefully scale this for every 
                 plot so that the plot does not become too small or too big.
@@ -184,7 +190,9 @@ class GeneScatter(AxSize):
             ax.set_rasterization_zorder(1)
 
         #Plot points
-        for g in genes:
+        if type(colors) == type(None):
+            colors = [self.color_dict[g] for g in genes]
+        for g, c in zip(genes, colors):
             data = self.get_gene(g)
             x = data.x
             y = data.y
@@ -194,7 +202,7 @@ class GeneScatter(AxSize):
                 filt = filt_x & filt_y
                 x = x[filt]
                 y = y[filt]
-            ax.scatter(x, y, s=s, color=self.color_dict[g], zorder=0, label=g,alpha=alpha)
+            ax.scatter(x, y, s=s, color=c, zorder=0, label=g, alpha=alpha)
             del data
         
         #Rescale
