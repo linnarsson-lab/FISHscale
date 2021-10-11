@@ -171,7 +171,7 @@ class GraphData(pl.LightningDataModule):
         if self.model.supervised:
             dglsup =self.save_to+'graph/{}Supervised_smooth{}.graph'.format(self.cells.shape[0],self.smooth)
             if not os.path.isfile(dglsup):
-                self.molecules_labelled, edges_labelled, labels = self.cell_types_to_graph(smooth=self.smooth)
+                molecules_labelled, edges_labelled, labels = self.cell_types_to_graph(smooth=self.smooth)
                 self.g_lab= dgl.graph((edges_labelled[0,:],edges_labelled[1,:]))
                 self.g_lab.ndata['gene'] = th.tensor(molecules_labelled.toarray(),dtype=th.float32)
                 self.g_lab.ndata['label'] = th.tensor(labels, dtype=th.long)
@@ -402,7 +402,7 @@ class GraphData(pl.LightningDataModule):
                     p = np.random.poisson(cl_i,size=(1,cl_i.shape[0]))[0,:]
                     p[p < 0] = 0
                     p = p/p.sum()
-                    random_molecules = np.random.choice(data.shape[0],size=10,p=p)
+                    random_molecules = np.random.choice(data.shape[0],size=5,p=p)
                     dot = np.zeros_like(cl_i)
                     for x in random_molecules:
                         dot[x] = dot[x]+1
