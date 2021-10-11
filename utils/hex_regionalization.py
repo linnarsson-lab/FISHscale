@@ -62,7 +62,7 @@ class Regionalize(Iteration, Decomposition):
         return coordinates
             
     def hexbin_make(self, spacing: float, min_count: int, feature_selection: np.ndarray=None,
-                    n_jobs: int=-1) -> Tuple[Any, np.ndarray, Any]:
+                    n_jobs: int=-1) -> Tuple[Any, np.ndarray]:
         """
         Bin 2D point data with hexagonal bins.
         
@@ -78,7 +78,7 @@ class Regionalize(Iteration, Decomposition):
                 cpu count. Defaults to -1.
 
         Returns:
-            Tuple[pd.DataFrame, np.ndarray, np.ndarray]: 
+            Tuple[pd.DataFrame, np.ndarray]: 
             Pandas Dataframe with counts for each valid tile.
             Numpy Array with centroid coordinates for the tiles.
             
@@ -238,6 +238,7 @@ class Regionalize(Iteration, Decomposition):
             p.set_color(c)
             p.set_linewidth(linewidth) #To hide small white lines between the polygons
             p.set_edgecolor(c)
+            colorbar=False
             
         #Set colors from an array of values
         else:
@@ -268,8 +269,6 @@ class Regionalize(Iteration, Decomposition):
         d = 0.5 * int(self._hexbin_params.split('_')[1])
         ax.set_xlim(plot_min[0] - d, plot_max[0] + d)
         ax.set_ylim(plot_min[1] - d, plot_max[1] + d)
-        #ax.set_xlim(self.x_min - d, self.x_max + d)
-        #ax.set_ylim(self.y_min - d, self.y_max + d)
         ax.set_aspect('equal')
         
         #Save
