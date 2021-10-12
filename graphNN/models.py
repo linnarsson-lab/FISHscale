@@ -118,7 +118,7 @@ class SAGELightning(LightningModule):
             # Will increasingly apply supervised loss, domain adaptation loss
             # from 0 to 1, from iteration 0 to 200, focusing first on unsupervised 
             # graphsage task
-            kappa = 2/(1+10**(-1*((1*self.kappa)/2000)))-1
+            kappa = 2/(1+10**(-1*((1*self.kappa)/8000)))-1
             self.kappa += 1
             loss = loss*kappa
             loss += domain_loss_fake + supervised_loss*kappa + classifier_loss #+ semantic_loss.detach()
