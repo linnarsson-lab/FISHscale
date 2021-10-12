@@ -402,7 +402,7 @@ class GraphData(pl.LightningDataModule):
                     p = np.random.poisson(cl_i,size=(1,cl_i.shape[0]))[0,:]
                     p[p < 0] = 0
                     p = p/p.sum()
-                    random_molecules = np.random.choice(data.shape[0],size=5,p=p)
+                    random_molecules = np.random.choice(data.shape[0],size=25,p=p)
                     dot = np.zeros_like(cl_i)
                     for x in random_molecules:
                         dot[x] = dot[x]+1

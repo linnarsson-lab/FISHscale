@@ -5,19 +5,15 @@ import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
 import pandas as pd
-from matplotlib.pyplot import hexbin
 from shapely.geometry import  MultiPolygon, Polygon
 from shapely.ops import unary_union
 from skimage.measure import subdivide_polygon
 from sklearn.cluster import AgglomerativeClustering
 from sklearn.neighbors import kneighbors_graph, radius_neighbors_graph
-from pint import UnitRegistry
 from FISHscale.utils.fast_iteration import Iteration
 from FISHscale.utils.decomposition import Decomposition
 from FISHscale.utils.inside_polygon import inside_multi_polygons
-#Mypy types
 from typing import Tuple, Union, Any, List
-import gc
 from scipy.spatial import KDTree
 from collections import Counter
 from matplotlib.patches import Polygon as mpl_polygon
@@ -29,19 +25,16 @@ from sklearn.manifold import TSNE, SpectralEmbedding
 
 class Regionalize(Iteration, Decomposition):
     """Class for regionalization of multidimensional 2D point data.
-
     """
            
     def hexagon_shape(self, spacing: float, closed=True) -> np.ndarray:
         """Make coordinates of hexagon with the point up.      
-
         Args:
             spacing (float): Distance between centroid and centroid of 
                 horizontal neighbour. 
             closed (bool, optional): If True first and last point will be
                 identical. Needed for some polygon algorithms. 
                 Defaults to True.
-
         Returns:
             [np.ndarray]: Array of coordinates.
         """
@@ -66,13 +59,12 @@ class Regionalize(Iteration, Decomposition):
         return coordinates
             
     def hexbin_make(self, spacing: float, min_count: int, feature_selection: np.ndarray=None,
-                    n_jobs: int=-1) -> Tuple[Any, np.ndarray, Any]:
+                    n_jobs: int=-1) -> Tuple[Any, np.ndarray]:
         """
         Bin 2D point data with hexagonal bins.
         
         Stores the centroids of the exagons under self.hexagon_coordinates,
         and the hexagon shape under self.hexbin_hexagon_shape.
-
         Args:
             spacing (float): distance between tile centers, in same units as 
                 the data. The function makes hexagons with the point up: ⬡
@@ -80,9 +72,8 @@ class Regionalize(Iteration, Decomposition):
                 tile in the dataset.
             n_jobs (int, optional): Number of workers. If -1 it takes the max
                 cpu count. Defaults to -1.
-
         Returns:
-            Tuple[pd.DataFrame, np.ndarray, np.ndarray]: 
+            Tuple[pd.DataFrame, np.ndarray]: 
             Pandas Dataframe with counts for each valid tile.
             Numpy Array with centroid coordinates for the tiles.
             
@@ -166,36 +157,44 @@ class Regionalize(Iteration, Decomposition):
 
         return df_hex, coordinates
                   
-    @lru_cache(maxsize=1)
-    def _hexbin_PatchCollection_make(self, params: str):
+    @lru_cache(maxsize=5)
+    def _hexbin_PatchCollection_make(self, params: str, filter = None):
         """Generate hexbin patch collection for plotting
-
         Args:
             params (str): The hexbin function saves its parameters under:
                 self._hexbin_params. This is used to check if the patch 
                 collection needs to be recalculated when the hexbin function 
                 has been run with different parameters.
-
+            filter (str): String representation of a boolean array of ones and
+                zeros. Example '1101' for [True, True, Flase, True].
+                (Needed because lru_cache does not take arrays)
         Returns:
             Matplotlib patch collection
         """
+        if type(filter) == type(None):
+            filter = np.ones(self.hexbin_coordinates.shape[0]).astype('bool')
+        else:
+            filter = np.array([int(i) for i in filter]).astype('bool')
+        
         patches = []
-        for i in self.hexbin_coordinates:
+        coordinates = self.hexbin_coordinates[filter]
+        for i in coordinates:
             pol = mpl_polygon(self.hexbin_hexagon_shape + i, closed=True)
             patches.append(pol)
         self._hexbin_PatchCollection = PatchCollection(patches)
-        return PatchCollection(patches)
+        return PatchCollection(patches), coordinates.min(axis=0), coordinates.max(axis=0)
                 
-    def hexbin_plot(self, c: Union[np.ndarray, list], cm=None, ax:Any=None, 
+    def hexbin_plot(self, c: Union[np.ndarray, list], cm:Any=None, 
+                    filter: np.ndarray = None, ax:Any=None, 
                     figsize=None, save:bool=False, savename:str='',
                     vmin:float=None, vmax:float=None, linewidth:float=0.1):
         """Plot hexbin results. 
-
         Args:
             c (np.ndarray, list): Eiter an Array with color values as a float
-                between 0 an 1. Or a list of RGB color values.
+                between 0 an 1. Or a list of RGB color values between 0 and 1.
             cm (plt color map): The color map to use when c is an array.
                 Defaults to plt.cm.viridis.
+            filter (np.ndarray): Boolean array to filter hexbin coordinates.
             ax (Any, optional): Axes object to plot on. Defaults to None.
             figsize (tuple): Size of figure if not defined by ax. 
                 If None uses: (10,10). Defaults to None.
@@ -221,13 +220,17 @@ class Regionalize(Iteration, Decomposition):
         #Get PatchCollection, patchCollection can only be added once to a figue so make a deep copy.
         if not hasattr(self, '_hexbin_params'):
             raise Exception('Hexbin has not been calculated yet. Please make using: self.hexbin_make()')
-        p = copy.deepcopy(self._hexbin_PatchCollection_make(self._hexbin_params))
+        #Format filter to be hasable for lru_cache
+        if type(filter) != type(None):
+            filter = ''.join(map(str, filter.astype('int')))
+        p, plot_min, plot_max = copy.deepcopy(self._hexbin_PatchCollection_make(self._hexbin_params, filter=filter))
         ax.add_collection(p)
         #Set colors from an RGB list
         if type(c) == list:
             p.set_color(c)
             p.set_linewidth(linewidth) #To hide small white lines between the polygons
             p.set_edgecolor(c)
+            colorbar=False
             
         #Set colors from an array of values
         else:
@@ -256,8 +259,8 @@ class Regionalize(Iteration, Decomposition):
             
         #Scale
         d = 0.5 * int(self._hexbin_params.split('_')[1])
-        ax.set_xlim(self.x_min - d, self.x_max + d)
-        ax.set_ylim(self.y_min - d, self.y_max + d)
+        ax.set_xlim(plot_min[0] - d, plot_max[0] + d)
+        ax.set_ylim(plot_min[1] - d, plot_max[1] + d)
         ax.set_aspect('equal')
         
         #Save
@@ -271,7 +274,6 @@ class Regionalize(Iteration, Decomposition):
         coordinates, which is then used to color the spatial hexbin data.
         With 3 components the 3 tSNE dimenstions are used for RGB colors.
         With 2 components the angle and distance are used for HSV colors.
-
         Args:
             data ([pd.DataFrame]): DataFrame with features in rows and samples
                 in columns, like from the self.hexbin_make() function.
@@ -381,7 +383,6 @@ class Regionalize(Iteration, Decomposition):
         """Plot decomposition components spatially.
         
         Usefull to plot PCA or LDA components spatially. 
-
         Args:
             data ([np.ndarray, pd.DataFrame]): Array with components in
                 columns. 
@@ -422,7 +423,6 @@ class Regionalize(Iteration, Decomposition):
                             distance_threshold: float = None, n_clusters:int = None, 
                             neighbor_rings:int = 1, n_jobs:int=-1) -> np.ndarray:
         """Cluster hex-bin data, with a neighborhood embedding.
-
         Clusters with AggolmerativeClustering that uses a distance matrix 
         made from the tiles and their neighbours within the neighbour_radius.
         Can either cluster with a pre-defined number of resulting clusters
@@ -430,7 +430,6 @@ class Regionalize(Iteration, Decomposition):
         "distance_threshold" that determines the cutoff. When passing
         multiple datasets that require a different number of clusters the
         "distance_threshold" will be more suitable.
-
         Args:
             df_hex (pd.Dataframe): Pandas Dataframe with molecule counts for
                 each hexagonal tile
@@ -446,14 +445,11 @@ class Regionalize(Iteration, Decomposition):
                 Clustering with connectivity. 1 means connections with the 6 
                 imediate neighbors. 2 means the first and second ring, making 
                 18 neigbors, etc.. Defaults to 1.
-
         Raises:
             Exception: If "distance_threshold" and "n_clusters" are not 
                 properly defined
-
         Returns:
             [np.array]: Numpy array with cluster labels.
-
         """
         #Input check
         if distance_threshold!=None and n_clusters!=None:
@@ -480,13 +476,11 @@ class Regionalize(Iteration, Decomposition):
     def smooth_hex_labels(self, hex_coord: np.ndarray, labels: np.ndarray, neighbor_rings: int = 1, cycles: int = 1,
                         return_all: bool = False, n_jobs: int = -1) -> Union[np.ndarray, list]:
         """Smooth labels of a hexagonal tile matrix by neighbour majority vote.
-
         For each tile, the identity is set to the most predominant label in 
         its local environment, set by the neighbour radius.
         The original label is taken into account. If a tie is encountered,
         the label is set to the original label that was the input of that
         smoothing round.
-
         Args:
             hex_coord (np.array): Numpy Array with XY coordinates of the
                 centroids of the hexagonal tiles.
@@ -503,10 +497,8 @@ class Regionalize(Iteration, Decomposition):
             n_jobs (int, optional): Number of jobs to use for generating the 
                 neighbourhood graph. -1 means as many jobs as CPUs.
                 Defaults to -1.
-
         Returns:
             [np.ndarray]: Numpy Array with the smoothed cluster labels. 
-
         """
         def smooth(Kgraph, label):
             """Smooth labels with neigbouring labels"""
@@ -541,17 +533,13 @@ class Regionalize(Iteration, Decomposition):
 
     def cluster_mean_make(self, df_hex: Any, labels: np.ndarray) -> Any:
         """Calculate cluster mean.
-
         For a DataFrame with samples in columns, calculate the mean expression
             values for each unique label in labels.
-
         Args:
             df_hex (pd.DataFrame): Pandas DataFrame with samples in columns.
             labels (np.ndarray): Numpy array with cluster labels
-
         Returns:
             [pd.DataFrame]: Pandas Dataframe with mean values for each label.
-
         """
         unique_labels = np.unique(labels)
         cluster_mean = pd.DataFrame(data=np.zeros((df_hex.shape[0], len(unique_labels))), index = df_hex.index,
@@ -561,23 +549,19 @@ class Regionalize(Iteration, Decomposition):
         for l in unique_labels:
             filt = labels == l
             #Get mean expression of cluster
-            cluster_mean.loc[:, l] = df_hex.loc[:, filt].mean(axis=1)
+            cluster_mean.loc[df_hex.index, l] = df_hex.loc[df_hex.index, filt].mean(axis=1)
 
         return cluster_mean
 
     def cluster_sum_make(self, df_hex, labels: np.ndarray) -> Any: 
         """Calculate cluster sum.
-
         For a DataFrame with samples in columns, calculate the sum expression
         counts for each unique label in labels.
-
         Args:
             df_hex (pd.DataFrame): Pandas DataFrame with samples in columns.
             labels (np.ndarray): Numpy array with cluster labels
-
         Returns:
             [pd.DataFrame]: Pandas Dataframe with sum values for each label.
-
         """
         unique_labels = np.unique(labels)
         cluster_sum = pd.DataFrame(data=np.zeros((df_hex.shape[0], len(unique_labels))), index = df_hex.index,
@@ -593,18 +577,14 @@ class Regionalize(Iteration, Decomposition):
 
     def hex_neighbour_coord(self, x:float, y:float, s:float) -> np.ndarray:
         """Calculate cartesian coordinates of neighbour centroids.
-
         Assumes hexagonal grid with point of hexagons up: ⬡
-
         Args:
             x (float): X coordinate of center point.
             y (float): Y coordinate of center point.
             s (float): Distance between center points.
-
         Returns:
             np.ndarray: Numpy array with XY coordinates of neighbouring hexagon
                 centroids. 
-
         """
         delta_y = 0.5 * s * math.sqrt(3) #(0.5 * s) / tan(30)
         neighbour_coord = np.array([[x-0.5*s, y + delta_y],
@@ -617,13 +597,11 @@ class Regionalize(Iteration, Decomposition):
 
     def get_rotation_deg(self, x1: float, y1: float, x2: float, y2: float) -> float:
         """Calculates the rotation of a vector between 2 points and the origin.
-
         Args:
             x1 (float): X coordinate of point 1.
             y1 (float): Y coordinate of point 1.
             x2 (float): X coordinate of point 2.
             y2 (float): Y coordinate of point 2.
-
         Returns:
             float: Angle in degrees
         
@@ -638,7 +616,6 @@ class Regionalize(Iteration, Decomposition):
     def hex_get_shared_corners(self, angle, corner_dict, x=0, y=0):
         """
         Get the corners that are shared with a neighbouring tile.
-
         Input:
         `angle`(int): Angle the centroid of the neighbouring tile makes
             with the tile of interest, relative to the origin at (0,0)
@@ -647,7 +624,6 @@ class Regionalize(Iteration, Decomposition):
         `y`(float): centroid y coordinate of tile of interest.
         Returns:
         Coordinates of shared corner points.
-
         """
         #Dictionary coupling angle with neighbour to angle of shared corners
         shared_corner = {0: [-30, 30],
@@ -670,10 +646,8 @@ class Regionalize(Iteration, Decomposition):
     def hex_region_boundaries(self, hex_coord: np.ndarray, hexagon_shape: Any, hexbin_spacing: float, labels: np.ndarray, 
                               decimals: int = 7) -> dict:
         """ Find border coordinates of regions in a hexagonal grid.
-
         Finds the border coordinates for each connected group of hexagons 
         represented by a unique label. Assumes hexagonal grid with point up: ⬡
-
         Args:
             hex_coord (np.ndarray): Numpy Array with centroid coordinates as XY
                 columns for all tiles in a hexagonal grid. 
@@ -687,7 +661,6 @@ class Regionalize(Iteration, Decomposition):
                 to return all unique points. If you experience errors with the 
                 generation of polygons downstream, lower the number of 
                 decimals. Default suggestion: 7
-
         Returns:
             dict: Dictionary with for each label the boundary point of the 
                 hexagonal tile as Numpy Array. 
@@ -754,24 +727,20 @@ class Regionalize(Iteration, Decomposition):
 
     def polygon_order_points(self, boundary_points: dict) -> dict:
         """Order set of point for making polygons.
-
         This function makes a network out of a set of points, and uses this to 
         find circles, in order to order the points to make a valid polygon. It 
         assumes that for any point its 2 closest neighbours are the previous 
         and next points in the polygons. If this is not the case the algorithm 
         will make shortcuts and not return all data.
         Closes the polygon by adding the first point to the end of the array.
-
         Args:
             boundary_points (dict): Dictunary with for each label the boundary
                 point of the hexagonal tile as Numpy Array. Polygon should not
                 be closed, i.e. no duplication of first point. 
-
         Returns:
             dict: Dictionary in the same shape as the input but now the points
                 are ordered. Will close the Polygon, meaning that the first and
                 last point are identical.
-
         """      
         results = {l:[] for l in boundary_points.keys()}
         #Loop over labels
@@ -802,21 +771,17 @@ class Regionalize(Iteration, Decomposition):
 
     def polygon_smooth_points(self, ordered_points: dict, degree: int=2) -> dict:
         """Smooth polygon point using skimage.measure.subdivide_polygon().
-
         This is not a very strong smoothing on hexagon border data. 
         Warning: Will cause neighbouring polygons to detached in corners were 3 
         polygons meet.
-
         Args:
             ordered_points (dict): Dictionary with datasets as keys. For each 
                 dataset a dictionary with labels as keys, with a list of 
                 polygon coordinates.
             degree (int, optional): Degree of B-spline smooting. Max 7.
                 Defaults to 2.
-
         Returns:
             dict: Smoothed points in same format as the input.
-
         """
         results = {l : [] for l in ordered_points.keys()}
 
@@ -830,19 +795,15 @@ class Regionalize(Iteration, Decomposition):
         
     def to_Shapely_polygons(self, ordered_points: dict) -> dict:
         """Make Shapely polygons out of a set of ordered points.
-
         Converts orderd points to polygons, and makes complex polygons 
         (MulitPolygons) if a region consists of multiple polygons. These sub-
         polygons can be inside the main polygon, in which case a hole is cut.
-
         Args:
             ordered_points (dict): Dictionary with keys for each label and a 
                 list of orderd points for each polygon.
-
         Returns:
             dict: Dictionary with for every label a Shapely Polygon, or a 
                 MultiPolygon if the region consists of multiple polygons.
-
         """
         #datasets = list(ordered_points.keys())
         results = {}
@@ -892,47 +853,38 @@ class Regionalize(Iteration, Decomposition):
 
     def geoSeries_make(self, polygons: dict) -> Any:
         """Convert dictionary with shapely polygons to geoPandas GeoSeries.
-
         Args:
             polygons ([type]): Dictionary with for every label a Shapely 
                 Polygon, or a MultiPolygon if the region consists of multiple 
                 polygons.
-
         Returns:
             GeoSeries: Geopandas series of the polygons.
-
         """
         return gp.GeoSeries(polygons, index=list(polygons.keys()))
 
     def geoDataFrame_make(self, data: np.ndarray, index: Union[List[str], np.ndarray], 
                           columns: Union[List[str], np.ndarray], geometry: Any) -> Any:
         """Construct geoDataFrame. 
-
         Args:
             data (np.ndarray): Array with data.
             index (Union[list[str], np.ndarray]): Dataframe region index labels
             columns (Union[list[str], np.ndarray]): Dataframe Column gene 
                 labels. 
             geometry (gp.geoSeries): geoSeries of the polygons of each Index
-
         Returns:
             [gp.geoDataFrame]
-
         """
         gdf = gp.GeoDataFrame(data=data, index=index, columns=columns, geometry=geometry)
         return gdf
 
     def bounding_box_get(self, polygon: np.ndarray) -> np.ndarray:
         """Get the bounding box of a single polygon.
-
         Args:
             polygon (np.ndarray): Array of X, Y coordinates of the polython as
                 columns.
-
         Returns:
             np.ndarray: Array with the Left Bottom and Top Right corner 
                 coordinates: np.array([[X_BL, Y_BL], [X_TR, Y_TR]])
-
         """
         xmin, ymin = polygon.min(axis=0)
         xmax, ymax = polygon.max(axis=0)
@@ -940,11 +892,9 @@ class Regionalize(Iteration, Decomposition):
 
     def bounding_box_make(self, polygon_points: dict) -> dict:
         """Find bounding box coordinates of dictionary with polygon points.
-
         Args:
             polygon_points (dict): Dictionary with labels of each (multi-) 
                 polygon and a list of (sub-)polygon(s) as numpy arrays.
-
         Returns:
             dict: Dictionary in the same shape as input, but for every (sub-)
                 polygon the bounding box.
@@ -962,17 +912,14 @@ class Regionalize(Iteration, Decomposition):
 
     def bbox_filter_points(self, bbox: np.ndarray, points: np.ndarray) -> np.ndarray:
         """Filter point that fall within bounding box.
-
         Args:
             bbox (np.ndarray): Array with the Left Bottom and Top Right corner 
                 coordinates: np.array([[X_BL, Y_BL], [X_TR, Y_TR]])
             points (np.ndarray): Array with X and Y coordinates of the points
                 as columns
-
         Returns:
             np.ndarray: Boolean array with True for points that are in the 
                 bounding box.
-
         """
         filt_x = np.logical_and(points[:,0]>=bbox[0][0], points[:,0]<=bbox[1][0])
         filt_y = np.logical_and(points[:,1]>=bbox[0][1], points[:,1]<=bbox[1][1])
@@ -980,13 +927,11 @@ class Regionalize(Iteration, Decomposition):
 
     def point_in_region(self, polygon_points: dict, normalize: bool = True, normalize_unit: str = 'millimeter') -> Any:
         """Make GeoPandas Dataframe of region and count points inside.
-
         Takes a dictionary of (Multi-)polygons and converts these to Shapely
         (Mulit-)Polygons. Then it takes the point data and counts the points
         that fall inside each region. The results are stored as GeoPandas 
         geoDataFrame, that contains the counts for all genes in each region.
         Optionally normalizes for area. 
-
         Args:
             polygon_points (dict): Dictionary with keys for each label and a 
                 list of orderd points for each polygon.
@@ -995,12 +940,10 @@ class Regionalize(Iteration, Decomposition):
             normalize_unit (str, optional): Unit of the normalization. Defaluts
                 to "milimeter", which means that data will be normalized by 
                 square milimeter. 
-
         Returns:
             [gp.GeoDataFrame]: geoDataFrame with (normalized) counts for each
             gene in each region. Every region has a Shapely (Multi-)Polygon in
             the geometry column.
-
         """
         #Make base geopandas dataframe
         polygons = self.to_Shapely_polygons(polygon_points)
@@ -1050,7 +993,6 @@ class Regionalize(Iteration, Decomposition):
         - Clustering
         - Optional smoothing
         - Calculating mean region expression matrix
-
         Args:
              spacing (float): distance between tile centers, in same units as 
                 the data. The function makes hexagons with the point up: ⬡
@@ -1091,7 +1033,6 @@ class Regionalize(Iteration, Decomposition):
                 based on similarity. Defaults to True.
             n_jobs (int, optional): Number op processes. If -1 uses the max 
                 number of CPUs. Defaults to -1.
-
         Returns:
             Union[pd.DataFrame, np.ndarray, np.ndarray, pd.DataFrame, 
                 pd.DataFrame]: Tuple containing:
@@ -1133,11 +1074,14 @@ class Regionalize(Iteration, Decomposition):
         #Order cluster labels
         if order_labels:
             manifold = SpectralEmbedding(n_components=1, n_jobs=n_jobs).fit_transform(df_mean.T)
-            even_spaced = np.linspace(0, 1, manifold.shape[0])
+            even_spaced = np.arange(manifold.shape[0])
             even_spaced_dict = dict(zip(np.sort(manifold.ravel()), even_spaced))
             manifold_even = np.array([even_spaced_dict[i] for i in manifold.ravel()])
             manifold_even_dict = dict(zip(df_mean.columns, manifold_even))
             labels = np.array([manifold_even_dict[i] for i in labels])
+            #labels = (labels * manifold.shape[0]).astype('int')
+            df_mean.rename(columns=manifold_even_dict, inplace=True)
+            df_norm.rename(columns=manifold_even_dict, inplace=True)
         
         return df_hex, labels, hex_coord, df_mean, df_norm
 
@@ -1155,7 +1099,6 @@ class Regionalize(Iteration, Decomposition):
         
         Output is a GeoPandas dataframe which contains the (normalized) counts
         per region and a polygon for each region.
-
         Args:
             spacing (float): Spacing used to generate the hexbins.
             df_hex (pandas DataFrame): Dataframe with features in rows and 
@@ -1183,10 +1126,8 @@ class Regionalize(Iteration, Decomposition):
             area_normalize_unit (str, optional): Unit to use for normalization.
                 Use the 1D unit: "micrometer" will mean sqare micrometer.
                 Defaults to 'micrometer'.
-
         Retruns:
             [None]: Data saved as self.regions. 
-
         """
         #Get boundary points of regions
         boundary_points = self.hex_region_boundaries(hex_coord, self.hexbin_hexagon_shape, spacing, labels, decimals = boundary_decimals)
@@ -1223,5 +1164,3 @@ class Regionalize(Iteration, Decomposition):
                                                  columns = sum_counts.columns, geometry=new_geoseries)
             
             return gdf
-            
-

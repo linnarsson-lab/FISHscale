@@ -1,5 +1,6 @@
 from os import path, makedirs,listdir
 from glob import glob
+import shutil
 import re
 from dask import dataframe as dd
 from typing import Optional, Dict, Any, Callable
@@ -335,6 +336,9 @@ class DataLoader(DataLoader_base):
                 
                 #Group the data by gene and save
                 data.groupby('g').apply(lambda x: self._dump_to_parquet(x, self.dataset_name, self.FISHscale_data_folder))#, meta=('float64')).compute()
+                if path.exists(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes')):
+                    shutil.rmtree(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes'))
+
                 
             else:
                 raise IOError (f'Invalid file type: {filename}, should be in ".parquet" or ".csv" format.') 
