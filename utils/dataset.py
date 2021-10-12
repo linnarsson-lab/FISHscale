@@ -70,7 +70,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
         color_input: Optional[Union[str, dict]] = None,
         verbose: bool = False,
         part_of_multidataset: bool = False):
-        """initiate PandasDataset
+        """initiate Dataset
 
         Args:
             filename (str): Name (and  optionally path) of the saved Pandas 

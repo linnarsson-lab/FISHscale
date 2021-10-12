@@ -192,7 +192,7 @@ class GeneCorr:
            spacing (float, optional): distance between tile centers, in same 
                 units as the data. The actual spacing will have a verry small 
                 deviation (tipically lower than 2e-9%) in the y axis, due to 
-                the matplotlib hexbin function. The function makes hexagons 
+                the matplotlib function. The function makes hexagons 
                 with the point up: ⬡
             min_count (int, optional): Minimal number of molecules in a tile to
                 keep the tile in the dataset. The algorithm will generate a lot
@@ -203,8 +203,7 @@ class GeneCorr:
         Returns:
             Pandas dataframe with correlation matrix between genes.
         """
-
-        if df_hex == None:
+        if type(df_hex) == type(None):
             if spacing == None and min_count == None:
                 raise Exception('If "df_hex" is not defined, both "spacing" and "min_count" need to be defined.')
             df_hex, hex_coord, hexbin_hexagon_shape = self.make_hexbin(spacing, min_count)
