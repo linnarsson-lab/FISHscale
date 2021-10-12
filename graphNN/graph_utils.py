@@ -224,7 +224,7 @@ class GraphData(pl.LightningDataModule):
 
     def train_dataloader(self):
         edges = np.arange(self.g.num_edges())
-        random_edges = torch.tensor(np.random.choice(edges,int(edges.shape[0]*self.train_p),replace=False))
+        random_edges = torch.tensor(np.random.choice(edges,int(edges.shape[0]*(self.train_p/self.ngh_size)),replace=False))
         unlab = dgl.dataloading.EdgeDataLoader(
                         self.g,
                         random_edges,
