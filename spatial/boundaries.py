@@ -18,7 +18,6 @@ def _worker_bisect(points: np.ndarray, grid: np.ndarray, radius: float,
     the radius of every grid point. Afterwards it devides the points with a 
     bisection line for various angles and counts the number of points on 
     either side.
-
     Args:
         points (np.ndarray): Numpy array or Pandas dataframe with XY
             coordinates for points.
@@ -70,13 +69,11 @@ def _worker_bisect(points: np.ndarray, grid: np.ndarray, radius: float,
     return angle_counts, count 
 
 def _worker_angle(n_angles: int, d1: np.ndarray, d2: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-    """Calculate Spearman r for all devisions of the points in a circle.
-
+    """Calculate euclidian distance for all devisions of the points in a circle.
     Args:
         n_angles (int): Number of angles to devide the circle by.
         d1 (np.ndarray): Count of point above the bisection lines.
         d2 (np.ndarray): Count of points below the bisection lines.
-
     Returns:
         Tuple[np.ndarray, np.ndarray]: [description]
     """
@@ -86,10 +83,9 @@ def _worker_angle(n_angles: int, d1: np.ndarray, d2: np.ndarray) -> Tuple[np.nda
         #Catch warnings
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
-            r[j] = (spearmanr(d1[:,j], d2[:,j]))[0]
             dist[j] = distance.euclidean(d1[:,j], d2[:,j])
     
-    return r.min(), r.argmin(), dist.max(), dist.argmax()
+    return dist.max(), dist.argmax()
 
 class Boundaries:
     
@@ -98,13 +94,11 @@ class Boundaries:
         
         Returns the start and end coordinates of a line that bisects a circle
         with its center at (0,0)
-
         Args:
             r (float): Radius of circle.
             a (float): Angle in degree.
             offset (np.ndarray): Offset from center coordinate, which normally
                 is at(0,0) .
-
         Returns:
             Tuple[np.ndarray, np.ndarray]:
             XY coordinate of start of line.
@@ -125,7 +119,6 @@ class Boundaries:
         
         Extends the grid to match the extent of the dataset so that the grid 
         point evenly cover the dataset.
-
         Args:
             bin_size (float): Distance between grid points.
             x_extent (float): X extent of the dataset.
@@ -134,7 +127,6 @@ class Boundaries:
             x_max (float): X maximum of dataset.
             y_min (float): Y minimum of dataset.
             y_max (float): Y maximum of dataset.
-
         Returns:
             Tuple[np.ndarray, np.ndarray, np.ndarray]: 
             Grid: Array with grid XY positions.
@@ -170,7 +162,6 @@ class Boundaries:
         
         The higher the distance the stronger the border is, and the angle 
         indicates the direction of the (potential) border.
-
         Args:
             bin_size (int, optional): The distance between the grid points in 
                 the same unit as the dataset. Defaults to 100.
@@ -184,7 +175,6 @@ class Boundaries:
             gene_selection (list, np.ndarray, optional): Genes 
             n_jobs (int, optional): Number of processes to use. If None, 
                 the max number of cpus is used. Defaults to None.
-
         Returns:
             Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
             results: Array with in the first colum the r values and in the
@@ -268,6 +258,6 @@ class Boundaries:
         #Convert angle index to angle in degree
         angle_used = (np.linspace(0, 180 - (180/n_angles), n_angles))
         results2[:,1] = [angle_used[int(i)] for i in results2[:,1]]
-        results2[:,3] = [angle_used[int(i)] for i in results2[:,3]]
+        #results2[:,3] = [angle_used[int(i)] for i in results2[:,3]]
         
         return results2, grid, grid_filt, filt_grid
