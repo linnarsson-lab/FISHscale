@@ -10,7 +10,6 @@ import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
 import pandas as pd
-import psutil
 from joblib import Parallel, delayed
 from matplotlib.pyplot import axes, hexbin, xcorr
 from shapely.geometry import MultiLineString, MultiPolygon, Polygon
@@ -620,7 +619,7 @@ class RegionalizeMulti(Decomposition):
             r = dask.delayed(d.regionalize)(spacing, min_count, feature_selection, normalization_mode, 
                                             dimensionality_reduction, n_components, clust_dist_threshold, 
                                             n_clusters, clust_neighbor_rings, smooth, smooth_neighbor_rings, 
-                                            smooth_cycles, n_jobs=1)
+                                            smooth_cycles, order_labels=False, n_jobs=1)
             results[d.dataset_name] = ({'df_hex': r[0],
                                        'labels': r[1],
                                        'coordinates': r[2],
@@ -767,7 +766,7 @@ class MultiRegionalize:
         """
         Parallel wrapper around make_hexbin()
         
-        Can consume 
+        Can consume
         
         Input:
         `spacing`(int): distance between tile centers, in same units as the data. 
@@ -846,7 +845,7 @@ class MultiRegionalize:
         dataset_keys = list(spots.keys())
         
         if n_jobs == None:
-            n_jobs = cpu_count()
+            n_jobs = self.cpu_count()
         with Parallel(n_jobs=n_cores, backend='loky') as parallel:
             result = parallel(delayed(make_hexbin)(spacing, spots[k], min_count, unique_genes) for k in dataset_keys)
             

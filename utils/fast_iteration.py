@@ -2,11 +2,12 @@ import pandas as pd
 import numpy as np
 from typing import Generator, Tuple
 from functools import lru_cache
+from difflib import get_close_matches
 
 class Iteration:
 
     def get_gene(self, gene: str, include_z:bool = False, include_other:list = []):
-        """Get the xyz coordinates of points of a queried gene.
+        """Get the xy(z) coordinates of points of a queried gene.
         
         This causes the data to get loaded in RAM.
 
@@ -20,6 +21,10 @@ class Iteration:
         Returns:
             [pd.DataFrame]: Pandas Dataframe with coordinates.
         """
+        #Input checking
+        if not gene in self.unique_genes:
+            raise Exception(f'Given gene: "{gene}" can not be found in dataset. Did you maybe mean: {get_close_matches(gene, self.unique_genes, cutoff=0.4)}?')
+        
         gene_i= self.gene_index[gene]
         
         if isinstance(include_other, str):
@@ -59,6 +64,10 @@ class Iteration:
         Returns:
             [pd.DataFrame]: Pandas Dataframe with coordinates.
         """
+        #Input checking
+        if not gene in self.unique_genes:
+            raise Exception(f'Given gene: "{gene}" can not be found in dataset. Did you maybe mean: {get_close_matches(gene, self.unique_genes, cutoff=0.4)}?')
+        
         if minimum != None:
             n_points = self.gene_n_points[gene]
             if n_points < minimum:

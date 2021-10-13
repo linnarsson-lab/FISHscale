@@ -186,8 +186,6 @@ class SpatialMetrics:
         plt.title(f"{label} profile")
 
 
-#Order genes
-
 #KDE
 
 #KDE percentile area?

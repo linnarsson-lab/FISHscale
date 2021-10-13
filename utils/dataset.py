@@ -1,3 +1,6 @@
+from multiprocessing import cpu_count
+from os import path, makedirs, environ
+environ['NUMEXPR_MAX_THREADS'] = str(cpu_count())
 
 from typing import Union, Optional
 import pandas as pd
@@ -12,9 +15,13 @@ from FISHscale.utils.normalization import Normalization
 from FISHscale.visualization.gene_scatter import GeneScatter, MultiGeneScatter
 from FISHscale.utils.data_handling import DataLoader, DataLoader_base
 from FISHscale.utils.clustering import Clustering
-from FISHscale.utils.bonefight import BoneFight
+from FISHscale.utils.bonefight import BoneFight, BoneFightMulti
 from FISHscale.utils.regionalization_multi import RegionalizeMulti
 from FISHscale.utils.decomposition import Decomposition
+from FISHscale.spatial.boundaries import Boundaries
+from FISHscale.spatial.gene_order import Gene_order
+from FISHscale.segmentation.cellpose import Cellpose
+from FISHscale.utils.regionalization_gradient import Regionalization_Gradient
 from PyQt5 import QtWidgets
 import sys
 from datetime import datetime
@@ -26,11 +33,9 @@ import numpy as np
 import loompy
 from pint import UnitRegistry
 from os import name as os_name
-from os import path, makedirs
 from glob import glob
 from time import strftime
 from math import ceil
-from multiprocessing import cpu_count
 from dask import dataframe as dd
 import dask
 from dask.distributed import Client, LocalCluster
@@ -40,9 +45,9 @@ except ModuleNotFoundError as e:
     print(f'Please install "pyarrow" to load ".parquet" files. Without only .csv files are supported which are memory inefficient. Error: {e}')
 from tqdm import tqdm
 
-
 class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, SpatialMetrics, DataLoader, Normalization, 
-              Density1D, Clustering, BoneFight, Decomposition):
+              Density1D, Clustering, BoneFight, Decomposition, Boundaries, Gene_order, Cellpose, 
+              Regionalization_Gradient):
     """
     Base Class for FISHscale, still under development
 
@@ -65,7 +70,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
         color_input: Optional[Union[str, dict]] = None,
         verbose: bool = False,
         part_of_multidataset: bool = False):
-        """initiate PandasDataset
+        """initiate Dataset
 
         Args:
             filename (str): Name (and  optionally path) of the saved Pandas 
@@ -83,6 +88,9 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
                 that need to be loaded. Data will stored under "self.other"
                 as Pandas Dataframe. Defaults to None.
             unique_genes (np.ndarray, optional): Array with unique gene names.
+                This can also be a selection of genes to load. After a
+                selection is made data needs to be re-parsed to include all
+                genes.                
                 If not provided it will find the unique genes from the 
                 gene_column. This is slow for > 10e6 rows. 
                 Defaults to None.
@@ -121,6 +129,8 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
         self.x_offset = x_offset
         self.y_offset = y_offset
         self.z_offset = z_offset
+        if not isinstance(other_columns, list):
+            other_columns = [other_columns]
         self.other_columns = other_columns
         
         #Dask
@@ -194,8 +204,15 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
         self.y_extent = self.y_max - self.y_min 
         self.xy_center = (self.x_max - 0.5*self.x_extent, self.y_max - 0.5*self.y_extent)
 
-
-    def visualize(self,columns:list=[],width=2000,height=2000,show_axis=False):
+    def visualize(self,
+                columns:list=[],
+                width=2000,
+                height=2000,
+                show_axis=False,
+                color_dic=None,
+                x=None,
+                y=None,
+                c={}):
         """
         Run open3d visualization on self.data
         Pass to columns a list of strings, each string will be the class of the dots to be colored by. example: color by gene
@@ -204,20 +221,30 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
             columns (list, optional): List of columns to be plotted with different colors by visualizer. Defaults to [].
             width (int, optional): Frame width. Defaults to 2000.
             height (int, optional): Frame height. Defaults to 2000.
-            color_dic ([type], optional): Dictionary of colors if None it will assign random colors. Defaults to None.
         """        
 
+        if self.color_dict:
+            color_dic = self.color_dict
+
         QtWidgets.QApplication.setStyle('Fusion')
-        App = QtWidgets.QApplication.instance()
-        if App is None:
-            App = QtWidgets.QApplication(sys.argv)
+        self.App = QtWidgets.QApplication.instance()
+        if self.App is None:
+            self.App = QtWidgets.QApplication(sys.argv)
         else:
-            print('QApplication instance already exists: %s' % str(App))
+            print('QApplication instance already exists: %s' % str(self.App))
 
-        window = Window(self,columns,width,height)
-        App.exec_()
-        App.quit()
-
+        window = Window(self,
+                        columns,
+                        width,
+                        height,
+                        color_dic,
+                        x_alt=x,
+                        y_alt=y,
+                        c_alt=c) 
+        
+        self.App.exec_()
+        
+        
     def DBsegment(self,eps=25,min_samples=5,cutoff=250):
         """
         Run DBscan segmentation on self.data, this will reassign a column on self.data with column_name
@@ -243,7 +270,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
         
 
 class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base, Normalization, RegionalizeMulti,
-                   Decomposition):
+                   Decomposition, BoneFightMulti):
     """Load multiple datasets as Dataset objects.
     """
 
@@ -659,7 +686,15 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
                 z_offset = 0
             d.offset_data_temp(x_offset, y_offset, z_offset)
         
-    def visualize(self,columns:list=[],width=2000,height=2000,show_axis=False,color_dic=None):
+    def visualize(self,
+                columns:list=[],
+                width=2000,
+                height=2000,
+                show_axis=False,
+                color_dic=None,
+                x=None,
+                y=None,
+                c=None):
         """
         Run open3d visualization on self.data
         Pass to columns a list of strings, each string will be the class of the dots to be colored by. example: color by gene
@@ -670,15 +705,14 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
             height (int, optional): Frame height. Defaults to 2000.
         """        
 
-        QtWidgets.QApplication.setStyle('Fusion')
-        App = QtWidgets.QApplication.instance()
-        if App is None:
-            App = QtWidgets.QApplication(sys.argv)
-        else:
-            print('QApplication instance already exists: %s' % str(App))
         if self.color_dict:
             color_dic = self.color_dict
-        window = Window(self,columns,width,height,color_dic) 
-        
-        App.exec_()
-        App.quit()
+
+        window = Window(self,
+                        columns,
+                        width,
+                        height,
+                        color_dic,
+                        x_alt=x,
+                        y_alt=y,
+                        c_alt=c) 

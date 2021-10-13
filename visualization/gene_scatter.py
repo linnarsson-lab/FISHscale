@@ -22,13 +22,16 @@ class AxSize:
                 units. Defaults to 'micrometer'.
 
         Returns:
-            [float]: Converted input in inches. (As number, not as number with
-                unit.)
+            [float]: Converted input in inches. (As number without unit.)
         """
 
         #Add unit if not present
-        if isinstance(x, float) or isinstance(x, int):
+        if isinstance(x, (float, int, np.int64, np.int32, np.float64, np.float32)):
             x = f'{x} {unit}'
+        elif isinstance(x, str):
+            pass
+        else:
+            raise Exception(f'Input should be a number or string with number and unit. not: {x} of type: {type(x)}')
 
         #Convert to inch
         x = self.ureg(x)
@@ -127,10 +130,13 @@ class AxSize:
 
 class GeneScatter(AxSize):
 
-    def scatter_plot(self, genes: Union[List, np.ndarray], s: float=0.1, ax_scale_factor: int=10, 
-                    view: Union[Any, List] = None, scalebar: bool=True, show_axes: bool=False,
-                    show_legend: bool = True, save: bool=False, save_name: str='', dpi: int=300, 
-                    file_format: str='.eps') -> None:
+    def scatter_plot(self, genes: Union[List, np.ndarray], s: float=0.1, 
+                    colors: Union[List, np.ndarray] = None, 
+                    ax_scale_factor: int=10, view: Union[Any, List] = None, 
+                    scalebar: bool=True, show_axes: bool=False,
+                    show_legend: bool = True, title: str = None, ax = None, 
+                    save: bool=False, save_name: str='', dpi: int=300, 
+                    file_format: str='.eps', alpha=1) -> None:
         """Make a scatter plot of the data.
 
         Uses a black background. Plots in real size if `ax_scale_factor` is 1. 
@@ -142,6 +148,9 @@ class GeneScatter(AxSize):
             genes (Union[List, np.ndarray]): List of genes to plot. First gene
                 will be plotted first and thus be on the bottom of the stack.
             s (float, optional): Size of the points. Defaults to 0.1.
+            colors (Union[List, np.ndarray]): Iterable with colors for the
+                selected genes. If None given, defaults to internal gene-
+                color dictionary. Defaults to None.
             ax_scale_factor (int, optional): Scale factor of the plot. If 1,
                 the plot will be in real size. Carefully scale this for every 
                 plot so that the plot does not become too small or too big.
@@ -156,6 +165,9 @@ class GeneScatter(AxSize):
                 Defaults to False.
             show_legend (bool, optional): Show the gene legend. Can not show
                 more than 15 genes.
+            title (str, optional): Add a title to the figure. Defaults to None.
+            ax (matplotlib ax object, optional): If given put plot in ax of 
+                existing figure. Defaults to None
             save (bool, optional): If True saves the plot. Defaults to False.
             save_name (str, optional): Name of the plot. If not given will have
                 the format: "Scatter_plot_<dataset_name>_<timestamp>"
@@ -165,18 +177,22 @@ class GeneScatter(AxSize):
             file_format (str, optional): Format of the plot including the 
                 point. Even if vector format is given the points will be 
                 rasterized. Defaults to '.eps'.
+            alpha (float, optional): transparency. Defaults to 1.
         """        
         #Check input
         if not isinstance(genes, list) and not isinstance(genes, np.ndarray):
             genes = [genes]
 
         #Make figure
-        fig = plt.figure(figsize=(20,10))
-        ax = fig.add_subplot(111)#, rasterized=True)
-        ax.set_rasterization_zorder(1)
+        if type(ax) == type(None):
+            fig = plt.figure(figsize=(20,10))
+            ax = fig.add_subplot(111)#, rasterized=True)
+            ax.set_rasterization_zorder(1)
 
         #Plot points
-        for g in genes:
+        if type(colors) == type(None):
+            colors = [self.color_dict[g] for g in genes]
+        for g, c in zip(genes, colors):
             data = self.get_gene(g)
             x = data.x
             y = data.y
@@ -186,7 +202,7 @@ class GeneScatter(AxSize):
                 filt = filt_x & filt_y
                 x = x[filt]
                 y = y[filt]
-            ax.scatter(x, y, s=s, color=self.color_dict[g], zorder=0, label=g)
+            ax.scatter(x, y, s=s, color=c, zorder=0, label=g, alpha=alpha)
             del data
         
         #Rescale
@@ -197,9 +213,11 @@ class GeneScatter(AxSize):
             x_extent = self.x_extent
             y_extent = self.y_extent
 
-        x_scale = self._to_inch(x_extent * ax_scale_factor)
-        y_scale = self._to_inch(y_extent * ax_scale_factor)
+        x_scale = self._to_inch(x_extent * ax_scale_factor, unit = self.pixel_size.units)
+        y_scale = self._to_inch(y_extent * ax_scale_factor, unit = self.pixel_size.units)
         self._set_ax_size(x_scale, y_scale)
+        
+        ax.set_aspect('equal')
 
         #Add scale bar
         if scalebar:   
@@ -221,7 +239,10 @@ class GeneScatter(AxSize):
                 lgnd = plt.legend(loc = 2, frameon=False, fontsize=fs, handletextpad=-0.3)
                 for handle in lgnd.legendHandles:
                     handle.set_sizes([lw*5])
-                    plt.setp(lgnd.get_texts(), color='w')                       
+                    plt.setp(lgnd.get_texts(), color='w')
+                    
+        if title != None:
+            plt.title(title, color='w', fontsize=24)            
 
         if save:
             if save_name == '':
@@ -231,10 +252,13 @@ class GeneScatter(AxSize):
 
 class MultiGeneScatter(AxSize):
     
-    def scatter_plot(self, genes: Union[List, np.ndarray], s: float=0.1, ax_scale_factor: int=10, 
-                    scalebar: bool=True, show_axes: bool=False, flip_y: bool=False, show_legend=True,
-                    show_title=False, save: bool=False, save_name: str='', dpi: int=300, 
-                    file_format: str='.eps'):
+    def scatter_plot(self, genes: Union[List, np.ndarray], s: float=0.1, 
+                    colors: Union[List, np.ndarray] = None, 
+                    ax_scale_factor: int=10, scalebar: bool=True, 
+                    show_axes: bool=False, flip_y: bool=False, 
+                    show_legend=True, show_title=False, save: bool=False, 
+                    save_name: str='', dpi: int=300, file_format: str='.eps', 
+                    alpha=1) -> None:
         """Make a scatter plot of all data.
 
         Use self.arange_grid_ffset() to arrange datasets in a grid.   
@@ -247,6 +271,9 @@ class MultiGeneScatter(AxSize):
             genes (Union[List, np.ndarray]): List of genes to plot. First gene
                 will be plotted first and thus be on the bottom of the stack.
             s (float, optional): Size of the points. Defaults to 0.1.
+            colors (Union[List, np.ndarray]): Iterable with colors for the
+                selected genes. If None given, defaults to internal gene-
+                color dictionary. Defaults to None.
             ax_scale_factor (int, optional): Scale factor of the plot. If 1,
                 the plot will be in real size. Carefully scale this for every 
                 plot so that the plot does not become too small or too big.
@@ -272,6 +299,7 @@ class MultiGeneScatter(AxSize):
             file_format (str, optional): Format of the plot including the 
                 point. Even if vector format is given the points will be 
                 rasterized. Defaults to '.eps'.
+            alpha (float, optional): transparency. Defaults to 1.
         """   
 
         #Check input
@@ -289,8 +317,10 @@ class MultiGeneScatter(AxSize):
         y_max = 0
 
         #Plot points
+        if type(colors) == type(None):
+            colors = [self.color_dict[g] for g in genes]
         for i, d in enumerate(self.datasets):
-            for g in genes:
+            for g, c in zip(genes, colors):
                 data = d.get_gene(g)
                 x = data.x
                 y = data.y
@@ -303,9 +333,9 @@ class MultiGeneScatter(AxSize):
                 y_max = y_max_g if y_max_g > y_max else y_max
                 
                 if i == 0:
-                    ax.scatter(x, y, s=s, color=self.color_dict[g], zorder=0, label=g)
+                    ax.scatter(x, y, s=s, color=c, zorder=0, label=g, alpha=alpha)
                 else:
-                    ax.scatter(x, y, s=s, color=self.color_dict[g], zorder=0)
+                    ax.scatter(x, y, s=s, color=c, zorder=0, alpha=alpha)
                     
             if show_title:
                 lw, fs = self._line_font_size(ax)
@@ -314,8 +344,8 @@ class MultiGeneScatter(AxSize):
         #Rescale
         x_extent = x_max - x_min
         y_extent = y_max - y_min
-        x_scale = self._to_inch(x_extent * ax_scale_factor)
-        y_scale = self._to_inch(y_extent * ax_scale_factor)
+        x_scale = self._to_inch(x_extent * ax_scale_factor, unit = self.unit_scale)
+        y_scale = self._to_inch(y_extent * ax_scale_factor, unit = self.unit_scale)
         self._set_ax_size(x_scale, y_scale)
         if flip_y:
             ax.invert_yaxis()            
