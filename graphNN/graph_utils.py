@@ -19,6 +19,7 @@ import h5py
 import sklearn.linear_model as lm
 import sklearn.metrics as skm
 import dgl
+import dgl.function as fn
 from FISHscale.graphNN.models import SAGELightning
 
 class UnsupervisedClassification(Callback):
@@ -148,7 +149,7 @@ class GraphData(pl.LightningDataModule):
             self.model = SAGELightning(in_feats=self.data.unique_genes.shape[0], 
                                         n_hidden=24,
                                         n_layers=2,
-                                        n_classes=self.ref_celltypes,
+                                        n_classes=self.ref_celltypes.shape[1],
                                         lr=self.lr,
                                         supervised=self.supervised,
                                         Ncells=self.ncells*self.ref_celltypes.sum(axis=0)
