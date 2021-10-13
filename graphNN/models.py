@@ -57,7 +57,7 @@ class SAGELightning(LightningModule):
         self.supervised= supervised
         self.loss_fcn = CrossEntropyLoss()
         self.kappa = kappa
-        self.reference=reference
+        self.reference=th.tensor(reference,dtype=th.float32)
         #self.automatic_optimization = True
         if self.supervised:
             self.automatic_optimization = False
@@ -73,9 +73,9 @@ class SAGELightning(LightningModule):
         mfgs = [mfg.int() for mfg in mfgs]
         #pos_graph = pos_graph.to(self.device)
         #neg_graph = neg_graph.to(self.device)
-        batch_inputs = mfgs[0].srcdata['gene']
-        
-        batch_pred_unlab = self.module(mfgs, batch_inputs)
+        batch_inputs_u = mfgs[0].srcdata['gene']
+        batch_pred_unlab = self.module(mfgs, batch_inputs_u)
+        bu = batch_inputs_u[pos_graph.nodes()]
         loss,pos, neg = self.loss_fcn(batch_pred_unlab, pos_graph, neg_graph) #* 5
         
 
@@ -98,15 +98,16 @@ class SAGELightning(LightningModule):
             self.log('Classifier Loss',classifier_loss)
             self.log('train_acc', self.train_acc, prog_bar=True, on_step=True)
             
-            print(batch_pred_lab.shape,batch_inputs.shape, self.reference.shape)
-            bone_fight_loss = -F.cosine_similarity(batch_pred_lab @ batch_inputs, self.reference)
-
             #Domain Adaptation Loss
             classifier_domain_loss = self.loss_discriminator([batch_pred_unlab, batch_pred_lab],predict_true_class=True)
             self.log('Classifier_true', classifier_domain_loss, prog_bar=False, on_step=True)
 
             #Semantic Loss
-            labels_unlab = self.module.encoder.encoder_dict['CF'](batch_pred_unlab).argsort(axis=-1)[:,-1]
+            probabilities_unlab = F.softmax(self.module.encoder.encoder_dict['CF'](batch_pred_unlab),dim=-1)
+            labels_unlab = probabilities_unlab.argsort(axis=-1)[:,-1]
+
+            bone_fight_loss = -F.cosine_similarity(probabilities_unlab @ self.reference.T, bu,dim=0).mean()
+
             '''semantic_loss = self.sl.semantic_loss(pseudo_latent=batch_pred_unlab, 
                                                     pseudo_labels=labels_unlab ,
                                                     true_latent=batch_pred_lab,
@@ -120,7 +121,7 @@ class SAGELightning(LightningModule):
             kappa = 2/(1+10**(-1*((1*self.kappa)/8000)))-1
             self.kappa += 1
             loss = loss*kappa
-            loss = classifier_loss + kappa*(kappa*loss + kappa*classifier_domain_loss + kappa*supervised_loss) #+ semantic_loss.detach()
+            loss = classifier_loss + bone_fight_loss + kappa*(kappa*loss + kappa*classifier_domain_loss + kappa*supervised_loss) #+ semantic_loss.detach()
             
             opt.zero_grad()
             self.manual_backward(loss)
@@ -405,7 +406,7 @@ class Classifier(nn.Module):
     def forward(self, x):
         if self.reverse_gradients:
             x = self.grl(x)
-        return F.log_softmax(self.classifier(x),dim=-1)
+        return self.classifier(x)
 
 
 class GradientReversalFunction(Function):

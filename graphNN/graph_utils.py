@@ -152,7 +152,8 @@ class GraphData(pl.LightningDataModule):
                                         n_classes=self.ref_celltypes.shape[1],
                                         lr=self.lr,
                                         supervised=self.supervised,
-                                        Ncells=self.ncells*self.ref_celltypes.sum(axis=0)
+                                        Ncells=self.ncells*self.ref_celltypes.sum(axis=0),
+                                        reference=self.ref_celltypes
                                     )
 
         self.folder = self.save_to+self.analysis_name+ '_' +datetime.now().strftime("%Y-%m-%d-%H%M%S")
