@@ -58,14 +58,6 @@ class Window:
         
         """
 
-        QtWidgets.QApplication.setStyle('Fusion')
-        self.App = QtWidgets.QApplication.instance()
-        if self.App is None:
-            self.App = QtWidgets.QApplication(sys.argv)
-        else:
-            print('QApplication instance already exists: %s' % str(self.App))
-        
-        
         r = lambda: random.randint(0,255)
         self.columns= columns
         self.dataset = dataset
@@ -129,16 +121,17 @@ class Window:
 
         self.collapse.qbutton.clicked.connect(self.quit)
         self.vis.execute()
-            
-        self.App.exec_()
-        self.App.quit()
+        #self.App.exec_()
+        #sys.exit(self.App.exec_())
+        #self.App.quit()
+
     def quit(self):
         self.collapse.break_loop = True
         self.vis.break_loop = True
         self.vis.visM.destroy_window()
         #QApplication.quit()
-        #
-
+    #
+    
 
     def pass_multi_data(self):
         r = lambda: random.randint(0,255)
@@ -274,7 +267,8 @@ class ListWidget(QWidget):
 
         self.list_widget.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
         self.tissue_selected = [x for x in self.vis.dic_pointclouds['File']]
-        
+
+
     def add_items(self):
         for e in self.subdic:
             i = QListWidgetItem(str(e)) 
@@ -360,10 +354,19 @@ class CollapsibleDialog(QDialog,QObject):
 
         self.qbutton = QPushButton('Quit Visualizer')
         layout.addWidget(self.qbutton)
-        
         app_icon = QtGui.QIcon()
         app_icon.addFile('Images/test16x16.png', QtCore.QSize(16,16))
         self.setWindowIcon(app_icon)
+    
+    '''def closeEvent(self, event):
+        reply = QMessageBox.question(self, 'Quit', 'Are You Sure to Quit?', QMessageBox.No | QMessageBox.Yes)
+        if reply == QMessageBox.Yes:
+            self.break_loop = True
+            self.vis.break_loop = True
+            self.vis.visM.destroy_window()
+            event.accept()
+        else:
+            event.ignore()'''
         
     def possible(self):
         for x in self.widget_lists:
