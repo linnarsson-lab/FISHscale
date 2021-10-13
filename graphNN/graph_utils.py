@@ -19,6 +19,7 @@ import h5py
 import sklearn.linear_model as lm
 import sklearn.metrics as skm
 import dgl
+from FISHscale.graphNN.models import SAGELightning
 
 class UnsupervisedClassification(Callback):
     def on_validation_epoch_start(self, trainer, pl_module):
@@ -83,8 +84,8 @@ class GraphData(pl.LightningDataModule):
     """    
     def __init__(self,
         data, # Data as numpy array of shape (Genes, Cells)
-        model, # GraphSAGE model
-        analysis_name:str,
+        model=None, # GraphSAGE model
+        analysis_name:str='',
         cells=None, # Array with cell_ids of shape (Cells)
         distance_threshold = 50,
         ngh_size = 40,
@@ -96,9 +97,12 @@ class GraphData(pl.LightningDataModule):
         save_to = '',
         subsample=1,
         ref_celltypes=None,
+        ncells=0 ,
         smooth:bool=False,
+        supervised:bool=False,
         negative_samples:int=5,
         device='cpu',
+        lr=1e-3,
         ):
         """
         Initialize GraphData class
@@ -135,7 +139,19 @@ class GraphData(pl.LightningDataModule):
         self.smooth = smooth
         self.negative_samples = negative_samples
         self.ngh_size = ngh_size
+        self.ncells = ncells
+        self.supervised=supervised
+        self.lr = lr
         
+        if type(self.model) == type(None):
+            self.model = SAGELightning(in_feats=self.data.unique_genes.shape[0], 
+                                        n_hidden=24,
+                                        n_layers=2,
+                                        n_classes=self.ref_celltypes,
+                                        lr=self.lr,
+                                        supervised=self.supervised,
+                                        Ncells=self.ncells*self.ref_celltypes.sum(axis=0)
+                                    )
 
         self.folder = self.analysis_name+ '_' +datetime.now().strftime("%Y-%m-%d-%H%M%S")
         os.mkdir(self.folder)
@@ -186,6 +202,7 @@ class GraphData(pl.LightningDataModule):
     def setup(self, stage: Optional[str] = None):
         #self.d = th.tensor(self.molecules_df(),dtype=th.float32) #works
         self.d = self.molecules_df()
+
 
     def compute_size(self):
         cells = self.cells
