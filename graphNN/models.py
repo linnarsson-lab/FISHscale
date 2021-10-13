@@ -45,7 +45,8 @@ class SAGELightning(LightningModule):
                  lr=0.01,
                  supervised=False,
                  kappa=0,
-                 Ncells=0
+                 Ncells=0,
+                 reference=0,
                  ):
         super().__init__()
 
@@ -55,6 +56,7 @@ class SAGELightning(LightningModule):
         self.supervised= supervised
         self.loss_fcn = CrossEntropyLoss()
         self.kappa = kappa
+        self.reference=reference
         #self.automatic_optimization = True
         if self.supervised:
             self.automatic_optimization = False
@@ -94,6 +96,9 @@ class SAGELightning(LightningModule):
             self.train_acc(labels_pred.argsort(axis=-1)[:,-1],batch_labels)
             self.log('Classifier Loss',classifier_loss)
             self.log('train_acc', self.train_acc, prog_bar=True, on_step=True)
+            
+            print(batch_pred_lab.shape,batch_inputs.shape, self.reference.shape)
+            bone_fight_loss = -F.cosine_similarity(batch_pred_lab @ batch_inputs, self.reference)
 
             #Domain Adaptation Loss
             classifier_domain_loss = self.loss_discriminator([batch_pred_unlab.detach(), batch_pred_lab.detach()],predict_true_class=True)
@@ -107,13 +112,12 @@ class SAGELightning(LightningModule):
 
             #Semantic Loss
             labels_unlab = self.module.encoder.encoder_dict['CF'](batch_pred_unlab).argsort(axis=-1)[:,-1]
-            semantic_loss = self.sl.semantic_loss(pseudo_latent=batch_pred_unlab, 
+            '''semantic_loss = self.sl.semantic_loss(pseudo_latent=batch_pred_unlab, 
                                                     pseudo_labels=labels_unlab ,
                                                     true_latent=batch_pred_lab,
                                                     true_labels=labels_pred.argsort(axis=-1)[:,-1],
                                                     )
-            self.log('Semantic_loss', semantic_loss, prog_bar=True, on_step=True)
-
+            self.log('Semantic_loss', semantic_loss, prog_bar=True, on_step=True)'''
             
             # Will increasingly apply supervised loss, domain adaptation loss
             # from 0 to 1, from iteration 0 to 200, focusing first on unsupervised 
@@ -121,7 +125,7 @@ class SAGELightning(LightningModule):
             #kappa = 2/(1+10**(-1*((1*self.kappa)/200)))-1
             #self.kappa += 1
 
-            loss += domain_loss_fake + supervised_loss + classifier_loss + semantic_loss.detach()
+            loss += domain_loss_fake + supervised_loss + classifier_loss #+ semantic_loss.detach()
 
 
             opt.zero_grad()
