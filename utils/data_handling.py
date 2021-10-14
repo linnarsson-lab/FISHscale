@@ -7,6 +7,8 @@ import numpy as np
 import itertools
 import pandas as pd
 import pickle
+from tqdm import tqdm
+from FISHscale.utils.inside_polygon import is_inside_sm_parallel
 
 from pandas.io.parquet import read_parquet
 try:
@@ -232,7 +234,7 @@ class DataLoader(DataLoader_base):
 
     def load_data(self, filename: str, x_label: str, y_label: str, gene_label: str, other_columns: Optional[list], 
                   x_offset: float, y_offset: float, z_offset: float, pixel_size: str, unique_genes: Optional[np.ndarray],
-                  reparse: bool = False) -> Any:             
+                  exclude_genes: list = None, polygon: np.ndarray = None, reparse: bool = False) -> Any:             
         """Load data from data file.
         
         Opens a file containing XY coordinates of points with a gene label.
@@ -267,8 +269,13 @@ class DataLoader(DataLoader_base):
             z_offset (float, optional): Offset in Z axis.
             pixel_size (str, optional): Size of the pixels in micrometer.
             unique_genes (np.ndarray, optional): Array with unique genes for
-                dataset. If not given can take some type to compute for large
+                dataset. Genes present in data but not in 'unique_genes' will
+                not be included. If not given, can take some type to compute for large
                 datasets.
+            exclude_genes (list, optional): List with genes to exclude from
+                dataset. Defaults to None. 
+            polygon (np.ndarray, optional): Array with shape (X,2) with closed
+                polygon to select points.
             reparse (bool, optional): True if you want to reparse the data,
                 if False, it will repeat the parsing. Parsing will apply the
                 offset. Defaults to False.
@@ -322,19 +329,31 @@ class DataLoader(DataLoader_base):
 
                 #unique genes
                 if not isinstance(unique_genes, (np.ndarray, list)):
-                    self.unique_genes = np.unique(data.g)
+                    ug = np.unique(data.g)
+                    if type(exclude_genes) != type(None):
+                        ug = ug[[g not in exclude_genes for g in ug]]
+                    self.unique_genes = ug
                 else:
-                    self.unique_genes = np.asarray(unique_genes)
+                    ug = np.asarray(unique_genes)
+                    if type(exclude_genes) != type(None):
+                        ug = ug[[g not in exclude_genes for g in ug]]
+                    self.unique_genes = ug                  
                     #Select requested genes
                     data = data.loc[data.g.isin(unique_genes)]
                 self._metadatafile_add({'unique_genes': self.unique_genes})    
+                
+                #Filter dots with polygon
+                if type(polygon) != type(None):
+                    filt = is_inside_sm_parallel(polygon, data.loc[:,['x', 'y']].to_numpy())
+                    data = data.loc[filt,:]
                 
                 #Get data shape
                 self.shape = data.shape
                 self._metadatafile_add({'shape': self.shape})
                 
                 #Group the data by gene and save
-                data.groupby('g').apply(lambda x: self._dump_to_parquet(x, self.dataset_name, self.FISHscale_data_folder))#, meta=('float64')).compute()
+                tqdm.pandas()
+                data.groupby('g').progress_apply(lambda x: self._dump_to_parquet(x, self.dataset_name, self.FISHscale_data_folder))#, meta=('float64')).compute()
                 
             else:
                 raise IOError (f'Invalid file type: {filename}, should be in ".parquet" or ".csv" format.') 
