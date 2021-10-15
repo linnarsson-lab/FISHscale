@@ -1,3 +1,4 @@
+from matplotlib.pyplot import bone
 import pytorch_lightning as pl
 from pytorch_lightning.metrics.classification import accuracy
 import torchmetrics
@@ -63,6 +64,9 @@ class SAGELightning(LightningModule):
             self.automatic_optimization = False
             self.sl = SemanticLoss(n_hidden,n_classes,device=self.device,ncells=Ncells)
             self.train_acc = torchmetrics.Accuracy()
+            p = th.tensor(Ncells*reference.sum(axis=0),dtype=th.float32)
+            self.p = p/p.sum()
+            self.kl = th.nn.KLDivLoss(reduction='sum')
             
 
     def training_step(self, batch, batch_idx):
@@ -106,14 +110,20 @@ class SAGELightning(LightningModule):
             probabilities_unlab = F.softmax(self.module.encoder.encoder_dict['CF'](batch_pred_unlab),dim=-1)
             labels_unlab = probabilities_unlab.argsort(axis=-1)[:,-1]
 
+            # Bonefight regularization of cell types
             bone_fight_loss = -F.cosine_similarity(probabilities_unlab @ self.reference.T, bu,dim=0).mean()
+            #bone_fight_loss1 = -F.cosine_similarity(probabilities_unlab @ self.reference.T, bu,dim=1).mean()
+            '''q = th.ones(probabilities_unlab.shape[0])/probabilities_unlab.shape[0]
+            p = th.log(self.p.T @ probabilities_unlab.T)
+            kl_loss = self.kl(p,q)
+            bone_fight_loss = bone_fight_loss0 + kl_loss'''
 
-            '''semantic_loss = self.sl.semantic_loss(pseudo_latent=batch_pred_unlab, 
+            semantic_loss = self.sl.semantic_loss(pseudo_latent=batch_pred_unlab, 
                                                     pseudo_labels=labels_unlab ,
                                                     true_latent=batch_pred_lab,
                                                     true_labels=labels_pred.argsort(axis=-1)[:,-1],
                                                     )
-            self.log('Semantic_loss', semantic_loss, prog_bar=True, on_step=True)'''
+            self.log('Semantic_loss', semantic_loss, prog_bar=True, on_step=True)
             
             # Will increasingly apply supervised loss, domain adaptation loss
             # from 0 to 1, from iteration 0 to 200, focusing first on unsupervised 
