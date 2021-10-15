@@ -442,24 +442,41 @@ class DataLoader(DataLoader_base):
         """        
         return self.df.map_partitions(lambda x: x[x.index.isin(l)])
 
-    def add_dask_attribute(self,name:str,l:list):
+    def add_dask_attribute(self,attribute_name:str,l, include_genes=False):
         """
         [summary]
 
         Args:
-            name (str): column name
-            l (list): list of features
-        """        
-        da = pd.DataFrame({'x':self.df.x.compute(),
-                                'y':self.df.y.compute(),
-                                'z':self.df.z.compute(),
-                                name:l})
+            attribute_name (str): Name of the attribute that the dask dataframe will be partitioned by
+            l: list or dictionary with columns and list of attributes to add.
+        """
+        if type(l) != dict:
+            d ={'x':self.df.x.compute(),
+                'y':self.df.y.compute(),
+                'z':self.df.z.compute(),                 
+                attribute_name:l}
+        else:
+            d ={'x':self.df.x.compute(),
+                'y':self.df.y.compute(),
+                'z':self.df.z.compute()} 
+            for x in l:
+                d[x] = l[x]             
+                        
+        if include_genes:
+            d['g'] = self.df.g.compute()
 
-        makedirs(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes',name),exist_ok=True)
-        da.groupby(name).apply(lambda x: self._dump_to_parquet(x, self.dataset_name, self.FISHscale_data_folder+'/attributes/{}'.format(name)))#, meta=('float64')).compute()
-        self.dask_attrs[name] = dd.read_parquet(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes/{}'.format(name), '*.parquet'))   
-        #self.dask_attrs.to_parquet(path.join(self.dataset_folder,self.FISHscale_data_folder,'attributes'))
+        da = pd.DataFrame(d)        
+        if path.exists(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes',attribute_name)):
+            shutil.rmtree(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes',attribute_name))
 
-        
+        makedirs(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes',attribute_name),exist_ok=True)
+        da.groupby(attribute_name).apply(lambda x: self._dump_to_parquet(x, self.dataset_name, self.FISHscale_data_folder+'/attributes/{}'.format(attribute_name)))#, meta=('float64')).compute()
+        self.dask_attrs[attribute_name] = dd.read_parquet(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes/{}'.format(attribute_name), '*.parquet'))   
+        #self.dask_attrs.to_parquet(path.join(self.dataset_folder,self.FISHscale_data_folder,'attributes'))    
+
+
+
+
+
         
         
