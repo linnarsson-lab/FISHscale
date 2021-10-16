@@ -22,7 +22,7 @@ from FISHscale.spatial.boundaries import Boundaries
 from FISHscale.spatial.gene_order import Gene_order
 from FISHscale.segmentation.cellpose import Cellpose
 from FISHscale.utils.regionalization_gradient import Regionalization_Gradient
-from FISHscale.utils.inside_polygon import check_closed
+from FISHscale.utils.inside_polygon import close_polygon
 from PyQt5 import QtWidgets
 import sys
 from datetime import datetime
@@ -137,7 +137,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
         self.x_offset = x_offset
         self.y_offset = y_offset
         self.z_offset = z_offset
-        self.polygon = check_closed(polygon)
+        self.polygon = close_polygon(polygon) if isinstance(polygon, np.ndarray) else polygon
         if not isinstance(other_columns, list):
             other_columns = [other_columns]
         self.other_columns = other_columns

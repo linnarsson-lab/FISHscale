@@ -333,13 +333,15 @@ class DataLoader(DataLoader_base):
                     if type(exclude_genes) != type(None):
                         ug = ug[[g not in exclude_genes for g in ug]]
                     self.unique_genes = ug
+                    #Select requested genes
+                    data = data.loc[data.g.isin(self.unique_genes)]
                 else:
                     ug = np.asarray(unique_genes)
                     if type(exclude_genes) != type(None):
                         ug = ug[[g not in exclude_genes for g in ug]]
                     self.unique_genes = ug                  
                     #Select requested genes
-                    data = data.loc[data.g.isin(unique_genes)]
+                    data = data.loc[data.g.isin(self.unique_genes)]
                 self._metadatafile_add({'unique_genes': self.unique_genes})    
                 
                 #Filter dots with polygon

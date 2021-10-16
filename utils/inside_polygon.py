@@ -4,7 +4,7 @@ import numba
 from typing import Any, Generator, Tuple
 
 
-def close_polygon(self, polygon: np.ndarray):
+def close_polygon(polygon: np.ndarray):
     """Check if polygon is closed. If not returns closed polygon.
     
     For a closed polygon the first and last point are identical.
