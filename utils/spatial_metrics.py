@@ -185,15 +185,6 @@ class SpatialMetrics:
         plt.xlabel('Radii')
         plt.title(f"{label} profile")
 
-
-#KDE
-
-#KDE percentile area?
-
-#Density 1D
-
-#Density 2D
-
 #Convex hull
 
 #Moran I
