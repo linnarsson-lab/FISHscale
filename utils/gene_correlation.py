@@ -22,7 +22,7 @@ class GeneCorr:
 
         self.gene_KDTree = gene_KDTree
 
-    def CBC(self, geneA: str, geneB: str, radius: float, workers: int=-1) -> Tuple[Any, Any]:
+    def _CBC(self, geneA: str, geneB: str, radius: float, workers: int=-1) -> Tuple[Any, Any]:
         """Calculate coordinate based colocalization.
 
         Malkusch, S., Endesfelder, U., Mondry, J. et al. Coordinate-based 
@@ -100,7 +100,7 @@ class GeneCorr:
         
         return cor_AB, cor_BA
 
-    def CBC_matrix(self, radius: float, workers: int=-1) -> Tuple[Any, Any]:
+    def _CBC_matrix(self, radius: float, workers: int=-1) -> Tuple[Any, Any]:
         """Calculate coordinate based colocalization for all genes.
 
         Malkusch, S., Endesfelder, U., Mondry, J. et al. Coordinate-based 
@@ -137,7 +137,7 @@ class GeneCorr:
         for i, (geneA, geneB) in enumerate(combinations):
             print(f'Radius {radius}: {i}/{combinations.shape[0]}             ', end='\r')
             #Get the spearman r and p value for gene A versus gene B and gene B versus gene A
-            cor_AB, cor_BA = self.CBC(geneA, geneB, radius, workers=workers)
+            cor_AB, cor_BA = self._CBC(geneA, geneB, radius, workers=workers)
             #Place in matrix
             if geneA == geneB:
                 cor.loc[geneA, geneB] = cor_AB[0]
@@ -176,19 +176,19 @@ class GeneCorr:
         #Make sure self.gene_KDTree is made.
         self.make_gene_KDTree()
         
-        return self.CBC_matrix(radius, workers)
+        return self._CBC_matrix(radius, workers)
 
 
-    def gene_corr_hex(self, method: str='spearman', df_hex: Any=None, spacing: float=None, min_count: int=1) -> Any:
+    def gene_corr_hex(self, df_hex: Any=None, method: str='spearman', spacing: float=None, min_count: int=1) -> Any:
         """Correlate gene expression over hexagonally binned data.
 
         Args:
-            method (str, optional): Method input for Pandas .corr() method.
-                Defaults to 'spearman'.
             df_hex (Any, optional): Pandas dataframe with gene counts for each 
                 hexagonal tile. Genes in rows, tiles as columns. If not given,
                 it will be calculated. In which case "spacing" and "min_count"
                 need to be defined. Defaults to None. 
+            method (str, optional): Method input for Pandas .corr() method.
+                Defaults to 'spearman'.
            spacing (float, optional): distance between tile centers, in same 
                 units as the data. The actual spacing will have a verry small 
                 deviation (tipically lower than 2e-9%) in the y axis, due to 
@@ -210,13 +210,15 @@ class GeneCorr:
 
         return df_hex.T.corr(method)    
 
-    def gene_corr_region(self) -> Any:
-        """Correlate gene expression over regions. 
+    def gene_corr_region(self, gdf) -> Any:
+        """Correlate gene expression over regions.
+        
+        Args:
+            gdf (Geopandas dataframe): Geopandas Dataframe with expression 
+            per region.
 
         Returns:
             Pandas dataframe with correlation matrix between genes.
         """
-        if not hasattr(self, 'regions'):
-            raise Exception('"self.regions" not defined. Please first regionalize the data with the ".run_regionalziation()" function.')
 
-        return self.regions.iloc[:-1].corr()
+        return gdf.iloc[:-1].corr()

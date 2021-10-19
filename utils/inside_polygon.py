@@ -4,6 +4,23 @@ import numba
 from typing import Any, Generator, Tuple
 
 
+def close_polygon(polygon: np.ndarray):
+    """Check if polygon is closed. If not returns closed polygon.
+    
+    For a closed polygon the first and last point are identical.
+
+    Args:
+        polygon (np.ndarray): Array with shape (X,2).
+
+    Returns:
+        [np.ndarray]: [description]
+    """
+    if np.all(polygon[0] != polygon[-1]):
+        polygon = np.vstack((polygon, polygon[0]))
+        
+    return polygon
+
+
 @jit(nopython=True)
 def is_inside_sm(polygon: np.ndarray, point: np.ndarray) -> Any:
     """Test if point is inside a polygon.

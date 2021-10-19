@@ -103,7 +103,7 @@ class Density1D:
                                                                                                                 np.ndarray,
                                                                                                                 np.ndarray,
                                                                                                                 np.ndarray]:
-        """Calculate density of points along a line with a certain width.
+        """Calculate KDE density of points along a line with a certain width.
         
         Calculates the kernel density estimate (KDE) in 1 dimension over a line. 
         Use the width to determine how close point need to be to be included in the 
@@ -213,7 +213,29 @@ class Density1D:
         return probability, sample_space, filt, y_coords
     
     
-    def density_count(self, points: np.ndarray, line: list, width: float, nbins: int=20, plot: bool=False, s: float=2):
+    def density_count(self, points: np.ndarray, line: list, width: float, nbins: int=20, plot: bool=False, 
+                      s: float=2) -> Tuple[np.ndarray, np.ndarray]:
+        """Calculate count density of points along a line with a certain width.
+
+        Args:
+            points (np.ndarray): Numpy array with X and Y coordinates as columns.
+            line (list): Begin and end coordinates of the line over which to 
+                calculate the density. Format: [x1, y1, x2, y2].
+            width (float): Width over which the density is sampled. Same units as
+                the points coordinates.
+            kernel (str, optional): Kernel for KDE, see sklearn documentation for
+                options. Defaults to 'gaussian'.
+            resolution (int, optional): Number of points for KDE sampling.
+                Defaults to 50.
+            plot (bool, optional): If True it plots the points, line and area over
+                which it calculated the density. Defaults to False.
+            s (float, optional): Size of dots for plotting. Defaults to 2.
+
+        Returns:
+            Tuple[np.ndarray, np.ndarray]: 
+            Histogram along the line.
+            Bin edges.
+        """
         
         x1, y1, x2, y2 = line
         
