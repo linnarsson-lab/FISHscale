@@ -233,7 +233,6 @@ class GraphData(pl.LightningDataModule):
         #if self.smooth:
         #    cells = self.molecules_connected
         np.save(self.folder +'/cells.npy', cells)
-
         self.train_size = int((cells.shape[0])*self.train_p)
         self.test_size = cells.shape[0]-int(cells.shape[0]*self.train_p)  
         random_state = np.random.RandomState(seed=0)
