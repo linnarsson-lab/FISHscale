@@ -9,14 +9,9 @@ import pandas as pd
 import pickle
 from tqdm import tqdm
 from FISHscale.utils.inside_polygon import is_inside_sm_parallel
+from pyarrow.parquet import ParquetFile
+from pyarrow import ArrowInvalid
 
-from pandas.io.parquet import read_parquet
-try:
-    from pyarrow.parquet import ParquetFile
-    from pyarrow import ArrowInvalid
-except ModuleNotFoundError as e:
-    print(f'Please install "pyarrow" to load ".parquet" files. Without, only .csv files are supported which are memory inefficient. Error: {e}')
-    
 class DataLoader_base():
       
     def _open_data_function(self, filename: str) -> Callable:
@@ -231,6 +226,20 @@ class DataLoader(DataLoader_base):
         self.y_extent = self.y_max - self.y_min 
         self.xy_center = (self.x_max - 0.5*self.x_extent, self.y_max - 0.5*self.y_extent)
         self.shape = prop['shape']
+        
+    def _numberstring_sort(self, l): 
+        """Sort where full numbers are considered.""" 
+        convert = lambda text: int(text) if text.isdigit() else text 
+        alphanum_key = lambda key: [ convert(c) for c in re.split('([0-9]+)', key) ] 
+        return np.array(sorted(l, key = alphanum_key))
+    
+    def _exclude_genes(self, ug, eg):
+        """Filter out excluded genes from unique gene array.
+        """
+        if type(eg) != type(None):
+            #ug = ug[[g not in eg for g in ug]]
+            ug = np.array([g for g in ug if g not in eg])
+        return ug
 
     def load_data(self, filename: str, x_label: str, y_label: str, gene_label: str, other_columns: Optional[list], 
                   x_offset: float, y_offset: float, z_offset: float, pixel_size: str, unique_genes: Optional[np.ndarray],
@@ -330,15 +339,19 @@ class DataLoader(DataLoader_base):
                 #unique genes
                 if not isinstance(unique_genes, (np.ndarray, list)):
                     ug = np.unique(data.g)
-                    if type(exclude_genes) != type(None):
-                        ug = ug[[g not in exclude_genes for g in ug]]
+                    #Get the order the same as how Pandas would sort.
+                    ug = self._numberstring_sort(ug)
+                    #Make unique genes
+                    ug = self._exclude_genes(ug, exclude_genes)
                     self.unique_genes = ug
                     #Select requested genes
                     data = data.loc[data.g.isin(self.unique_genes)]
                 else:
                     ug = np.asarray(unique_genes)
-                    if type(exclude_genes) != type(None):
-                        ug = ug[[g not in exclude_genes for g in ug]]
+                    #Get the order the same as how Pandas would sort.
+                    ug = self._numberstring_sort(ug)
+                    #Make unique genes
+                    ug = self._exclude_genes(ug, exclude_genes)    
                     self.unique_genes = ug                  
                     #Select requested genes
                     data = data.loc[data.g.isin(self.unique_genes)]
@@ -365,13 +378,18 @@ class DataLoader(DataLoader_base):
         if isinstance(unique_genes, (np.ndarray, list)):
             #Make selected genes file list         
             p = path.join(self.FISHscale_data_folder, self.dataset_name)
-            filter_filelist = [f'{p}_{g}.parquet' for g in unique_genes]
+            ug = self._exclude_genes(unique_genes, exclude_genes)
+            filter_filelist = [f'{p}_{g}.parquet' for g in ug]
+
             #Load selected genes        
             self.df = dd.read_parquet(filter_filelist)
-            self.shape = (self.df.shape[0].compute(),self.df.shape[1])
+            self.shape = (self.df.shape[0].compute(), self.df.shape[1])
         else:
             #Load all genes
             self.df = dd.read_parquet(path.join(self.FISHscale_data_folder, '*.parquet'))
+        
+        #New    
+        #self.gene_index = {g:i for i,g in enumerate(self.unique_genes)}
 
         if new_parse ==False:
             #Get coordinate properties from metadata
@@ -384,11 +402,12 @@ class DataLoader(DataLoader_base):
             
             #Check if unique_genes are given by user
             if isinstance(unique_genes, (np.ndarray, list)):
-                self.unique_genes = np.asarray(unique_genes)
+                ug = self._exclude_genes(unique_genes, exclude_genes)
+                self.unique_genes = np.asarray(self._numberstring_sort(ug))
                 self._metadatafile_add({'unique_genes': self.unique_genes})
             #Check if unique genes could be found in metadata
             elif isinstance(unique_genes_metadata, (np.ndarray, list)): 
-                self.unique_genes = unique_genes_metadata
+                self.unique_genes = self._numberstring_sort(unique_genes_metadata)
             #Calcualte the unique genes, slow
             else:
                 self.unique_genes = self.df.g.drop_duplicates().compute().to_numpy()
