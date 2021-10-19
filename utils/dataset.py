@@ -4,7 +4,10 @@ environ['NUMEXPR_MAX_THREADS'] = str(cpu_count())
 
 from typing import Union, Optional
 import pandas as pd
-from FISHscale.visualization.primitiveVis_open3dv2 import Window
+try:
+    from FISHscale.visualization.primitiveVis_open3dv2 import Window
+except ModuleNotFoundError as e:
+    print(f'Please install "PyQt5" for data visualization. {e}')  
 from FISHscale.utils.hex_regionalization import Regionalize
 from FISHscale.utils.fast_iteration import Iteration, MultiIteration
 from FISHscale.utils.colors import ManyColors
@@ -22,7 +25,6 @@ from FISHscale.spatial.boundaries import Boundaries
 from FISHscale.spatial.gene_order import Gene_order
 from FISHscale.segmentation.cellpose import Cellpose
 from FISHscale.utils.regionalization_gradient import Regionalization_Gradient
-from PyQt5 import QtWidgets
 import sys
 from datetime import datetime
 from sklearn.cluster import DBSCAN
@@ -222,7 +224,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
             width (int, optional): Frame width. Defaults to 2000.
             height (int, optional): Frame height. Defaults to 2000.
         """        
-
+        from PyQt5 import QtWidgets
         if self.color_dict:
             color_dic = self.color_dict
 
@@ -704,7 +706,7 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
             width (int, optional): Frame width. Defaults to 2000.
             height (int, optional): Frame height. Defaults to 2000.
         """        
-
+        from PyQt5 import QtWidgets
         if self.color_dict:
             color_dic = self.color_dict
 

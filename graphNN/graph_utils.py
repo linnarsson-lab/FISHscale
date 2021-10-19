@@ -144,7 +144,7 @@ class GraphData(pl.LightningDataModule):
         self.ncells = ncells
         self.supervised=supervised
         self.lr = lr
-        
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         if type(self.model) == type(None):
             self.model = SAGELightning(in_feats=self.data.unique_genes.shape[0], 
                                         n_hidden=24,
@@ -153,14 +153,16 @@ class GraphData(pl.LightningDataModule):
                                         lr=self.lr,
                                         supervised=self.supervised,
                                         Ncells=self.ncells*self.ref_celltypes.sum(axis=0),
-                                        reference=self.ref_celltypes
+                                        reference=self.ref_celltypes,
+                                        device=self.device.type
                                     )
+        self.model.to(self.device)
+        print('model is in: ', self.model.device)
 
         self.folder = self.save_to+self.analysis_name+ '_' +datetime.now().strftime("%Y-%m-%d-%H%M%S")
         os.mkdir(self.folder)
         if not os.path.isdir(self.save_to+'graph'):
             os.mkdir(self.save_to+'graph')
-        #self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         #print('Device is: ',self.device)
         self.subsample = subsample
         self.subsample_xy()
@@ -226,7 +228,6 @@ class GraphData(pl.LightningDataModule):
             stopping_threshold=0.35,
             )
 
-
     def compute_size(self):
         cells = self.cells
         #if self.smooth:
@@ -249,7 +250,7 @@ class GraphData(pl.LightningDataModule):
                         random_edges,
                         self.sampler,
                         negative_sampler=dgl.dataloading.negative_sampler.Uniform(self.negative_samples), # NegativeSampler(self.g, self.negative_samples, False),
-                        #device=self.device,
+                        device=self.device,
                         #exclude='self',
                         #reverse_eids=th.arange(self.g.num_edges()) ^ 1,
                         batch_size=self.batch_size,
@@ -261,13 +262,12 @@ class GraphData(pl.LightningDataModule):
         if self.model.supervised:
             edges = np.arange(self.g_lab.num_edges())
             random_edges = torch.tensor(np.random.choice(edges,random_edges.shape[0],replace=True))
-    
             lab = dgl.dataloading.EdgeDataLoader(
                             self.g_lab,
                             random_edges,
                             self.sampler,
                             negative_sampler=dgl.dataloading.negative_sampler.Uniform(self.negative_samples), # NegativeSampler(self.g, self.negative_samples, False),
-                            #device=self.device,
+                            device=self.device,
                             #exclude='self',
                             #reverse_eids=th.arange(self.g.num_edges()) ^ 1,
                             batch_size=self.batch_size,
@@ -282,8 +282,8 @@ class GraphData(pl.LightningDataModule):
             return {'unlabelled':unlab}
 
     def train(self,max_epochs=5,gpus=0):
-        #if self.device.type == 'cuda':
-        #    gpus=0
+        if self.device.type == 'cuda':
+            gpus=1
         if self.model.supervised: 
             trainer = pl.Trainer(gpus=gpus,callbacks=[self.checkpoint_callback], max_epochs=max_epochs)
         else:
@@ -501,7 +501,7 @@ class GraphData(pl.LightningDataModule):
                 spread=1,
                 random_state=1,
                 verbose=True,
-                n_jobs=6
+                n_jobs=-1
             )
 
         if self.model.supervised:

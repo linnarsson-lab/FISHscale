@@ -49,6 +49,7 @@ class SAGELightning(LightningModule):
                  kappa=0,
                  Ncells=0,
                  reference=0,
+                 device='cpu'
                  ):
         super().__init__()
 
@@ -59,12 +60,11 @@ class SAGELightning(LightningModule):
         self.loss_fcn = CrossEntropyLoss()
         self.kappa = kappa
         self.reference=th.tensor(reference,dtype=th.float32)
-        #self.automatic_optimization = True
         if self.supervised:
             self.automatic_optimization = False
-            self.sl = SemanticLoss(n_hidden,n_classes,device=self.device,ncells=Ncells)
+            self.sl = SemanticLoss(n_hidden,n_classes,ncells=Ncells,device=device)
             self.train_acc = torchmetrics.Accuracy()
-            p = th.tensor(Ncells*reference.sum(axis=0),dtype=th.float32)
+            p = th.tensor(Ncells*reference.sum(axis=0),dtype=th.float32,device=self.device)
             self.p = p/p.sum()
             self.kl = th.nn.KLDivLoss(reduction='sum')
             
@@ -111,19 +111,19 @@ class SAGELightning(LightningModule):
             labels_unlab = probabilities_unlab.argsort(axis=-1)[:,-1]
 
             # Bonefight regularization of cell types
-            bone_fight_loss = -F.cosine_similarity(probabilities_unlab @ self.reference.T, bu,dim=0).mean()
+            bone_fight_loss = -F.cosine_similarity(probabilities_unlab @ self.reference.T.to(self.device), bu,dim=0).mean()
             #bone_fight_loss1 = -F.cosine_similarity(probabilities_unlab @ self.reference.T, bu,dim=1).mean()
             '''q = th.ones(probabilities_unlab.shape[0])/probabilities_unlab.shape[0]
             p = th.log(self.p.T @ probabilities_unlab.T)
             kl_loss = self.kl(p,q)
             bone_fight_loss = bone_fight_loss0 + kl_loss'''
 
-            semantic_loss = self.sl.semantic_loss(pseudo_latent=batch_pred_unlab, 
+            '''semantic_loss = self.sl.semantic_loss(pseudo_latent=batch_pred_unlab, 
                                                     pseudo_labels=labels_unlab ,
                                                     true_latent=batch_pred_lab,
                                                     true_labels=labels_pred.argsort(axis=-1)[:,-1],
                                                     )
-            self.log('Semantic_loss', semantic_loss, prog_bar=True, on_step=True)
+            self.log('Semantic_loss', semantic_loss, prog_bar=True, on_step=True)'''
             
             # Will increasingly apply supervised loss, domain adaptation loss
             # from 0 to 1, from iteration 0 to 200, focusing first on unsupervised 
@@ -191,21 +191,21 @@ class SemanticLoss(nn.Module):
     def __init__(self , 
         n_hidden,
         n_labels,
-        device,
         ncells=0,
+        device='cpu'
         ):
-        self.device = 'cpu'
-        self.centroids_pseudo = th.randn([n_hidden,n_labels],device=self.device)
-        self.pseudo_count = th.ones([n_labels],device=self.device)
-        self.centroids_true = th.randn([n_hidden, n_labels],device=self.device)
-        self.true_count = th.ones([n_labels],device=self.device)
+        self.dev = device
+        self.centroids_pseudo = th.randn([n_hidden,n_labels],device=self.dev)
+        self.pseudo_count = th.ones([n_labels],device=self.dev)
+        self.centroids_true = th.randn([n_hidden, n_labels],device=self.dev)
+        self.true_count = th.ones([n_labels],device=self.dev)
         
         if type(ncells) == type(0):
             self.ncells = self.true_count/self.true_count.sum()
             self.ncells_max = self.true_count.sum()*1000
         else:
             self.ncells_max = ncells.sum()
-            self.ncells = th.tensor(ncells/ncells.sum(),device=self.device)
+            self.ncells = th.tensor(ncells/ncells.sum(),device=self.dev)
 
         super().__init__()
     def semantic_loss(self, 
@@ -215,13 +215,13 @@ class SemanticLoss(nn.Module):
             true_labels):
 
         if self.pseudo_count.max() >= self.ncells_max:
-            self.pseudo_count = th.ones([self.pseudo_count.shape[0]],device=self.device)
+            self.pseudo_count = th.ones([self.pseudo_count.shape[0]],device=self.dev)
 
         for pl in pseudo_labels.unique():
             filt = pseudo_labels == pl
             if filt.sum() > 5:
                 centroid_pl = pseudo_latent[filt,:]
-                dp = th.tensor([nn.MSELoss()(centroid_pl[cell,:], self.centroids_pseudo[:,pl]) for cell in range(centroid_pl.shape[0])],device=self.device)
+                dp = th.tensor([nn.MSELoss()(centroid_pl[cell,:], self.centroids_pseudo[:,pl]) for cell in range(centroid_pl.shape[0])])
                 dispersion_p = th.mean(dp)
                 centroid_pl = centroid_pl.mean(axis=0)
                 new_avg_pl = self.centroids_pseudo[:,pl] * self.pseudo_count[pl] + centroid_pl *filt.sum()
