@@ -63,11 +63,13 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
         gene_label: str = 'below3Hdistance_genes',
         other_columns: Optional[list] = [],
         unique_genes: Optional[np.ndarray] = None,
+        exclude_genes: list = None,
         z: float = 0,
         pixel_size: str = '1 micrometer',
         x_offset: float = 0,
         y_offset: float = 0,
         z_offset: float = 0,
+        polygon: np.ndarray = None,
         reparse: bool = False,
         color_input: Optional[Union[str, dict]] = None,
         verbose: bool = False,
@@ -96,6 +98,8 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
                 If not provided it will find the unique genes from the 
                 gene_column. This is slow for > 10e6 rows. 
                 Defaults to None.
+            exclude_genes (list, optional): List with genes to exclude from
+                dataset. Defaults to None.     
             z (float, optional): Z coordinate of the dataset. Defaults to zero.
             pixel_size (str, optional): Unit size of the data. Is used to 
                 convert data to micrometer scale. Uses Pint's UnitRegistry.
@@ -106,6 +110,9 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
             x_offset (float, optional): Offset in X axis. Defaults to 0.
             y_offset (float, optional): Offset in Y axis. Defaults to 0.
             z_offset (float, optional): Offset in Z axis. Defaults to 0.
+            polygon (np.ndarray, optional): A numpy array with shape (X,2) with
+                a polygon that can be used to select points. If the polygon is
+                changed the dataset needs to be re-parsed. Defaults to None.
             reparse (bool, optional): True if you want to reparse the data,
                 if False, it will repeat the parsing. Parsing will apply the
                 offset. Defaults to False.
@@ -131,6 +138,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
         self.x_offset = x_offset
         self.y_offset = y_offset
         self.z_offset = z_offset
+        self.polygon = close_polygon(polygon) if isinstance(polygon, np.ndarray) else polygon
         if not isinstance(other_columns, list):
             other_columns = [other_columns]
         self.other_columns = other_columns
@@ -158,7 +166,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
         
         #Load data
         self.load_data(self.filename, x_label, y_label, gene_label, self.other_columns, x_offset, y_offset, z_offset, 
-                       self.pixel_size.magnitude, unique_genes, reparse=reparse)
+                       self.pixel_size.magnitude, unique_genes, exclude_genes, self.polygon, reparse=reparse)
 
         #Gene metadata
         self.gene_index = dict(zip(self.unique_genes, range(self.unique_genes.shape[0])))
@@ -289,19 +297,22 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
         y_label: str ='c_px_microscope_stitched',
         gene_label: str = 'below3Hdistance_genes',
         other_columns: Optional[list] = [],
+        exclude_genes: list = None,
         z: float = 0,
         pixel_size: str = '1 micrometer',
         x_offset: float = 0,
         y_offset: float = 0,
         z_offset: float = 0,
+        polygon: Union[np.ndarray, list] = None,
         reparse: bool = False,
         parse_num_threads: int = -1):
         """initiate PandasDataset
 
         Args:
             data (Union[list, str]): List with initiated Dataset objects, or 
-                path to folder with files to load. Unique genes must be 
-                identical for all Datasets.
+                path to folder with files to load. If a path is given the 
+                found files will be processed in alphanumerically sorted order.
+                Unique genes must match for all Datasets.
             data_folder (Optional, str): Path to folder with data when "data" 
                 is a list of already initiated Datasets. This folder will be 
                 used to save MultiDataset metadata. If not provided it will
@@ -309,7 +320,9 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
             unique_genes (np.ndarray, optional): Array with unique gene names.
                 If not provided it will find the unique genes from the 
                 gene_column. This is slow for > 10e6 rows. 
-                Defaults to None.
+                This can also be a selection of genes to load. After a
+                selection is made data needs to be re-parsed to make a new
+                selection. Defaults to None.
             MultiDataset_name (Optional[str], optional): Name of multi-dataset.
                 This is used to store multi-dataset specific parameters, such
                 as gene colors. If `None` will use a timestamp.
@@ -339,6 +352,8 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
             other_columns (list, optional): List with labels of other columns 
                 that need to be loaded. Data will stored under "self.other"
                 as Pandas Dataframe. Defaults to None.
+            exclude_genes (list, optional): List with genes to exclude from
+                dataset. Defaults to None.
             z (float, optional): Z coordinate of the dataset. Defaults to zero.
             pixel_size (str, optional): Unit size of the data. Is used to 
                 convert data to micrometer scale. Uses Pint's UnitRegistry.
@@ -349,7 +364,10 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
             x_offset (float, optional): Offset in X axis. Defaults to 0.
             y_offset (float, optional): Offset in Y axis. Defaults to 0.
             z_offset (float, optional): Offset in Z axis. Defaults to 0.
-            
+            polygon ([np.ndarray, list], optional): Array or list of numpy
+                arrays with shape (X,2) to select points. If a single polygon 
+                is given this is used for all datasets. If the polygon is
+                changed the dataset needs to be re-parsed. Defaults to None.
             parse_num_threads (int, optional): Number of workers for opening
                 and parsing the datafiles. Datafiles need to be loaded in 
                 memory to be parsed, which could cause problems with RAM. Use
@@ -383,11 +401,12 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
         elif type(data) == str:
             if parse_num_threads == -1 or parse_num_threads > self.cpu_count:
                 parse_num_threads = self.cpu_count
-            self.load_from_files(data, x_label, y_label, gene_label, other_columns, z, pixel_size, 
-                                x_offset, y_offset, z_offset, reparse, num_threads=parse_num_threads)
+            self.load_from_files(data, x_label, y_label, gene_label, other_columns, unique_genes, exclude_genes, z, 
+                                 pixel_size, x_offset, y_offset, z_offset, polygon, reparse, color_input, 
+                                 num_threads=parse_num_threads)
         else:
             raise Exception(f'Input for "data" not understood. Should be list with initiated Datasets or valid path to files.')
-
+        
         #Handle units
         self.check_unit()
 
@@ -421,12 +440,16 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
         y_label: str ='c_px_microscope_stitched',
         gene_label: str = 'below3Hdistance_genes',
         other_columns: Optional[list] = None,
+        unique_genes: Optional[np.ndarray] = None,
+        exclude_genes: list = None,
         z: float = 0,
         pixel_size: str = '1 micrometer',
         x_offset: float = 0,
         y_offset: float = 0,
         z_offset: float = 0,
+        polygon: Union[np.ndarray, list] = None,
         reparse: bool = False,
+        color_input: dict = None,
         num_threads: int = -1):
         """Load files from folder.
 
@@ -434,7 +457,8 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
         Which is a list of initiated Dataset objects.
 
         Args:
-            filepath (str): folder to look for parquet files.
+            filepath (str): folder to look for parquet files. Files will be 
+                processed in alphanumerically sorted order.
             x_label (str, optional): Name of the column of the Pandas dataframe
                 that contains the X coordinates of the points. Defaults to 
                 'r_px_microscope_stitched'.
@@ -447,6 +471,15 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
             other_columns (list, optional): List with labels of other columns 
                 that need to be loaded. Data will stored under "self.other"
                 as Pandas Dataframe. Defaults to None.
+            unique_genes (np.ndarray, optional): Array with unique gene names.
+                This can also be a selection of genes to load. After a
+                selection is made data needs to be re-parsed to include all
+                genes.                
+                If not provided it will find the unique genes from the 
+                gene_column. This is slow for > 10e6 rows. 
+                Defaults to None.
+            exclude_genes (list, optional): List with genes to exclude from
+                dataset. Defaults to None.     
             z (float, optional): Z coordinate of the dataset. Defaults to zero.
             pixel_size (str, optional): Unit size of the data. Is used to 
                 convert data to micrometer scale. Uses Pint's UnitRegistry.
@@ -457,6 +490,10 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
             x_offset (float, optional): Offset in X axis. Defaults to 0.
             y_offset (float, optional): Offset in Y axis. Defaults to 0.
             z_offset (float, optional): Offset in Z axis. Defaults to 0.
+            polygon ([np.ndarray, list], optional): Array or list of numpy
+                arrays with shape (X,2) to select points. If a single polygon 
+                is given this is used for all datasets. If the polygon is
+                changed the dataset needs to be re-parsed. Defaults to None.
             unique_genes (np.ndarray, optional): Array with unique genes for
                 dataset. If not given can take some type to compute for large
                 datasets.
@@ -484,6 +521,7 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
             files = glob(filepath + '*' + '.csv')
         if len(files) == 0:
             raise Exception(f'No .parquet or .csv files found in {filepath}')
+        files = sorted(files)
         
         n_files = len(files)
         if not isinstance(z, (list, np.ndarray)):
@@ -496,29 +534,36 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
             z_offset = [z_offset] * n_files
         if not isinstance(pixel_size, (list, np.ndarray)):
             pixel_size = [pixel_size] * n_files
-        
+        if not isinstance(polygon, list):
+            polygon = [polygon] * n_files
         
         #Get the unique genes
-        if not isinstance(self.unique_genes, np.ndarray): 
-            #Check if data has already been parsed to get the unique genes
-            ug_success = False
-            if self._check_parsed(files[0].split('.')[0] + '_FISHscale_Data')[0] and reparse == False:
-                try:
-                    self.unique_genes = self._metadatafile_get_bypass(files[0], 'unique_genes')
-                    ug_success = True
-                except Exception as e:
-                    self.vp(f'Failed to fetch unique genes from metadata of previously parsed files. Recalculating. Exception: {e}')
-            
-            if not ug_success: 
-                open_f = self._open_data_function(files[0])
-                all_genes = open_f(files[0], [gene_label])
-                self.unique_genes = np.unique(all_genes)
+        if isinstance(unique_genes, np.ndarray):
+            self.unique_genes = unique_genes
+        
+        #unique genes not provided
+        else:
+            if not isinstance(self.unique_genes, np.ndarray): 
+                #Check if data has already been parsed to get the unique genes
+                ug_success = False
+                if self._check_parsed(files[0].split('.')[0] + '_FISHscale_Data')[0] and reparse == False:
+                    try:
+                        self.unique_genes = self._metadatafile_get_bypass(files[0], 'unique_genes')
+                        ug_success = True
+                    except Exception as e:
+                        self.vp(f'Failed to fetch unique genes from metadata of previously parsed files. Recalculating. Exception: {e}')
+                
+                if not ug_success: 
+                    open_f = self._open_data_function(files[0])
+                    all_genes = open_f(files[0], [gene_label])
+                    self.unique_genes = np.unique(all_genes)
         
         #Open the files with the option to do this in paralell.
         lazy_result = []
-        for f, zz, pxs, xo, yo, zo in tqdm(zip(files, z, pixel_size, x_offset, y_offset, z_offset)):
-            lr = dask.delayed(Dataset) (f, x_label, y_label, gene_label, other_columns, self.unique_genes, zz, pxs,
-                                    xo, yo, zo, reparse, verbose = self.verbose, part_of_multidataset=True)
+        for f, zz, pxs, xo, yo, zo, pol in tqdm(zip(files, z, pixel_size, x_offset, y_offset, z_offset, polygon)):
+            lr = dask.delayed(Dataset) (f, x_label, y_label, gene_label, other_columns, self.unique_genes, exclude_genes, 
+                                        zz, pxs, xo, yo, zo, pol, reparse, color_input, verbose = self.verbose, 
+                                        part_of_multidataset=True)
             lazy_result.append(lr)
         futures = dask.persist(*lazy_result, num_workers=1, num_threads = num_threads)
         self.datasets = dask.compute(*futures)

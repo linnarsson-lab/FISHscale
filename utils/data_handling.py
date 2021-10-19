@@ -8,14 +8,11 @@ import numpy as np
 import itertools
 import pandas as pd
 import pickle
+from tqdm import tqdm
+from FISHscale.utils.inside_polygon import is_inside_sm_parallel
+from pyarrow.parquet import ParquetFile
+from pyarrow import ArrowInvalid
 
-from pandas.io.parquet import read_parquet
-try:
-    from pyarrow.parquet import ParquetFile
-    from pyarrow import ArrowInvalid
-except ModuleNotFoundError as e:
-    print(f'Please install "pyarrow" to load ".parquet" files. Without, only .csv files are supported which are memory inefficient. Error: {e}')
-    
 class DataLoader_base():
       
     def _open_data_function(self, filename: str) -> Callable:
@@ -230,10 +227,24 @@ class DataLoader(DataLoader_base):
         self.y_extent = self.y_max - self.y_min 
         self.xy_center = (self.x_max - 0.5*self.x_extent, self.y_max - 0.5*self.y_extent)
         self.shape = prop['shape']
+        
+    def _numberstring_sort(self, l): 
+        """Sort where full numbers are considered.""" 
+        convert = lambda text: int(text) if text.isdigit() else text 
+        alphanum_key = lambda key: [ convert(c) for c in re.split('([0-9]+)', key) ] 
+        return np.array(sorted(l, key = alphanum_key))
+    
+    def _exclude_genes(self, ug, eg):
+        """Filter out excluded genes from unique gene array.
+        """
+        if type(eg) != type(None):
+            #ug = ug[[g not in eg for g in ug]]
+            ug = np.array([g for g in ug if g not in eg])
+        return ug
 
     def load_data(self, filename: str, x_label: str, y_label: str, gene_label: str, other_columns: Optional[list], 
                   x_offset: float, y_offset: float, z_offset: float, pixel_size: str, unique_genes: Optional[np.ndarray],
-                  reparse: bool = False) -> Any:             
+                  exclude_genes: list = None, polygon: np.ndarray = None, reparse: bool = False) -> Any:             
         """Load data from data file.
         
         Opens a file containing XY coordinates of points with a gene label.
@@ -268,8 +279,13 @@ class DataLoader(DataLoader_base):
             z_offset (float, optional): Offset in Z axis.
             pixel_size (str, optional): Size of the pixels in micrometer.
             unique_genes (np.ndarray, optional): Array with unique genes for
-                dataset. If not given can take some type to compute for large
+                dataset. Genes present in data but not in 'unique_genes' will
+                not be included. If not given, can take some type to compute for large
                 datasets.
+            exclude_genes (list, optional): List with genes to exclude from
+                dataset. Defaults to None. 
+            polygon (np.ndarray, optional): Array with shape (X,2) with closed
+                polygon to select points.
             reparse (bool, optional): True if you want to reparse the data,
                 if False, it will repeat the parsing. Parsing will apply the
                 offset. Defaults to False.
@@ -323,19 +339,37 @@ class DataLoader(DataLoader_base):
 
                 #unique genes
                 if not isinstance(unique_genes, (np.ndarray, list)):
-                    self.unique_genes = np.unique(data.g)
-                else:
-                    self.unique_genes = np.asarray(unique_genes)
+                    ug = np.unique(data.g)
+                    #Get the order the same as how Pandas would sort.
+                    ug = self._numberstring_sort(ug)
+                    #Make unique genes
+                    ug = self._exclude_genes(ug, exclude_genes)
+                    self.unique_genes = ug
                     #Select requested genes
-                    data = data.loc[data.g.isin(unique_genes)]
+                    data = data.loc[data.g.isin(self.unique_genes)]
+                else:
+                    ug = np.asarray(unique_genes)
+                    #Get the order the same as how Pandas would sort.
+                    ug = self._numberstring_sort(ug)
+                    #Make unique genes
+                    ug = self._exclude_genes(ug, exclude_genes)    
+                    self.unique_genes = ug                  
+                    #Select requested genes
+                    data = data.loc[data.g.isin(self.unique_genes)]
                 self._metadatafile_add({'unique_genes': self.unique_genes})    
+                
+                #Filter dots with polygon
+                if type(polygon) != type(None):
+                    filt = is_inside_sm_parallel(polygon, data.loc[:,['x', 'y']].to_numpy())
+                    data = data.loc[filt,:]
                 
                 #Get data shape
                 self.shape = data.shape
                 self._metadatafile_add({'shape': self.shape})
                 
                 #Group the data by gene and save
-                data.groupby('g').apply(lambda x: self._dump_to_parquet(x, self.dataset_name, self.FISHscale_data_folder))#, meta=('float64')).compute()
+                tqdm.pandas()
+                data.groupby('g').progress_apply(lambda x: self._dump_to_parquet(x, self.dataset_name, self.FISHscale_data_folder))#, meta=('float64')).compute()
                 if path.exists(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes')):
                     shutil.rmtree(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes'))
 
@@ -348,13 +382,18 @@ class DataLoader(DataLoader_base):
         if isinstance(unique_genes, (np.ndarray, list)):
             #Make selected genes file list         
             p = path.join(self.FISHscale_data_folder, self.dataset_name)
-            filter_filelist = [f'{p}_{g}.parquet' for g in unique_genes]
+            ug = self._exclude_genes(unique_genes, exclude_genes)
+            filter_filelist = [f'{p}_{g}.parquet' for g in ug]
+
             #Load selected genes        
             self.df = dd.read_parquet(filter_filelist)
-            self.shape = (self.df.shape[0].compute(),self.df.shape[1])
+            self.shape = (self.df.shape[0].compute(), self.df.shape[1])
         else:
             #Load all genes
             self.df = dd.read_parquet(path.join(self.FISHscale_data_folder, '*.parquet'))
+        
+        #New    
+        #self.gene_index = {g:i for i,g in enumerate(self.unique_genes)}
 
         if new_parse ==False:
             #Get coordinate properties from metadata
@@ -367,11 +406,12 @@ class DataLoader(DataLoader_base):
             
             #Check if unique_genes are given by user
             if isinstance(unique_genes, (np.ndarray, list)):
-                self.unique_genes = np.asarray(unique_genes)
+                ug = self._exclude_genes(unique_genes, exclude_genes)
+                self.unique_genes = np.asarray(self._numberstring_sort(ug))
                 self._metadatafile_add({'unique_genes': self.unique_genes})
             #Check if unique genes could be found in metadata
             elif isinstance(unique_genes_metadata, (np.ndarray, list)): 
-                self.unique_genes = unique_genes_metadata
+                self.unique_genes = self._numberstring_sort(unique_genes_metadata)
             #Calcualte the unique genes, slow
             else:
                 self.unique_genes = self.df.g.drop_duplicates().compute().to_numpy()

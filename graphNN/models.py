@@ -111,7 +111,8 @@ class SAGELightning(LightningModule):
             labels_unlab = probabilities_unlab.argsort(axis=-1)[:,-1]
 
             # Bonefight regularization of cell types
-            bone_fight_loss = -F.cosine_similarity(probabilities_unlab @ self.reference.T.to(self.device), bu,dim=0).mean()
+            bone_fight_loss = -F.cosine_similarity(probabilities_unlab @ self.reference.T, bu,dim=0).mean()
+            #bone_fight_loss = -F.cosine_similarity(probabilities_unlab.detach() @ self.sl.centroids_true.detach().T, batch_pred_unlab,dim=0).mean()
             #bone_fight_loss1 = -F.cosine_similarity(probabilities_unlab @ self.reference.T, bu,dim=1).mean()
             '''q = th.ones(probabilities_unlab.shape[0])/probabilities_unlab.shape[0]
             p = th.log(self.p.T @ probabilities_unlab.T)
@@ -134,7 +135,7 @@ class SAGELightning(LightningModule):
             loss = classifier_loss + loss + bone_fight_loss + kappa*(kappa*classifier_domain_loss + kappa*supervised_loss) #+ semantic_loss.detach()
             
             opt.zero_grad()
-            self.manual_backward(loss)
+            self.manual_backward(loss,retain_graph=True)
             opt.step()
 
         if self.supervised == False:
