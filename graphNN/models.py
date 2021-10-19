@@ -15,6 +15,7 @@ import tqdm
 from pytorch_lightning.metrics import Accuracy
 from pytorch_lightning.callbacks import ModelCheckpoint, Callback
 from pytorch_lightning import LightningDataModule, LightningModule, Trainer
+from torch.autograd import Function
 
 class CrossEntropyLoss(nn.Module):
     def forward(self, block_outputs, pos_graph, neg_graph):
@@ -96,32 +97,34 @@ class SAGELightning(LightningModule):
             self.log('train_acc', self.train_acc, prog_bar=True, on_step=True)
 
             #Domain Adaptation Loss
-            classifier_domain_loss = 1*self.loss_discriminator([batch_pred_unlab.detach(), batch_pred_lab.detach()],predict_true_class=True)
+            classifier_domain_loss = self.loss_discriminator([batch_pred_unlab, batch_pred_lab],predict_true_class=True)
             self.log('Classifier_true', classifier_domain_loss, prog_bar=False, on_step=True)
-            d_opt.zero_grad()
+            
+            '''d_opt.zero_grad()
             self.manual_backward(classifier_domain_loss)
             d_opt.step()
-
             domain_loss_fake = 1*self.loss_discriminator([batch_pred_unlab, batch_pred_lab],predict_true_class=False)
             self.log('Classifier_fake', domain_loss_fake, prog_bar=False, on_step=True)
+            '''
 
             #Semantic Loss
             labels_unlab = self.module.encoder.encoder_dict['CF'](batch_pred_unlab).argsort(axis=-1)[:,-1]
-            '''semantic_loss = self.sl.semantic_loss(pseudo_latent=batch_pred_unlab, 
+            semantic_loss = self.sl.semantic_loss(pseudo_latent=batch_pred_unlab, 
                                                     pseudo_labels=labels_unlab ,
                                                     true_latent=batch_pred_lab,
                                                     true_labels=labels_pred.argsort(axis=-1)[:,-1],
                                                     )
-            self.log('Semantic_loss', semantic_loss, prog_bar=True, on_step=True)'''
+            self.log('Semantic_loss', semantic_loss, prog_bar=True, on_step=True)
 
             
             # Will increasingly apply supervised loss, domain adaptation loss
             # from 0 to 1, from iteration 0 to 200, focusing first on unsupervised 
             # graphsage task
-            kappa = 2/(1+10**(-1*((1*self.kappa)/2000)))-1
+            kappa = 2/(1+10**(-1*((1*self.kappa)/8000)))-1
             self.kappa += 1
             loss = loss*kappa
-            loss += domain_loss_fake + supervised_loss*kappa + classifier_loss #+ semantic_loss.detach()
+            loss = classifier_loss + kappa*(kappa*loss + kappa*classifier_domain_loss + kappa*supervised_loss + kappa*semantic_loss.detach()) #+ semantic_loss.detach()
+            
             opt.zero_grad()
             self.manual_backward(loss)
             opt.step()
@@ -139,7 +142,7 @@ class SAGELightning(LightningModule):
         return batch_pred
 
     def configure_optimizers(self):
-        optimizer = th.optim.Adam(self.module.encoder.parameters(), lr=self.lr)
+        optimizer = th.optim.Adam(self.module.parameters(), lr=self.lr)
         if self.supervised:
             d_opt = th.optim.Adam(self.module.domain_adaptation.parameters(), lr=1e-3)
             return [optimizer, d_opt]
@@ -157,19 +160,18 @@ class SAGELightning(LightningModule):
             cls_logits = self.module.domain_adaptation(z)
 
             if predict_true_class:
-                cls_target = th.zeros(
-                    n_classes, dtype=th.float32, device=z.device
-                )
-                cls_target[i] = 1.0
+                #cls_target = th.zeros( n_classes, dtype=th.float32, device=z.device)
+                cls_target = th.zeros_like(cls_logits,dtype=th.float32,device=z.device)
+                cls_target[:,i] = 1
             else:
-                cls_target = th.ones(
-                    n_classes, dtype=th.float32, device=z.device
-                ) / (n_classes - 1)
-                cls_target[i] = 0.0
+                #cls_target = th.ones(n_classes, dtype=th.float32, device=z.device) / (n_classes - 1)
+                cls_target = th.ones_like(cls_logits,dtype=th.float32,device=z.device)
+                cls_target[:,i] = 0.0
 
-            l_soft = cls_logits * cls_target
-            cls_loss = -l_soft.sum(dim=1).mean()
-            losses.append(cls_loss)
+            bcloss = th.nn.BCEWithLogitsLoss()(cls_logits,cls_target)
+            #l_soft = cls_logits * cls_target
+            #cls_loss = -l_soft.sum(dim=1).mean()
+            losses.append(bcloss)
 
         if return_details:
             return losses
@@ -232,8 +234,8 @@ class SemanticLoss(nn.Module):
         
         kl_density = th.nn.functional.kl_div(self.ncells.log(),self.pseudo_count/self.pseudo_count.sum())
         #kl_density =  -F.logsigmoid((self.ncells*self.pseudo_count).sum(-1)).sum()*100
-        #semantic_loss = -F.logsigmoid((self.centroids_pseudo*self.centroids_true).sum(-1)).mean() + kl_density #+ dispersion_p
-        semantic_loss = nn.MSELoss()(self.centroids_pseudo, self.centroids_true) + kl_density
+        #semantic_loss = -F.logsigmoid((self.centroids_pseudo*self.centroids_true).sum(-1)).mean() + kl_density #
+        semantic_loss = nn.MSELoss()(self.centroids_pseudo, self.centroids_true) + kl_density + dispersion_p
         return semantic_loss
 
 class SAGE(nn.Module):
@@ -256,7 +258,10 @@ class SAGE(nn.Module):
         self.supervised = supervised
         
         if self.supervised:
-            self.domain_adaptation = Classifier(n_input=n_hidden,n_labels=2,softmax=False)
+            self.domain_adaptation = Classifier(n_input=n_hidden,
+                                                n_labels=2,
+                                                softmax=False,
+                                                reverse_gradients=True)
 
         self.encoder = Encoder(in_feats,n_hidden,n_classes,n_layers,supervised)
         
@@ -273,6 +278,7 @@ class SAGE(nn.Module):
                 h = F.dropout(h, p=0.2, training=self.training)
                 h = self.encoder.encoder_dict['FC'][0](h)
         h = self.encoder.encoder_dict['FC'][1](h)
+        h = F.normalize(h)
         return h
 
     def inference(self, g, x, device, batch_size, num_workers):
@@ -290,7 +296,6 @@ class SAGE(nn.Module):
         # TODO: can we standardize this?
         for l, layer in enumerate(self.encoder.encoder_dict['GS']):
             y = th.zeros(g.num_nodes(), self.n_hidden) #if not self.supervised else th.zeros(g.num_nodes(), self.n_classes)
-            print(y.shape)
 
             sampler = dgl.dataloading.MultiLayerFullNeighborSampler(1)
             dataloader = dgl.dataloading.NodeDataLoader(
@@ -304,8 +309,9 @@ class SAGE(nn.Module):
 
             for input_nodes, output_nodes, blocks in tqdm.tqdm(dataloader):
                 block = blocks[0]
-                block = block.int()#.to(device)
-                h = x[input_nodes]#.to(device)
+                block = block.int()
+                h = th.log(x[input_nodes]+1)#.to(device)
+
                 h = layer(block, h)
                 h = F.normalize(h)
 
@@ -316,6 +322,7 @@ class SAGE(nn.Module):
                     h =self.encoder.encoder_dict['FC'][0](h)
                 elif l == len(self.encoder.encoder_dict['GS']) -1:
                     h = self.encoder.encoder_dict['FC'][1](h)
+                    h = F.normalize(h)
 
                 y[output_nodes] = h.cpu().detach()#.numpy()
             x = y
@@ -355,7 +362,10 @@ class Encoder(nn.Module):
                 layers.append(dglnn.SAGEConv(in_feats, n_classes, 'pool'))
 
             if supervised:
-                classifier = Classifier(n_input=n_hidden,n_labels=n_classes,softmax=False)
+                classifier = Classifier(n_input=n_hidden,
+                                        n_labels=n_classes,
+                                        softmax=False,
+                                        reverse_gradients=False)
             else:
                 classifier = None
 
@@ -379,8 +389,11 @@ class Classifier(nn.Module):
         use_batch_norm: bool=True,
         bias: bool=True,
         use_relu:bool=True,
+        reverse_gradients:bool=False,
     ):
         super().__init__()
+        self.grl = GradientReversal()
+        self.reverse_gradients = reverse_gradients
         layers = [nn.Sequential(
                             nn.Linear(n_input , n_hidden, bias=bias),
                             nn.BatchNorm1d(n_hidden) if use_batch_norm else None,
@@ -393,6 +406,36 @@ class Classifier(nn.Module):
         self.classifier = nn.Sequential(*layers)
 
     def forward(self, x):
+        if self.reverse_gradients:
+            x = self.grl(x)
         return F.log_softmax(self.classifier(x),dim=-1)
 
 
+class GradientReversalFunction(Function):
+    """
+    Gradient Reversal Layer from:
+    Unsupervised Domain Adaptation by Backpropagation (Ganin & Lempitsky, 2015)
+    Forward pass is the identity function. In the backward pass,
+    the upstream gradients are multiplied by -lambda (i.e. gradient is reversed)
+    """
+
+    @staticmethod
+    def forward(ctx, x, lambda_):
+        ctx.lambda_ = lambda_
+        return x.clone()
+
+    @staticmethod
+    def backward(ctx, grads):
+        lambda_ = ctx.lambda_
+        lambda_ = grads.new_tensor(lambda_)
+        dx = -lambda_ * grads
+        return dx, None
+
+
+class GradientReversal(th.nn.Module):
+    def __init__(self, lambda_=1):
+        super(GradientReversal, self).__init__()
+        self.lambda_ = lambda_
+
+    def forward(self, x):
+        return GradientReversalFunction.apply(x, self.lambda_)

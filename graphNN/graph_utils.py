@@ -224,7 +224,7 @@ class GraphData(pl.LightningDataModule):
 
     def train_dataloader(self):
         edges = np.arange(self.g.num_edges())
-        random_edges = torch.tensor(np.random.choice(edges,int(edges.shape[0]*self.train_p),replace=False))
+        random_edges = torch.tensor(np.random.choice(edges,int(edges.shape[0]*(self.train_p/(self.g.num_edges()/self.g.num_nodes()))),replace=False))
         unlab = dgl.dataloading.EdgeDataLoader(
                         self.g,
                         random_edges,
@@ -387,7 +387,7 @@ class GraphData(pl.LightningDataModule):
             cl_i = data[:,i]#*(Ncells[i]/(Ncells.min()*100)).astype('int')
             cl_v = self.var_celltypes[:,i]
             if smooth == False:
-                random_molecules = np.random.choice(data.shape[0],size=2500,p=cl_i)
+                random_molecules = np.random.choice(data.shape[0],size=2500,p=cl_i/cl_i.sum())
                 for x in random_molecules:
                     dot = np.zeros_like(cl_i)
                     dot[x] = 1
@@ -402,7 +402,7 @@ class GraphData(pl.LightningDataModule):
                     p = np.random.poisson(cl_i,size=(1,cl_i.shape[0]))[0,:]
                     p[p < 0] = 0
                     p = p/p.sum()
-                    random_molecules = np.random.choice(data.shape[0],size=5,p=p)
+                    random_molecules = np.random.choice(data.shape[0],size=25,p=p)
                     dot = np.zeros_like(cl_i)
                     for x in random_molecules:
                         dot[x] = dot[x]+1

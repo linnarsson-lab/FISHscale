@@ -235,6 +235,13 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
         if self.color_dict:
             color_dic = self.color_dict
 
+        QtWidgets.QApplication.setStyle('Fusion')
+        self.App = QtWidgets.QApplication.instance()
+        if self.App is None:
+            self.App = QtWidgets.QApplication(sys.argv)
+        else:
+            print('QApplication instance already exists: %s' % str(self.App))
+
         window = Window(self,
                         columns,
                         width,
@@ -243,6 +250,9 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
                         x_alt=x,
                         y_alt=y,
                         c_alt=c) 
+        
+        self.App.exec_()
+        
         
     def DBsegment(self,eps=25,min_samples=5,cutoff=250):
         """
