@@ -1,6 +1,4 @@
 import networkx as nx
-from networkx.algorithms.traversal import edgedfs
-from numpy.core.fromnumeric import size
 import torch as th
 import numpy as np
 import torch
