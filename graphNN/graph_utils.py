@@ -105,23 +105,51 @@ class GraphData(pl.LightningDataModule):
         lr=1e-3,
         ):
         """
-        Initialize GraphData class
+        GraphData prepared the FISHscale dataset to be analysed in a supervised
+        or unsupervised manner by non-linear GraphSage.
+
+        [extended_summary]
 
         Args:
-            data (FISHscale.utils.dataset.Dataset): Dataset object.
-            model (FISHscale.graphNN.models.SAGE): GraphSAGE model.
-            analysis_name (str): Filename for data and analysis.
-            distance_threshold (int, optional): Maximum distance to consider to molecules neighbors. Defaults to 250um.
-            minimum_nodes_connected (int, optional): Nodes with less will be eliminated. Defaults to 5.
-            ngh_sizes (list, optional): Neighborhood sizes that will be aggregated. Defaults to [20, 10].
-            train_p (float, optional): Training size, as percentage. Defaults to 0.75.
-            batch_size (int, optional): Batch size. Defaults to 1024.
-            num_workers (int, optional): Workers for sampling. Defaults to 1.
-            save_to (str, optional): Path to save network edges and nn tree. Defaults to current path.
-            subsample (int,optional): Subsample part of the input data if it is to large.
-            ref_celltypes (np.array, optional): Cell types for decoder. Shape (genes,cell types)       
-        """        
-
+            data (FISHscale.dataset): FISHscale DataSet object. Contains 
+                x,y coordinates and gene identity.
+            model (graphNN.model): GraphSage model to be used. If None GraphData
+                will generate automatically a model with 24 latent variables.
+                Defaults to None.
+            cells (np.array, optional): Array of molecules to be kept for 
+                analysis. Defaults to None.
+            minimum_nodes_connected (int, optional): Minimum molecules connected
+                in the network. Defaults to 5.
+            ngh_sizes (list, optional): GraphSage sampling size. 
+                Defaults to [20, 10].
+            train_p (float, optional): train_size is generally small if number of 
+                molecules is large enough that information would be redundant 
+                especially if smoothing is performed. Defaults to 0.25.
+            batch_size (int, optional): Mini-batch for training. Defaults to 512.
+            num_workers (int, optional): Dataloader parameter. Defaults to 0.
+            save_to (str, optional): Folder where analysis will be saved. 
+                Defaults to ''.
+            subsample (float/dict, optional): Float between 0 and 1 to subsample
+                a fraction of molecules that will be used to make the network. 
+                Or dictionary with the squared region to subsample.
+                Defaults to 1.
+            ref_celltypes (loomfile, optional): Rerence data of cell types for 
+                supervised analysis. Contains mean expression for gene/cell type
+                and must contain ds.ca['Ncells'] and ds.ca['ClusterNames'] 
+                attributes. Defaults to None.
+            exclude_clusters (list, optional): List of clusters present in 
+                ds.ca['ClusterNames'] to exclude. Defaults to [''].
+            smooth (bool, optional): Smooth knn in the network data. Improves 
+                both supervised and unsupervised network performance.
+                Defaults to True.
+            negative_samples (int, optional): Negative samples taken by 
+                GraphSage sampler. Defaults to 5.
+            distance_factor (float, optional): Distance selected to construct 
+                network graph will be multiplied by the distance factor. 
+                Defaults to 3.
+            device (str, optional): Device where pytorch is run. Defaults to 'cpu'.
+            lr (float, optional): learning rate .Defaults to 1e-3.
+        """
         super().__init__()
 
         self.model = model
