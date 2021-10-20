@@ -88,20 +88,19 @@ class GraphData(pl.LightningDataModule):
         model=None, # GraphSAGE model
         analysis_name:str='',
         cells=None, # Array with cell_ids of shape (Cells)
-        distance_threshold = 50,
         ngh_size = 40,
         minimum_nodes_connected = 5,
         ngh_sizes = [20, 10],
         train_p = 0.25,
-        batch_size= 1024,
-        num_workers=1,
+        batch_size= 512,
+        num_workers=0,
         save_to = '',
         subsample=1,
         ref_celltypes=None,
-        ncells=0 ,
-        smooth:bool=False,
-        supervised:bool=False,
+        exclude_clusters:list=[''],
+        smooth:bool=True,
         negative_samples:int=5,
+        distance_factor:int=3,
         device='cpu',
         lr=1e-3,
         ):
@@ -130,21 +129,21 @@ class GraphData(pl.LightningDataModule):
         self.ngh_sizes = ngh_sizes
         self.data = data
         self.cells = cells
-        self.distance_threshold = distance_threshold
         self.minimum_nodes_connected = minimum_nodes_connected
         self.train_p = train_p
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.save_to = save_to
-        self.ref_celltypes = ref_celltypes[0]
-        self.var_celltypes = ref_celltypes[1] 
+        self.ref_celltypes = ref_celltypes
+        self.exclude_clusters = exclude_clusters
         self.smooth = smooth
         self.negative_samples = negative_samples
         self.ngh_size = ngh_size
-        self.ncells = ncells
-        self.supervised=supervised
         self.lr = lr
+        self.subsample = subsample
+
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.prepare_reference()
         if type(self.model) == type(None):
             self.model = SAGELightning(in_feats=self.data.unique_genes.shape[0], 
                                         n_hidden=24,
@@ -164,7 +163,8 @@ class GraphData(pl.LightningDataModule):
         if not os.path.isdir(self.save_to+'graph'):
             os.mkdir(self.save_to+'graph')
         #print('Device is: ',self.device)
-        self.subsample = subsample
+    
+        self.compute_distance_th(distance_factor)
         self.subsample_xy()
         self.compute_size()
         self.setup()
@@ -315,6 +315,16 @@ class GraphData(pl.LightningDataModule):
             self.cells = self.cells[filt_x & filt_y]
             #self.cells = np.random.choice(self.data.df.index.compute(),size=int(subsample*self.data.shape[0]),replace=False)
 
+    def compute_distance_th(self,omega):
+        from scipy.spatial import cKDTree as KDTree
+        from matplotlib import pyplot as plt
+        x,y = self.data.df.x.values.compute(),self.data.df.y.values.compute()
+        kdT = KDTree(np.array([x,y]).T)
+        d,i = kdT.query(np.array([x,y]).T,k=2)
+        d_th = np.percentile(d[:,1],97)*omega
+        self.distance_threshold = d_th
+        print('Chosen dist: {}'.format(d_th))
+
     def buildGraph(self, d_th,coords=None):
         print('Building graph...')
         if type(coords)  == type(None):
@@ -440,6 +450,32 @@ class GraphData(pl.LightningDataModule):
         edges = self.buildGraph(75,coords=all_coords)
         print('Fake Molecules: ',all_molecules.shape)
         return all_molecules, edges, all_cl
+
+    def prepare_reference(self):
+        if type(self.ref_celltypes) != type(None):
+            self.supervised = True
+            import loompy
+            with loompy.connect(self.ref_celltypes,'r') as ds:
+                print(ds.ca.keys())
+                region_filt = np.isin(ds.ca['ClusterNames'], self.exclude_clusters, invert=True)
+                genes = ds.ra.Gene
+                order = []
+                for x in self.data.unique_genes:
+                    try:
+                        order.append(np.where(genes==x)[0].tolist()[0])
+                    except:
+                        pass
+                self.ncells = ds.ca['Ncells'][region_filt]
+                ref = ds[:,:]
+                ref = ref[order]
+                ref = ref[:,region_filt]
+                self.ref_celltypes = ref
+        else:
+            self.supervised = False
+            self.ref_celltypes = np.array([[0],[0]])
+            self.ncells = 0
+
+        #do something
 
     '''def knn_smooth(self,neighborhood_size=75):
         print('Smoothing neighborhoods with kernel size: {}'.format(neighborhood_size))
