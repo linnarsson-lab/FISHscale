@@ -215,8 +215,8 @@ class SemanticLoss(nn.Module):
             true_latent, 
             true_labels):
 
-        if self.pseudo_count.max() >= self.ncells_max:
-            self.pseudo_count = th.ones([self.pseudo_count.shape[0]],device=self.dev)
+        '''if self.pseudo_count.max() >= self.ncells_max:
+            self.pseudo_count = th.ones([self.pseudo_count.shape[0]],device=self.dev)'''
 
         for pl in pseudo_labels.unique():
             filt = pseudo_labels == pl

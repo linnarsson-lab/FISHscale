@@ -439,7 +439,6 @@ class GraphData(pl.LightningDataModule):
             molecules = []
             # Reduce number of cells by Ncells.min() to avoid having a huge dataframe, since it is actually simulated data
             cl_i = data[:,i]#*(Ncells[i]/(Ncells.min()*100)).astype('int')
-            cl_v = self.var_celltypes[:,i]
             if smooth == False:
                 random_molecules = np.random.choice(data.shape[0],size=2500,p=cl_i/cl_i.sum())
                 for x in random_molecules:
@@ -452,7 +451,6 @@ class GraphData(pl.LightningDataModule):
                         pass
             else:
                 for x in range(2500):
-                    #p = np.random.normal(cl_i,cl_v)[0,:]
                     p = np.random.poisson(cl_i,size=(1,cl_i.shape[0]))[0,:]
                     p[p < 0] = 0
                     p = p/p.sum()
@@ -484,6 +482,7 @@ class GraphData(pl.LightningDataModule):
             with loompy.connect(self.ref_celltypes,'r') as ds:
                 print(ds.ca.keys())
                 region_filt = np.isin(ds.ca['ClusterNames'], self.exclude_clusters, invert=True)
+                self.ClusterNames = ds.ca['ClusterNames'][region_filt]
                 genes = ds.ra.Gene
                 order = []
                 for x in self.data.unique_genes:
@@ -643,6 +642,44 @@ class GraphData(pl.LightningDataModule):
             plt.yticks(fontsize=2)
             plt.axis('scaled')
             plt.savefig("{}/spatial_umap_embedding_clusters.png".format(self.folder), bbox_inches='tight', dpi=5000)
+
+            import holoviews as hv
+            hv.extension('matplotlib')
+            molecules_y = self.data.df.y.values.compute()[self.cells]
+            molecules_x = self.data.df.x.values.compute()[self.cells]
+            nd_dic = {}
+
+            allm = 0
+            for cl in range(self.ClusterNames.shape[0]):
+                x, y = molecules_x[clusters == cl], molecules_y[clusters == cl]
+                allm += x.shape[0]
+                color = ['red']*x.shape[0]
+                nd_dic[self.ClusterNames[cl]] = hv.Scatter(np.array([x,y]).T).opts(
+                    bgcolor='black',
+                    aspect='equal',
+                    fig_inches=10,
+                    s=1,
+                    title=self.ClusterNames[cl],
+                    color=color_dic[cl])
+
+            layout = hv.Layout([nd_dic[x] for x in nd_dic]).cols(5)
+            hv.save(layout,"{}/molecule_prediction.png".format(self.folder))
+
+            pred_labels = torch.tensor(self.prediction_unlabelled)
+            merge = np.concatenate([molecules_x[:,np.newaxis],molecules_y[:,np.newaxis]],axis=1)
+            L = []
+            for n in range(self.ClusterNames.shape[0]):
+                scatter= hv.Scatter(np.concatenate([merge,pred_labels.softmax(axis=-1).detach().numpy()[:,n][:,np.newaxis]],axis=1),
+                                    kdims=['x','y'],vdims=[self.ClusterNames[n]]).opts(cmap='Viridis',
+                                                                                        color=hv.dim(str(self.ClusterNames[n])),
+                                                                                        s=1,
+                                                                                        aspect='equal',
+                                                                                        bgcolor='black',
+                                                                                        fig_inches=10,
+                                                                                        title=self.ClusterNames[n])
+                L.append(scatter)
+            layout = hv.Layout(L).cols(5)
+            hv.save(layout,"{}/cluster_probabilities.png".format(self.folder))
 
         else:
             import scanpy as sc
