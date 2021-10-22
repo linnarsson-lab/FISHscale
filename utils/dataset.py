@@ -270,8 +270,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
             segmentation = DBSCAN(50,min_samples=10).fit(cl_molecules_xy)
             return segmentation.labels_
         result = self.dask_attrs[label_column].groupby(label_column).apply(segmentation, meta=object).compute()
-        result = np.concatenate(result)
-        self.dask_attrs[label_column].merge(pd.DataFrame({'DBscan':np.concatenate(result)}))
+        self.dask_attrs[label_column] = self.dask_attrs[label_column].merge(pd.DataFrame({'DBscan':np.concatenate(result)}))
 
                     
 
