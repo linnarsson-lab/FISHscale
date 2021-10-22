@@ -95,7 +95,7 @@ class GraphData(pl.LightningDataModule):
         save_to = '',
         subsample=1,
         ref_celltypes=None,
-        exclude_clusters:list=[''],
+        exclude_clusters:dict={},
         smooth:bool=True,
         negative_samples:int=5,
         distance_factor:int=3,
@@ -481,8 +481,10 @@ class GraphData(pl.LightningDataModule):
             import loompy
             with loompy.connect(self.ref_celltypes,'r') as ds:
                 print(ds.ca.keys())
-                region_filt = np.isin(ds.ca['ClusterNames'], self.exclude_clusters, invert=True)
-                self.ClusterNames = ds.ca['ClusterNames'][region_filt]
+                k = list(self.exclude_clusters.keys())[0]
+                v = self.exclude_clusters[k]
+                region_filt = np.isin(ds.ca[k], v, invert=True)
+                self.ClusterNames = ds.ca[k][region_filt]
                 genes = ds.ra.Gene
                 order = []
                 for x in self.data.unique_genes:
@@ -490,7 +492,7 @@ class GraphData(pl.LightningDataModule):
                         order.append(np.where(genes==x)[0].tolist()[0])
                     except:
                         pass
-                self.ncells = ds.ca['Ncells'][region_filt]
+                self.ncells = ds.ca['NCells'][region_filt]
                 ref = ds[:,:]
                 ref = ref[order]
                 ref = ref[:,region_filt]
