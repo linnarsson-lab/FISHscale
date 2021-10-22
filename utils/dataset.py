@@ -255,7 +255,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
         self.App.exec_()
         
         
-    def DBsegment(self,eps=25,min_samples=5,cutoff=250):
+    def DBsegment(self,label_column,eps=50,min_samples=10,cutoff=4):
         """
         Run DBscan segmentation on self.data, this will reassign a column on self.data with column_name
 
@@ -265,19 +265,15 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
             column_name (str, optional): [description]. Defaults to 'cell'.
             cutoff (int,optional): cells with number of dots above this threshold will be removed and -1 passed to background dots
         """        
+        def segmentation(partition):
+            cl_molecules_xy = partition.loc[:,['x','y']].values
+            segmentation = DBSCAN(50,min_samples=10).fit(cl_molecules_xy)
+            return segmentation.labels_
+        result = self.dask_attrs[label_column].groupby(label_column).apply(segmentation, meta=object).compute()
+        result = np.concatenate(result)
+        self.dask_attrs[label_column].merge(pd.DataFrame({'DBscan':np.concatenate(result)}))
 
-        print('Running DBscan segmentation')
-        X = np.array([self.df.x.values.compute(),self.df.y.values.compute()]).T
-        clustering = DBSCAN(eps=eps, min_samples=min_samples).fit(X)
-
-        print('Assigning background dots whose cluster has more than {}'.format(cutoff))
-        c =Counter(clustering.labels_)
-        bg = [x for x in c if c[x] > cutoff]
-        labels =  np.array([-1 if x in bg else x for x in clustering.labels_])
-        self.add_dask_attribute('labels',labels)
-        print('Background molecules: {}'.format((labels == -1).sum()))
-        print('DBscan found {} clusters'.format(labels.max()))
-        
+                    
 
 class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base, Normalization, RegionalizeMulti,
                    Decomposition, BoneFightMulti):
