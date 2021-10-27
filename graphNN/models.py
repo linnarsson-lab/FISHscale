@@ -44,7 +44,7 @@ class SAGELightning(LightningModule):
                  n_layers,
                  activation=F.relu,
                  dropout=0.2,
-                 lr=0.01,
+                 lr=0.001,
                  supervised=False,
                  kappa=0,
                  Ncells=0,
