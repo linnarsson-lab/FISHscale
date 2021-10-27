@@ -97,8 +97,8 @@ class GraphData(pl.LightningDataModule):
         ref_celltypes=None,
         exclude_clusters:dict={},
         smooth:bool=True,
-        negative_samples:int=5,
-        distance_factor:int=3,
+        negative_samples:int=1,
+        distance_factor:int=4,
         device='cpu',
         lr=1e-3,
         ):
@@ -243,7 +243,7 @@ class GraphData(pl.LightningDataModule):
             monitor='train_loss',
             dirpath=self.folder,
             filename=self.analysis_name+'-{epoch:02d}-{train_loss:.2f}',
-            save_top_k=2,
+            save_top_k=5,
             mode='min',
             )
         self.early_stop_callback = EarlyStopping(
@@ -619,7 +619,7 @@ class GraphData(pl.LightningDataModule):
             import random
             r = lambda: random.randint(0,255)
             color_dic = {}
-            for x in np.unique(clusters):
+            for x in range(self.ClusterNames.shape[0]):
                 color_dic[x] = (r()/255,r()/255,r()/255)
             clusters_colors = np.array([color_dic[x] for x in clusters])
 
@@ -652,17 +652,21 @@ class GraphData(pl.LightningDataModule):
             nd_dic = {}
 
             allm = 0
+            print(color_dic)
             for cl in range(self.ClusterNames.shape[0]):
-                x, y = molecules_x[clusters == cl], molecules_y[clusters == cl]
-                allm += x.shape[0]
-                color = ['red']*x.shape[0]
-                nd_dic[self.ClusterNames[cl]] = hv.Scatter(np.array([x,y]).T).opts(
-                    bgcolor='black',
-                    aspect='equal',
-                    fig_inches=10,
-                    s=1,
-                    title=self.ClusterNames[cl],
-                    color=color_dic[cl])
+                    try:
+                        x, y = molecules_x[clusters == cl], molecules_y[clusters == cl]
+                        allm += x.shape[0]
+                        color = ['red']*x.shape[0]
+                        nd_dic[self.ClusterNames[cl]] = hv.Scatter(np.array([x,y]).T).opts(
+                            bgcolor='black',
+                            aspect='equal',
+                            fig_inches=10,
+                            s=1,
+                            title=self.ClusterNames[cl],
+                            color=color_dic[cl])
+                    except:
+                        pass
 
             layout = hv.Layout([nd_dic[x] for x in nd_dic]).cols(5)
             hv.save(layout,"{}/molecule_prediction.png".format(self.folder))
@@ -671,15 +675,18 @@ class GraphData(pl.LightningDataModule):
             merge = np.concatenate([molecules_x[:,np.newaxis],molecules_y[:,np.newaxis]],axis=1)
             L = []
             for n in range(self.ClusterNames.shape[0]):
-                scatter= hv.Scatter(np.concatenate([merge,pred_labels.softmax(axis=-1).detach().numpy()[:,n][:,np.newaxis]],axis=1),
-                                    kdims=['x','y'],vdims=[self.ClusterNames[n]]).opts(cmap='Viridis',
-                                                                                        color=hv.dim(str(self.ClusterNames[n])),
-                                                                                        s=1,
-                                                                                        aspect='equal',
-                                                                                        bgcolor='black',
-                                                                                        fig_inches=10,
-                                                                                        title=self.ClusterNames[n])
-                L.append(scatter)
+                try:
+                    scatter= hv.Scatter(np.concatenate([merge,pred_labels.softmax(axis=-1).detach().numpy()[:,n][:,np.newaxis]],axis=1),
+                                        kdims=['x','y'],vdims=[self.ClusterNames[n]]).opts(cmap='Viridis',
+                                                                                            color=hv.dim(str(self.ClusterNames[n])),
+                                                                                            s=1,
+                                                                                            aspect='equal',
+                                                                                            bgcolor='black',
+                                                                                            fig_inches=10,
+                                                                                            title=self.ClusterNames[n])
+                    L.append(scatter)
+                except:
+                    pass
             layout = hv.Layout(L).cols(5)
             hv.save(layout,"{}/cluster_probabilities.png".format(self.folder))
 

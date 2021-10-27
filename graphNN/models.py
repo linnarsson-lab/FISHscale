@@ -44,7 +44,7 @@ class SAGELightning(LightningModule):
                  n_layers,
                  activation=F.relu,
                  dropout=0.2,
-                 lr=0.01,
+                 lr=0.001,
                  supervised=False,
                  kappa=0,
                  Ncells=0,
@@ -129,7 +129,7 @@ class SAGELightning(LightningModule):
             # Will increasingly apply supervised loss, domain adaptation loss
             # from 0 to 1, from iteration 0 to 200, focusing first on unsupervised 
             # graphsage task
-            kappa = 2/(1+10**(-1*((1*self.kappa)/8000)))-1
+            kappa = 2/(1+10**(-1*((1*self.kappa)/2000)))-1
             self.kappa += 1
             loss = loss*kappa
             loss = classifier_loss + loss + bone_fight_loss + kappa*(kappa*classifier_domain_loss + kappa*supervised_loss) #+ semantic_loss.detach()
