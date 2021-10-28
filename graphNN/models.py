@@ -91,11 +91,13 @@ class SAGELightning(LightningModule):
             #neg_graph = neg_graph.to(self.device)
             batch_inputs = mfgs[0].srcdata['gene']
             batch_labels = mfgs[-1].dstdata['label']
+            bl = batch_inputs[pos_graph.nodes()]
             batch_pred_lab = self.module(mfgs, batch_inputs)
             supervised_loss,_,_ = self.loss_fcn(batch_pred_lab, pos_graph, neg_graph)
 
             # Label prediction loss
-            labels_pred = self.module.encoder.encoder_dict['CF'](batch_pred_lab)
+            labels_pred = self.module.encoder.encoder_dict['CF'](batch_pred_lab.detach())
+            probabilities_lab = F.softmax(labels_pred,dim=-1)
             cce = th.nn.CrossEntropyLoss()
             classifier_loss = cce(labels_pred,batch_labels) #* 0.05
             self.train_acc(labels_pred.argsort(axis=-1)[:,-1],batch_labels)
@@ -115,25 +117,24 @@ class SAGELightning(LightningModule):
                         true_labels=labels_pred.argsort(axis=-1)[:,-1],
                         )
 
-
             # Bonefight regularization of cell types
             bone_fight_loss = -F.cosine_similarity(probabilities_unlab @ self.reference.T.to(self.device), bu,dim=0).mean()
-            #bone_fight_loss = -F.cosine_similarity(probabilities_unlab.detach() @ self.sl.centroids_true.detach().T, batch_pred_unlab,dim=0).mean() 
-            #bone_fight_loss1 = -F.cosine_similarity(probabilities_unlab @ self.reference.T, bu,dim=1).mean()
+            
+            #seems to sort of work
+            #bone_fight_loss = -F.cosine_similarity(probabilities_unlab @ self.sl.centroids_true.detach().T, batch_pred_unlab.detach(),dim=0).mean() 
+
             '''q = th.ones(probabilities_unlab.shape[0])/probabilities_unlab.shape[0]
             p = th.log(self.p.T @ probabilities_unlab.T)
             kl_loss = self.kl(p,q)
             bone_fight_loss = bone_fight_loss0 + kl_loss'''
 
-            #self.log('Semantic_loss', semantic_loss, prog_bar=False, on_step=True)
-            
             # Will increasingly apply supervised loss, domain adaptation loss
             # from 0 to 1, from iteration 0 to 200, focusing first on unsupervised 
             # graphsage task
             kappa = 2/(1+10**(-1*((1*self.kappa)/2000)))-1
             self.kappa += 1
             loss = loss*kappa
-            loss = classifier_loss + bone_fight_loss + loss + kappa*(kappa*classifier_domain_loss + kappa*supervised_loss) #+ semantic_loss.detach()
+            loss = classifier_loss + loss + kappa*(kappa*bone_fight_loss+kappa*classifier_domain_loss + kappa*supervised_loss) #+ semantic_loss.detach()
             
             opt.zero_grad()
             self.manual_backward(loss,retain_graph=True)
