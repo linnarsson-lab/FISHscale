@@ -686,9 +686,12 @@ class GraphData(pl.LightningDataModule):
                                                                                             title=self.ClusterNames[n])
                     L.append(scatter)
                 except:
+                    print('Skipping cluster: ', self.ClusterNames[n])
                     pass
             layout = hv.Layout(L).cols(5)
+            print('Saving cluster probabilities...')
             hv.save(layout,"{}/cluster_probabilities.png".format(self.folder))
+            print('Plots saved.')
 
         else:
             import scanpy as sc
