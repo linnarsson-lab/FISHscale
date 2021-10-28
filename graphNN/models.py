@@ -91,11 +91,13 @@ class SAGELightning(LightningModule):
             #neg_graph = neg_graph.to(self.device)
             batch_inputs = mfgs[0].srcdata['gene']
             batch_labels = mfgs[-1].dstdata['label']
+            bl = batch_inputs[pos_graph.nodes()]
             batch_pred_lab = self.module(mfgs, batch_inputs)
             supervised_loss,_,_ = self.loss_fcn(batch_pred_lab, pos_graph, neg_graph)
 
             # Label prediction loss
-            labels_pred = self.module.encoder.encoder_dict['CF'](batch_pred_lab)
+            labels_pred = self.module.encoder.encoder_dict['CF'](batch_pred_lab.detach())
+            probabilities_lab = F.softmax(labels_pred,dim=-1)
             cce = th.nn.CrossEntropyLoss()
             classifier_loss = cce(labels_pred,batch_labels) #* 0.05
             self.train_acc(labels_pred.argsort(axis=-1)[:,-1],batch_labels)
@@ -109,38 +111,38 @@ class SAGELightning(LightningModule):
             #Semantic Loss
             probabilities_unlab = F.softmax(self.module.encoder.encoder_dict['CF'](batch_pred_unlab),dim=-1)
             labels_unlab = probabilities_unlab.argsort(axis=-1)[:,-1]
+            self.sl.semantic_loss(pseudo_latent=batch_pred_unlab, 
+                        pseudo_labels=labels_unlab ,
+                        true_latent=batch_pred_lab,
+                        true_labels=labels_pred.argsort(axis=-1)[:,-1],
+                        )
 
             # Bonefight regularization of cell types
             bone_fight_loss = -F.cosine_similarity(probabilities_unlab @ self.reference.T.to(self.device), bu,dim=0).mean()
-            #bone_fight_loss = -F.cosine_similarity(probabilities_unlab.detach() @ self.sl.centroids_true.detach().T, batch_pred_unlab,dim=0).mean()
-            #bone_fight_loss1 = -F.cosine_similarity(probabilities_unlab @ self.reference.T, bu,dim=1).mean()
+            
+            #seems to sort of work
+            #bone_fight_loss = -F.cosine_similarity(probabilities_unlab @ self.sl.centroids_true.detach().T, batch_pred_unlab.detach(),dim=0).mean() 
+
             '''q = th.ones(probabilities_unlab.shape[0])/probabilities_unlab.shape[0]
             p = th.log(self.p.T @ probabilities_unlab.T)
             kl_loss = self.kl(p,q)
             bone_fight_loss = bone_fight_loss0 + kl_loss'''
 
-            '''semantic_loss = self.sl.semantic_loss(pseudo_latent=batch_pred_unlab, 
-                                                    pseudo_labels=labels_unlab ,
-                                                    true_latent=batch_pred_lab,
-                                                    true_labels=labels_pred.argsort(axis=-1)[:,-1],
-                                                    )
-            self.log('Semantic_loss', semantic_loss, prog_bar=True, on_step=True)'''
-            
             # Will increasingly apply supervised loss, domain adaptation loss
             # from 0 to 1, from iteration 0 to 200, focusing first on unsupervised 
             # graphsage task
             kappa = 2/(1+10**(-1*((1*self.kappa)/2000)))-1
             self.kappa += 1
             loss = loss*kappa
-            loss = classifier_loss + loss + bone_fight_loss + kappa*(kappa*classifier_domain_loss + kappa*supervised_loss) #+ semantic_loss.detach()
+            loss = classifier_loss + loss + kappa*(kappa*bone_fight_loss+kappa*classifier_domain_loss + kappa*supervised_loss) #+ semantic_loss.detach()
             
             opt.zero_grad()
             self.manual_backward(loss,retain_graph=True)
             opt.step()
 
-        if self.supervised == False:
-            self.log('balance', pos/neg, prog_bar=True,on_step=True, on_epoch=True,)
-        self.log('train_loss', loss, prog_bar=True, on_step=False, on_epoch=True)
+        #if self.supervised == False:
+        #    self.log('balance', pos/neg, prog_bar=True,on_step=False, on_epoch=True,)
+        self.log('train_loss', loss, prog_bar=True, on_step=True, on_epoch=True)
         return loss
 
     def validation_step(self, batch, batch_idx):
@@ -188,7 +190,7 @@ class SAGELightning(LightningModule):
         total_loss = th.stack(losses).sum()
         return total_loss
 
-class SemanticLoss(nn.Module):
+class SemanticLoss:
     def __init__(self , 
         n_hidden,
         n_labels,
@@ -196,17 +198,17 @@ class SemanticLoss(nn.Module):
         device='cpu'
         ):
         self.dev = device
-        self.centroids_pseudo = th.randn([n_hidden,n_labels],device=self.dev)
+        self.centroids_pseudo = th.zeros([n_hidden,n_labels],device=self.dev)
         self.pseudo_count = th.ones([n_labels],device=self.dev)
-        self.centroids_true = th.randn([n_hidden, n_labels],device=self.dev)
+        self.centroids_true = th.zeros([n_hidden, n_labels],device=self.dev)
         self.true_count = th.ones([n_labels],device=self.dev)
         
-        if type(ncells) == type(0):
+        '''if type(ncells) == type(0):
             self.ncells = self.true_count/self.true_count.sum()
             self.ncells_max = self.true_count.sum()*1000
         else:
             self.ncells_max = ncells.sum()
-            self.ncells = th.tensor(ncells/ncells.sum(),device=self.dev)
+            self.ncells = th.tensor(ncells/ncells.sum(),device=self.dev)'''
 
         super().__init__()
     def semantic_loss(self, 
@@ -215,12 +217,13 @@ class SemanticLoss(nn.Module):
             true_latent, 
             true_labels):
 
-        '''if self.pseudo_count.max() >= self.ncells_max:
-            self.pseudo_count = th.ones([self.pseudo_count.shape[0]],device=self.dev)'''
+        '''if self.true_count.max() >= self.ncells_max/10:
+            self.pseudo_count = th.ones([self.pseudo_count.shape[0]],device=self.dev)
+            self.true_count = th.ones([self.true_count.shape[0]],device=self.dev)'''
 
-        for pl in pseudo_labels.unique():
+        '''for pl in pseudo_labels.unique():
             filt = pseudo_labels == pl
-            if filt.sum() > 5:
+            if filt.sum() > 10:
                 centroid_pl = pseudo_latent[filt,:]
                 dp = th.tensor([nn.MSELoss()(centroid_pl[cell,:], self.centroids_pseudo[:,pl]) for cell in range(centroid_pl.shape[0])])
                 dispersion_p = th.mean(dp)
@@ -228,11 +231,11 @@ class SemanticLoss(nn.Module):
                 new_avg_pl = self.centroids_pseudo[:,pl] * self.pseudo_count[pl] + centroid_pl *filt.sum()
                 new_avg_pl = new_avg_pl/(self.pseudo_count[pl] +filt.sum())
                 self.pseudo_count[pl] += filt.sum()
-                self.centroids_pseudo[:,pl] = new_avg_pl
+                self.centroids_pseudo[:,pl] = new_avg_pl'''
 
         for tl in true_labels.unique():
             filt = true_labels == tl
-            if filt.sum() > 5:
+            if filt.sum() > 10:
                 centroid_tl = true_latent[filt,:]
                 '''dispersion_t = th.mean(th.tensor([nn.MSELoss()(centroid_tl[cell,:], self.centroids_true[:,tl]) for cell in range(centroid_tl.shape[0])],device='cuda'))'''
                 centroid_tl = centroid_tl.mean(axis=0)
@@ -241,11 +244,11 @@ class SemanticLoss(nn.Module):
                 self.true_count[tl] += filt.sum()
                 self.centroids_true[:,tl] = new_avg_tl
         
-        kl_density = th.nn.functional.kl_div(self.ncells.log(),self.pseudo_count/self.pseudo_count.sum())
+        #kl_density = th.nn.functional.kl_div(self.ncells.log(),self.pseudo_count/self.pseudo_count.sum())
         #kl_density =  -F.logsigmoid((self.ncells*self.pseudo_count).sum(-1)).sum()*100
         #semantic_loss = -F.logsigmoid((self.centroids_pseudo*self.centroids_true).sum(-1)).mean() + kl_density #
-        semantic_loss = nn.MSELoss()(self.centroids_pseudo, self.centroids_true) + kl_density + dispersion_p
-        return semantic_loss
+        #semantic_loss = nn.MSELoss()(self.centroids_pseudo, self.centroids_true) + kl_density + dispersion_p
+        #return semantic_loss
 
 class SAGE(nn.Module):
     '''def __init__(self, in_feats, n_hidden, n_classes, n_layers, activation, dropout):

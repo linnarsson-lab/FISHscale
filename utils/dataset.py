@@ -254,8 +254,13 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
         
         self.App.exec_()
         
-        
-    def DBsegment(self,label_column,eps=50,min_samples=10,cutoff=4):
+    def DBsegment(self,
+                    label_column,
+                    eps=50,
+                    min_samples=10,
+                    cutoff=4,
+                    save_to=None):
+        from tqdm import trange
         """
         Run DBscan segmentation on self.data, this will reassign a column on self.data with column_name
 
@@ -267,11 +272,53 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
         """        
         def segmentation(partition):
             cl_molecules_xy = partition.loc[:,['x','y']].values
-            segmentation = DBSCAN(50,min_samples=10).fit(cl_molecules_xy)
+            segmentation = DBSCAN(eps,min_samples=min_samples).fit(cl_molecules_xy)
             return segmentation.labels_
+
+        def get_counts(cell_i):
+            cell_i,dblabel, centroid = cell_i[1], cell_i[0],(cell_i[1].x.mean(),cell_i[1].y.mean())
+            cell_i_g = cell_i['g']
+            centroid = (cell_i.x.mean(),cell_i.y.mean())
+            gene,cell =  np.unique(cell_i_g,return_counts=True)
+            d = pd.DataFrame({dblabel:cell},index=gene)
+            g= pd.DataFrame(index=self.unique_genes)
+            data = pd.concat([g,d],join='outer',axis=1).fillna(0)
+            return data, dblabel, centroid
+
+        def get_cells(partition):
+            cl_molecules_xy = partition.loc[:,['x','y','g','DBscan','Labels']]
+            clr= cl_molecules_xy.groupby('DBscan')#.applymap(get_counts)
+            clusters, dblabel, centroids, data = [],[],[],[]
+            cl = cl_molecules_xy[label_column].values[0]
+            for cell in clr:
+                d, label, centroid = get_counts(cell)
+                dblabel.append(label)
+                centroids.append(centroid)
+                data.append(d)
+            data = pd.concat(data,axis=1)
+            return data, dblabel, centroids
+
+        def gene_by_cell_loom(dask_attrs):
+            matrices, labels, centroids = [],[],[]
+            for p in trange(self.df.npartitions):
+                matrix, label, centroid = get_cells(dask_attrs.partitions[p].compute())
+                matrices.append(matrix)
+                print(matrix.shape,len(label))
+                labels += label
+                centroids += centroid
+            matrices = pd.concat(matrices,axis=1)
+            if type(save_to) == type(None):
+                file = path.join(self.dataset_folder,self.filename.split('.')[0]+'_DBcells.loom')
+            else:
+                file = path.join(save_to+'DBcells.loom')
+            row_attrs = {'Gene':matrices.index.values}
+            col_attrs = {'DBlabel':matrices.columns.values, 'Centroid':centroids}
+            loompy.create(file,matrices.values,row_attrs,col_attrs)
+            #return matrices, labels, centroids
+
         result = self.dask_attrs[label_column].groupby(label_column).apply(segmentation, meta=object).compute()
         self.dask_attrs[label_column] = self.dask_attrs[label_column].merge(pd.DataFrame({'DBscan':np.concatenate(result)}))
-
+        gene_by_cell_loom(self.dask_attrs[label_column])
                     
 
 class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base, Normalization, RegionalizeMulti,

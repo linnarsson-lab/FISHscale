@@ -572,9 +572,9 @@ class GraphData(pl.LightningDataModule):
             batch = np.concatenate([np.zeros(self.latent_unlabelled.shape[0]),np.ones(self.latent_labelled.shape[0])])
             some_mixed = np.random.choice(np.arange(mixed.shape[0]),int(random_n/2),replace=False)
             print(some_mixed.shape,batch.shape)
-            umap_embedding = reducer.fit_transform(mixed[some_mixed])
-
-            Y_umap_mixed = umap_embedding
+            umap_embedding = reducer.fit(mixed[some_mixed])
+            embedding = umap_embedding.transform(mixed)
+            Y_umap_mixed = embedding
             Y_umap_mixed -= np.min(Y_umap_mixed, axis=0)
             Y_umap_mixed /= np.max(Y_umap_mixed, axis=0)
 
@@ -582,15 +582,17 @@ class GraphData(pl.LightningDataModule):
             cycled = [0,1,2,0]
             for i in range(3):
                 plt.subplot(1,3,i+1)
-                plt.scatter(Y_umap_mixed[:,cycled[i]], Y_umap_mixed[:,cycled[i+1]], c=batch[some_mixed],  s=0.25, marker='.', linewidths=0, edgecolors=None)
+                plt.scatter(Y_umap_mixed[:,cycled[i]], Y_umap_mixed[:,cycled[i+1]], c=batch,  s=0.25, marker='.', linewidths=0, edgecolors=None)
                 plt.xlabel("Y"+str(cycled[i]))
                 plt.ylabel("Y"+str(cycled[i+1]))
             plt.tight_layout()
             plt.savefig("{}/umap_supervised.png".format(self.folder), bbox_inches='tight', dpi=500)
 
             some = np.random.choice(np.arange(self.latent_unlabelled.shape[0]),random_n,replace=False)
-            umap_embedding = reducer.fit_transform(self.latent_unlabelled[some])
-            Y_umap = umap_embedding
+            #umap_embedding = reducer.fit_transform(self.latent_unlabelled[some])
+            umap_embedding = reducer.fit(self.latent_unlabelled[some])
+            embedding = umap_embedding.transform(self.latent_unlabelled)
+            Y_umap = embedding
             Y_umap -= np.min(Y_umap, axis=0)
             Y_umap /= np.max(Y_umap, axis=0)
 
@@ -609,7 +611,7 @@ class GraphData(pl.LightningDataModule):
             ax.set_facecolor("black")
             width_cutoff = 1640 # um
             #plt.scatter(DS.df.x.values.compute()[GD.cells], DS.df.y.values.compute()[GD.cells], c=torch.argmax(pred.softmax(dim=-1),dim=-1).numpy(), s=0.2,marker='.',linewidths=0, edgecolors=None,cmap='rainbow')
-            plt.scatter(self.data.df.x.values.compute()[self.cells][some], self.data.df.y.values.compute()[self.cells][some], c=Y_umap, s=0.05,marker='.',linewidths=0, edgecolors=None)
+            plt.scatter(self.data.df.x.values.compute()[self.cells], self.data.df.y.values.compute()[self.cells], c=Y_umap, s=0.05,marker='.',linewidths=0, edgecolors=None)
             plt.xticks(fontsize=2)
             plt.yticks(fontsize=2)
             plt.axis('scaled')
@@ -627,7 +629,7 @@ class GraphData(pl.LightningDataModule):
             cycled = [0,1,2,0]
             for i in range(3):
                 plt.subplot(1,3,i+1)
-                plt.scatter(Y_umap[:,cycled[i]], Y_umap[:,cycled[i+1]], c=clusters_colors[some],  s=2, marker='.', linewidths=0, edgecolors=None,cmap='rainbow')
+                plt.scatter(Y_umap[:,cycled[i]], Y_umap[:,cycled[i+1]], c=clusters_colors,  s=2, marker='.', linewidths=0, edgecolors=None,cmap='rainbow')
                 plt.xlabel("Y"+str(cycled[i]))
                 plt.ylabel("Y"+str(cycled[i+1]))
                 plt.xticks(fontsize=2)
@@ -652,7 +654,7 @@ class GraphData(pl.LightningDataModule):
             nd_dic = {}
 
             allm = 0
-            print(color_dic)
+            print('Generating plots for cluster assigned to molecules...')
             for cl in range(self.ClusterNames.shape[0]):
                     try:
                         x, y = molecules_x[clusters == cl], molecules_y[clusters == cl]
@@ -674,6 +676,7 @@ class GraphData(pl.LightningDataModule):
             pred_labels = torch.tensor(self.prediction_unlabelled)
             merge = np.concatenate([molecules_x[:,np.newaxis],molecules_y[:,np.newaxis]],axis=1)
             L = []
+            print('Generating plots for molecule cluster probabilities...')
             for n in range(self.ClusterNames.shape[0]):
                 try:
                     scatter= hv.Scatter(np.concatenate([merge,pred_labels.softmax(axis=-1).detach().numpy()[:,n][:,np.newaxis]],axis=1),
@@ -713,9 +716,9 @@ class GraphData(pl.LightningDataModule):
             clusters_colors = np.array([color_dic[x] for x in self.clusters])
 
             some = np.random.choice(np.arange(self.latent_unlabelled.shape[0]),random_n,replace=False)
-            umap_embedding = reducer.fit_transform(self.latent_unlabelled[some])
-
-            Y_umap = umap_embedding
+            umap_embedding = reducer.fit(self.latent_unlabelled[some])
+            embedding = umap_embedding.transform(self.latent_unlabelled)
+            Y_umap = embedding
             Y_umap -= np.min(Y_umap, axis=0)
             Y_umap /= np.max(Y_umap, axis=0)
 
