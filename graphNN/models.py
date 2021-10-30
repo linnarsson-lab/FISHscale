@@ -289,7 +289,7 @@ class SAGE(nn.Module):
                 h = F.dropout(h, p=0.2, training=self.training)
                 h = self.encoder.encoder_dict['FC'][0](h)
         h = self.encoder.encoder_dict['FC'][1](h)
-        h = F.normalize(h)
+        #h = F.normalize(h)
         return h
 
     def inference(self, g, x, device, batch_size, num_workers):

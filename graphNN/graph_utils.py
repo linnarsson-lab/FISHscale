@@ -699,12 +699,15 @@ class GraphData(pl.LightningDataModule):
 
         else:
             import scanpy as sc
+            from sklearn.cluster import MiniBatchKMeans
             print('Running leiden clustering from scanpy...')
-            adata = sc.AnnData(X=self.latent_unlabelled)
-            sc.pp.neighbors(adata, n_neighbors=15)
-            sc.tl.leiden(adata, random_state=42)
+            #adata = sc.AnnData(X=self.latent_unlabelled)
+            #sc.pp.neighbors(adata, n_neighbors=15)
+            #sc.tl.leiden(adata, random_state=42)
             #self.data.add_dask_attribute('leiden',adata.obs['leiden'].values.tolist())
-            self.clusters= adata.obs['leiden'].values.astype('int')
+            kmeans = MiniBatchKMeans(n_clusters=50)
+            self.clusters = kmeans.fit_predict(self.latent_unlabelled)
+            
             np.save(self.folder+'/clusters',self.clusters)
             print('Clustering done.')
             print('Generating umap embedding...')
@@ -717,9 +720,9 @@ class GraphData(pl.LightningDataModule):
             clusters_colors = np.array([color_dic[x] for x in self.clusters])
 
             some = np.random.choice(np.arange(self.latent_unlabelled.shape[0]),random_n,replace=False)
-            umap_embedding = reducer.fit(self.latent_unlabelled[some])
-            embedding = umap_embedding.transform(self.latent_unlabelled)
-            Y_umap = embedding
+            umap_embedding = reducer.fit_transform(self.latent_unlabelled[some])
+            #embedding = umap_embedding.transform(self.latent_unlabelled)
+            Y_umap = umap_embedding
             Y_umap -= np.min(Y_umap, axis=0)
             Y_umap /= np.max(Y_umap, axis=0)
 
