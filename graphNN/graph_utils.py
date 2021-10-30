@@ -701,7 +701,7 @@ class GraphData(pl.LightningDataModule):
             import scanpy as sc
             print('Running leiden clustering from scanpy...')
             adata = sc.AnnData(X=self.latent_unlabelled)
-            sc.pp.neighbors(adata, n_neighbors=10)
+            sc.pp.neighbors(adata, n_neighbors=15)
             sc.tl.leiden(adata, random_state=42)
             #self.data.add_dask_attribute('leiden',adata.obs['leiden'].values.tolist())
             self.clusters= adata.obs['leiden'].values.astype('int')
