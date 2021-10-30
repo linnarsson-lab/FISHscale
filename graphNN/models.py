@@ -82,7 +82,6 @@ class SAGELightning(LightningModule):
         bu = batch_inputs_u[pos_graph.nodes()]
         loss,pos, neg = self.loss_fcn(batch_pred_unlab, pos_graph, neg_graph) #* 5
         
-
         if self.supervised:
             batch2 = batch['labelled']
             _, pos_graph, neg_graph, mfgs = batch2
@@ -290,7 +289,7 @@ class SAGE(nn.Module):
                 h = F.dropout(h, p=0.2, training=self.training)
                 h = self.encoder.encoder_dict['FC'][0](h)
         h = self.encoder.encoder_dict['FC'][1](h)
-        h = F.normalize(h)
+        #h = F.normalize(h)
         return h
 
     def inference(self, g, x, device, batch_size, num_workers):
@@ -334,7 +333,7 @@ class SAGE(nn.Module):
                     h =self.encoder.encoder_dict['FC'][0](h)
                 elif l == len(self.encoder.encoder_dict['GS']) -1:
                     h = self.encoder.encoder_dict['FC'][1](h)
-                    h = F.normalize(h)
+                    #h = F.normalize(h)
 
                 y[output_nodes] = h.cpu().detach()#.numpy()
             x = y

@@ -277,13 +277,14 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
 
         def get_counts(cell_i):
             cell_i,dblabel, centroid = cell_i[1], cell_i[0],(cell_i[1].x.mean(),cell_i[1].y.mean())
-            cell_i_g = cell_i['g']
-            centroid = (cell_i.x.mean(),cell_i.y.mean())
-            gene,cell =  np.unique(cell_i_g,return_counts=True)
-            d = pd.DataFrame({dblabel:cell},index=gene)
-            g= pd.DataFrame(index=self.unique_genes)
-            data = pd.concat([g,d],join='outer',axis=1).fillna(0)
-            return data, dblabel, centroid
+            if dblabel != -1:
+                cell_i_g = cell_i['g']
+                centroid = (cell_i.x.mean(),cell_i.y.mean())
+                gene,cell =  np.unique(cell_i_g,return_counts=True)
+                d = pd.DataFrame({dblabel:cell},index=gene)
+                g= pd.DataFrame(index=self.unique_genes)
+                data = pd.concat([g,d],join='outer',axis=1).fillna(0)
+                return data, dblabel, centroid
 
         def get_cells(partition):
             cl_molecules_xy = partition.loc[:,['x','y','g','DBscan','Labels']]
@@ -291,19 +292,21 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
             clusters, dblabel, centroids, data = [],[],[],[]
             cl = cl_molecules_xy[label_column].values[0]
             for cell in clr:
-                d, label, centroid = get_counts(cell)
-                dblabel.append(label)
-                centroids.append(centroid)
-                data.append(d)
+                try:
+                    d, label, centroid = get_counts(cell)
+                    dblabel.append(label)
+                    centroids.append(centroid)
+                    data.append(d)
+                except:
+                    pass
             data = pd.concat(data,axis=1)
             return data, dblabel, centroids
 
         def gene_by_cell_loom(dask_attrs):
             matrices, labels, centroids = [],[],[]
-            for p in trange(self.df.npartitions):
+            for p in trange(self.dask_attrs[label_column].npartitions):
                 matrix, label, centroid = get_cells(dask_attrs.partitions[p].compute())
                 matrices.append(matrix)
-                print(matrix.shape,len(label))
                 labels += label
                 centroids += centroid
             matrices = pd.concat(matrices,axis=1)
