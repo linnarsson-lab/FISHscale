@@ -333,7 +333,7 @@ class SAGE(nn.Module):
                     h =self.encoder.encoder_dict['FC'][0](h)
                 elif l == len(self.encoder.encoder_dict['GS']) -1:
                     h = self.encoder.encoder_dict['FC'][1](h)
-                    h = F.normalize(h)
+                    #h = F.normalize(h)
 
                 y[output_nodes] = h.cpu().detach()#.numpy()
             x = y
