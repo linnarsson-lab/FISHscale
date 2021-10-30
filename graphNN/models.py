@@ -82,7 +82,6 @@ class SAGELightning(LightningModule):
         bu = batch_inputs_u[pos_graph.nodes()]
         loss,pos, neg = self.loss_fcn(batch_pred_unlab, pos_graph, neg_graph) #* 5
         
-
         if self.supervised:
             batch2 = batch['labelled']
             _, pos_graph, neg_graph, mfgs = batch2
