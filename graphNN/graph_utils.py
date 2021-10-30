@@ -481,10 +481,14 @@ class GraphData(pl.LightningDataModule):
             import loompy
             with loompy.connect(self.ref_celltypes,'r') as ds:
                 print(ds.ca.keys())
-                k = list(self.exclude_clusters.keys())[0]
-                v = self.exclude_clusters[k]
-                region_filt = np.isin(ds.ca[k], v, invert=True)
-                self.ClusterNames = ds.ca[k][region_filt]
+                try:
+                    k = list(self.exclude_clusters.keys())[0]
+                    v = self.exclude_clusters[k]
+                    region_filt = np.isin(ds.ca[k], v, invert=True)
+                    self.ClusterNames = ds.ca[k][region_filt]
+                except:
+                    self.ClusterNames = ds.ca[k]
+
                 genes = ds.ra.Gene
                 order = []
                 for x in self.data.unique_genes:
@@ -679,7 +683,8 @@ class GraphData(pl.LightningDataModule):
             print('Generating plots for molecule cluster probabilities...')
             for n in range(self.ClusterNames.shape[0]):
                 try:
-                    scatter= hv.Scatter(np.concatenate([merge,pred_labels.softmax(axis=-1).detach().numpy()[:,n][:,np.newaxis]],axis=1),
+                    ps = pred_labels.softmax(axis=-1).detach().numpy()[:,n][:,np.newaxis]
+                    scatter= hv.Scatter(np.concatenate([merge,ps],axis=1),
                                         kdims=['x','y'],vdims=[self.ClusterNames[n]]).opts(cmap='Viridis',
                                                                                             color=hv.dim(str(self.ClusterNames[n])),
                                                                                             s=1,
@@ -700,7 +705,8 @@ class GraphData(pl.LightningDataModule):
             import scanpy as sc
             print('Running leiden clustering from scanpy...')
             adata = sc.AnnData(X=self.latent_unlabelled)
-            sc.pp.neighbors(adata, n_neighbors=10)
+            sc.pp.neighbors(adata, n_neighbors=100
+            )
             sc.tl.leiden(adata, random_state=42)
             #self.data.add_dask_attribute('leiden',adata.obs['leiden'].values.tolist())
             self.clusters= adata.obs['leiden'].values.astype('int')
