@@ -329,18 +329,18 @@ class SAGE(nn.Module):
                 h = th.log(x[input_nodes]+1)#.to(device)
 
                 h = layer(block, h)
-                #h = F.batch_norm(h)
+                h = F.normalize(h)
                 if l != len(self.encoder.encoder_dict['GS']) -1:# and l != len(self.layers) - 2:
                     h = self.encoder.encoder_dict['BN'][l](h)
                     h = h.relu()
                     h = F.dropout(h, p=0.2, training=self.training)
-                    h = F.normalize(h)
+                    #h = F.normalize(h)
                     h =self.encoder.encoder_dict['FC'][l](h)
                 elif l == len(self.encoder.encoder_dict['GS']) -1:
-                    h = self.encoder.encoder_dict['BN'][l](h)
+                    '''h = self.encoder.encoder_dict['BN'][l](h)
                     h = h.relu()
                     h = F.dropout(h, p=0.2, training=self.training)
-                    h= F.normalize(h)
+                    h= F.normalize(h)'''
                     h = self.encoder.encoder_dict['FC'][l](h)
                     #h = F.normalize(h)
                 y[output_nodes] = h.cpu().detach()#.numpy()
