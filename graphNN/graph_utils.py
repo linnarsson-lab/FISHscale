@@ -575,9 +575,8 @@ class GraphData(pl.LightningDataModule):
             mixed = np.concatenate([self.latent_unlabelled,self.latent_labelled])
             batch = np.concatenate([np.zeros(self.latent_unlabelled.shape[0]),np.ones(self.latent_labelled.shape[0])])
             some_mixed = np.random.choice(np.arange(mixed.shape[0]),int(random_n/2),replace=False)
-            print(some_mixed.shape,batch.shape)
-            umap_embedding = reducer.fit(mixed[some_mixed])
-            embedding = umap_embedding.transform(mixed)
+            embedding = reducer.fit_transform(mixed[some_mixed])
+            #embedding = umap_embedding.transform(mixed)
             Y_umap_mixed = embedding
             Y_umap_mixed -= np.min(Y_umap_mixed, axis=0)
             Y_umap_mixed /= np.max(Y_umap_mixed, axis=0)
@@ -593,9 +592,9 @@ class GraphData(pl.LightningDataModule):
             plt.savefig("{}/umap_supervised.png".format(self.folder), bbox_inches='tight', dpi=500)
 
             some = np.random.choice(np.arange(self.latent_unlabelled.shape[0]),random_n,replace=False)
-            #umap_embedding = reducer.fit_transform(self.latent_unlabelled[some])
-            umap_embedding = reducer.fit(self.latent_unlabelled[some])
-            embedding = umap_embedding.transform(self.latent_unlabelled)
+            embedding = reducer.fit_transform(self.latent_unlabelled[some])
+            #umap_embedding = reducer.fit(self.latent_unlabelled[some])
+            #embedding = umap_embedding.transform(self.latent_unlabelled)
             Y_umap = embedding
             Y_umap -= np.min(Y_umap, axis=0)
             Y_umap /= np.max(Y_umap, axis=0)
@@ -684,7 +683,11 @@ class GraphData(pl.LightningDataModule):
             for n in range(self.ClusterNames.shape[0]):
                 try:
                     ps = pred_labels.softmax(axis=-1).detach().numpy()[:,n][:,np.newaxis]
+<<<<<<< HEAD
                     scatter= hv.Scatter(np.concatenate([merge,ps],axis=1),
+=======
+                    scatter= hv.Scatter(np.concatenate([merge,ps],axis=1)[:,ps >0.5],
+>>>>>>> 1fbab2ead3483f276329871e7ed99482e120d61a
                                         kdims=['x','y'],vdims=[self.ClusterNames[n]]).opts(cmap='Viridis',
                                                                                             color=hv.dim(str(self.ClusterNames[n])),
                                                                                             s=1,
