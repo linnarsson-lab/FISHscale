@@ -62,7 +62,7 @@ class SAGELightning(LightningModule):
         self.reference=th.tensor(reference,dtype=th.float32)
         if self.supervised:
             self.automatic_optimization = False
-            self.sl = SemanticLoss(n_hidden,n_classes,ncells=Ncells,device=device)
+            #self.sl = SemanticLoss(n_hidden,n_classes,ncells=Ncells,device=device)
             self.train_acc = torchmetrics.Accuracy()
             p = th.tensor(Ncells*reference.sum(axis=0),dtype=th.float32,device=self.device)
             self.p = p/p.sum()
@@ -110,11 +110,11 @@ class SAGELightning(LightningModule):
             #Semantic Loss
             probabilities_unlab = F.softmax(self.module.encoder.encoder_dict['CF'](batch_pred_unlab),dim=-1)
             labels_unlab = probabilities_unlab.argsort(axis=-1)[:,-1]
-            self.sl.semantic_loss(pseudo_latent=batch_pred_unlab, 
+            '''self.sl.semantic_loss(pseudo_latent=batch_pred_unlab, 
                         pseudo_labels=labels_unlab ,
                         true_latent=batch_pred_lab,
                         true_labels=labels_pred.argsort(axis=-1)[:,-1],
-                        )
+                        )'''
 
             # Bonefight regularization of cell types
             bone_fight_loss = -F.cosine_similarity(probabilities_unlab @ self.reference.T.to(self.device), bu,dim=0).mean()
@@ -133,7 +133,7 @@ class SAGELightning(LightningModule):
             kappa = 2/(1+10**(-1*((1*self.kappa)/2000)))-1
             self.kappa += 1
             loss = loss*kappa
-            loss = classifier_loss + loss + kappa*(kappa*bone_fight_loss+kappa*classifier_domain_loss + kappa*supervised_loss) #+ semantic_loss.detach()
+            loss = classifier_loss + loss + bone_fight_loss + kappa*(kappa*classifier_domain_loss + kappa*supervised_loss) #+ semantic_loss.detach()
             
             opt.zero_grad()
             self.manual_backward(loss,retain_graph=True)
@@ -275,21 +275,26 @@ class SAGE(nn.Module):
                                                 reverse_gradients=True)
 
         self.encoder = Encoder(in_feats,n_hidden,n_classes,n_layers,supervised)
-        
+ 
     def forward(self, blocks, x):
         h = th.log(x+1)   
         for l, (layer, block) in enumerate(zip(self.encoder.encoder_dict['GS'], blocks)):
             #print(l)
-            h = layer(block, h)
-            h = F.normalize(h)
-
+            h = layer(block, h,)
+            #h= F.normalize(h)
             if l != len(self.encoder.encoder_dict['GS']) - 1: #and l != len(self.layers) - 2:
                 h = self.encoder.encoder_dict['BN'][l](h)
                 h = h.relu()
                 h = F.dropout(h, p=0.2, training=self.training)
-                h = self.encoder.encoder_dict['FC'][0](h)
-        h = self.encoder.encoder_dict['FC'][1](h)
+                h = F.normalize(h)
+                h = self.encoder.encoder_dict['FC'][l](h)
+
+        h = self.encoder.encoder_dict['BN'][l](h)
+        h = h.relu()
+        h = F.dropout(h, p=0.2, training=self.training)
         h = F.normalize(h)
+        h = self.encoder.encoder_dict['FC'][l](h)
+        #h = F.normalize(h)
         return h
 
     def inference(self, g, x, device, batch_size, num_workers):
@@ -324,17 +329,20 @@ class SAGE(nn.Module):
                 h = th.log(x[input_nodes]+1)#.to(device)
 
                 h = layer(block, h)
-                h = F.normalize(h)
-
+                #h = F.batch_norm(h)
                 if l != len(self.encoder.encoder_dict['GS']) -1:# and l != len(self.layers) - 2:
                     h = self.encoder.encoder_dict['BN'][l](h)
                     h = h.relu()
                     h = F.dropout(h, p=0.2, training=self.training)
-                    h =self.encoder.encoder_dict['FC'][0](h)
+                    h = F.normalize(h)
+                    h =self.encoder.encoder_dict['FC'][l](h)
                 elif l == len(self.encoder.encoder_dict['GS']) -1:
-                    h = self.encoder.encoder_dict['FC'][1](h)
+                    h = self.encoder.encoder_dict['BN'][l](h)
+                    h = h.relu()
+                    h = F.dropout(h, p=0.2, training=self.training)
+                    h= F.normalize(h)
+                    h = self.encoder.encoder_dict['FC'][l](h)
                     #h = F.normalize(h)
-
                 y[output_nodes] = h.cpu().detach()#.numpy()
             x = y
         return y
@@ -354,10 +362,10 @@ class Encoder(nn.Module):
             for _ in range(n_layers):
                 bns.append(nn.BatchNorm1d(n_hidden))
 
-            hidden = nn.Sequential(
+            hidden = [nn.Sequential(
                                 nn.Linear(n_hidden , n_hidden),
                                 nn.BatchNorm1d(n_hidden),
-                                nn.ReLU())
+                                nn.ReLU()) for x in range(n_layers )]
 
             latent = nn.Sequential(
                         nn.Linear(n_hidden , n_hidden), #if not supervised else nn.Linear(n_hidden , self.n_classes),
@@ -382,7 +390,7 @@ class Encoder(nn.Module):
 
             self.encoder_dict = nn.ModuleDict({'GS': layers, 
                                                 'BN':bns,
-                                                'FC': nn.ModuleList([hidden,latent]),
+                                                'FC': nn.ModuleList([h for h in hidden]+[latent]),
                                                 'CF':classifier})
 
 class Classifier(nn.Module):
@@ -419,7 +427,7 @@ class Classifier(nn.Module):
     def forward(self, x):
         if self.reverse_gradients:
             x = self.grl(x)
-        return self.classifier(x)
+        return self.classifier(F.normalize(x))
 
 
 class GradientReversalFunction(Function):

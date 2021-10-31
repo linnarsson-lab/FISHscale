@@ -585,7 +585,7 @@ class GraphData(pl.LightningDataModule):
             cycled = [0,1,2,0]
             for i in range(3):
                 plt.subplot(1,3,i+1)
-                plt.scatter(Y_umap_mixed[:,cycled[i]], Y_umap_mixed[:,cycled[i+1]], c=batch,  s=0.25, marker='.', linewidths=0, edgecolors=None)
+                plt.scatter(Y_umap_mixed[:,cycled[i]], Y_umap_mixed[:,cycled[i+1]], c=batch[some_mixed],  s=0.25, marker='.', linewidths=0, edgecolors=None)
                 plt.xlabel("Y"+str(cycled[i]))
                 plt.ylabel("Y"+str(cycled[i+1]))
             plt.tight_layout()
@@ -614,7 +614,7 @@ class GraphData(pl.LightningDataModule):
             ax.set_facecolor("black")
             width_cutoff = 1640 # um
             #plt.scatter(DS.df.x.values.compute()[GD.cells], DS.df.y.values.compute()[GD.cells], c=torch.argmax(pred.softmax(dim=-1),dim=-1).numpy(), s=0.2,marker='.',linewidths=0, edgecolors=None,cmap='rainbow')
-            plt.scatter(self.data.df.x.values.compute()[self.cells], self.data.df.y.values.compute()[self.cells], c=Y_umap, s=0.05,marker='.',linewidths=0, edgecolors=None)
+            plt.scatter(self.data.df.x.values.compute()[self.cells][some], self.data.df.y.values.compute()[self.cells][some], c=Y_umap, s=0.05,marker='.',linewidths=0, edgecolors=None)
             plt.xticks(fontsize=2)
             plt.yticks(fontsize=2)
             plt.axis('scaled')
@@ -632,7 +632,7 @@ class GraphData(pl.LightningDataModule):
             cycled = [0,1,2,0]
             for i in range(3):
                 plt.subplot(1,3,i+1)
-                plt.scatter(Y_umap[:,cycled[i]], Y_umap[:,cycled[i+1]], c=clusters_colors,  s=2, marker='.', linewidths=0, edgecolors=None,cmap='rainbow')
+                plt.scatter(Y_umap[:,cycled[i]], Y_umap[:,cycled[i+1]], c=clusters_colors[some],  s=2, marker='.', linewidths=0, edgecolors=None,cmap='rainbow')
                 plt.xlabel("Y"+str(cycled[i]))
                 plt.ylabel("Y"+str(cycled[i+1]))
                 plt.xticks(fontsize=2)
@@ -683,7 +683,7 @@ class GraphData(pl.LightningDataModule):
             for n in range(self.ClusterNames.shape[0]):
                 try:
                     ps = pred_labels.softmax(axis=-1).detach().numpy()[:,n][:,np.newaxis]
-                
+                    pdata= np.concatenate([merge,ps],axis=1)[ps[:,0]>0.1,:]               
                     scatter= hv.Scatter(pdata,
                                         kdims=['x','y'],vdims=[self.ClusterNames[n]]).opts(cmap='Viridis',
                                                                                             color=hv.dim(str(self.ClusterNames[n])),
