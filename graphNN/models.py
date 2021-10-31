@@ -281,7 +281,7 @@ class SAGE(nn.Module):
         for l, (layer, block) in enumerate(zip(self.encoder.encoder_dict['GS'], blocks)):
             #print(l)
             h = layer(block, h,)
-            #h= F.normalize(h)
+            h= F.normalize(h)
             if l != len(self.encoder.encoder_dict['GS']) - 1: #and l != len(self.layers) - 2:
                 h = self.encoder.encoder_dict['BN'][l](h)
                 h = h.relu()
@@ -289,9 +289,9 @@ class SAGE(nn.Module):
                 h = F.normalize(h)
                 h = self.encoder.encoder_dict['FC'][l](h)
 
-        h = self.encoder.encoder_dict['BN'][l](h)
+        ''' h = self.encoder.encoder_dict['BN'][l](h)
         h = h.relu()
-        h = F.dropout(h, p=0.2, training=self.training)
+        h = F.dropout(h, p=0.2, training=self.training)'''
         h = F.normalize(h)
         h = self.encoder.encoder_dict['FC'][l](h)
         #h = F.normalize(h)
