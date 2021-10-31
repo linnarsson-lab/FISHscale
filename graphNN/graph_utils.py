@@ -683,7 +683,8 @@ class GraphData(pl.LightningDataModule):
             for n in range(self.ClusterNames.shape[0]):
                 try:
                     ps = pred_labels.softmax(axis=-1).detach().numpy()[:,n][:,np.newaxis]
-                    scatter= hv.Scatter(np.concatenate([merge,ps],axis=1)[:,ps >0.5],
+                
+                    scatter= hv.Scatter(pdata,
                                         kdims=['x','y'],vdims=[self.ClusterNames[n]]).opts(cmap='Viridis',
                                                                                             color=hv.dim(str(self.ClusterNames[n])),
                                                                                             s=1,
