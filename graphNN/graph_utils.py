@@ -575,9 +575,8 @@ class GraphData(pl.LightningDataModule):
             mixed = np.concatenate([self.latent_unlabelled,self.latent_labelled])
             batch = np.concatenate([np.zeros(self.latent_unlabelled.shape[0]),np.ones(self.latent_labelled.shape[0])])
             some_mixed = np.random.choice(np.arange(mixed.shape[0]),int(random_n/2),replace=False)
-            print(some_mixed.shape,batch.shape)
-            umap_embedding = reducer.fit(mixed[some_mixed])
-            embedding = umap_embedding.transform(mixed)
+            embedding = reducer.fit_transform(mixed[some_mixed])
+            #embedding = umap_embedding.transform(mixed)
             Y_umap_mixed = embedding
             Y_umap_mixed -= np.min(Y_umap_mixed, axis=0)
             Y_umap_mixed /= np.max(Y_umap_mixed, axis=0)
@@ -593,9 +592,9 @@ class GraphData(pl.LightningDataModule):
             plt.savefig("{}/umap_supervised.png".format(self.folder), bbox_inches='tight', dpi=500)
 
             some = np.random.choice(np.arange(self.latent_unlabelled.shape[0]),random_n,replace=False)
-            #umap_embedding = reducer.fit_transform(self.latent_unlabelled[some])
-            umap_embedding = reducer.fit(self.latent_unlabelled[some])
-            embedding = umap_embedding.transform(self.latent_unlabelled)
+            embedding = reducer.fit_transform(self.latent_unlabelled[some])
+            #umap_embedding = reducer.fit(self.latent_unlabelled[some])
+            #embedding = umap_embedding.transform(self.latent_unlabelled)
             Y_umap = embedding
             Y_umap -= np.min(Y_umap, axis=0)
             Y_umap /= np.max(Y_umap, axis=0)
@@ -684,11 +683,7 @@ class GraphData(pl.LightningDataModule):
             for n in range(self.ClusterNames.shape[0]):
                 try:
                     ps = pred_labels.softmax(axis=-1).detach().numpy()[:,n][:,np.newaxis]
-<<<<<<< HEAD
-                    scatter= hv.Scatter(np.concatenate([merge,ps],axis=1),
-=======
                     scatter= hv.Scatter(np.concatenate([merge,ps],axis=1)[:,ps >0.5],
->>>>>>> 492a33b74052bd8f220926c1aec0ff659cb46467
                                         kdims=['x','y'],vdims=[self.ClusterNames[n]]).opts(cmap='Viridis',
                                                                                             color=hv.dim(str(self.ClusterNames[n])),
                                                                                             s=1,
@@ -709,16 +704,9 @@ class GraphData(pl.LightningDataModule):
             import scanpy as sc
             from sklearn.cluster import MiniBatchKMeans
             print('Running leiden clustering from scanpy...')
-<<<<<<< HEAD
-            adata = sc.AnnData(X=self.latent_unlabelled)
-            sc.pp.neighbors(adata, n_neighbors=100
-            )
-            sc.tl.leiden(adata, random_state=42)
-=======
             #adata = sc.AnnData(X=self.latent_unlabelled)
             #sc.pp.neighbors(adata, n_neighbors=15)
             #sc.tl.leiden(adata, random_state=42)
->>>>>>> 492a33b74052bd8f220926c1aec0ff659cb46467
             #self.data.add_dask_attribute('leiden',adata.obs['leiden'].values.tolist())
             kmeans = MiniBatchKMeans(n_clusters=50)
             self.clusters = kmeans.fit_predict(self.latent_unlabelled)
