@@ -286,13 +286,13 @@ class SAGE(nn.Module):
                 h = self.encoder.encoder_dict['BN'][l](h)
                 h = h.relu()
                 h = F.dropout(h, p=0.2, training=self.training)
-                h = F.normalize(h)
+                #h = F.normalize(h)
                 h = self.encoder.encoder_dict['FC'][l](h)
 
-        ''' h = self.encoder.encoder_dict['BN'][l](h)
+        '''h = self.encoder.encoder_dict['BN'][l](h)
         h = h.relu()
         h = F.dropout(h, p=0.2, training=self.training)'''
-        h = F.normalize(h)
+        #h = F.normalize(h)
         h = self.encoder.encoder_dict['FC'][l](h)
         #h = F.normalize(h)
         return h
