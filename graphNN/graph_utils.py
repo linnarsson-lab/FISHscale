@@ -668,7 +668,7 @@ class GraphData(pl.LightningDataModule):
                             aspect='equal',
                             fig_inches=10,
                             s=1,
-                            title=self.ClusterNames[cl],
+                            title=str(self.ClusterNames[cl]),
                             color=color_dic[cl])
                     except:
                         pass
@@ -681,21 +681,18 @@ class GraphData(pl.LightningDataModule):
             L = []
             print('Generating plots for molecule cluster probabilities...')
             for n in range(self.ClusterNames.shape[0]):
-                try:
-                    ps = pred_labels.softmax(axis=-1).detach().numpy()[:,n][:,np.newaxis]
-                    pdata= np.concatenate([merge,ps],axis=1)[ps[:,0]>0.1,:]               
-                    scatter= hv.Scatter(pdata,
-                                        kdims=['x','y'],vdims=[self.ClusterNames[n]]).opts(cmap='Viridis',
-                                                                                            color=hv.dim(str(self.ClusterNames[n])),
-                                                                                            s=1,
-                                                                                            aspect='equal',
-                                                                                            bgcolor='black',
-                                                                                            fig_inches=10,
-                                                                                            title=self.ClusterNames[n])
-                    L.append(scatter)
-                except:
-                    print('Skipping cluster: ', self.ClusterNames[n])
-                    pass
+                ps = pred_labels.softmax(axis=-1).detach().numpy()[:,n][:,np.newaxis]
+                pdata= np.concatenate([merge,ps],axis=1)[ps[:,0]>0.1,:]               
+                scatter= hv.Scatter(pdata,
+                                    kdims=['x','y'],vdims=[str(self.ClusterNames[n])]).opts(cmap='Viridis',
+                                                                                        color=hv.dim(str(self.ClusterNames[n])),
+                                                                                        s=1,
+                                                                                        aspect='equal',
+                                                                                        bgcolor='black',
+                                                                                        fig_inches=10,
+                                                                                        title=str(self.ClusterNames[n]))
+                L.append(scatter)
+
             layout = hv.Layout(L).cols(5)
             print('Saving cluster probabilities...')
             hv.save(layout,"{}/cluster_probabilities.png".format(self.folder))
