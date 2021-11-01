@@ -454,7 +454,7 @@ class GraphData(pl.LightningDataModule):
                     p = np.random.poisson(cl_i,size=(1,cl_i.shape[0]))[0,:]
                     p[p < 0] = 0
                     p = p/p.sum()
-                    random_molecules = np.random.choice(data.shape[0],size=25,p=p)
+                    random_molecules = np.random.choice(data.shape[0],size=50,p=p)
                     dot = np.zeros_like(cl_i)
                     for x in random_molecules:
                         dot[x] = dot[x]+1
@@ -547,7 +547,7 @@ class GraphData(pl.LightningDataModule):
                 #np.save(self.folder+'/latent_labelled',self.latent_labelled)
             self.prediction_unlabelled = self.model.module.encoder.encoder_dict['CF'](latent_unlabelled).detach().numpy()
             np.save(self.folder+'/labels_unlabelled',self.prediction_unlabelled.argsort(axis=-1)[:,-1].astype('str'))
-            np.save(self.folder+'/probabilities_unlabelled',self.prediction_unlabelled)
+            #np.save(self.folder+'/probabilities_unlabelled',self.prediction_unlabelled)
 
         self.latent_unlabelled = latent_unlabelled.detach().numpy()
         np.save(self.folder+'/latent_unlabelled',latent_unlabelled)
