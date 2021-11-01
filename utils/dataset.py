@@ -1,13 +1,13 @@
 from multiprocessing import cpu_count
 from os import path, makedirs, environ
 environ['NUMEXPR_MAX_THREADS'] = str(cpu_count())
-
 from typing import Union, Optional
 import pandas as pd
 try:
     from FISHscale.visualization.primitiveVis_open3dv2 import Window
 except ModuleNotFoundError as e:
-    print(f'Please install "PyQt5" for data visualization. {e}')  
+    print(f'Please install "PyQt5" for data visualization. {e}') 
+from FISHscale.utils.inside_polygon import close_polygon 
 from FISHscale.utils.hex_regionalization import Regionalize
 from FISHscale.utils.fast_iteration import Iteration, MultiIteration
 from FISHscale.utils.colors import ManyColors
