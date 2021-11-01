@@ -133,7 +133,7 @@ class SAGELightning(LightningModule):
             kappa = 2/(1+10**(-1*((1*self.kappa)/2000)))-1
             self.kappa += 1
             loss = loss*kappa
-            loss = classifier_loss + loss + bone_fight_loss + kappa*(kappa*classifier_domain_loss + kappa*supervised_loss) #+ semantic_loss.detach()
+            loss = classifier_loss + loss + kappa*(kappa*bone_fight_loss+kappa*classifier_domain_loss + kappa*supervised_loss) #+ semantic_loss.detach()
             
             opt.zero_grad()
             self.manual_backward(loss,retain_graph=True)
@@ -294,7 +294,7 @@ class SAGE(nn.Module):
         h = F.dropout(h, p=0.2, training=self.training)'''
         #h = F.normalize(h)
         h = self.encoder.encoder_dict['FC'][l](h)
-        #h = F.normalize(h)
+        h = F.normalize(h)
         return h
 
     def inference(self, g, x, device, batch_size, num_workers):
@@ -342,7 +342,7 @@ class SAGE(nn.Module):
                     h = F.dropout(h, p=0.2, training=self.training)
                     h= F.normalize(h)'''
                     h = self.encoder.encoder_dict['FC'][l](h)
-                    #h = F.normalize(h)
+                    h = F.normalize(h)
                 y[output_nodes] = h.cpu().detach()#.numpy()
             x = y
         return y
@@ -427,7 +427,7 @@ class Classifier(nn.Module):
     def forward(self, x):
         if self.reverse_gradients:
             x = self.grl(x)
-        return self.classifier(F.normalize(x))
+        return self.classifier(x)
 
 
 class GradientReversalFunction(Function):
