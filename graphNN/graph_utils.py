@@ -667,7 +667,7 @@ class GraphData(pl.LightningDataModule):
                             bgcolor='black',
                             aspect='equal',
                             fig_inches=10,
-                            s=0.01,
+                            s=1,
                             title=str(self.ClusterNames[cl]),
                             color=color_dic[cl])
                     except:
@@ -686,7 +686,7 @@ class GraphData(pl.LightningDataModule):
                 scatter= hv.Scatter(pdata,
                                     kdims=['x','y'],vdims=[str(self.ClusterNames[n])]).opts(cmap='Viridis',
                                                                                         color=hv.dim(str(self.ClusterNames[n])),
-                                                                                        s=0.01,
+                                                                                        s=0.5,
                                                                                         aspect='equal',
                                                                                         bgcolor='black',
                                                                                         fig_inches=10,
