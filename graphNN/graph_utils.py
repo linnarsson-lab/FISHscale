@@ -173,7 +173,7 @@ class GraphData(pl.LightningDataModule):
         if type(self.model) == type(None):
             self.model = SAGELightning(in_feats=self.data.unique_genes.shape[0], 
                                         n_hidden=24,
-                                        n_layers=2,
+                                        n_layers=len(self.ngh_sizes),
                                         n_classes=self.ref_celltypes.shape[1],
                                         lr=self.lr,
                                         supervised=self.supervised,
@@ -667,7 +667,7 @@ class GraphData(pl.LightningDataModule):
                             bgcolor='black',
                             aspect='equal',
                             fig_inches=10,
-                            s=0.01,
+                            s=1,
                             title=str(self.ClusterNames[cl]),
                             color=color_dic[cl])
                     except:
@@ -686,7 +686,7 @@ class GraphData(pl.LightningDataModule):
                 scatter= hv.Scatter(pdata,
                                     kdims=['x','y'],vdims=[str(self.ClusterNames[n])]).opts(cmap='Viridis',
                                                                                         color=hv.dim(str(self.ClusterNames[n])),
-                                                                                        s=0.01,
+                                                                                        s=1,
                                                                                         aspect='equal',
                                                                                         bgcolor='black',
                                                                                         fig_inches=10,

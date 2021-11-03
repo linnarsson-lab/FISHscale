@@ -287,7 +287,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
                 return data, dblabel, centroid
 
         def get_cells(partition):
-            cl_molecules_xy = partition.loc[:,['x','y','g','DBscan','Labels']]
+            cl_molecules_xy = partition.loc[:,['x','y','g','DBscan',label_column]]
             clr= cl_molecules_xy.groupby('DBscan')#.applymap(get_counts)
             clusters, dblabel, centroids, data = [],[],[],[]
             cl = cl_molecules_xy[label_column].values[0]
@@ -319,8 +319,11 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
             loompy.create(file,matrices.values,row_attrs,col_attrs)
             #return matrices, labels, centroids
 
+        print('Running DBscan by: {}'.format(label_column))
         result = self.dask_attrs[label_column].groupby(label_column).apply(segmentation, meta=object).compute()
+        print('DBscan results added to dask attributes.')
         self.dask_attrs[label_column] = self.dask_attrs[label_column].merge(pd.DataFrame({'DBscan':np.concatenate(result)}))
+        print('Generating gene by cell matrix as loom file.')
         gene_by_cell_loom(self.dask_attrs[label_column])
                     
 

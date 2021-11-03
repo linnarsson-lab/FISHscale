@@ -118,6 +118,7 @@ class SAGELightning(LightningModule):
 
             # Bonefight regularization of cell types
             bone_fight_loss = -F.cosine_similarity(probabilities_unlab @ self.reference.T.to(self.device), bu,dim=0).mean()
+            bone_fight_loss += -F.cosine_similarity(probabilities_unlab @ self.reference.T.to(self.device), bu,dim=1).mean()
             '''q = th.ones(probabilities_unlab.shape[0])/probabilities_unlab.shape[0]
             p = th.log(self.p.T @ probabilities_unlab.T)
             kl_loss = self.kl(p,q)
