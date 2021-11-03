@@ -173,7 +173,7 @@ class GraphData(pl.LightningDataModule):
         if type(self.model) == type(None):
             self.model = SAGELightning(in_feats=self.data.unique_genes.shape[0], 
                                         n_hidden=24,
-                                        n_layers=2,
+                                        n_layers=len(self.ngh_sizes),
                                         n_classes=self.ref_celltypes.shape[1],
                                         lr=self.lr,
                                         supervised=self.supervised,
@@ -667,7 +667,7 @@ class GraphData(pl.LightningDataModule):
                             bgcolor='black',
                             aspect='equal',
                             fig_inches=10,
-                            s=1,
+                            s=0.1,
                             title=str(self.ClusterNames[cl]),
                             color=color_dic[cl])
                     except:
@@ -686,14 +686,14 @@ class GraphData(pl.LightningDataModule):
                 scatter= hv.Scatter(pdata,
                                     kdims=['x','y'],vdims=[str(self.ClusterNames[n])]).opts(cmap='Viridis',
                                                                                         color=hv.dim(str(self.ClusterNames[n])),
-                                                                                        s=0.5,
+                                                                                        s=1,
                                                                                         aspect='equal',
                                                                                         bgcolor='black',
-                                                                                        fig_inches=10,
+                                                                                        fig_inches=50,
                                                                                         title=str(self.ClusterNames[n]))
                 L.append(scatter)
 
-            layout = hv.Layout(L).cols(5)
+            layout = hv.Layout(L).cols(2)
             print('Saving cluster probabilities...')
             hv.save(layout,"{}/cluster_probabilities.png".format(self.folder))
             print('Plots saved.')
