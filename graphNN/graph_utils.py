@@ -86,9 +86,9 @@ class GraphData(pl.LightningDataModule):
         model=None, # GraphSAGE model
         analysis_name:str='',
         cells=None, # Array with cell_ids of shape (Cells)
-        ngh_size = 40,
+        ngh_size = 100,
         minimum_nodes_connected = 5,
-        ngh_sizes = [20, 10],
+        ngh_sizes = [10, 20],
         train_p = 0.25,
         batch_size= 512,
         num_workers=0,
@@ -667,7 +667,7 @@ class GraphData(pl.LightningDataModule):
                             bgcolor='black',
                             aspect='equal',
                             fig_inches=10,
-                            s=1,
+                            s=0.1,
                             title=str(self.ClusterNames[cl]),
                             color=color_dic[cl])
                     except:
@@ -680,6 +680,7 @@ class GraphData(pl.LightningDataModule):
             merge = np.concatenate([molecules_x[:,np.newaxis],molecules_y[:,np.newaxis]],axis=1)
             L = []
             print('Generating plots for molecule cluster probabilities...')
+            os.mkdir('{}/ClusterProbabilities'.format(self.folder))
             for n in range(self.ClusterNames.shape[0]):
                 ps = pred_labels.softmax(axis=-1).detach().numpy()[:,n][:,np.newaxis]
                 pdata= np.concatenate([merge,ps],axis=1)#[ps[:,0]>0.1,:]               
@@ -689,13 +690,10 @@ class GraphData(pl.LightningDataModule):
                                                                                         s=1,
                                                                                         aspect='equal',
                                                                                         bgcolor='black',
-                                                                                        fig_inches=10,
+                                                                                        fig_inches=50,
                                                                                         title=str(self.ClusterNames[n]))
-                L.append(scatter)
 
-            layout = hv.Layout(L).cols(5)
-            print('Saving cluster probabilities...')
-            hv.save(layout,"{}/cluster_probabilities.png".format(self.folder))
+                hv.save(scatter,"{}/ClusterProbabilities/{}.png".format(self.folder,str(self.ClusterNames[n])))
             print('Plots saved.')
 
         else:
