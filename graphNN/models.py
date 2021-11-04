@@ -130,7 +130,7 @@ class SAGELightning(LightningModule):
             kappa = 2/(1+10**(-1*((1*self.kappa)/2000)))-1
             self.kappa += 1
             loss = loss*kappa
-            loss = classifier_loss + loss + kappa*(kappa*bone_fight_loss+kappa*classifier_domain_loss + kappa*supervised_loss) #+ semantic_loss.detach()
+            loss = bone_fight_loss+ loss + kappa*(classifier_loss*kappa+kappa*classifier_domain_loss + kappa*supervised_loss) #+ semantic_loss.detach()
             
             opt.zero_grad()
             self.manual_backward(loss,retain_graph=True)
