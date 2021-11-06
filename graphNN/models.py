@@ -129,9 +129,9 @@ class SAGELightning(LightningModule):
             # graphsage task
             kappa = 2/(1+10**(-1*((1*self.kappa)/2000)))-1
             self.kappa += 1
-            loss = loss*kappa
-            loss = bone_fight_loss+ loss + kappa*(classifier_loss*kappa+kappa*classifier_domain_loss + kappa*supervised_loss) #+ semantic_loss.detach()
-            
+            #loss = loss*kappa
+            #loss = bone_fight_loss + loss +classifier_loss+ kappa*(kappa*classifier_domain_loss + kappa*supervised_loss) #+ semantic_loss.detach()
+            loss = bone_fight_loss + loss +classifier_loss+ classifier_domain_loss + supervised_loss #+ semantic_loss.detach()
             opt.zero_grad()
             self.manual_backward(loss,retain_graph=True)
             opt.step()
