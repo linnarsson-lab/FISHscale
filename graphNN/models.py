@@ -61,7 +61,7 @@ class SAGELightning(LightningModule):
         self.kappa = kappa
         self.reference=th.tensor(reference,dtype=th.float32)
         if self.supervised:
-            self.automatic_optimization = False
+            #self.automatic_optimization = False
             #self.sl = SemanticLoss(n_hidden,n_classes,ncells=Ncells,device=device)
             self.train_acc = torchmetrics.Accuracy()
             p = th.tensor(Ncells*reference.sum(axis=0),dtype=th.float32,device=self.device)
@@ -71,7 +71,7 @@ class SAGELightning(LightningModule):
 
     def training_step(self, batch, batch_idx):
         if self.supervised:
-            opt, d_opt = self.optimizers()
+            opt = self.optimizers()
         batch1 = batch['unlabelled']
         _, pos_graph, neg_graph, mfgs = batch1
         mfgs = [mfg.int() for mfg in mfgs]
@@ -133,9 +133,9 @@ class SAGELightning(LightningModule):
             #loss = loss*kappa
             #loss = bone_fight_loss + loss +classifier_loss+ kappa*(kappa*classifier_domain_loss + kappa*supervised_loss) #+ semantic_loss.detach()
             loss = bone_fight_loss + loss + classifier_loss+ classifier_domain_loss + supervised_loss #+ semantic_loss.detach()
-            opt.zero_grad()
+            '''opt.zero_grad()
             self.manual_backward(loss,retain_graph=True)
-            opt.step()
+            opt.step()'''
 
         self.log('train_loss', loss, prog_bar=True, on_step=True, on_epoch=True)
         return loss
@@ -149,11 +149,10 @@ class SAGELightning(LightningModule):
 
     def configure_optimizers(self):
         optimizer = th.optim.Adam(self.module.parameters(), lr=self.lr)
-        if self.supervised:
+        '''if self.supervised:
             d_opt = th.optim.Adam(self.module.domain_adaptation.parameters(), lr=1e-3)
-            return [optimizer, d_opt]
-        else:
-            return optimizer
+            return [optimizer, d_opt]'''
+        return optimizer
 
     def loss_discriminator(self, latent_tensors, 
         predict_true_class: bool = True,
