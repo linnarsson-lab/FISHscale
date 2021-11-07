@@ -486,6 +486,7 @@ class GraphData(pl.LightningDataModule):
                     v = self.exclude_clusters[k]
                     region_filt = np.isin(ds.ca[k], v, invert=True)
                     self.ClusterNames = ds.ca[k][region_filt]
+                    print('Selected clusters: {}'.format(self.ClusterNames))
                 except:
                     self.ClusterNames = ds.ca[k]
 
