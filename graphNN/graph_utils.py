@@ -101,6 +101,7 @@ class GraphData(pl.LightningDataModule):
         distance_factor:int=4,
         device='cpu',
         lr=1e-3,
+        aggregate=1
         ):
         """
         GraphData prepared the FISHscale dataset to be analysed in a supervised
@@ -167,6 +168,7 @@ class GraphData(pl.LightningDataModule):
         self.ngh_size = ngh_size
         self.lr = lr
         self.subsample = subsample
+        self.aggregate = aggregate
 
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.prepare_reference()
@@ -201,11 +203,29 @@ class GraphData(pl.LightningDataModule):
             d = self.molecules_df()
             edges = self.buildGraph(self.distance_threshold)
             self.g= dgl.graph((edges[0,:],edges[1,:]))
+            self.g = dgl.to_bidirected(self.g)
             self.g.ndata['gene'] = th.tensor(d.toarray(), dtype=th.float32)
             graph_labels = {"UnsupervisedDGL": th.tensor([0])}
             if self.smooth:
                 #self.g.update_all(fn.u_add_v('gene','gene','a'),fn.sum('a','gene'))
-                self.g.update_all(fn.copy_u('gene', 'm'), fn.sum('m', 'gene'))
+                sampler = dgl.dataloading.MultiLayerFullNeighborSampler(1)
+                dataloader = dgl.dataloading.NodeDataLoader(
+                    self.g,
+                    torch.arange(self.g.num_nodes()),#.to(g.device),
+                    sampler,
+                    batch_size=1,
+                    shuffle=False,
+                    drop_last=False,
+                    num_workers=1)
+
+                y = torch.zeros_like(self.g.ndata['gene'])
+                print('Smoothing graph...')
+                for _,b,mfgs in tqdm(dataloader):
+                    y[b,:] = mfgs[0].ndata['gene']['_N'].sum(axis=0)
+                self.g.ndata['gene'] = y
+
+
+
             #self.g.update_all(fn.copy_u('gene', 'g2'), fn.sum('g2', 'gene'))
             dgl.data.utils.save_graphs(dgluns, [self.g], graph_labels)
             #self.g = self.g.to(self.device)
@@ -219,6 +239,7 @@ class GraphData(pl.LightningDataModule):
             if not os.path.isfile(dglsup):
                 molecules_labelled, edges_labelled, labels = self.cell_types_to_graph(smooth=self.smooth)
                 self.g_lab= dgl.graph((edges_labelled[0,:],edges_labelled[1,:]))
+                self.g_lab = dgl.to_bidirected(self.g_lab)
                 self.g_lab.ndata['gene'] = th.tensor(molecules_labelled.toarray(),dtype=th.float32)
                 self.g_lab.ndata['label'] = th.tensor(labels, dtype=th.long)
                 graph_labels = {"SupervisedDGL": th.tensor([0])}
