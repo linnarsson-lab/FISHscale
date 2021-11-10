@@ -502,6 +502,7 @@ class GraphData(pl.LightningDataModule):
                 ref = ref[order]
                 ref = ref[:,region_filt]
                 self.ref_celltypes = ref
+                print('Reference dataset shape: {}'.format(self.ref_celltypes.shape))
         else:
             self.supervised = False
             self.ref_celltypes = np.array([[0],[0]])
