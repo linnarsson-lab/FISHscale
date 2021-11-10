@@ -208,7 +208,11 @@ class GraphData(pl.LightningDataModule):
             graph_labels = {"UnsupervisedDGL": th.tensor([0])}
             if self.smooth:
                 #self.g.update_all(fn.u_add_v('gene','gene','a'),fn.sum('a','gene'))
-                sampler = dgl.dataloading.MultiLayerFullNeighborSampler(1)
+                self.g.ndata['zero'] = torch.zeros_like(self.g.ndata['gene'])
+                self.g.update_all(fn.u_add_v('gene','zero','e'),fn.sum('e','zero'))
+                self.g.ndata['x'] = self.g.ndata['zero'] + self.g.ndata['gene']
+                del self.g.ndata['zero']
+                '''sampler = dgl.dataloading.MultiLayerFullNeighborSampler(1)
                 dataloader = dgl.dataloading.NodeDataLoader(
                     self.g,
                     torch.arange(self.g.num_nodes()),#.to(g.device),
@@ -222,7 +226,7 @@ class GraphData(pl.LightningDataModule):
                 print('Smoothing graph...')
                 for _,b,mfgs in tqdm(dataloader):
                     y[b,:] = mfgs[0].ndata['gene']['_N'].sum(axis=0)
-                self.g.ndata['gene'] = y
+                self.g.ndata['gene'] = y'''
 
 
 
