@@ -203,7 +203,7 @@ class GraphData(pl.LightningDataModule):
             d = self.molecules_df()
             edges = self.buildGraph(self.distance_threshold)
             self.g= dgl.graph((edges[0,:],edges[1,:]))
-            self.g = dgl.to_bidirected(self.g)
+            #self.g = dgl.to_bidirected(self.g)
             self.g.ndata['gene'] = th.tensor(d.toarray(), dtype=th.float32)
             graph_labels = {"UnsupervisedDGL": th.tensor([0])}
             if self.smooth:
