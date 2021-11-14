@@ -49,6 +49,7 @@ class SAGELightning(LightningModule):
                  kappa=0,
                  Ncells=0,
                  reference=0,
+                 smooth=False,
                  device='cpu'
                  ):
         super().__init__()
@@ -60,6 +61,7 @@ class SAGELightning(LightningModule):
         self.loss_fcn = CrossEntropyLoss()
         self.kappa = kappa
         self.reference=th.tensor(reference,dtype=th.float32)
+        self.smooth = smooth
         if self.supervised:
             #self.automatic_optimization = False
             #self.sl = SemanticLoss(n_hidden,n_classes,ncells=Ncells,device=device)
@@ -79,10 +81,14 @@ class SAGELightning(LightningModule):
         #neg_graph = neg_graph.to(self.device)
         batch_inputs_u = mfgs[0].srcdata['gene']
         batch_pred_unlab = self.module(mfgs, batch_inputs_u)
-        bu = batch_inputs_u[pos_graph.nodes()]
+        #bu = batch_inputs_u[pos_graph.nodes()]
         loss,pos, neg = self.loss_fcn(batch_pred_unlab, pos_graph, neg_graph) #* 5
         
         if self.supervised:
+            #bu = batch_inputs_u[pos_graph.nodes()]
+            if self.smooth == False:
+                bu = mfgs[0].srcdata['ngh'][pos_graph.nodes()]
+
             batch2 = batch['labelled']
             _, pos_graph, neg_graph, mfgs = batch2
             mfgs = [mfg.int() for mfg in mfgs]
@@ -98,7 +104,10 @@ class SAGELightning(LightningModule):
             labels_pred = self.module.encoder.encoder_dict['CF'](batch_pred_lab)
             probabilities_lab = F.softmax(labels_pred,dim=-1)
             cce = th.nn.CrossEntropyLoss()
-            classifier_loss = cce(labels_pred,batch_labels) #* 0.05
+            classifier_loss = cce(labels_pred,batch_labels) #
+            #classifier_loss = -F.cosine_similarity(probabilities_lab @ self.reference.T.to(self.device), bl,dim=0).mean()
+            #classifier_loss += -F.cosine_similarity(probabilities_lab @ self.reference.T.to(self.device), bl,dim=1).mean()*0.5
+
             self.train_acc(labels_pred.argsort(axis=-1)[:,-1],batch_labels)
             self.log('Classifier Loss',classifier_loss)
             self.log('train_acc', self.train_acc, prog_bar=True, on_step=True)
@@ -135,7 +144,7 @@ class SAGELightning(LightningModule):
             self.kappa += 1
             #loss = loss*kappa
             #loss = bone_fight_loss + loss +classifier_loss+ kappa*(kappa*classifier_domain_loss + kappa*supervised_loss) #+ semantic_loss.detach()
-            loss = bone_fight_loss + loss + classifier_loss+ classifier_domain_loss + supervised_loss #+ semantic_loss.detach()
+            loss = bone_fight_loss + loss + classifier_loss+ supervised_loss + classifier_domain_loss  #+ semantic_loss.detach()
             '''opt.zero_grad()
             self.manual_backward(loss,retain_graph=True)
             opt.step()'''
