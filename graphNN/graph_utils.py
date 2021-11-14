@@ -181,7 +181,8 @@ class GraphData(pl.LightningDataModule):
                                         supervised=self.supervised,
                                         Ncells=self.ncells*self.ref_celltypes.sum(axis=0),
                                         reference=self.ref_celltypes,
-                                        device=self.device.type
+                                        device=self.device.type,
+                                        smooth=self.smooth
                                     )
         self.model.to(self.device)
         print('model is in: ', self.model.device)
@@ -207,28 +208,10 @@ class GraphData(pl.LightningDataModule):
             self.g.ndata['gene'] = th.tensor(d.toarray(), dtype=th.float32)
             graph_labels = {"UnsupervisedDGL": th.tensor([0])}
             if self.smooth:
-                #self.g.update_all(fn.u_add_v('gene','gene','a'),fn.sum('a','gene'))
                 self.g.ndata['zero'] = torch.zeros_like(self.g.ndata['gene'])
                 self.g.update_all(fn.u_add_v('gene','zero','e'),fn.sum('e','zero'))
                 self.g.ndata['gene'] = self.g.ndata['zero'] + self.g.ndata['gene']
                 del self.g.ndata['zero']
-                '''sampler = dgl.dataloading.MultiLayerFullNeighborSampler(1)
-                dataloader = dgl.dataloading.NodeDataLoader(
-                    self.g,
-                    torch.arange(self.g.num_nodes()),#.to(g.device),
-                    sampler,
-                    batch_size=1,
-                    shuffle=False,
-                    drop_last=False,
-                    num_workers=1)
-
-                y = torch.zeros_like(self.g.ndata['gene'])
-                print('Smoothing graph...')
-                for _,b,mfgs in tqdm(dataloader):
-                    y[b,:] = mfgs[0].ndata['gene']['_N'].sum(axis=0)
-                self.g.ndata['gene'] = y'''
-
-
 
             #self.g.update_all(fn.copy_u('gene', 'g2'), fn.sum('g2', 'gene'))
             dgl.data.utils.save_graphs(dgluns, [self.g], graph_labels)
@@ -239,6 +222,12 @@ class GraphData(pl.LightningDataModule):
             #self.g = self.g.to(self.device)
 
         if self.model.supervised:
+            self.g.ndata['zero'] = torch.zeros_like(self.g.ndata['gene'])
+            self.g.update_all(fn.u_add_v('gene','zero','e'),fn.sum('e','zero'))
+            self.g.ndata['gene'] = self.g.ndata['gene']
+            self.g.ndata['ngh'] = self.g.ndata['zero'] + self.g.ndata['gene']
+            del self.g.ndata['zero']
+
             dglsup =self.save_to+'graph/{}Supervised_smooth{}.graph'.format(self.cells.shape[0],self.smooth)
             if not os.path.isfile(dglsup):
                 molecules_labelled, edges_labelled, labels = self.cell_types_to_graph(smooth=self.smooth)
