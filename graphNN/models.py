@@ -110,18 +110,21 @@ class SAGELightning(LightningModule):
             #Semantic Loss
             probabilities_unlab = F.softmax(self.module.encoder.encoder_dict['CF'](batch_pred_unlab),dim=-1)
             labels_unlab = probabilities_unlab.argsort(axis=-1)[:,-1]
-            '''self.sl.semantic_loss(pseudo_latent=batch_pred_unlab, 
-                        pseudo_labels=labels_unlab ,
-                        true_latent=batch_pred_lab,
-                        true_labels=labels_pred.argsort(axis=-1)[:,-1],
-                        )'''
+            '''
+            self.sl.semantic_loss(pseudo_latent=batch_pred_unlab, 
+                                pseudo_labels=labels_unlab ,
+                                true_latent=batch_pred_lab,
+                                true_labels=labels_pred.argsort(axis=-1)[:,-1],
+                                )
+            '''
 
             # Bonefight regularization of cell types
             bone_fight_loss = -F.cosine_similarity(probabilities_unlab @ self.reference.T.to(self.device), bu,dim=0).mean()
             bone_fight_loss += -F.cosine_similarity(probabilities_unlab @ self.reference.T.to(self.device), bu,dim=1).mean()*0.5
-            '''q = th.ones(probabilities_unlab.shape[0],device=self.device)/probabilities_unlab.shape[0]
+            
+            '''q = th.ones(probabilities_unlab.shape[1],device=self.device)/probabilities_unlab.shape[1]
             #print(q.shape, probabilities_unlab.shape)
-            p = th.log(q @ probabilities_unlab)
+            p = th.log(probabilities_unlab.sum(axis=0)/probabilities_unlab.shape[0])
             kl_loss = self.kl(p,self.p.to(self.device))
             bone_fight_loss = bone_fight_loss + kl_loss'''
 
