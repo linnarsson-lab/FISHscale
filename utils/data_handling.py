@@ -510,8 +510,3 @@ class DataLoader(DataLoader_base):
         This operation does NOT survive reloading the data.
         """
         self.df.y = -(self.df.y - self.xy_center[1]) + self.xy_center[1]
-    
-   
-        
-        
-        
