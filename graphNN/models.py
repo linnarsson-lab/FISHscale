@@ -50,12 +50,13 @@ class SAGELightning(LightningModule):
                  Ncells=0,
                  reference=0,
                  smooth=False,
-                 device='cpu'
+                 device='cpu',
+                 aggregator='attentional',
                  ):
         super().__init__()
 
         self.save_hyperparameters()
-        self.module = SAGE(in_feats, n_hidden, n_classes, n_layers, activation, dropout, supervised)
+        self.module = SAGE(in_feats, n_hidden, n_classes, n_layers, activation, dropout, supervised,aggregator)
         self.lr = lr
         self.supervised= supervised
         self.loss_fcn = CrossEntropyLoss()
@@ -203,7 +204,8 @@ class SAGE(nn.Module):
                 n_layers, 
                 activation, 
                 dropout,
-                supervised):
+                supervised,
+                aggregator):
         super().__init__()
         self.n_layers = n_layers
         self.n_hidden = n_hidden
@@ -216,14 +218,17 @@ class SAGE(nn.Module):
                                                 softmax=False,
                                                 reverse_gradients=True)
 
-        self.encoder = Encoder(in_feats,n_hidden,n_classes,n_layers,supervised)
+        self.encoder = Encoder(in_feats,
+                                n_hidden,
+                                n_classes,
+                                n_layers,
+                                supervised,
+                                aggregator)
  
     def forward(self, blocks, x):
         h = th.log(x+1)   
         for l, (layer, block) in enumerate(zip(self.encoder.encoder_dict['GS'], blocks)):
-            #print(l)
-            h = layer(block, h,)
-            #h = F.normalize(h)
+            h = layer(block, h,).flatten(1)
             h = self.encoder.encoder_dict['FC'][l](h)
 
         return h
@@ -258,10 +263,8 @@ class SAGE(nn.Module):
                 block = blocks[0]
                 block = block.int()
                 h = th.log(x[input_nodes]+1)#.to(device)
-
-                h = layer(block, h)
+                h = layer(block, h).flatten(1)
                 h = self.encoder.encoder_dict['FC'][l](h)
-                #h = F.normalize(h)
                 y[output_nodes] = h.cpu().detach()#.numpy()
             x = y
         return y
@@ -340,28 +343,60 @@ class Encoder(nn.Module):
             n_classes,
             n_layers,
             supervised,
+            aggregator,
             ):
             super().__init__()
         
+
             bns = nn.ModuleList()
             for _ in range(n_layers):
                 bns.append(nn.BatchNorm1d(n_hidden))
 
             hidden = [nn.Sequential(
-                                nn.Linear(n_hidden , n_hidden),
+                                nn.Linear(n_hidden , n_hidden) if aggregator !='attentional' else nn.Linear(n_hidden*8, n_hidden),
                                 nn.BatchNorm1d(n_hidden),
-                                nn.ReLU()) for x in range(n_layers )]
+                                nn.ReLU()) for x in range(1,n_layers )]
 
             latent = nn.Sequential(
-                        nn.Linear(n_hidden , n_hidden), #if not supervised else nn.Linear(n_hidden , self.n_classes),
+                        nn.Linear(n_hidden , n_hidden) if aggregator !='attentional' else nn.Linear(n_hidden*4, n_hidden), #if not supervised else nn.Linear(n_hidden , self.n_classes),
                         nn.BatchNorm1d(n_hidden), #if not supervised else  nn.BatchNorm1d(self.n_classes),
                         #nn.Softmax()
                         )
+
             layers = nn.ModuleList()
             if n_layers > 1:
-                layers.append(dglnn.SAGEConv(in_feats, n_hidden, 'pool',feat_drop=0.2,activation=F.relu,norm=F.normalize))
+                if aggregator == 'attentional':
+                    layers.append(dglnn.GATConv(in_feats, 
+                                                n_hidden, 
+                                                num_heads=8,
+                                                feat_drop=0.2,
+                                                activation=F.relu,
+                                                allow_zero_in_degree=True))
+
+                else:
+                    layers.append(dglnn.SAGEConv(in_feats, 
+                                                n_hidden, 
+                                                aggregator_type=aggregator,
+                                                feat_drop=0.2,
+                                                activation=F.relu,
+                                                norm=F.normalize))
+
                 for i in range(1,n_layers):
-                    layers.append(dglnn.SAGEConv(n_hidden, n_hidden, 'pool',feat_drop=0.2,activation=F.relu,norm=F.normalize))
+                    if aggregator == 'attentional':
+                        layers.append(dglnn.GATConv(n_hidden, 
+                                                    n_hidden, 
+                                                    num_heads=4, 
+                                                    feat_drop=0.2,
+                                                    activation=F.relu,
+                                                    allow_zero_in_degree=True))
+
+                    else:
+                        layers.append(dglnn.SAGEConv(n_hidden, 
+                                                        n_hidden, 
+                                                        aggregator_type=aggregator,
+                                                        feat_drop=0.2,
+                                                        activation=F.relu,
+                                                        norm=F.normalize))
             else:
                 layers.append(dglnn.SAGEConv(in_feats, n_classes, 'pool',feat_drop=0.2,activation=F.relu,norm=F.normalize))
 
