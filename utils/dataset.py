@@ -290,23 +290,28 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
             cl_molecules_xy = partition.loc[:,['x','y','g','DBscan',label_column]]
             clr= cl_molecules_xy.groupby('DBscan')#.applymap(get_counts)
             clusters, dblabel, centroids, data = [],[],[],[]
-            cl = cl_molecules_xy[label_column].values[0]
-            for cell in clr:
-                try:
-                    d, label, centroid = get_counts(cell)
-                    dblabel.append(label)
-                    centroids.append(centroid)
-                    data.append(d)
-                except:
-                    pass
-            data = pd.concat(data,axis=1)
-            return data, dblabel, centroids
+            try:
+                cl = cl_molecules_xy[label_column].values[0]
+                for cell in clr:
+                    try:
+                        d, label, centroid = get_counts(cell)
+                        dblabel.append(label)
+                        centroids.append(centroid)
+                        data.append(d)
+                    except:
+                        pass
+                data = pd.concat(data,axis=1)
+                return data, dblabel, centroids
+            except:
+                return None, [], []
+            
 
         def gene_by_cell_loom(dask_attrs):
             matrices, labels, centroids = [],[],[]
             for p in trange(self.dask_attrs[label_column].npartitions):
                 matrix, label, centroid = get_cells(dask_attrs.partitions[p].compute())
-                matrices.append(matrix)
+                if type(matrix) != type(None):
+                    matrices.append(matrix)
                 labels += label
                 centroids += centroid
             matrices = pd.concat(matrices,axis=1)
