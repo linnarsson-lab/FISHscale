@@ -111,7 +111,10 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Spatial
             z_offset (float, optional): Offset in Z axis. Defaults to 0.
             polygon (np.ndarray, optional): A numpy array with shape (X,2) with
                 a polygon that can be used to select points. If the polygon is
-                changed the dataset needs to be re-parsed. Defaults to None.
+                changed the dataset needs to be re-parsed. If multiple regions 
+                need to be selected, a single array containing the points of
+                all polygons can be passed as long as each one is closed (First
+                and last point are identical). Defaults to None.
             reparse (bool, optional): True if you want to reparse the data,
                 if False, it will repeat the parsing. Parsing will apply the
                 offset. Defaults to False.
@@ -366,7 +369,11 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
             polygon ([np.ndarray, list], optional): Array or list of numpy
                 arrays with shape (X,2) to select points. If a single polygon 
                 is given this is used for all datasets. If the polygon is
-                changed the dataset needs to be re-parsed. Defaults to None.
+                changed the dataset needs to be re-parsed. If multiple regions 
+                in a single dataset need to be selected, a single array 
+                containing the points of all polygons can be passed as long as
+                each one is closed (First and last point are identical). 
+                Defaults to None.
             parse_num_threads (int, optional): Number of workers for opening
                 and parsing the datafiles. Datafiles need to be loaded in 
                 memory to be parsed, which could cause problems with RAM. Use
