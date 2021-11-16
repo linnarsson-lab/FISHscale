@@ -211,7 +211,7 @@ class SAGE(nn.Module):
         self.n_hidden = n_hidden
         self.n_classes = n_classes
         self.supervised = supervised
-        
+        self.aggregator = aggregator
         if self.supervised:
             self.domain_adaptation = Classifier(n_input=n_hidden,
                                                 n_labels=2,
@@ -228,9 +228,19 @@ class SAGE(nn.Module):
     def forward(self, blocks, x):
         h = th.log(x+1)   
         for l, (layer, block) in enumerate(zip(self.encoder.encoder_dict['GS'], blocks)):
-            h = layer(block, h,).flatten(1)
+            h = layer(block, h,)#.mean(1)
+            if self.aggregator == 'attentional':
+                h = h.mean(1)
             h = self.encoder.encoder_dict['FC'][l](h)
 
+            '''if l == self.n_layers -1:
+                h = layer(block, h,).mean(1)
+                #h = self.encoder.encoder_dict['FC'][l](h)
+            else:
+                h = layer(block, h,).flatten(1)
+                h = self.encoder.encoder_dict['FC'][l](h)'''
+
+            
         return h
 
     def inference(self, g, x, device, batch_size, num_workers):
@@ -247,7 +257,10 @@ class SAGE(nn.Module):
         # on each layer are of course splitted in batches.
         # TODO: can we standardize this?
         for l, layer in enumerate(self.encoder.encoder_dict['GS']):
-            y = th.zeros(g.num_nodes(), self.n_hidden) #if not self.supervised else th.zeros(g.num_nodes(), self.n_classes)
+            if l ==  0:
+                y = th.zeros(g.num_nodes(), self.n_hidden) #if not self.supervised else th.zeros(g.num_nodes(), self.n_classes)
+            else: 
+                y = th.zeros(g.num_nodes(), self.n_hidden)
 
             sampler = dgl.dataloading.MultiLayerFullNeighborSampler(1)
             dataloader = dgl.dataloading.NodeDataLoader(
@@ -263,8 +276,16 @@ class SAGE(nn.Module):
                 block = blocks[0]
                 block = block.int()
                 h = th.log(x[input_nodes]+1)#.to(device)
-                h = layer(block, h).flatten(1)
+                h = layer(block, h,)#.mean(1)
+                if self.aggregator == 'attentional':
+                    h = h.mean(1)
                 h = self.encoder.encoder_dict['FC'][l](h)
+                '''if l == self.n_layers -1:
+                    h = layer(block, h,).mean(1)
+                else:
+                    h = layer(block, h,).flatten(1)
+                    h = self.encoder.encoder_dict['FC'][l](h)'''
+                #h = self.encoder.encoder_dict['FC'][l](h)
                 y[output_nodes] = h.cpu().detach()#.numpy()
             x = y
         return y
@@ -353,12 +374,12 @@ class Encoder(nn.Module):
                 bns.append(nn.BatchNorm1d(n_hidden))
 
             hidden = [nn.Sequential(
-                                nn.Linear(n_hidden , n_hidden) if aggregator !='attentional' else nn.Linear(n_hidden*8, n_hidden),
+                                nn.Linear(n_hidden , n_hidden), #if aggregator !='attentional' else nn.Linear(n_hidden*4, n_hidden),
                                 nn.BatchNorm1d(n_hidden),
                                 nn.ReLU()) for x in range(1,n_layers )]
 
             latent = nn.Sequential(
-                        nn.Linear(n_hidden , n_hidden) if aggregator !='attentional' else nn.Linear(n_hidden*4, n_hidden), #if not supervised else nn.Linear(n_hidden , self.n_classes),
+                        nn.Linear(n_hidden , n_hidden), #if aggregator !='attentional' else nn.Linear(n_hidden, n_hidden), #if not supervised else nn.Linear(n_hidden , self.n_classes),
                         nn.BatchNorm1d(n_hidden), #if not supervised else  nn.BatchNorm1d(self.n_classes),
                         #nn.Softmax()
                         )
@@ -368,7 +389,7 @@ class Encoder(nn.Module):
                 if aggregator == 'attentional':
                     layers.append(dglnn.GATConv(in_feats, 
                                                 n_hidden, 
-                                                num_heads=8,
+                                                num_heads=4,
                                                 feat_drop=0.2,
                                                 activation=F.relu,
                                                 allow_zero_in_degree=True))

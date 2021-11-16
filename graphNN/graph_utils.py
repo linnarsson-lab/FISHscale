@@ -101,7 +101,8 @@ class GraphData(pl.LightningDataModule):
         distance_factor:int=4,
         device='cpu',
         lr=1e-3,
-        aggregate=1
+        aggregate=1,
+        aggregator='pool'
         ):
         """
         GraphData prepared the FISHscale dataset to be analysed in a supervised
@@ -169,6 +170,7 @@ class GraphData(pl.LightningDataModule):
         self.lr = lr
         self.subsample = subsample
         self.aggregate = aggregate
+        self.aggregator = aggregator
 
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.prepare_reference()
@@ -182,7 +184,8 @@ class GraphData(pl.LightningDataModule):
                                         Ncells=self.ncells*self.ref_celltypes.sum(axis=0),
                                         reference=self.ref_celltypes,
                                         device=self.device.type,
-                                        smooth=self.smooth
+                                        smooth=self.smooth,
+                                        aggregator=self.aggregator
                                     )
         self.model.to(self.device)
         print('model is in: ', self.model.device)
@@ -716,12 +719,12 @@ class GraphData(pl.LightningDataModule):
             import scanpy as sc
             from sklearn.cluster import MiniBatchKMeans
             print('Running leiden clustering from scanpy...')
-            adata = sc.AnnData(X=self.latent_unlabelled)
-            sc.pp.neighbors(adata, n_neighbors=15)
-            sc.tl.leiden(adata, random_state=42)
-            self.clusters= adata.obs['leiden'].values
-            #kmeans = MiniBatchKMeans(n_clusters=50)
-            #self.clusters = kmeans.fit_predict(self.latent_unlabelled)
+            #adata = sc.AnnData(X=self.latent_unlabelled)
+            #sc.pp.neighbors(adata, n_neighbors=15)
+            #sc.tl.leiden(adata, random_state=42)
+            #self.clusters= adata.obs['leiden'].values
+            kmeans = MiniBatchKMeans(n_clusters=50)
+            self.clusters = kmeans.fit_predict(self.latent_unlabelled)
             
             np.save(self.folder+'/clusters',self.clusters)
             print('Clustering done.')
