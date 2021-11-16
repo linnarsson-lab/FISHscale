@@ -231,6 +231,7 @@ class SAGE(nn.Module):
             h = layer(block, h,)#.mean(1)
             if self.aggregator == 'attentional':
                 h = h.mean(1)
+                continue
             h = self.encoder.encoder_dict['FC'][l](h)
 
             '''if l == self.n_layers -1:
@@ -279,6 +280,7 @@ class SAGE(nn.Module):
                 h = layer(block, h,)#.mean(1)
                 if self.aggregator == 'attentional':
                     h = h.mean(1)
+                    continue
                 h = self.encoder.encoder_dict['FC'][l](h)
                 '''if l == self.n_layers -1:
                     h = layer(block, h,).mean(1)
@@ -392,7 +394,7 @@ class Encoder(nn.Module):
                                                 num_heads=4,
                                                 feat_drop=0.2,
                                                 activation=F.relu,
-                                                allow_zero_in_degree=True))
+                                                allow_zero_in_degree=False))
 
                 else:
                     layers.append(dglnn.SAGEConv(in_feats, 
@@ -409,7 +411,7 @@ class Encoder(nn.Module):
                                                     num_heads=4, 
                                                     feat_drop=0.2,
                                                     activation=F.relu,
-                                                    allow_zero_in_degree=True))
+                                                    allow_zero_in_degree=False))
 
                     else:
                         layers.append(dglnn.SAGEConv(n_hidden, 

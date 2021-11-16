@@ -246,6 +246,11 @@ class GraphData(pl.LightningDataModule):
                 self.g_lab = glist[0]
                 #self.g_lab = self.g_lab.to(self.device)
         
+        if self.aggregator == 'attentional':
+            self.g = dgl.add_self_loop(self.g)
+            if self.supervised:
+                self.g_lab = dgl.add_self_loop(self.g_lab)
+        
         print(self.g)
 
     def prepare_data(self):
