@@ -230,20 +230,9 @@ class SAGE(nn.Module):
         for l, (layer, block) in enumerate(zip(self.encoder.encoder_dict['GS'], blocks)):
             if self.aggregator != 'attentional':
                 h = layer(block, h,)#.mean(1)
-                h = F.normalize(h)
-
-                if l != self.n_layers - 1:
-                    h = self.encoder.encoder_dict['BN'][l](h)
-                    h = F.relu(h)
-                    h = F.dropout(h)
-                h = self.encoder.encoder_dict['FC'][l](h)
-
+                #h = self.encoder.encoder_dict['FC'][l](h)
             else:
                 h = layer(block, h,).mean(1)
-                if l != self.n_layers - 1:
-                    h = F.relu(h)
-                    h = F.dropout(h)
-                    h = F.normalize(h)
 
                 #h = self.encoder.encoder_dict['FC'][l](h)
 
@@ -289,21 +278,9 @@ class SAGE(nn.Module):
 
                 if self.aggregator != 'attentional':
                     h = layer(block, h,)#.mean(1)
-                    h = F.normalize(h)
-
-                    if l != self.n_layers - 1:
-                        h = self.encoder.encoder_dict['BN'][l](h)
-                        h = F.relu(h)
-                        h = F.dropout(h)
-                    h = self.encoder.encoder_dict['FC'][l](h)
-
 
                 else:
                     h = layer(block, h,).mean(1)
-                    if l != self.n_layers - 1:
-                        h = F.relu(h)
-                        h = F.normalize(h)
-
                     #h = self.encoder.encoder_dict['FC'][l](h)
                 y[output_nodes] = h.cpu().detach()#.numpy()
             x = y
@@ -345,8 +322,8 @@ class Encoder(nn.Module):
                                                 n_hidden, 
                                                 num_heads=4,
                                                 #feat_drop=0.2,
-                                                #activation=F.relu,
-                                                #norm=F.normalize,
+                                                activation=F.relu,
+                                                norm=F.normalize,
                                                 #allow_zero_in_degree=False
                                                 ))
 
@@ -355,8 +332,8 @@ class Encoder(nn.Module):
                                                 n_hidden, 
                                                 aggregator_type=aggregator,
                                                 #feat_drop=0.2,
-                                                #activation=F.relu,
-                                                #norm=F.normalize
+                                                activation=F.relu,
+                                                norm=F.normalize
                                                 ))
 
                 for i in range(1,n_layers):
@@ -365,7 +342,7 @@ class Encoder(nn.Module):
                                                     n_hidden, 
                                                     num_heads=4, 
                                                     feat_drop=0.2,
-                                                    activation=F.relu,
+                                                    #activation=F.relu,
                                                     #allow_zero_in_degree=False
                                                     ))
 
@@ -373,7 +350,7 @@ class Encoder(nn.Module):
                         layers.append(dglnn.SAGEConv(n_hidden, 
                                                         n_hidden, 
                                                         aggregator_type=aggregator,
-                                                        #feat_drop=0.2,
+                                                        feat_drop=0.2,
                                                         #activation=F.relu,
                                                         #norm=F.normalize
                                                         ))
