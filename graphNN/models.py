@@ -82,7 +82,7 @@ class SAGELightning(LightningModule):
         #neg_graph = neg_graph.to(self.device)
         batch_inputs_u = mfgs[0].srcdata['gene']
         batch_pred_unlab = self.module(mfgs, batch_inputs_u)
-        #bu = batch_inputs_u[pos_graph.nodes()]
+        bu = batch_inputs_u[pos_graph.nodes()]
         loss,pos, neg = self.loss_fcn(batch_pred_unlab, pos_graph, neg_graph) #* 5
         
         if self.supervised:
@@ -228,20 +228,25 @@ class SAGE(nn.Module):
     def forward(self, blocks, x):
         h = th.log(x+1)   
         for l, (layer, block) in enumerate(zip(self.encoder.encoder_dict['GS'], blocks)):
-            h = layer(block, h,)#.mean(1)
-            if self.aggregator == 'attentional':
-                h = h.mean(1)
-                continue
-            h = self.encoder.encoder_dict['FC'][l](h)
+            if self.aggregator != 'attentional':
+                h = layer(block, h,)#.mean(1)
+                h = F.normalize(h)
 
-            '''if l == self.n_layers -1:
-                h = layer(block, h,).mean(1)
-                #h = self.encoder.encoder_dict['FC'][l](h)
+                if l != self.n_layers - 1:
+                    h = self.encoder.encoder_dict['BN'][l](h)
+                    h = F.relu(h)
+                    h = F.dropout(h)
+                h = self.encoder.encoder_dict['FC'][l](h)
+
             else:
-                h = layer(block, h,).flatten(1)
-                h = self.encoder.encoder_dict['FC'][l](h)'''
+                h = layer(block, h,).mean(1)
+                if l != self.n_layers - 1:
+                    h = F.relu(h)
+                    h = F.dropout(h)
+                    h = F.normalize(h)
 
-            
+                #h = self.encoder.encoder_dict['FC'][l](h)
+
         return h
 
     def inference(self, g, x, device, batch_size, num_workers):
@@ -257,6 +262,7 @@ class SAGE(nn.Module):
         # Therefore, we compute the representation of all nodes layer by layer.  The nodes
         # on each layer are of course splitted in batches.
         # TODO: can we standardize this?
+        self.eval()
         for l, layer in enumerate(self.encoder.encoder_dict['GS']):
             if l ==  0:
                 y = th.zeros(g.num_nodes(), self.n_hidden) #if not self.supervised else th.zeros(g.num_nodes(), self.n_classes)
@@ -276,21 +282,116 @@ class SAGE(nn.Module):
             for input_nodes, output_nodes, blocks in tqdm.tqdm(dataloader):
                 block = blocks[0]
                 block = block.int()
-                h = th.log(x[input_nodes]+1)#.to(device)
-                h = layer(block, h,)#.mean(1)
-                if self.aggregator == 'attentional':
-                    h = h.mean(1)
-                    continue
-                h = self.encoder.encoder_dict['FC'][l](h)
-                '''if l == self.n_layers -1:
-                    h = layer(block, h,).mean(1)
+                if l == 0:
+                    h = th.log(x[input_nodes]+1)#.to(device)
                 else:
-                    h = layer(block, h,).flatten(1)
-                    h = self.encoder.encoder_dict['FC'][l](h)'''
-                #h = self.encoder.encoder_dict['FC'][l](h)
+                    h = x[input_nodes]
+
+                if self.aggregator != 'attentional':
+                    h = layer(block, h,)#.mean(1)
+                    h = F.normalize(h)
+
+                    if l != self.n_layers - 1:
+                        h = self.encoder.encoder_dict['BN'][l](h)
+                        h = F.relu(h)
+                        h = F.dropout(h)
+                    h = self.encoder.encoder_dict['FC'][l](h)
+
+
+                else:
+                    h = layer(block, h,).mean(1)
+                    if l != self.n_layers - 1:
+                        h = F.relu(h)
+                        h = F.normalize(h)
+
+                    #h = self.encoder.encoder_dict['FC'][l](h)
                 y[output_nodes] = h.cpu().detach()#.numpy()
             x = y
         return y
+
+class Encoder(nn.Module):
+        def __init__(
+            self,
+            in_feats,
+            n_hidden,
+            n_classes,
+            n_layers,
+            supervised,
+            aggregator,
+            ):
+            super().__init__()
+        
+
+            bns = nn.ModuleList()
+            for _ in range(n_layers):
+                bns.append(nn.BatchNorm1d(n_hidden))
+
+            hidden = [nn.Sequential(
+                                nn.Linear(n_hidden , n_hidden), #if aggregator !='attentional' else nn.Linear(n_hidden*4, n_hidden),
+                                nn.BatchNorm1d(n_hidden,  momentum=0.01, eps=0.001),
+                                nn.ReLU(),
+                                nn.Dropout()) for x in range(1,n_layers )]
+
+            latent = nn.Sequential(
+                        nn.Linear(n_hidden , n_hidden), #if aggregator !='attentional' else nn.Linear(n_hidden, n_hidden), #if not supervised else nn.Linear(n_hidden , self.n_classes),
+                        #nn.BatchNorm1d(n_hidden,  momentum=0.01, eps=0.001), #if not supervised else  nn.BatchNorm1d(self.n_classes),
+                        #nn.ReLU()
+                        )
+
+            layers = nn.ModuleList()
+            if n_layers > 1:
+                if aggregator == 'attentional':
+                    layers.append(dglnn.GATConv(in_feats, 
+                                                n_hidden, 
+                                                num_heads=4,
+                                                #feat_drop=0.2,
+                                                #activation=F.relu,
+                                                #norm=F.normalize,
+                                                #allow_zero_in_degree=False
+                                                ))
+
+                else:
+                    layers.append(dglnn.SAGEConv(in_feats, 
+                                                n_hidden, 
+                                                aggregator_type=aggregator,
+                                                #feat_drop=0.2,
+                                                #activation=F.relu,
+                                                #norm=F.normalize
+                                                ))
+
+                for i in range(1,n_layers):
+                    if aggregator == 'attentional':
+                        layers.append(dglnn.GATConv(n_hidden, 
+                                                    n_hidden, 
+                                                    num_heads=4, 
+                                                    feat_drop=0.2,
+                                                    activation=F.relu,
+                                                    #allow_zero_in_degree=False
+                                                    ))
+
+                    else:
+                        layers.append(dglnn.SAGEConv(n_hidden, 
+                                                        n_hidden, 
+                                                        aggregator_type=aggregator,
+                                                        #feat_drop=0.2,
+                                                        #activation=F.relu,
+                                                        #norm=F.normalize
+                                                        ))
+            else:
+                layers.append(dglnn.SAGEConv(in_feats, n_classes, 'pool',feat_drop=0.2,activation=F.relu,norm=F.normalize))
+
+            if supervised:
+                classifier = Classifier(n_input=n_hidden,
+                                        n_labels=n_classes,
+                                        softmax=False,
+                                        reverse_gradients=False)
+            else:
+                classifier = None
+
+            self.encoder_dict = nn.ModuleDict({'GS': layers, 
+                                                'BN':bns,
+                                                'FC': nn.ModuleList([h for h in hidden]+[latent]),
+                                                'CF':classifier})
 
 class Classifier(nn.Module):
     """Basic fully-connected NN classifier
@@ -314,7 +415,7 @@ class Classifier(nn.Module):
         self.reverse_gradients = reverse_gradients
         layers = [nn.Sequential(
                             nn.Linear(n_input , n_hidden, bias=bias),
-                            nn.BatchNorm1d(n_hidden) if use_batch_norm else None,
+                            nn.BatchNorm1d(n_hidden, momentum=0.01, eps=0.001) if use_batch_norm else None,
                             nn.ReLU() if use_relu else None,
                             nn.Dropout(p=dropout_rate) if dropout_rate > 0 else None),
             nn.Linear(n_hidden, n_labels),]
@@ -357,84 +458,6 @@ class GradientReversal(th.nn.Module):
 
     def forward(self, x):
         return GradientReversalFunction.apply(x, self.lambda_)
-
-class Encoder(nn.Module):
-        def __init__(
-            self,
-            in_feats,
-            n_hidden,
-            n_classes,
-            n_layers,
-            supervised,
-            aggregator,
-            ):
-            super().__init__()
-        
-
-            bns = nn.ModuleList()
-            for _ in range(n_layers):
-                bns.append(nn.BatchNorm1d(n_hidden))
-
-            hidden = [nn.Sequential(
-                                nn.Linear(n_hidden , n_hidden), #if aggregator !='attentional' else nn.Linear(n_hidden*4, n_hidden),
-                                nn.BatchNorm1d(n_hidden),
-                                nn.ReLU()) for x in range(1,n_layers )]
-
-            latent = nn.Sequential(
-                        nn.Linear(n_hidden , n_hidden), #if aggregator !='attentional' else nn.Linear(n_hidden, n_hidden), #if not supervised else nn.Linear(n_hidden , self.n_classes),
-                        nn.BatchNorm1d(n_hidden), #if not supervised else  nn.BatchNorm1d(self.n_classes),
-                        #nn.Softmax()
-                        )
-
-            layers = nn.ModuleList()
-            if n_layers > 1:
-                if aggregator == 'attentional':
-                    layers.append(dglnn.GATConv(in_feats, 
-                                                n_hidden, 
-                                                num_heads=4,
-                                                feat_drop=0.2,
-                                                activation=F.relu,
-                                                allow_zero_in_degree=False))
-
-                else:
-                    layers.append(dglnn.SAGEConv(in_feats, 
-                                                n_hidden, 
-                                                aggregator_type=aggregator,
-                                                feat_drop=0.2,
-                                                activation=F.relu,
-                                                norm=F.normalize))
-
-                for i in range(1,n_layers):
-                    if aggregator == 'attentional':
-                        layers.append(dglnn.GATConv(n_hidden, 
-                                                    n_hidden, 
-                                                    num_heads=4, 
-                                                    feat_drop=0.2,
-                                                    activation=F.relu,
-                                                    allow_zero_in_degree=False))
-
-                    else:
-                        layers.append(dglnn.SAGEConv(n_hidden, 
-                                                        n_hidden, 
-                                                        aggregator_type=aggregator,
-                                                        feat_drop=0.2,
-                                                        activation=F.relu,
-                                                        norm=F.normalize))
-            else:
-                layers.append(dglnn.SAGEConv(in_feats, n_classes, 'pool',feat_drop=0.2,activation=F.relu,norm=F.normalize))
-
-            if supervised:
-                classifier = Classifier(n_input=n_hidden,
-                                        n_labels=n_classes,
-                                        softmax=False,
-                                        reverse_gradients=False)
-            else:
-                classifier = None
-
-            self.encoder_dict = nn.ModuleDict({'GS': layers, 
-                                                'BN':bns,
-                                                'FC': nn.ModuleList([h for h in hidden]+[latent]),
-                                                'CF':classifier})
 
 
 class SemanticLoss:
