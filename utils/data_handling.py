@@ -12,6 +12,7 @@ from tqdm import tqdm
 from FISHscale.utils.inside_polygon import is_inside_sm_parallel
 from pyarrow.parquet import ParquetFile
 from pyarrow import ArrowInvalid
+import warnings
 
 class DataLoader_base():
       
@@ -157,6 +158,24 @@ class DataLoader_base():
         existing_dict = self._metadatafile_read(metadata_file)    
         
         return existing_dict[item]
+    
+    def _metatdata_set(self, obj: object, exclude: list=[]):
+        """Transfer metadata from file to self.
+
+        Args:
+            obj (object): Object to add to. Should be `self`
+            exclude (list, optional): List with keys to ignore. Use this for
+                metadata items that are already handled elsewhere.
+                Defaults to [].
+        """
+        
+        metadata = self._metadatafile_read()
+        
+        for k,v in metadata.items():
+            if k not in exclude:
+                if hasattr(obj, k):
+                    warnings.warn(f'Object already has an attribute: "{k}". Overwriting "{k}" with stored data from metadata file.')
+                setattr(obj, k, v)
         
     def _dump_to_parquet(self, data, name, folder_name:str):
         """Save groupby results as .parquet files.
@@ -193,6 +212,35 @@ class DataLoader_base():
         else:
             return False, 0
 
+    def get_dask_attrs_rows(self,l:list):
+        """
+        Get rows by index
+
+        Args:
+            l (list): list of indexes to get from self.df
+
+        Returns:
+            dask.dataframe: filtered dask dataframe
+        """        
+        return self.df.map_partitions(lambda x: x[x.index.isin(l)])
+
+    def add_dask_attribute(self,name:str,l:list):
+        """
+        [summary]
+
+        Args:
+            name (str): column name
+            l (list): list of features
+        """        
+        da = pd.DataFrame({'x':self.df.x.compute(),
+                                'y':self.df.y.compute(),
+                                'z':self.df.z.compute(),
+                                name:l})
+
+        makedirs(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes',name),exist_ok=True)
+        da.groupby(name).apply(lambda x: self._dump_to_parquet(x, self.dataset_name, self.FISHscale_data_folder+'/attributes/{}'.format(name)))#, meta=('float64')).compute()
+        self.dask_attrs[name] = dd.read_parquet(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes/{}'.format(name), '*.parquet'))   
+        #self.dask_attrs.to_parquet(path.join(self.dataset_folder,self.FISHscale_data_folder,'attributes'))
 
 class DataLoader(DataLoader_base):
     
@@ -238,7 +286,6 @@ class DataLoader(DataLoader_base):
         """Filter out excluded genes from unique gene array.
         """
         if type(eg) != type(None):
-            #ug = ug[[g not in eg for g in ug]]
             ug = np.array([g for g in ug if g not in eg])
         return ug
 
@@ -362,6 +409,8 @@ class DataLoader(DataLoader_base):
                 if type(polygon) != type(None):
                     filt = is_inside_sm_parallel(polygon, data.loc[:,['x', 'y']].to_numpy())
                     data = data.loc[filt,:]
+                    print('adding to metadata')
+                    self._metadatafile_add({'polygon': polygon})
                 
                 #Get data shape
                 self.shape = data.shape
@@ -372,8 +421,7 @@ class DataLoader(DataLoader_base):
                 data.groupby('g').progress_apply(lambda x: self._dump_to_parquet(x, self.dataset_name, self.FISHscale_data_folder))#, meta=('float64')).compute()
                 if path.exists(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes')):
                     shutil.rmtree(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes'))
-
-                
+ 
             else:
                 raise IOError (f'Invalid file type: {filename}, should be in ".parquet" or ".csv" format.') 
         
@@ -391,11 +439,8 @@ class DataLoader(DataLoader_base):
         else:
             #Load all genes
             self.df = dd.read_parquet(path.join(self.FISHscale_data_folder, '*.parquet'))
-        
-        #New    
-        #self.gene_index = {g:i for i,g in enumerate(self.unique_genes)}
 
-        if new_parse ==False:
+        if new_parse == False:
             #Get coordinate properties from metadata
             self._get_coordinate_properties()
             #Unique genes
@@ -416,10 +461,13 @@ class DataLoader(DataLoader_base):
             else:
                 self.unique_genes = self.df.g.drop_duplicates().compute().to_numpy()
                 self._metadatafile_add({'unique_genes': self.unique_genes})
+                
+            #Handle all other metadata, (Excluding all attributes that are already handled somewhere else)
+            self._metatdata_set(self, exclude=['unique_genes', 'x_min', 'x_max', 'y_min', 'y_max', 'shape', 'color_dict'])
 
         #Handle metadata
         else: 
-            makedirs(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes'),exist_ok=True)
+            makedirs(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes'), exist_ok=True)
             self.dask_attrs = {}
             '''self.dask_attrs = dd.from_pandas(pd.DataFrame(index=self.df.index), npartitions=self.df.npartitions, sort=False)
             for c in other_columns:
@@ -469,54 +517,3 @@ class DataLoader(DataLoader_base):
         This operation does NOT survive reloading the data.
         """
         self.df.y = -(self.df.y - self.xy_center[1]) + self.xy_center[1]
-    
-    def get_dask_attrs_rows(self,l:list):
-        """
-        Get rows by index
-
-        Args:
-            l (list): list of indexes to get from self.df
-
-        Returns:
-            dask.dataframe: filtered dask dataframe
-        """        
-        return self.df.map_partitions(lambda x: x[x.index.isin(l)])
-
-    def add_dask_attribute(self,attribute_name:str,l, include_genes=False):
-        """
-        [summary]
-
-        Args:
-            attribute_name (str): Name of the attribute that the dask dataframe will be partitioned by
-            l: list or dictionary with columns and list of attributes to add.
-        """
-        if type(l) != dict:
-            d ={'x':self.df.x.compute(),
-                'y':self.df.y.compute(),
-                'z':self.df.z.compute(),                 
-                attribute_name:l}
-        else:
-            d ={'x':self.df.x.compute(),
-                'y':self.df.y.compute(),
-                'z':self.df.z.compute()} 
-            for x in l:
-                d[x] = l[x]             
-                        
-        if include_genes:
-            d['g'] = self.df.g.compute()
-
-        da = pd.DataFrame(d)        
-        if path.exists(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes',attribute_name)):
-            shutil.rmtree(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes',attribute_name))
-
-        makedirs(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes',attribute_name),exist_ok=True)
-        da.groupby(attribute_name).apply(lambda x: self._dump_to_parquet(x, self.dataset_name, self.FISHscale_data_folder+'/attributes/{}'.format(attribute_name)))#, meta=('float64')).compute()
-        self.dask_attrs[attribute_name] = dd.read_parquet(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes/{}'.format(attribute_name), '*.parquet'))   
-        #self.dask_attrs.to_parquet(path.join(self.dataset_folder,self.FISHscale_data_folder,'attributes'))    
-
-
-
-
-
-        
-        

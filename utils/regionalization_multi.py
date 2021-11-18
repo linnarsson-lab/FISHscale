@@ -126,9 +126,13 @@ class RegionalizeMulti(Decomposition):
 
         Args:
             data ([pd.DataFrame]): DataFrame with features in rows and samples
-                in columns, like from the self.hexbin_make() function.
-                Best to normalize the data and/or apply PCA first.
+                in columns, like from the self.hexbin_make() function. To merge
+                multiple datasets use the "self.merge_norm()" function. Best to
+                normalize the data and/or apply PCA first.
                 Defaults to None.
+            samples (np.ndarray): Array with sample labels for each column in
+                data. The "self.merge_norm()" function returns this array.
+                Defautls to None.                
             tsne (np.ndarray, optional): Pre computed tSNE embedding of hexbin
                 data with 2 or 3 components. If not provided, tSNE will be 
                 calculated.

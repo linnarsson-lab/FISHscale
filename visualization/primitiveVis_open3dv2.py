@@ -56,12 +56,11 @@ class Window:
         color_dic: pass dictionary of desired color in RGB for each unique gene in the parquet_file
         
         
-        """
-
+        """            
         r = lambda: random.randint(0,255)
         self.columns= columns
         self.dataset = dataset
-        self.x_alt,self.y_alt,self.c_alt, self.plot_type = x_alt,y_alt,c_alt, plot_type
+        self.x_alt, self.y_alt, self.c_alt, self.plot_type = x_alt, y_alt, c_alt, plot_type
 
         self.color_dic = self.dataset.color_dict
         for g in self.dataset.unique_genes:
