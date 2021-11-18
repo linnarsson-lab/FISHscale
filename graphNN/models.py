@@ -224,10 +224,11 @@ class SAGE(nn.Module):
                                 n_layers,
                                 supervised,
                                 aggregator)
- 
+
     def forward(self, blocks, x):
         h = th.log(x+1)   
         for l, (layer, block) in enumerate(zip(self.encoder.encoder_dict['GS'], blocks)):
+            feat_n = []
             if self.aggregator != 'attentional':
                 h = layer(block, h,)#.mean(1)
                 #h = self.encoder.encoder_dict['FC'][l](h)
@@ -236,6 +237,12 @@ class SAGE(nn.Module):
 
                 #h = self.encoder.encoder_dict['FC'][l](h)
 
+        '''g = dgl.graph(block.edges())
+        g.ndata['feat'] = feat_n[0]
+        g.update_all(fn.u_add_v('feat','feat','v'),fn.sum('v','feat'))
+        i =th.tensor(block.dstnodes(),dtype=th.int64)
+        h = th.cat([h,g.ndata['feat'][i]],axis=1)'''
+        #h = self.encoder.encoder_dict['FC'][1](h)
         return h
 
     def inference(self, g, x, device, batch_size, num_workers):
@@ -277,13 +284,13 @@ class SAGE(nn.Module):
                     h = x[input_nodes]
 
                 if self.aggregator != 'attentional':
-                    h = layer(block, h,)#.mean(1)
-
+                    h = layer(block, h,)
                 else:
                     h = layer(block, h,).mean(1)
                     #h = self.encoder.encoder_dict['FC'][l](h)
                 y[output_nodes] = h.cpu().detach()#.numpy()
             x = y
+    
         return y
 
 class Encoder(nn.Module):
@@ -316,14 +323,23 @@ class Encoder(nn.Module):
                         )
 
             layers = nn.ModuleList()
-            if n_layers > 1:
+            self.pair_norm = PairNorm()
+
+
+            for i in range(0,n_layers-1):
+                if i > 0:
+                    in_feats = n_hidden
+                    x = 0.2
+                else:
+                    x = 0
+
                 if aggregator == 'attentional':
                     layers.append(dglnn.GATConv(in_feats, 
                                                 n_hidden, 
                                                 num_heads=4,
-                                                #feat_drop=0.2,
+                                                feat_drop=x,
                                                 activation=F.relu,
-                                                norm=F.normalize,
+                                                norm=self.pair_norm,
                                                 #allow_zero_in_degree=False
                                                 ))
 
@@ -333,29 +349,26 @@ class Encoder(nn.Module):
                                                 aggregator_type=aggregator,
                                                 #feat_drop=0.2,
                                                 activation=F.relu,
-                                                norm=F.normalize
+                                                norm=self.pair_norm,
                                                 ))
 
-                for i in range(1,n_layers):
-                    if aggregator == 'attentional':
-                        layers.append(dglnn.GATConv(n_hidden, 
-                                                    n_hidden, 
-                                                    num_heads=4, 
-                                                    feat_drop=0.2,
-                                                    #activation=F.relu,
-                                                    #allow_zero_in_degree=False
-                                                    ))
+            if aggregator == 'attentional':
+                layers.append(dglnn.GATConv(n_hidden, 
+                                            n_hidden, 
+                                            num_heads=4, 
+                                            feat_drop=0.2,
+                                            #activation=F.relu,
+                                            #allow_zero_in_degree=False
+                                            ))
 
-                    else:
-                        layers.append(dglnn.SAGEConv(n_hidden, 
-                                                        n_hidden, 
-                                                        aggregator_type=aggregator,
-                                                        feat_drop=0.2,
-                                                        #activation=F.relu,
-                                                        #norm=F.normalize
-                                                        ))
             else:
-                layers.append(dglnn.SAGEConv(in_feats, n_classes, 'pool',feat_drop=0.2,activation=F.relu,norm=F.normalize))
+                layers.append(dglnn.SAGEConv(n_hidden, 
+                                                n_hidden, 
+                                                aggregator_type=aggregator,
+                                                feat_drop=0.2,
+                                                #activation=F.relu,
+                                                #norm=F.normalize
+                                                ))
 
             if supervised:
                 classifier = Classifier(n_input=n_hidden,
@@ -496,3 +509,60 @@ class SemanticLoss:
         #semantic_loss = -F.logsigmoid((self.centroids_pseudo*self.centroids_true).sum(-1)).mean() + kl_density #
         #semantic_loss = nn.MSELoss()(self.centroids_pseudo, self.centroids_true) + kl_density + dispersion_p
         #return semantic_loss
+
+class PairNorm(th.nn.Module):
+    r"""Applies pair normalization over node features as described in the
+    `"PairNorm: Tackling Oversmoothing in GNNs"
+    <https://arxiv.org/abs/1909.12223>`_ paper
+
+    .. math::
+        \mathbf{x}_i^c &= \mathbf{x}_i - \frac{1}{n}
+        \sum_{i=1}^n \mathbf{x}_i \\
+
+        \mathbf{x}_i^{\prime} &= s \cdot
+        \frac{\mathbf{x}_i^c}{\sqrt{\frac{1}{n} \sum_{i=1}^n
+        {\| \mathbf{x}_i^c \|}^2_2}}
+
+    Args:
+        scale (float, optional): Scaling factor :math:`s` of normalization.
+            (default, :obj:`1.`)
+        scale_individually (bool, optional): If set to :obj:`True`, will
+            compute the scaling step as :math:`\mathbf{x}^{\prime}_i = s \cdot
+            \frac{\mathbf{x}_i^c}{{\| \mathbf{x}_i^c \|}_2}`.
+            (default: :obj:`False`)
+        eps (float, optional): A value added to the denominator for numerical
+            stability. (default: :obj:`1e-5`)
+    """
+    def __init__(self, scale: float = 1., scale_individually: bool = False,
+                 eps: float = 1e-5):
+        super(PairNorm, self).__init__()
+        from torch_scatter import scatter
+        self.scale = scale
+        self.scale_individually = scale_individually
+        self.eps = eps
+
+    def forward(self, x, batch=None):
+        scale = self.scale
+
+        if batch is None:
+            x = x - x.mean(dim=0, keepdim=True)
+
+            if not self.scale_individually:
+                return scale * x / (self.eps + x.pow(2).sum(-1).mean()).sqrt()
+            else:
+                return scale * x / (self.eps + x.norm(2, -1, keepdim=True))
+
+        else:
+            mean = scatter(x, batch, dim=0, reduce='mean')
+            x = x - mean.index_select(0, batch)
+
+            if not self.scale_individually:
+                return scale * x / th.sqrt(self.eps + scatter(
+                    x.pow(2).sum(-1, keepdim=True), batch, dim=0,
+                    reduce='mean').index_select(0, batch))
+            else:
+                return scale * x / (self.eps + x.norm(2, -1, keepdim=True))
+
+
+    def __repr__(self):
+        return f'{self.__class__.__name__}()'
