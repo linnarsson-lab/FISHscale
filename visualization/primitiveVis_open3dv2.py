@@ -56,11 +56,7 @@ class Window:
         color_dic: pass dictionary of desired color in RGB for each unique gene in the parquet_file
         
         
-        """
-        #Lars quick fix:
-        if c_alt == None:
-            c_alt = {}
-            
+        """            
         r = lambda: random.randint(0,255)
         self.columns= columns
         self.dataset = dataset
