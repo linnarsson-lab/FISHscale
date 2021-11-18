@@ -12,6 +12,7 @@ from tqdm import tqdm
 from FISHscale.utils.inside_polygon import is_inside_sm_parallel
 from pyarrow.parquet import ParquetFile
 from pyarrow import ArrowInvalid
+import warnings
 
 class DataLoader_base():
       
@@ -158,13 +159,22 @@ class DataLoader_base():
         
         return existing_dict[item]
     
-    def _metatdata_set(self, obj: object, d: dict, exclude: list=[]):
+    def _metatdata_set(self, obj: object, exclude: list=[]):
+        """Transfer metadata from file to self.
+
+        Args:
+            obj (object): Object to add to. Should be `self`
+            exclude (list, optional): List with keys to ignore. Use this for
+                metadata items that are already handled elsewhere.
+                Defaults to [].
+        """
         
-        print('got here')
+        metadata = self._metadatafile_read()
         
-        for k,v in d:
+        for k,v in metadata.items():
             if k not in exclude:
-                print(k,v)
+                if hasattr(obj, k):
+                    warnings.warn(f'Object already has an attribute: "{k}". Overwriting "{k}" with stored data from metadata file.')
                 setattr(obj, k, v)
         
     def _dump_to_parquet(self, data, name, folder_name:str):
@@ -395,7 +405,6 @@ class DataLoader(DataLoader_base):
                     data = data.loc[data.g.isin(self.unique_genes)]
                 self._metadatafile_add({'unique_genes': self.unique_genes})    
                 
-                print('parsing the shit')
                 #Filter dots with polygon
                 if type(polygon) != type(None):
                     filt = is_inside_sm_parallel(polygon, data.loc[:,['x', 'y']].to_numpy())
@@ -412,8 +421,7 @@ class DataLoader(DataLoader_base):
                 data.groupby('g').progress_apply(lambda x: self._dump_to_parquet(x, self.dataset_name, self.FISHscale_data_folder))#, meta=('float64')).compute()
                 if path.exists(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes')):
                     shutil.rmtree(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes'))
-
-                
+ 
             else:
                 raise IOError (f'Invalid file type: {filename}, should be in ".parquet" or ".csv" format.') 
         
@@ -455,8 +463,7 @@ class DataLoader(DataLoader_base):
                 self._metadatafile_add({'unique_genes': self.unique_genes})
                 
             #Handle all other metadata, (Excluding all attributes that are already handled somewhere else)
-            self._metatdata_set(self, self._metadatafile_get(),
-                                exclude=['unique_genes', 'x_min', 'x_max', 'y_min', 'y_max', 'shape', 'color_dict'])
+            self._metatdata_set(self, exclude=['unique_genes', 'x_min', 'x_max', 'y_min', 'y_max', 'shape', 'color_dict'])
 
         #Handle metadata
         else: 
