@@ -101,7 +101,8 @@ class GraphData(pl.LightningDataModule):
         distance_factor:int=4,
         device='cpu',
         lr=1e-3,
-        aggregate=1
+        aggregate=1,
+        aggregator='pool'
         ):
         """
         GraphData prepared the FISHscale dataset to be analysed in a supervised
@@ -169,6 +170,7 @@ class GraphData(pl.LightningDataModule):
         self.lr = lr
         self.subsample = subsample
         self.aggregate = aggregate
+        self.aggregator = aggregator
 
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.prepare_reference()
@@ -182,7 +184,8 @@ class GraphData(pl.LightningDataModule):
                                         Ncells=self.ncells*self.ref_celltypes.sum(axis=0),
                                         reference=self.ref_celltypes,
                                         device=self.device.type,
-                                        smooth=self.smooth
+                                        smooth=self.smooth,
+                                        aggregator=self.aggregator
                                     )
         self.model.to(self.device)
         print('model is in: ', self.model.device)
@@ -242,6 +245,11 @@ class GraphData(pl.LightningDataModule):
                 glist, _ = dgl.data.utils.load_graphs(dglsup) # glist will be [g1, g2]
                 self.g_lab = glist[0]
                 #self.g_lab = self.g_lab.to(self.device)
+        
+        if self.aggregator == 'attentional':
+            self.g = dgl.add_self_loop(self.g)
+            if self.supervised:
+                self.g_lab = dgl.add_self_loop(self.g_lab)
         
         print(self.g)
 
@@ -569,7 +577,7 @@ class GraphData(pl.LightningDataModule):
         np.save(self.folder+'/latent_unlabelled',latent_unlabelled)
 
 
-    def get_umap(self,random_n=50000):
+    def get_umap(self,random_n=50000,n_clusters=50):
         import umap
         import matplotlib.pyplot as plt
 
@@ -720,7 +728,7 @@ class GraphData(pl.LightningDataModule):
             #sc.pp.neighbors(adata, n_neighbors=25)
             #sc.tl.leiden(adata, random_state=42)
             #self.clusters= adata.obs['leiden'].values
-            kmeans = MiniBatchKMeans(n_clusters=200)
+            kmeans = MiniBatchKMeans(n_clusters=n_clusters)
             self.clusters = kmeans.fit_predict(self.latent_unlabelled)
             
             np.save(self.folder+'/clusters',self.clusters)
@@ -745,7 +753,7 @@ class GraphData(pl.LightningDataModule):
             cycled = [0,2,1,0]
             for i in range(3):
                 plt.subplot(1,3,i+1)
-                plt.scatter(Y_umap[:,cycled[i]], Y_umap[:,cycled[i+1]], c=Y_umap,  s=0.5, marker='.', linewidths=0, edgecolors=None)
+                plt.scatter(Y_umap[:,cycled[i]], Y_umap[:,cycled[i+1]], c=clusters_colors[some],  s=0.5, marker='.', linewidths=0, edgecolors=None)
                 plt.xlabel("Y"+str(cycled[i]))
                 plt.ylabel("Y"+str(cycled[i+1]))
             plt.tight_layout()

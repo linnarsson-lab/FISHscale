@@ -82,7 +82,7 @@ class SAGELightning(LightningModule):
         #neg_graph = neg_graph.to(self.device)
         batch_inputs_u = mfgs[0].srcdata['gene']
         batch_pred_unlab = self.module(mfgs, batch_inputs_u)
-        #bu = batch_inputs_u[pos_graph.nodes()]
+        bu = batch_inputs_u[pos_graph.nodes()]
         loss,pos, neg = self.loss_fcn(batch_pred_unlab, pos_graph, neg_graph) #* 5
         
         if self.supervised:
@@ -211,7 +211,7 @@ class SAGE(nn.Module):
         self.n_hidden = n_hidden
         self.n_classes = n_classes
         self.supervised = supervised
-        
+        self.aggregator = aggregator
         if self.supervised:
             self.domain_adaptation = Classifier(n_input=n_hidden,
                                                 n_labels=2,
@@ -224,13 +224,25 @@ class SAGE(nn.Module):
                                 n_layers,
                                 supervised,
                                 aggregator)
- 
+
     def forward(self, blocks, x):
         h = th.log(x+1)   
         for l, (layer, block) in enumerate(zip(self.encoder.encoder_dict['GS'], blocks)):
-            h = layer(block, h,).flatten(1)
-            h = self.encoder.encoder_dict['FC'][l](h)
+            feat_n = []
+            if self.aggregator != 'attentional':
+                h = layer(block, h,)#.mean(1)
+                #h = self.encoder.encoder_dict['FC'][l](h)
+            else:
+                h = layer(block, h,).mean(1)
 
+                #h = self.encoder.encoder_dict['FC'][l](h)
+
+        '''g = dgl.graph(block.edges())
+        g.ndata['feat'] = feat_n[0]
+        g.update_all(fn.u_add_v('feat','feat','v'),fn.sum('v','feat'))
+        i =th.tensor(block.dstnodes(),dtype=th.int64)
+        h = th.cat([h,g.ndata['feat'][i]],axis=1)'''
+        #h = self.encoder.encoder_dict['FC'][1](h)
         return h
 
     def inference(self, g, x, device, batch_size, num_workers):
@@ -246,8 +258,12 @@ class SAGE(nn.Module):
         # Therefore, we compute the representation of all nodes layer by layer.  The nodes
         # on each layer are of course splitted in batches.
         # TODO: can we standardize this?
+        self.eval()
         for l, layer in enumerate(self.encoder.encoder_dict['GS']):
-            y = th.zeros(g.num_nodes(), self.n_hidden) #if not self.supervised else th.zeros(g.num_nodes(), self.n_classes)
+            if l ==  0:
+                y = th.zeros(g.num_nodes(), self.n_hidden) #if not self.supervised else th.zeros(g.num_nodes(), self.n_classes)
+            else: 
+                y = th.zeros(g.num_nodes(), self.n_hidden)
 
             sampler = dgl.dataloading.MultiLayerFullNeighborSampler(1)
             dataloader = dgl.dataloading.NodeDataLoader(
@@ -262,12 +278,110 @@ class SAGE(nn.Module):
             for input_nodes, output_nodes, blocks in tqdm.tqdm(dataloader):
                 block = blocks[0]
                 block = block.int()
-                h = th.log(x[input_nodes]+1)#.to(device)
-                h = layer(block, h).flatten(1)
-                h = self.encoder.encoder_dict['FC'][l](h)
+                if l == 0:
+                    h = th.log(x[input_nodes]+1)#.to(device)
+                else:
+                    h = x[input_nodes]
+
+                if self.aggregator != 'attentional':
+                    h = layer(block, h,)
+                else:
+                    h = layer(block, h,).mean(1)
+                    #h = self.encoder.encoder_dict['FC'][l](h)
                 y[output_nodes] = h.cpu().detach()#.numpy()
             x = y
+    
         return y
+
+class Encoder(nn.Module):
+        def __init__(
+            self,
+            in_feats,
+            n_hidden,
+            n_classes,
+            n_layers,
+            supervised,
+            aggregator,
+            ):
+            super().__init__()
+        
+
+            bns = nn.ModuleList()
+            for _ in range(n_layers):
+                bns.append(nn.BatchNorm1d(n_hidden))
+
+            hidden = [nn.Sequential(
+                                nn.Linear(n_hidden , n_hidden), #if aggregator !='attentional' else nn.Linear(n_hidden*4, n_hidden),
+                                nn.BatchNorm1d(n_hidden,  momentum=0.01, eps=0.001),
+                                nn.ReLU(),
+                                nn.Dropout()) for x in range(1,n_layers )]
+
+            latent = nn.Sequential(
+                        nn.Linear(n_hidden , n_hidden), #if aggregator !='attentional' else nn.Linear(n_hidden, n_hidden), #if not supervised else nn.Linear(n_hidden , self.n_classes),
+                        #nn.BatchNorm1d(n_hidden,  momentum=0.01, eps=0.001), #if not supervised else  nn.BatchNorm1d(self.n_classes),
+                        #nn.ReLU()
+                        )
+
+            layers = nn.ModuleList()
+            self.pair_norm = PairNorm()
+
+
+            for i in range(0,n_layers-1):
+                if i > 0:
+                    in_feats = n_hidden
+                    x = 0.2
+                else:
+                    x = 0
+
+                if aggregator == 'attentional':
+                    layers.append(dglnn.GATConv(in_feats, 
+                                                n_hidden, 
+                                                num_heads=4,
+                                                feat_drop=x,
+                                                activation=F.relu,
+                                                norm=self.pair_norm,
+                                                #allow_zero_in_degree=False
+                                                ))
+
+                else:
+                    layers.append(dglnn.SAGEConv(in_feats, 
+                                                n_hidden, 
+                                                aggregator_type=aggregator,
+                                                #feat_drop=0.2,
+                                                activation=F.relu,
+                                                norm=self.pair_norm,
+                                                ))
+
+            if aggregator == 'attentional':
+                layers.append(dglnn.GATConv(n_hidden, 
+                                            n_hidden, 
+                                            num_heads=4, 
+                                            feat_drop=0.2,
+                                            #activation=F.relu,
+                                            #allow_zero_in_degree=False
+                                            ))
+
+            else:
+                layers.append(dglnn.SAGEConv(n_hidden, 
+                                                n_hidden, 
+                                                aggregator_type=aggregator,
+                                                feat_drop=0.2,
+                                                #activation=F.relu,
+                                                #norm=F.normalize
+                                                ))
+
+            if supervised:
+                classifier = Classifier(n_input=n_hidden,
+                                        n_labels=n_classes,
+                                        softmax=False,
+                                        reverse_gradients=False)
+            else:
+                classifier = None
+
+            self.encoder_dict = nn.ModuleDict({'GS': layers, 
+                                                'BN':bns,
+                                                'FC': nn.ModuleList([h for h in hidden]+[latent]),
+                                                'CF':classifier})
 
 class Classifier(nn.Module):
     """Basic fully-connected NN classifier
@@ -291,7 +405,7 @@ class Classifier(nn.Module):
         self.reverse_gradients = reverse_gradients
         layers = [nn.Sequential(
                             nn.Linear(n_input , n_hidden, bias=bias),
-                            nn.BatchNorm1d(n_hidden) if use_batch_norm else None,
+                            nn.BatchNorm1d(n_hidden, momentum=0.01, eps=0.001) if use_batch_norm else None,
                             nn.ReLU() if use_relu else None,
                             nn.Dropout(p=dropout_rate) if dropout_rate > 0 else None),
             nn.Linear(n_hidden, n_labels),]
@@ -334,84 +448,6 @@ class GradientReversal(th.nn.Module):
 
     def forward(self, x):
         return GradientReversalFunction.apply(x, self.lambda_)
-
-class Encoder(nn.Module):
-        def __init__(
-            self,
-            in_feats,
-            n_hidden,
-            n_classes,
-            n_layers,
-            supervised,
-            aggregator,
-            ):
-            super().__init__()
-        
-
-            bns = nn.ModuleList()
-            for _ in range(n_layers):
-                bns.append(nn.BatchNorm1d(n_hidden))
-
-            hidden = [nn.Sequential(
-                                nn.Linear(n_hidden , n_hidden) if aggregator !='attentional' else nn.Linear(n_hidden*8, n_hidden),
-                                nn.BatchNorm1d(n_hidden),
-                                nn.ReLU()) for x in range(1,n_layers )]
-
-            latent = nn.Sequential(
-                        nn.Linear(n_hidden , n_hidden) if aggregator !='attentional' else nn.Linear(n_hidden*4, n_hidden), #if not supervised else nn.Linear(n_hidden , self.n_classes),
-                        nn.BatchNorm1d(n_hidden), #if not supervised else  nn.BatchNorm1d(self.n_classes),
-                        #nn.Softmax()
-                        )
-
-            layers = nn.ModuleList()
-            if n_layers > 1:
-                if aggregator == 'attentional':
-                    layers.append(dglnn.GATConv(in_feats, 
-                                                n_hidden, 
-                                                num_heads=8,
-                                                feat_drop=0.2,
-                                                activation=F.relu,
-                                                allow_zero_in_degree=True))
-
-                else:
-                    layers.append(dglnn.SAGEConv(in_feats, 
-                                                n_hidden, 
-                                                aggregator_type=aggregator,
-                                                feat_drop=0.2,
-                                                activation=F.relu,
-                                                norm=F.normalize))
-
-                for i in range(1,n_layers):
-                    if aggregator == 'attentional':
-                        layers.append(dglnn.GATConv(n_hidden, 
-                                                    n_hidden, 
-                                                    num_heads=4, 
-                                                    feat_drop=0.2,
-                                                    activation=F.relu,
-                                                    allow_zero_in_degree=True))
-
-                    else:
-                        layers.append(dglnn.SAGEConv(n_hidden, 
-                                                        n_hidden, 
-                                                        aggregator_type=aggregator,
-                                                        feat_drop=0.2,
-                                                        activation=F.relu,
-                                                        norm=F.normalize))
-            else:
-                layers.append(dglnn.SAGEConv(in_feats, n_classes, 'pool',feat_drop=0.2,activation=F.relu,norm=F.normalize))
-
-            if supervised:
-                classifier = Classifier(n_input=n_hidden,
-                                        n_labels=n_classes,
-                                        softmax=False,
-                                        reverse_gradients=False)
-            else:
-                classifier = None
-
-            self.encoder_dict = nn.ModuleDict({'GS': layers, 
-                                                'BN':bns,
-                                                'FC': nn.ModuleList([h for h in hidden]+[latent]),
-                                                'CF':classifier})
 
 
 class SemanticLoss:
@@ -473,3 +509,60 @@ class SemanticLoss:
         #semantic_loss = -F.logsigmoid((self.centroids_pseudo*self.centroids_true).sum(-1)).mean() + kl_density #
         #semantic_loss = nn.MSELoss()(self.centroids_pseudo, self.centroids_true) + kl_density + dispersion_p
         #return semantic_loss
+
+class PairNorm(th.nn.Module):
+    r"""Applies pair normalization over node features as described in the
+    `"PairNorm: Tackling Oversmoothing in GNNs"
+    <https://arxiv.org/abs/1909.12223>`_ paper
+
+    .. math::
+        \mathbf{x}_i^c &= \mathbf{x}_i - \frac{1}{n}
+        \sum_{i=1}^n \mathbf{x}_i \\
+
+        \mathbf{x}_i^{\prime} &= s \cdot
+        \frac{\mathbf{x}_i^c}{\sqrt{\frac{1}{n} \sum_{i=1}^n
+        {\| \mathbf{x}_i^c \|}^2_2}}
+
+    Args:
+        scale (float, optional): Scaling factor :math:`s` of normalization.
+            (default, :obj:`1.`)
+        scale_individually (bool, optional): If set to :obj:`True`, will
+            compute the scaling step as :math:`\mathbf{x}^{\prime}_i = s \cdot
+            \frac{\mathbf{x}_i^c}{{\| \mathbf{x}_i^c \|}_2}`.
+            (default: :obj:`False`)
+        eps (float, optional): A value added to the denominator for numerical
+            stability. (default: :obj:`1e-5`)
+    """
+    def __init__(self, scale: float = 1., scale_individually: bool = False,
+                 eps: float = 1e-5):
+        super(PairNorm, self).__init__()
+        from torch_scatter import scatter
+        self.scale = scale
+        self.scale_individually = scale_individually
+        self.eps = eps
+
+    def forward(self, x, batch=None):
+        scale = self.scale
+
+        if batch is None:
+            x = x - x.mean(dim=0, keepdim=True)
+
+            if not self.scale_individually:
+                return scale * x / (self.eps + x.pow(2).sum(-1).mean()).sqrt()
+            else:
+                return scale * x / (self.eps + x.norm(2, -1, keepdim=True))
+
+        else:
+            mean = scatter(x, batch, dim=0, reduce='mean')
+            x = x - mean.index_select(0, batch)
+
+            if not self.scale_individually:
+                return scale * x / th.sqrt(self.eps + scatter(
+                    x.pow(2).sum(-1, keepdim=True), batch, dim=0,
+                    reduce='mean').index_select(0, batch))
+            else:
+                return scale * x / (self.eps + x.norm(2, -1, keepdim=True))
+
+
+    def __repr__(self):
+        return f'{self.__class__.__name__}()'
