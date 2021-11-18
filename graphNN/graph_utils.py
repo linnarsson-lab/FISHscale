@@ -88,7 +88,7 @@ class GraphData(pl.LightningDataModule):
         cells=None, # Array with cell_ids of shape (Cells)
         ngh_size = 100,
         minimum_nodes_connected = 5,
-        ngh_sizes = [20, 10],
+        ngh_sizes = [10, 20],
         train_p = 0.25,
         batch_size= 512,
         num_workers=0,
