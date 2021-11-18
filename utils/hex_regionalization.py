@@ -187,7 +187,8 @@ class Regionalize(Iteration, Decomposition):
     def hexbin_plot(self, c: Union[np.ndarray, list], cm:Any=None, 
                     filter: np.ndarray = None, ax:Any=None, 
                     figsize=None, save:bool=False, savename:str='',
-                    vmin:float=None, vmax:float=None, linewidth:float=0.1):
+                    vmin:float=None, vmax:float=None, linewidth:float=0.1,
+                    colorbar=False):
         """Plot hexbin results. 
         Args:
             c (np.ndarray, list): Eiter an Array with color values as a float
@@ -208,12 +209,10 @@ class Regionalize(Iteration, Decomposition):
                 the hexagons. Increase the linewidth to hide them
         """
         #Input handling
-        colorbar=False
         if ax == None: 
             if figsize == None:
                 figsize = (10,10)
             fig, ax = plt.subplots(figsize=figsize)
-            colorbar=True
         if cm == None:
             cm = plt.cm.viridis
 
@@ -230,7 +229,9 @@ class Regionalize(Iteration, Decomposition):
             p.set_color(c)
             p.set_linewidth(linewidth) #To hide small white lines between the polygons
             p.set_edgecolor(c)
-            colorbar=False
+            if colorbar:
+                print('Colorbar not possible to add when giving a list of RGB colors')
+                colorbar=False
             
         #Set colors from an array of values
         else:
