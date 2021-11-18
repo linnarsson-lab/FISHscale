@@ -753,7 +753,7 @@ class GraphData(pl.LightningDataModule):
             cycled = [0,2,1,0]
             for i in range(3):
                 plt.subplot(1,3,i+1)
-                plt.scatter(Y_umap[:,cycled[i]], Y_umap[:,cycled[i+1]], c=Y_umap,  s=0.5, marker='.', linewidths=0, edgecolors=None)
+                plt.scatter(Y_umap[:,cycled[i]], Y_umap[:,cycled[i+1]], c=clusters_colors[some],  s=0.5, marker='.', linewidths=0, edgecolors=None)
                 plt.xlabel("Y"+str(cycled[i]))
                 plt.ylabel("Y"+str(cycled[i+1]))
             plt.tight_layout()

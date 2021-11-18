@@ -786,6 +786,7 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
                 z_offset = 0
             d.offset_data_temp(x_offset, y_offset, z_offset)
         
+
     def visualize(self,
                 columns:list=[],
                 width=2000,
@@ -794,7 +795,7 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
                 color_dic=None,
                 x=None,
                 y=None,
-                c=None):
+                c={}):
         """
         Run open3d visualization on self.data
         Pass to columns a list of strings, each string will be the class of the dots to be colored by. example: color by gene
@@ -808,6 +809,13 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
         if self.color_dict:
             color_dic = self.color_dict
 
+        QtWidgets.QApplication.setStyle('Fusion')
+        self.App = QtWidgets.QApplication.instance()
+        if self.App is None:
+            self.App = QtWidgets.QApplication(sys.argv)
+        else:
+            print('QApplication instance already exists: %s' % str(self.App))
+
         window = Window(self,
                         columns,
                         width,
@@ -816,3 +824,6 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
                         x_alt=x,
                         y_alt=y,
                         c_alt=c) 
+        
+        self.App.exec_()
+        
