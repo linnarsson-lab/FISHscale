@@ -375,3 +375,126 @@ class MultiGeneScatter(AxSize):
             if save_name == '':
                 save_name = f'Scatter_plot_{self.dataset_name}_{strftime("%Y-%m-%d_%H-%M-%S")}'
             plt.savefig(f'{save_name}{file_format}', dpi=dpi, bbox_inches='tight', pad_inches=0)
+
+
+class AttributeScatter(AxSize):
+    def attribute_scatter_plot(self, attributes: Union[List, np.ndarray], section:str,
+                    s: float=0.1, colors: Union[List, np.ndarray] = None, 
+                    ax_scale_factor: int=10, view: Union[Any, List] = None, 
+                    scalebar: bool=True, show_axes: bool=False,
+                    show_legend: bool = True, title: str = None, ax = None, 
+                    save: bool=False, save_name: str='', dpi: int=300, 
+                    file_format: str='.eps', alpha=1) -> None:
+        """Make a scatter plot of the data.
+
+        Uses a black background. Plots in real size if `ax_scale_factor` is 1. 
+        If the plot is saved it rasterizes the points because vector plots of
+        milions of points get very huge. All other parts of the plot are 
+        vectors.
+
+        Args:
+            genes (Union[List, np.ndarray]): List of genes to plot. First gene
+                will be plotted first and thus be on the bottom of the stack.
+            s (float, optional): Size of the points. Defaults to 0.1.
+            colors (Union[List, np.ndarray]): Iterable with colors for the
+                selected genes. If None given, defaults to internal gene-
+                color dictionary. Defaults to None.
+            ax_scale_factor (int, optional): Scale factor of the plot. If 1,
+                the plot will be in real size. Carefully scale this for every 
+                plot so that the plot does not become too small or too big.
+                Defaults to 10.
+            view (Union[Any, List], optional): If given it crops the points. 
+                Should be a list of list with the the Left Bottom and Top Right
+                corner coordinates: [[X_BL, Y_BL], [X_TR, Y_TR]]
+                Defaults to None.
+            scalebar (bool, optional): If True adds a scalebar.
+                Defaults to True.
+            show_axes (bool, optional): If True adds the axes to the plot.
+                Defaults to False.
+            show_legend (bool, optional): Show the gene legend. Can not show
+                more than 15 genes.
+            title (str, optional): Add a title to the figure. Defaults to None.
+            ax (matplotlib ax object, optional): If given put plot in ax of 
+                existing figure. Defaults to None
+            save (bool, optional): If True saves the plot. Defaults to False.
+            save_name (str, optional): Name of the plot. If not given will have
+                the format: "Scatter_plot_<dataset_name>_<timestamp>"
+                Defaults to ''.
+            dpi (int, optional): Dots Per Inch (DPI) of the plot.
+                Defaults to 300.
+            file_format (str, optional): Format of the plot including the 
+                point. Even if vector format is given the points will be 
+                rasterized. Defaults to '.eps'.
+            alpha (float, optional): transparency. Defaults to 1.
+        """        
+        #Check input
+        if not isinstance(attributes, list) and not isinstance(attributes, np.ndarray):
+            attributes = [attributes]
+
+        #Make figure
+        if type(ax) == type(None):
+            fig = plt.figure(figsize=(20,10))
+            ax = fig.add_subplot(111)#, rasterized=True)
+            ax.set_rasterization_zorder(1)
+
+        #Plot points
+        if type(colors) == type(None):
+            colors = [self.color_dict[g] for g in attributes]
+        for g, c in zip(attributes, colors):
+            data = self.dask_attrs[section]
+            data= data[data[section].isin(attributes)].compute()
+            x = data.x
+            y = data.y
+            if isinstance(view, list):
+                filt_x = (x > view[0][0]) & (x < view[1][0])
+                filt_y = (y > view[0][1] )& (y < view[1][1])
+                filt = filt_x & filt_y
+                x = x[filt]
+                y = y[filt]
+            ax.scatter(x, y, s=s, color=c, zorder=0, label=g, alpha=alpha)
+            del data
+        
+        #Rescale
+        if isinstance(view, list):
+            x_extent = view[1][0] - view[0][0]
+            y_extent = view[1][1] - view[0][1]
+        else:
+            x_extent = self.x_extent
+            y_extent = self.y_extent
+
+        x_scale = self._to_inch(x_extent * ax_scale_factor, unit = self.pixel_size.units)
+        y_scale = self._to_inch(y_extent * ax_scale_factor, unit = self.pixel_size.units)
+        self._set_ax_size(x_scale, y_scale)
+        
+        ax.set_aspect('equal')
+
+        #Add scale bar
+        if scalebar:   
+            self._add_scale_bar(ax)
+        
+        #Plot layout
+        if not show_axes:
+            ax.set_axis_off()
+            plt.gca().xaxis.set_major_locator(plt.NullLocator())
+            plt.gca().yaxis.set_major_locator(plt.NullLocator())
+        ax.add_patch(plt.Rectangle((0,0), 1, 1, facecolor=(0,0,0),
+                                transform=ax.transAxes, zorder=-1))
+        
+        if show_legend:
+            if len(attributes) > 15:
+                print('Can not add the legend for more than 15 genes. Please see self.color_dict for gene colors.')
+            else:
+                lw, fs = self._line_font_size(ax)
+                lgnd = plt.legend(loc = 2, frameon=False, fontsize=fs, handletextpad=-0.3)
+                for handle in lgnd.legendHandles:
+                    handle.set_sizes([lw*5])
+                    plt.setp(lgnd.get_texts(), color='w')
+                    
+        if title != None:
+            plt.title(title, color='w', fontsize=24)            
+
+        if save:
+            if save_name == '':
+                save_name = f'Scatter_plot_{self.dataset_name}_{strftime("%Y-%m-%d_%H-%M-%S")}'
+            plt.savefig(f'{save_name}{file_format}', dpi=dpi, bbox_inches='tight', pad_inches=0)
+

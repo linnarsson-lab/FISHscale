@@ -130,8 +130,6 @@ class Window:
         self.vis.visM.destroy_window()
         #QApplication.quit()
     #
-    
-
     def pass_multi_data(self):
         r = lambda: random.randint(0,255)
         ds = []
@@ -315,7 +313,7 @@ class ListWidget(QWidget):
 
                     else:
                         da = d.dask_attrs[self.section]
-                        selected = da[da[self.section].isin(self.selected)].compute() #.index.compute()
+                        selected = da[da[self.section].isin(self.selected)].compute() #.index.compute(
                         ps =  selected.loc[:,['x','y','z']].values
                         cs = np.array([x for x in selected[self.section].apply(lambda x: d.color_dict[str(x)])])
                         points.append(ps)

@@ -15,7 +15,7 @@ from FISHscale.utils.gene_correlation import GeneCorr
 from FISHscale.utils.spatial_metrics import SpatialMetrics
 from FISHscale.utils.density_1D import Density1D
 from FISHscale.utils.normalization import Normalization
-from FISHscale.visualization.gene_scatter import GeneScatter, MultiGeneScatter
+from FISHscale.visualization.gene_scatter import GeneScatter, MultiGeneScatter, AttributeScatter
 from FISHscale.utils.data_handling import DataLoader, DataLoader_base
 from FISHscale.utils.clustering import Clustering
 from FISHscale.utils.bonefight import BoneFight, BoneFightMulti
@@ -47,7 +47,7 @@ except ModuleNotFoundError as e:
     print(f'Please install "pyarrow" to load ".parquet" files. Without only .csv files are supported which are memory inefficient. Error: {e}')
 from tqdm import tqdm
 
-class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, SpatialMetrics, DataLoader, Normalization, 
+class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, AttributeScatter, SpatialMetrics, DataLoader, Normalization, 
               Density1D, Clustering, BoneFight, Decomposition, Boundaries, Gene_order, Cellpose, 
               Regionalization_Gradient):
     """
