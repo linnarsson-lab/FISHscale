@@ -314,9 +314,8 @@ class Encoder(nn.Module):
                         )
 
             layers = nn.ModuleList()
-            #self.pair_norm = PairNorm()
-            self.pair_norm = DiffGroupNorm(n_hidden,20)
-
+            self.pair_norm = PairNorm()
+            #self.pair_norm = DiffGroupNorm(n_hidden,20)
 
             for i in range(0,n_layers-1):
                 if i > 0:
