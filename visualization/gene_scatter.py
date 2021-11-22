@@ -441,6 +441,7 @@ class AttributeScatter(AxSize):
         if type(colors) == type(None):
             colors = [self.color_dict[g] for g in attributes]
         for g, c in zip(attributes, colors):
+            print(g)
             data = self.dask_attrs[section]
             data= data[data[section].isin(attributes)].compute()
             x = data.x
