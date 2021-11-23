@@ -296,11 +296,6 @@ class Encoder(nn.Module):
             ):
             super().__init__()
         
-
-            bns = nn.ModuleList()
-            for _ in range(n_layers):
-                bns.append(nn.BatchNorm1d(n_hidden))
-
             hidden = [nn.Sequential(
                                 nn.Linear(n_hidden , n_hidden), #if aggregator !='attentional' else nn.Linear(n_hidden*4, n_hidden),
                                 nn.BatchNorm1d(n_hidden,  momentum=0.01, eps=0.001),
@@ -314,8 +309,11 @@ class Encoder(nn.Module):
                         )
 
             layers = nn.ModuleList()
-            self.pair_norm = PairNorm()
-            #self.pair_norm = DiffGroupNorm(n_hidden,20)
+            #self.norm = PairNorm()
+            if supervised:
+                self.norm = F.normalize
+            else:
+                self.norm = DiffGroupNorm(n_hidden,20) 
 
             for i in range(0,n_layers-1):
                 if i > 0:
@@ -330,7 +328,7 @@ class Encoder(nn.Module):
                                                 num_heads=4,
                                                 feat_drop=x,
                                                 activation=F.relu,
-                                                norm=self.pair_norm,
+                                                norm=self.norm,
                                                 #allow_zero_in_degree=False
                                                 ))
 
@@ -340,7 +338,7 @@ class Encoder(nn.Module):
                                                 aggregator_type=aggregator,
                                                 #feat_drop=0.2,
                                                 activation=F.relu,
-                                                norm=self.pair_norm,
+                                                norm=self.norm,
                                                 ))
 
             if aggregator == 'attentional':
@@ -370,6 +368,5 @@ class Encoder(nn.Module):
                 classifier = None
 
             self.encoder_dict = nn.ModuleDict({'GS': layers, 
-                                                'BN':bns,
                                                 'FC': nn.ModuleList([h for h in hidden]+[latent]),
                                                 'CF':classifier})
