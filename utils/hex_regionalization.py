@@ -1165,3 +1165,85 @@ class Regionalize(Iteration, Decomposition):
                                                  columns = sum_counts.columns, geometry=new_geoseries)
             
             return gdf
+        
+    def region_inspect(self, l, labels:np.ndarray, df_hex, df_mean, 
+                           cmap = plt.cm.gist_ncar_r, s:float = 0.005, 
+                           save:bool = False, savename:str = '', 
+                           close:bool = False, dpi = 150):
+        """Plot location and characteristics for one region.
+        
+        Intended for inspection and annotation of regions.
+        Uses input of the "self.regionalize()" function.
+
+        Args:
+            l : Label of interest
+            labels (np.ndarray): Array of hexagon cluster labels, should be
+                integer or float.
+            df_hex ([pandas.Dataframe]): Dataframe with hexagon counts.
+            df_mean ([pandas.Dataframe]): Dataframe with mean counts.
+            cmap ([matplotlib colormap], optional): Matplotlib colormap object.
+                Defaults to plt.cm.gist_ncar_r.
+            s (float, optional): Size of the dots for the scatterplot.
+                Defaults to 0.005.
+            save (bool, optional): Saves the plot if True. Defaults to False.
+            savename (str, optional): Path and name to save. Will be appended
+                with "_<l>.png" where l is the label of interest.
+                Defaults to ''.
+            close (bool, optional): If True, closes the figure after plotting.
+                Defaults to False.
+            dpi (int, optional): dpi to use for the plot. Defaults to 150.
+        """
+
+        fig = plt.figure(figsize=(20,10), constrained_layout=True, facecolor='white')
+        gs = fig.add_gridspec(3, 4)
+
+        #Plot region of interest
+        ax0 = fig.add_subplot(gs[0,:2])
+
+        labels_float = labels / labels.max()
+        c = plt.cm.gist_ncar_r(labels_float)
+        filt = labels == l
+        c[filt, :3] = np.array([0,0,0])
+        c[np.invert(filt), 3] = 0.5
+
+        self.hexbin_plot([i for i in c], ax=ax0)
+        ax0.set_axis_off()
+
+        #Plot gene expression
+        ax1 = fig.add_subplot(gs[0,2:])
+
+        #Calculate z score
+        mean = df_hex.mean(axis=1)
+        std = df_hex.std(axis=1)
+        z = (df_mean.loc[:,l] - mean) / std
+
+        argsort = np.argsort(np.abs(z.to_numpy()))[::-1]
+        
+        #Get 10 highest z scores
+        n=10
+        x = np.linspace(0, 10, n)
+        y = [z.iloc[i] for i in argsort[:n]]
+        lab = [z.index[i] for i in argsort[:n]]
+
+        ax1.bar(x, y, width = 1)
+        ax1.set_xticks(x)
+        ax1.set_xticklabels(lab, rotation=-90, fontsize=12)
+        ax1.set_ylabel('z score', fontsize=14)
+
+        #Plot 4 highest expressed genes (According to z score)
+        for i, g in enumerate(z.index[argsort[:8]]):
+
+            ax = fig.add_subplot(gs[int(i/4)+1, i%4])
+            xy = self.get_gene(g)
+            ax.scatter(xy.x, xy.y, s=s, c='k')
+            ax.set_title(g, fontsize=14)
+            ax.set_aspect('equal')
+            ax.axis('off')
+
+        plt.suptitle(f'Label: {l}', fontsize=20, y=1.05)
+        
+        if save:
+            plt.savefig(f'{savename}_{l}.png', dpi=dpi, bbox_inches='tight', facecolor='white')
+            
+        if close:
+            plt.close()
