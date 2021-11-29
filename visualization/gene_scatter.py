@@ -251,7 +251,6 @@ class GeneScatter(AxSize):
 
 
 class MultiGeneScatter(AxSize):
-    
     def scatter_plot(self, genes: Union[List, np.ndarray], s: float=0.1, 
                     colors: Union[List, np.ndarray] = None, 
                     ax_scale_factor: int=10, scalebar: bool=True, 
@@ -439,11 +438,17 @@ class AttributeScatter(AxSize):
 
         #Plot points
         if type(colors) == type(None):
+            import random
+            r = lambda: random.randint(0,255)
+            for a in attributes:
+                if a not in self.color_dict:
+                    self.color_dict[str(a)] = (r()/255,r()/255,r()/255)
+
             colors = [self.color_dict[g] for g in attributes]
         for g, c in zip(attributes, colors):
             print(g)
             data = self.dask_attrs[section]
-            data= data[data[section].isin(attributes)].compute()
+            data= data[data[section].isin([g])].compute()
             x = data.x
             y = data.y
             if isinstance(view, list):

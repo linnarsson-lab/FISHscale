@@ -292,7 +292,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         def get_cells(partition):
             cl_molecules_xy = partition.loc[:,['x','y','g','DBscan',label_column]]
             clr= cl_molecules_xy.groupby('DBscan')#.applymap(get_counts)
-            clusters, dblabel, centroids, data = [],[],[],[]
+            dblabel, centroids, data = [],[],[]
             try:
                 cl = cl_molecules_xy[label_column].values[0]
                 for cell in clr:
@@ -307,32 +307,38 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 return data, dblabel, centroids
             except:
                 return None, [], []
-            
 
         def gene_by_cell_loom(dask_attrs):
-            matrices, labels, centroids = [],[],[]
+            matrices, labels, centroids, clusters = [],[],[], []
             for p in trange(self.dask_attrs[label_column].npartitions):
                 matrix, label, centroid = get_cells(dask_attrs.partitions[p].compute())
                 if type(matrix) != type(None):
                     matrices.append(matrix)
+
+                try:
+                    clusters += [self.dask_attrs[label_column].partitions[p][label_column].values.compute()[0]]*len(label)
+                except:
+                    pass
+
                 labels += label
                 centroids += centroid
             matrices = pd.concat(matrices,axis=1)
+
             if type(save_to) == type(None):
                 file = path.join(self.dataset_folder,self.filename.split('.')[0]+'_DBcells.loom')
             else:
                 file = path.join(save_to+'DBcells.loom')
             row_attrs = {'Gene':matrices.index.values}
-            col_attrs = {'DBlabel':matrices.columns.values, 'Centroid':centroids}
+            col_attrs = {'DBlabel':matrices.columns.values, 'Centroid':centroids, label_column:clusters}
             loompy.create(file,matrices.values,row_attrs,col_attrs)
-            #return matrices, labels, centroids
 
         print('Running DBscan by: {}'.format(label_column))
-        result = self.dask_attrs[label_column].groupby(label_column).apply(segmentation, meta=object).compute()
-        print('DBscan results added to dask attributes.')
-        self.dask_attrs[label_column] = self.dask_attrs[label_column].merge(pd.DataFrame({'DBscan':np.concatenate(result)}))
-        print('Generating gene by cell matrix as loom file.')
+        r = self.dask_attrs[label_column].groupby(label_column).apply(segmentation, meta=object).compute()
+        result = [r[self.dask_attrs[label_column].partitions[x][label_column].compute().values[0]] for x in range(self.dask_attrs[label_column].npartitions)]
+        self.dask_attrs[label_column] = self.dask_attrs[label_column].merge(pd.DataFrame(np.concatenate(result),index=self.dask_attrs[label_column].index,columns=['DBscan']))
+        print('DBscan results added to dask attributes. Generating gene by cell matrix as loom file.')
         gene_by_cell_loom(self.dask_attrs[label_column])
+        
                     
 
 class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base, Normalization, RegionalizeMulti,
