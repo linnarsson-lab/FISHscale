@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier
+from tqdm import tqdm
 
 
 class Regionalization_Gradient:
@@ -8,6 +9,7 @@ class Regionalization_Gradient:
     def regionalization_gradient_make(self, df_hex, labels, colors=None, cm=plt.cm.nipy_spectral_r,
                                       max_depth=5, random_state=0, plot=True, n_jobs=-1, **kwargs):
         """Convert discreet regionalization to mixtures of labels.
+        
         Args:
             df_hex (pd.DataFrame): Pandas Dataframe with hexagonally binned 
                 data. 
@@ -115,3 +117,80 @@ class Regionalization_Gradient:
             ax2.set_axis_off()
             
         return mix_color, predicted_prob, predicted_labels, color_dict
+    
+    
+class Regionalization_Gradient_Multi:
+    
+    def regionalization_gradient_make_multi(self, regionalization_result, colors=None, cm=plt.cm.nipy_spectral_r,
+                                      max_depth=5, random_state=0, plot=False, n_jobs=-1, **kwargs):
+        """Convert discreet regionalization to mixtures of labels.
+        
+        Runs self.regionalization_gradient_make() for each individual dataset.
+        Results are stored in a dictionary per dataset and can be accessed
+        easily using self.get_dict_item().
+        
+        Args:
+            regionalization_result (dictionary): Results form the 
+                self.regionalize() function. 
+            colors (list, optional): List of RGB(A) color tuples for each 
+                hexagonal bin. If not given will use the default or given
+                matplotlib colormap. Defaults to None.
+            cm (matplotlib colormap, optional): If "colors" is not given will
+                use this colormap to give colors to the labels. Can be any 
+                matplotlib colormap.
+                Defaults to plt.cm.nipy_spectral_r.
+            max_depth (int, optional): Maximum depth of the Random Forest 
+                Classifier. Tweak this to prevent under or over fitting. See
+                Scikit Learn documentation for more details. Defaults to 5.
+            random_state (int, optional): Random state for the Random Forest
+                Classifier. Defaults to 0.
+            plot (bool, optional): If True, will plot the original lables,
+                classifier calls and mixed colors. Defaults to True.
+            n_jobs (int, optional): Number of jobs to run. Defaults to -1.
+            **kwargs (optional): Kwargs will be passed to the initiation of the
+                RandomForestClassifier. Refer to the Scikit Learn documentation
+                for options and explanation.
+        Returns:
+            Dictionary containing:
+                - mixed_colors: List with mixed RGB colors.
+                - predicted_prob: Array with probabilities for all labels for each
+                hexagonal tiles.
+                - predicted_labels: Array with predicted labels of classification.
+                - color_dict: Dictionary with label colors.
+            
+        """
+        
+        #Get input
+        dfs =  self.get_dict_item(regionalization_result, 'df_hex')
+        labels = self.get_dict_item(regionalization_result, 'labels')
+        
+        #Use pre-determined colors to get the mixing right
+        if type(colors) == type(None):
+            colors = [cm(l) for l in labels]
+        
+        results = {}
+        #Loop over datasets and run the function
+        for d, df, l, c in tqdm(zip(self.datasets, dfs, labels, colors)):
+            results[d.dataset_name] = {}
+            mixed_colors, predicted_prob, predicted_labels, color_dict = d.regionalization_gradient_make(df, 
+                                                                                                         l, 
+                                                                                                         colors=c, 
+                                                                                                         cm=cm,
+                                                                                                         max_depth=max_depth,
+                                                                                                         random_state=random_state,
+                                                                                                         plot=plot,
+                                                                                                         n_jobs=n_jobs,
+                                                                                                         **kwargs)
+            results[d.dataset_name]['mixed_colors'] = mixed_colors
+            results[d.dataset_name]['predicted_prob'] = predicted_prob
+            results[d.dataset_name]['predicted_labels'] = predicted_labels
+            results[d.dataset_name]['color_dict'] = color_dict
+        
+        return results
+        
+        
+        
+        
+        
+        
+        

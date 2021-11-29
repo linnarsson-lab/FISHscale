@@ -9,6 +9,7 @@ import math
 from scipy.ndimage import binary_erosion
 from typing import Tuple
 from scipy.spatial import distance
+from tqdm import tqdm
 
 def _worker_bisect(points: np.ndarray, grid: np.ndarray, radius: float, 
                    lines: list, n_angles: int):
@@ -177,12 +178,14 @@ class Boundaries:
                 the max number of cpus is used. Defaults to None.
         Returns:
             Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-            results: Array with in the first colum the r values and in the
-                second column the angle with the lowest correlation. These are
-                only caluclated for grid points that fall within the dataset.
+            results: Array with in the first colum the euclidian distance and 
+                in the second column the angle with the highest distance.
+                These are only caluclated for grid points that fall within 
+                the dataset and the point coordinates can be found in 
+                `grid_filt`.
             grid: XY coordinates of all grid points. 
             grid_filt: XY coordinates of valid grid points.
-            filt_grid: boolean filter to filter the `grid` to get `grid_filt`
+            filt_grid: boolean filter to filter the `grid` to get `grid_filt`.
         """
         if n_jobs == None:
             n_jobs = self.cpu_count()
@@ -261,3 +264,106 @@ class Boundaries:
         #results2[:,3] = [angle_used[int(i)] for i in results2[:,3]]
         
         return results2, grid, grid_filt, filt_grid
+    
+class Boundaries_Multi:
+    
+    def boundaries_make_multi(self, bin_size: int = 100, radius: int = 200, n_angles: int = 6,
+                normalize: bool = False, normalization_mode: str = 'log', gene_selection: any = None, 
+                n_jobs: int = -1):
+        """Calculate local similarity to investigate border strenth.
+        
+        Loops over all samples in the multi-dataset and for each sample 
+        overlays the sample with a grid of points. For each point the molecules
+        within the radius are selected. This circle is then devided in two 
+        halves, at different angles. The Euclidian distance between the 
+        molecule counts of the two halves is calcuated and the value and angle
+        of the angle with the highest distance is returned.
+        
+        The higher the distance the stronger the border is, and the angle 
+        indicates the direction of the (potential) border.
+        
+        Results are stored in a dictionary per dataset and can be accessed
+        easily using self.get_dict_item().
+        
+        Args:
+            bin_size (int, optional): The distance between the grid points in 
+                the same unit as the dataset. Defaults to 100.
+            radius (int, optional): Search radius for asigning molecules to 
+                grid points. May be larger than the bin_size. Defaults to 200.
+            n_angles (int, optional): Number of angles to test. Defaults to 6.
+            normalize (bool, optional): If True normalizes the count data.
+                Defaults to False.
+            normalization_mode (str, optional): Normalization method to use.
+                Defaults to 'log'.
+            gene_selection (list, np.ndarray, optional): Genes 
+            n_jobs (int, optional): Number of processes to use. If None, 
+                the max number of cpus is used. Defaults to None.
+        Returns:
+            Returns:
+            Dictionary containing:
+                - results: Array with in the first colum the euclidian distance
+                    and in the second column the angle with the highest 
+                    distance. These are only caluclated for grid points that 
+                    fall within the dataset and the point coordinates can be 
+                    found in `grid_filt`.
+                - grid: XY coordinates of all grid points. 
+                - grid_filt: XY coordinates of valid grid points.
+                - filt_grid: boolean filter to filter the `grid` to get 
+                    `grid_filt`.
+        """
+        
+        results = {}
+        for d in tqdm(self.datasets):
+            
+            r, grid, grid_filt, filt_grid = d.boundaries_make(bin_size = bin_size,
+                                                              radius = radius,
+                                                              n_angles = n_angles,
+                                                              normalize = normalize,
+                                                              normalization_mode = normalization_mode,
+                                                              gene_selection = gene_selection,
+                                                              n_jobs = n_jobs)
+            
+            results[d.dataset_name]['result'] = r
+            results[d.dataset_name]['grid'] = grid
+            results[d.dataset_name]['grid_filt'] = grid_filt
+            results[d.dataset_name]['filt_grid'] = filt_grid
+        
+        return results
+        
+        
+        
+        """Calculate local similarity to investigate border strenth.
+        
+        Overlays the sample with a grid of points. For each point the molecules
+        within the radius are selected. This circle is then devided in two 
+        halves, at different angles. The Euclidian distance between the 
+        molecule counts of the two halves is calcuated and the value and angle
+        of the angle with the highest distance is returned.
+        
+        The higher the distance the stronger the border is, and the angle 
+        indicates the direction of the (potential) border.
+        Args:
+            bin_size (int, optional): The distance between the grid points in 
+                the same unit as the dataset. Defaults to 100.
+            radius (int, optional): Search radius for asigning molecules to 
+                grid points. May be larger than the bin_size. Defaults to 200.
+            n_angles (int, optional): Number of angles to test. Defaults to 6.
+            normalize (bool, optional): If True normalizes the count data.
+                Defaults to False.
+            normalization_mode (str, optional): Normalization method to use.
+                Defaults to 'log'.
+            gene_selection (list, np.ndarray, optional): Genes 
+            n_jobs (int, optional): Number of processes to use. If None, 
+                the max number of cpus is used. Defaults to None.
+        Returns:
+            Returns:
+            Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+            results: Array with in the first colum the euclidian distance and 
+                in the second column the angle with the highest distance.
+                These are only caluclated for grid points that fall within 
+                the dataset and the point coordinates can be found in 
+                `grid_filt`.
+            grid: XY coordinates of all grid points. 
+            grid_filt: XY coordinates of valid grid points.
+            filt_grid: boolean filter to filter the `grid` to get `grid_filt`
+        """
