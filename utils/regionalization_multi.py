@@ -57,7 +57,8 @@ class RegionalizeMulti(Decomposition):
     
     #### PLOTTING ####        
     def hexbin_plot(self, c:list, cm=None, gridspec=None, figsize=None, 
-                    save:bool=False, savename:str=''):
+                    show_sample_title:bool = True, vmin:float = None,
+                     vmax:float = None, save:bool=False, savename:str=''):
         """Plot spatial multidataset hexbin results
 
         Args:
@@ -76,6 +77,8 @@ class RegionalizeMulti(Decomposition):
             figsize (tuple): Size of figure if not defined by gridspec. 
                 If None uses: (sqrt(n_datasets) * 5, sqrt(n_datasets) * 5).
                 Defaults to None.
+            show_sampel_title (bool): Show titles of individual samples.
+                Defaults to True.
             save (bool, optional): Save the plot as .pdf. Defaults to False.
             savename (str, optional): Name of the plot. Defaults to ''.
         """
@@ -97,8 +100,9 @@ class RegionalizeMulti(Decomposition):
         #plot data
         for d, col, ((i,j), ax) in zip(self.datasets, c, np.ndenumerate(axes)):
             ax = axes[i,j]
-            d.hexbin_plot(c = col, cm=cm, ax=ax)
-            ax.set_title(d.dataset_name, fontsize=6)
+            d.hexbin_plot(c = col, cm=cm, ax=ax, vmin=vmin, vmax=vmax)
+            if show_sample_title:
+                ax.set_title(d.dataset_name, fontsize=6)
             ax.set_aspect('equal')
             ax.set_axis_off()
             
