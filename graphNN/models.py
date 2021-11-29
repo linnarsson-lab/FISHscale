@@ -122,7 +122,6 @@ class SAGELightning(LightningModule):
             # Bonefight regularization of cell types
             bone_fight_loss = -F.cosine_similarity(probabilities_unlab @ self.reference.T.to(self.device), bu,dim=0).mean()
             bone_fight_loss += -F.cosine_similarity(probabilities_unlab @ self.reference.T.to(self.device), bu,dim=1).mean()*0.5
-            
             '''q = th.ones(probabilities_unlab.shape[1],device=self.device)/probabilities_unlab.shape[1]
             #print(q.shape, probabilities_unlab.shape)
             p = th.log(probabilities_unlab.sum(axis=0)/probabilities_unlab.shape[0])
@@ -136,7 +135,7 @@ class SAGELightning(LightningModule):
             self.kappa += 1
             #loss = loss*kappa
             #loss = bone_fight_loss + loss +classifier_loss+ kappa*(kappa*classifier_domain_loss + kappa*supervised_loss) #+ semantic_loss.detach()
-            loss = bone_fight_loss + loss + classifier_loss+ supervised_loss + classifier_domain_loss  #+ semantic_loss.detach()
+            loss = bone_fight_loss + classifier_loss + classifier_domain_loss #+ loss+ supervised_loss   #+ semantic_loss.detach()
             '''opt.zero_grad()
             self.manual_backward(loss,retain_graph=True)
             opt.step()'''
@@ -311,7 +310,7 @@ class Encoder(nn.Module):
             layers = nn.ModuleList()
             #self.norm = PairNorm()
             if supervised:
-                self.norm = F.normalize
+                self.norm = PairNorm(scale_individually=True)
             else:
                 self.norm = DiffGroupNorm(n_hidden,20) 
 
