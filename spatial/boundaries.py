@@ -273,7 +273,6 @@ class Boundaries:
         
         image = np.zeros(shape)
         image[filt_grid] = results2[:,0]
-        print(image.shape)
         
         return results2, image, grid, grid_filt, filt_grid, shape
     
