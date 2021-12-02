@@ -530,7 +530,8 @@ class RegionalizeMulti(Decomposition):
             cluster_mean = self.cluster_mean(merged_data, all_labels)
             #Order clusters
             manifold = SpectralEmbedding(n_components=1).fit_transform(cluster_mean.T)
-            even_spaced = np.linspace(0, 1, manifold.shape[0])
+            #even_spaced = np.linspace(0, 1, manifold.shape[0])
+            even_spaced = np.arange(manifold.shape[0])
             even_spaced_dict = dict(zip(np.sort(manifold.ravel()), even_spaced))
             manifold_even = np.array([even_spaced_dict[i] for i in manifold.ravel()])
             manifold_even_dict = dict(zip(cluster_mean.columns, manifold_even))

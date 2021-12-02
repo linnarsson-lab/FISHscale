@@ -163,6 +163,11 @@ class Boundaries:
         
         The higher the distance the stronger the border is, and the angle 
         indicates the direction of the (potential) border.
+        
+        An array of the resulting angle, similar to the image output,
+        can be made using:
+        np.zeros(shape)[filt_grid] = borders[:,1]
+        
         Args:
             bin_size (int, optional): The distance between the grid points in 
                 the same unit as the dataset. Defaults to 100.
@@ -183,9 +188,11 @@ class Boundaries:
                 These are only caluclated for grid points that fall within 
                 the dataset and the point coordinates can be found in 
                 `grid_filt`.
+            image: Array of the results in the shape of the tissue.
             grid: XY coordinates of all grid points. 
             grid_filt: XY coordinates of valid grid points.
             filt_grid: boolean filter to filter the `grid` to get `grid_filt`.
+            shape: Original shape of grid. 
         """
         if n_jobs == None:
             n_jobs = self.cpu_count()
@@ -193,6 +200,7 @@ class Boundaries:
         #Make the grid overlaying the data       
         grid, Xi, Yi = self.square_grid(bin_size, self.x_extent, self.y_extent, 
                                         self.x_min, self.x_max, self.y_min, self.y_max)
+        shape = Xi.shape
 
         #make lines that bisect a circle for each required angle
         lines = [self.bisect(radius, a) for a in np.linspace(0, 180 - (180 / n_angles), n_angles)]
@@ -263,7 +271,11 @@ class Boundaries:
         results2[:,1] = [angle_used[int(i)] for i in results2[:,1]]
         #results2[:,3] = [angle_used[int(i)] for i in results2[:,3]]
         
-        return results2, grid, grid_filt, filt_grid
+        image = np.zeros(shape)
+        image[filt_grid] = results2[:,0]
+        print(image.shape)
+        
+        return results2, image, grid, grid_filt, filt_grid, shape
     
 class Boundaries_Multi:
     
@@ -284,6 +296,10 @@ class Boundaries_Multi:
         
         Results are stored in a dictionary per dataset and can be accessed
         easily using self.get_dict_item().
+        
+        An array of the resulting angle, similar to the image output,
+        can be made using:
+        np.zeros(shape)[filt_grid] = borders[:,1]
         
         Args:
             bin_size (int, optional): The distance between the grid points in 
@@ -306,16 +322,19 @@ class Boundaries_Multi:
                     distance. These are only caluclated for grid points that 
                     fall within the dataset and the point coordinates can be 
                     found in `grid_filt`.
+                - image: Array with the border strength as values.
                 - grid: XY coordinates of all grid points. 
                 - grid_filt: XY coordinates of valid grid points.
                 - filt_grid: boolean filter to filter the `grid` to get 
                     `grid_filt`.
+                - shape: Original shape of grid.
         """
         
         results = {}
         for d in tqdm(self.datasets):
-            
-            r, grid, grid_filt, filt_grid = d.boundaries_make(bin_size = bin_size,
+            results[d.dataset_name] = {}
+
+            r, image, grid, grid_filt, filt_grid, shape = d.boundaries_make(bin_size = bin_size,
                                                               radius = radius,
                                                               n_angles = n_angles,
                                                               normalize = normalize,
@@ -324,46 +343,10 @@ class Boundaries_Multi:
                                                               n_jobs = n_jobs)
             
             results[d.dataset_name]['result'] = r
+            results[d.dataset_name]['image'] = image
             results[d.dataset_name]['grid'] = grid
             results[d.dataset_name]['grid_filt'] = grid_filt
             results[d.dataset_name]['filt_grid'] = filt_grid
-        
+            results[d.dataset_name]['shape'] = shape
+            
         return results
-        
-        
-        
-        """Calculate local similarity to investigate border strenth.
-        
-        Overlays the sample with a grid of points. For each point the molecules
-        within the radius are selected. This circle is then devided in two 
-        halves, at different angles. The Euclidian distance between the 
-        molecule counts of the two halves is calcuated and the value and angle
-        of the angle with the highest distance is returned.
-        
-        The higher the distance the stronger the border is, and the angle 
-        indicates the direction of the (potential) border.
-        Args:
-            bin_size (int, optional): The distance between the grid points in 
-                the same unit as the dataset. Defaults to 100.
-            radius (int, optional): Search radius for asigning molecules to 
-                grid points. May be larger than the bin_size. Defaults to 200.
-            n_angles (int, optional): Number of angles to test. Defaults to 6.
-            normalize (bool, optional): If True normalizes the count data.
-                Defaults to False.
-            normalization_mode (str, optional): Normalization method to use.
-                Defaults to 'log'.
-            gene_selection (list, np.ndarray, optional): Genes 
-            n_jobs (int, optional): Number of processes to use. If None, 
-                the max number of cpus is used. Defaults to None.
-        Returns:
-            Returns:
-            Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-            results: Array with in the first colum the euclidian distance and 
-                in the second column the angle with the highest distance.
-                These are only caluclated for grid points that fall within 
-                the dataset and the point coordinates can be found in 
-                `grid_filt`.
-            grid: XY coordinates of all grid points. 
-            grid_filt: XY coordinates of valid grid points.
-            filt_grid: boolean filter to filter the `grid` to get `grid_filt`
-        """
