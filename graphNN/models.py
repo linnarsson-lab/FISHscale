@@ -8,6 +8,7 @@ import dgl.function as fn
 import tqdm
 from pytorch_lightning import LightningModule
 from FISHscale.graphNN.submodules import Classifier, PairNorm, DiffGroupNorm
+from torch.distributions import Normal, kl_divergence as kl
 
 class CrossEntropyLoss(nn.Module):
     def forward(self, block_outputs, pos_graph, neg_graph):
@@ -26,6 +27,9 @@ class CrossEntropyLoss(nn.Module):
         #label = th.cat([th.ones_like(pos_score), th.zeros_like(neg_score)]).long()
         #loss = F.binary_cross_entropy_with_logits(score, label.float())
         return loss, pos_loss, neg_loss
+
+def reparameterize_gaussian(mu, var):
+    return Normal(mu, var.sqrt()).rsample()
 
 class SAGELightning(LightningModule):
     def __init__(self,
@@ -72,73 +76,21 @@ class SAGELightning(LightningModule):
         #pos_graph = pos_graph.to(self.device)
         #neg_graph = neg_graph.to(self.device)
         batch_inputs_u = mfgs[0].srcdata['gene']
-        batch_pred_unlab = self.module(mfgs, batch_inputs_u)
+        batch_pred_unlab, qz_m, qz_v = self.module(mfgs, batch_inputs_u)
         bu = batch_inputs_u[pos_graph.nodes()]
         loss,pos, neg = self.loss_fcn(batch_pred_unlab, pos_graph, neg_graph) #* 5
         
         if self.supervised:
             #bu = batch_inputs_u[pos_graph.nodes()]
-            if self.smooth == False:
-                bu = mfgs[0].srcdata['ngh'][pos_graph.nodes()]
+            mean = th.zeros_like(qz_m)
+            scale = th.ones_like(qz_v)
 
-            batch2 = batch['labelled']
-            _, pos_graph, neg_graph, mfgs = batch2
-            mfgs = [mfg.int() for mfg in mfgs]
-            #pos_graph = pos_graph.to(self.device)
-            #neg_graph = neg_graph.to(self.device)
-            batch_inputs = mfgs[0].srcdata['gene']
-            batch_labels = mfgs[-1].dstdata['label']
-            bl = batch_inputs[pos_graph.nodes()]
-            batch_pred_lab = self.module(mfgs, batch_inputs)
-            supervised_loss,_,_ = self.loss_fcn(batch_pred_lab, pos_graph, neg_graph)
+            kl_divergence_z = kl(Normal(qz_m, torch.sqrt(qz_v)), Normal(mean, scale)).sum(
+                dim=1)
 
-            # Label prediction loss
-            labels_pred = self.module.encoder.encoder_dict['CF'](batch_pred_lab)
-            probabilities_lab = F.softmax(labels_pred,dim=-1)
-            cce = th.nn.CrossEntropyLoss()
-            classifier_loss = cce(labels_pred,batch_labels) #
-            #classifier_loss = -F.cosine_similarity(probabilities_lab @ self.reference.T.to(self.device), bl,dim=0).mean()
-            #classifier_loss += -F.cosine_similarity(probabilities_lab @ self.reference.T.to(self.device), bl,dim=1).mean()*0.5
-
-            self.train_acc(labels_pred.argsort(axis=-1)[:,-1],batch_labels)
-            self.log('Classifier Loss',classifier_loss)
-            self.log('train_acc', self.train_acc, prog_bar=True, on_step=True)
             
-            #Domain Adaptation Loss
-            classifier_domain_loss = self.loss_discriminator([batch_pred_unlab, batch_pred_lab],predict_true_class=True)
-            self.log('Classifier_true', classifier_domain_loss, prog_bar=False, on_step=True)
+            pass
 
-            #Semantic Loss
-            probabilities_unlab = F.softmax(self.module.encoder.encoder_dict['CF'](batch_pred_unlab),dim=-1)
-            labels_unlab = probabilities_unlab.argsort(axis=-1)[:,-1]
-            '''
-            self.sl.semantic_loss(pseudo_latent=batch_pred_unlab, 
-                                pseudo_labels=labels_unlab ,
-                                true_latent=batch_pred_lab,
-                                true_labels=labels_pred.argsort(axis=-1)[:,-1],
-                                )
-            '''
-
-            # Bonefight regularization of cell types
-            bone_fight_loss = -F.cosine_similarity(probabilities_unlab @ self.reference.T.to(self.device), bu,dim=0).mean()
-            bone_fight_loss += -F.cosine_similarity(probabilities_unlab @ self.reference.T.to(self.device), bu,dim=1).mean()*0.5
-            '''q = th.ones(probabilities_unlab.shape[1],device=self.device)/probabilities_unlab.shape[1]
-            #print(q.shape, probabilities_unlab.shape)
-            p = th.log(probabilities_unlab.sum(axis=0)/probabilities_unlab.shape[0])
-            kl_loss = self.kl(p,self.p.to(self.device))
-            bone_fight_loss = bone_fight_loss + kl_loss'''
-
-            # Will increasingly apply supervised loss, domain adaptation loss
-            # from 0 to 1, from iteration 0 to 200, focusing first on unsupervised 
-            # graphsage task
-            kappa = 2/(1+10**(-1*((1*self.kappa)/2000)))-1
-            self.kappa += 1
-            #loss = loss*kappa
-            #loss = bone_fight_loss + loss +classifier_loss+ kappa*(kappa*classifier_domain_loss + kappa*supervised_loss) #+ semantic_loss.detach()
-            loss = bone_fight_loss + classifier_loss + classifier_domain_loss #+ loss+ supervised_loss   #+ semantic_loss.detach()
-            '''opt.zero_grad()
-            self.manual_backward(loss,retain_graph=True)
-            opt.step()'''
 
         self.log('train_loss', loss, prog_bar=True, on_step=True, on_epoch=True)
         return loss
@@ -214,6 +166,8 @@ class SAGE(nn.Module):
                                 n_layers,
                                 supervised,
                                 aggregator)
+        self.mean_encoder = self.encoder.encoder_dict['mean']
+        self.var_encoder = self.encoder.encoder_dict['var']
 
     def forward(self, blocks, x):
         h = th.log(x+1)   
@@ -226,14 +180,11 @@ class SAGE(nn.Module):
                 h = layer(block, h,).mean(1)
 
                 #h = self.encoder.encoder_dict['FC'][l](h)
-
-        '''g = dgl.graph(block.edges())
-        g.ndata['feat'] = feat_n[0]
-        g.update_all(fn.u_add_v('feat','feat','v'),fn.sum('v','feat'))
-        i =th.tensor(block.dstnodes(),dtype=th.int64)
-        h = th.cat([h,g.ndata['feat'][i]],axis=1)'''
+        
+        mu,var = self.mean_encoder(h), self.var_encoder(h)
+        h = reparameterize_gaussian(mu,th.exp(var)+1e-8)
         #h = self.encoder.encoder_dict['FC'][1](h)
-        return h
+        return h,mu,var
 
     def inference(self, g, x, device, batch_size, num_workers):
         """
@@ -278,6 +229,9 @@ class SAGE(nn.Module):
                 else:
                     h = layer(block, h,).mean(1)
                     #h = self.encoder.encoder_dict['FC'][l](h)
+
+                if layer == 1:
+                    h = self.mean_encoder(h)
                 y[output_nodes] = h.cpu().detach()#.numpy()
             x = y
     
@@ -295,24 +249,15 @@ class Encoder(nn.Module):
             ):
             super().__init__()
         
-            hidden = [nn.Sequential(
-                                nn.Linear(n_hidden , n_hidden), #if aggregator !='attentional' else nn.Linear(n_hidden*4, n_hidden),
-                                nn.BatchNorm1d(n_hidden,  momentum=0.01, eps=0.001),
-                                nn.ReLU(),
-                                nn.Dropout()) for x in range(1,n_layers )]
 
-            latent = nn.Sequential(
-                        nn.Linear(n_hidden , n_hidden), #if aggregator !='attentional' else nn.Linear(n_hidden, n_hidden), #if not supervised else nn.Linear(n_hidden , self.n_classes),
-                        #nn.BatchNorm1d(n_hidden,  momentum=0.01, eps=0.001), #if not supervised else  nn.BatchNorm1d(self.n_classes),
-                        #nn.ReLU()
-                        )
-
+            self.mean_encoder = nn.Linear(n_hidden, n_hidden)
+            self.var_encoder = nn.Linear(n_hidden, n_hidden)
             layers = nn.ModuleList()
-            #self.norm = PairNorm()
+
             if supervised:
-                self.norm = PairNorm(scale_individually=True)
+                self.norm = PairNorm()
             else:
-                self.norm = DiffGroupNorm(n_hidden,20) 
+                self.norm = F.normalize#DiffGroupNorm(n_hidden,20) 
 
             for i in range(0,n_layers-1):
                 if i > 0:
@@ -367,5 +312,6 @@ class Encoder(nn.Module):
                 classifier = None
 
             self.encoder_dict = nn.ModuleDict({'GS': layers, 
-                                                'FC': nn.ModuleList([h for h in hidden]+[latent]),
+                                                'mean': self.mean_encoder,
+                                                'var':self.var_encoder,
                                                 'CF':classifier})
