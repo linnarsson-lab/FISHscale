@@ -257,7 +257,7 @@ class RegionalizeMulti(Decomposition):
             c.append(results[k][item])
         return c
             
-    def merge_norm(self, data:list, mode:str=None, plot:bool = False):
+    def merge_norm(self, data:list, mode:str=None, plot:bool = False, **kwargs):
         """Merge multiple datasets and optionaly normalize before merging.
 
         Args:
@@ -271,6 +271,9 @@ class RegionalizeMulti(Decomposition):
             plot (bool, optional): Plot a histogram of the data. Usefull to
                 evaluate normalization performace. Defaults to False.
 
+        Kwargs:
+            Will be passed to the APR() normalization function.
+        
         Returns:
             Tuple with:
             [pd.DataFrame]: Merged dataframe.
@@ -287,7 +290,7 @@ class RegionalizeMulti(Decomposition):
                 df_all = df_next
                 samples = [name for j in df_all.columns]
                 if norm:
-                    df_next_norm = self.normalize(df_next, mode=mode)
+                    df_next_norm = self.normalize(df_next, mode=mode, **kwargs)
                     df_norm = df_next_norm
                 
             else:
@@ -295,7 +298,7 @@ class RegionalizeMulti(Decomposition):
                 for j in df_next.columns:
                     samples.append(name)
                 if norm:
-                    df_next_norm = self.normalize(df_next, mode=mode)
+                    df_next_norm = self.normalize(df_next, mode=mode, **kwargs)
                     df_norm = pd.concat([df_norm, df_next_norm], axis=1, sort=False)
             
             if plot:    
@@ -557,6 +560,8 @@ class RegionalizeMulti(Decomposition):
                     clust_neighbor_rings: int = 1,
                     smooth: bool = False,
                     smooth_neighbor_rings: int = 1, 
+                    post_merge: bool = False,
+                    post_merge_t: float = 0.05,
                     smooth_cycles: int = 1,
                     merge_labels: bool = True,
                     merge_cutoff: float = 0.7,
@@ -628,7 +633,7 @@ class RegionalizeMulti(Decomposition):
             r = dask.delayed(d.regionalize)(spacing, min_count, feature_selection, normalization_mode, 
                                             dimensionality_reduction, n_components, clust_dist_threshold, 
                                             n_clusters, clust_neighbor_rings, smooth, smooth_neighbor_rings, 
-                                            smooth_cycles, order_labels=False, n_jobs=1)
+                                            smooth_cycles, post_merge, post_merge_t, order_labels=False, n_jobs=1)
             results[d.dataset_name] = ({'df_hex': r[0],
                                        'labels': r[1],
                                        'coordinates': r[2],
@@ -656,6 +661,38 @@ class RegionalizeMulti(Decomposition):
 
         return collection
     
+    def merged_cluster_mean(self, reg:dict, mode:str=None) -> Any:
+        """Calculate cluster  after label merging.
+
+        For a DataFrame with samples in columns, calculate the mean expression
+            values for each unique label in labels.
+
+        Args:
+            reg (dict): Dictionary with results from the regionalize() 
+                function.
+            mode (str): Normalization mode. Data can be normalized before
+                merging. 
+
+        Returns:
+            [pd.DataFrame]: Pandas Dataframe with mean values for each label.
+
+        """
+        labels_merged = self.get_dict_item(reg, 'labels_merged')
+        labels_merged_concat = np.concatenate(labels_merged)
+        unique_labels = np.unique(labels_merged_concat)
+        
+        data, samples = self.merge_norm(self.get_dict_item(reg, 'df_hex'), mode=mode)
+        
+        cluster_mean = pd.DataFrame(data=np.zeros((data.shape[0], len(unique_labels))), index = data.index,
+                                    columns=unique_labels)
+        #return cluster_mean, data
+        #Loop over clusters
+        for l in unique_labels:
+            filt = labels_merged_concat == l
+            #Get mean expression of cluster
+            cluster_mean.loc[:, l] = data.loc[:, filt].mean(axis=1)
+
+        return cluster_mean
     
     
         
