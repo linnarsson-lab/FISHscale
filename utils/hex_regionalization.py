@@ -15,6 +15,7 @@ from FISHscale.utils.decomposition import Decomposition
 from FISHscale.utils.inside_polygon import inside_multi_polygons
 from typing import Tuple, Union, Any, List
 from scipy.spatial import KDTree
+from scipy.cluster.hierarchy import linkage, fcluster, dendrogram
 from collections import Counter
 from matplotlib.patches import Polygon as mpl_polygon
 from matplotlib.collections import PatchCollection
@@ -267,6 +268,8 @@ class Regionalize(Iteration, Decomposition):
         #Save
         if save:
             plt.savefig(f'{savename}_hexbin.pdf')
+            
+        del p, plot_min, plot_max
             
     def hexbin_tsne_plot(self, data = None, tsne:np.ndarray = None, components: int = 2, save:bool=False, savename:str=''):
         """Calculate tSNE on hexbin and plot spatial identities.
@@ -983,6 +986,8 @@ class Regionalize(Iteration, Decomposition):
                         smooth: bool = False,
                         smooth_neighbor_rings: int = 1, 
                         smooth_cycles: int = 1,
+                        post_merge: bool = False,
+                        post_merge_t: float = 0.05,
                         order_labels: bool = True,
                         n_jobs=-1) -> Union[Any, np.ndarray, np.ndarray, Any]:
         """Regionalize dataset.
@@ -1030,6 +1035,10 @@ class Regionalize(Iteration, Decomposition):
                 18 neigbors, etc. Defaults to 1.
             smooth_cycles (int, optional): Number of smoothing cycles.
                 Defaults to 1.
+                
+                
+                
+                
             order_labels (bool, optional): If True orders the cluster labels
                 based on similarity. Defaults to True.
             n_jobs (int, optional): Number op processes. If -1 uses the max 
@@ -1071,6 +1080,16 @@ class Regionalize(Iteration, Decomposition):
         #make mean expression
         df_mean = self.cluster_mean_make(df_hex, labels)
         df_norm = self.cluster_mean_make(df_hex_norm, labels)
+        
+        #Post merge, merge labels on correlation if they are too similar
+        if post_merge:
+            Z = linkage(df_mean.T, metric='correlation')
+            labels_post_merge = fcluster(Z, post_merge_t, criterion='distance')
+            label_conversion = dict(zip(df_mean.columns, labels_post_merge))
+            labels = np.array([label_conversion[i] for i in labels])
+            #Remake mean expression dataframe
+            df_mean = self.cluster_mean_make(df_hex, labels)
+            df_norm = self.cluster_mean_make(df_hex_norm, labels)
         
         #Order cluster labels
         if order_labels:
