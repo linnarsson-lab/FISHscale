@@ -1,6 +1,7 @@
 # FISHscale
 Software package for the visualization, exploration and analysis of point based spatial transcriptomics data. FISHscale can load single or multiple datasets.  
 
+![](FISHscale_open3D.gif)
 
 # Getting started
 Clone or download the repository.  
