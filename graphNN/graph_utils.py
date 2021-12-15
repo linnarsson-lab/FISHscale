@@ -96,7 +96,7 @@ class GraphData(pl.LightningDataModule):
         subsample=1,
         ref_celltypes=None,
         exclude_clusters:dict={},
-        smooth:bool=True,
+        smooth:bool=False,
         negative_samples:int=1,
         distance_factor:int=4,
         device='cpu',
@@ -596,7 +596,7 @@ class GraphData(pl.LightningDataModule):
 
         if self.model.supervised:
 
-            mixed = np.concatenate([self.latent_unlabelled,self.latent_labelled])
+            '''mixed = np.concatenate([self.latent_unlabelled,self.latent_labelled])
             batch = np.concatenate([np.zeros(self.latent_unlabelled.shape[0]),np.ones(self.latent_labelled.shape[0])])
             some_mixed = np.random.choice(np.arange(mixed.shape[0]),int(random_n/2),replace=False)
             embedding = reducer.fit_transform(mixed[some_mixed])
@@ -613,7 +613,7 @@ class GraphData(pl.LightningDataModule):
                 plt.xlabel("Y"+str(cycled[i]))
                 plt.ylabel("Y"+str(cycled[i+1]))
             plt.tight_layout()
-            plt.savefig("{}/umap_supervised.png".format(self.folder), bbox_inches='tight', dpi=500)
+            plt.savefig("{}/umap_supervised.png".format(self.folder), bbox_inches='tight', dpi=500)'''
 
             some = np.random.choice(np.arange(self.latent_unlabelled.shape[0]),random_n,replace=False)
             embedding = reducer.fit_transform(self.latent_unlabelled[some])
