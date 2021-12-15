@@ -1,4 +1,9 @@
 # FISHscale
+
+> *Everything that glitters ain't fishscale*
+> 
+> <cite>*-- MF Doom - Figaro, Album: Madvillain*</cite>
+
 Software package for the visualization, exploration and analysis of point based spatial transcriptomics data. FISHscale can load single or multiple datasets.  
 
 # Galery
