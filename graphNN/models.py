@@ -1,3 +1,4 @@
+from numpy.random import poisson
 import torchmetrics
 import dgl
 import torch as th
