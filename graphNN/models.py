@@ -88,7 +88,14 @@ class SAGELightning(LightningModule):
             kl_divergence_z = kl(Normal(qz_m, torch.sqrt(qz_v)), Normal(mean, scale)).sum(
                 dim=1)
 
-            predictions = self.module.encoder.encoder_dict['CF'](batch_pred_unlab)
+            predictions = self.module.encoder.encoder_dict['CF'](batch_pred_unlab).argsort(axis=-1)[:,-1]
+
+            fake_nghs = {}
+            for l in predictions.unique():
+                merged_genes = batch_inputs_u[predictions == l,:].sum(axis=0)
+                fake_nghs[l] = merged_genes
+            fake_nghs = [fake_nghs[l] for l in predictions]
+
 
             
             pass
