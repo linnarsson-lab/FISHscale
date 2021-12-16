@@ -429,7 +429,6 @@ class DataLoader(DataLoader_base):
                 if type(polygon) != type(None):
                     filt = is_inside_sm_parallel(polygon, data.loc[:,['x', 'y']].to_numpy())
                     data = data.loc[filt,:]
-                    print('adding to metadata')
                     self._metadatafile_add({'polygon': polygon})
                 
                 #Get data shape

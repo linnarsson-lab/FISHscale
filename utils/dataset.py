@@ -21,10 +21,10 @@ from FISHscale.utils.clustering import Clustering
 from FISHscale.utils.bonefight import BoneFight, BoneFightMulti
 from FISHscale.utils.regionalization_multi import RegionalizeMulti
 from FISHscale.utils.decomposition import Decomposition
-from FISHscale.spatial.boundaries import Boundaries
+from FISHscale.spatial.boundaries import Boundaries, Boundaries_Multi
 from FISHscale.spatial.gene_order import Gene_order
 from FISHscale.segmentation.cellpose import Cellpose
-from FISHscale.utils.regionalization_gradient import Regionalization_Gradient
+from FISHscale.utils.regionalization_gradient import Regionalization_Gradient, Regionalization_Gradient_Multi
 import sys
 from datetime import datetime
 from sklearn.cluster import DBSCAN
@@ -342,7 +342,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                     
 
 class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base, Normalization, RegionalizeMulti,
-                   Decomposition, BoneFightMulti):
+                   Decomposition, BoneFightMulti, Regionalization_Gradient_Multi, Boundaries_Multi):
     """Load multiple datasets as Dataset objects.
     """
 
