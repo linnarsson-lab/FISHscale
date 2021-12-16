@@ -88,6 +88,8 @@ class SAGELightning(LightningModule):
             kl_divergence_z = kl(Normal(qz_m, torch.sqrt(qz_v)), Normal(mean, scale)).sum(
                 dim=1)
 
+            predictions = self.module.encoder.encoder_dict['CF'](batch_pred_unlab)
+
             
             pass
 
