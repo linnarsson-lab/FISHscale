@@ -58,7 +58,7 @@ class Normalization:
             c[~np.isfinite(c)] = 0  # -inf inf NaN
         return c
     
-    def APR(self, df, clip:float =None):
+    def APR(self, df, clip = None):
         """Analytic Pearson residuals. 
         
         Calculate bionimial deviance statistics. 
@@ -68,12 +68,14 @@ class Normalization:
         Args:
             df ([pd.DataFrame, np.ndarray]): Pandas dataframe or numpy array 
                 with features as rows and samples as columns.
-            clip (float, optional): If given data below -`clip` and above
-                `clip` will be set to -`clip` and `clip` respectively.
+            clip ([float, bool], optional): If True, data will be clipped to 
+                +/- sqrt(n samples). If a number is given the data will be 
+                clipped to +/- the value.
                 
         Returns:
-            [pd.DataFrame]: Pandas dataframe with results.
+            [pd.DataFrame, np.ndarray]: Pandas dataframe or array with results.
         """
+        
         pandas = False
         if type(df) == pd.core.frame.DataFrame:
             pandas = True
@@ -92,7 +94,11 @@ class Normalization:
         if pandas:
             result = pd.DataFrame(data=result, index=index, columns=columns)
         
-        if clip != None:
+        if clip == True:
+            cap = np.sqrt(result.shape[1])
+            result = result.clip(lower=-cap, upper=cap)
+            
+        elif isinstance(clip, (int, float)):
             result = result.clip(lower=-clip, upper=clip)
         
         return result
@@ -108,6 +114,9 @@ class Normalization:
                 transform, z scores or Analytic Pearson residuals respectively.
                 When the mode is None, no normalization will be performed and
                 the input is the output. Defaults to 'log'.
+                
+        Kwargs:
+            Will be passed to the APR() normalization function.
 
         Raises:
             Exception: If mode is not properly defined
