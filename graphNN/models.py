@@ -87,7 +87,7 @@ class SAGELightning(LightningModule):
 
             kl_divergence_z = kl(Normal(qz_m, th.sqrt(qz_v)), Normal(mean, scale)).sum(dim=-1)
 
-            probabilities_unlab = self.module.encoder.encoder_dict['CF'](batch_pred_unlab[pos_graph.nodes()])
+            probabilities_unlab = F.softmax(self.module.encoder.encoder_dict['CF'](batch_pred_unlab[pos_graph.nodes()]),dim=-1)
             predictions = probabilities_unlab.argsort(axis=-1)[:,-1]
 
             fake_nghs = {}
@@ -102,14 +102,14 @@ class SAGELightning(LightningModule):
 
             bone_fight_loss = -F.cosine_similarity(probabilities_unlab @ self.reference.T.to(self.device), fake_nghs,dim=1)
             #print(bone_fight_loss.shape,kl_divergence_z.shape)
-            q = th.ones(probabilities_unlab.shape[1],device=self.device)/probabilities_unlab.shape[1]
-            p = th.log(probabilities_unlab.sum(axis=0)/probabilities_unlab.shape[0])
-            print(q,p)
+            #q = th.ones(probabilities_unlab.shape[1],device=self.device)/probabilities_unlab.shape[1]
+            #p = th.log(probabilities_unlab.sum(axis=0)/probabilities_unlab.shape[0])
+            #print(q,p)
             #kl_loss_uniform = self.kl(p,self.p.to(self.device))
-            kl_loss_uniform = self.kl(p,q)
+            #kl_loss_uniform = self.kl(p,q)
 
             loss2 = bone_fight_loss+ kl_divergence_z
-            loss += loss2.mean() + kl_loss_uniform
+            loss += loss2.mean() #+ kl_loss_uniform
 
 
         self.log('train_loss', loss, prog_bar=True, on_step=True, on_epoch=True)
