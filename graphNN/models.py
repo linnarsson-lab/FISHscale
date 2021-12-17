@@ -76,7 +76,7 @@ class SAGELightning(LightningModule):
         #pos_graph = pos_graph.to(self.device)
         #neg_graph = neg_graph.to(self.device)
         batch_inputs_u = mfgs[0].srcdata['gene']
-        batch_pred_unlab, qz_m, qz_v = self.module(mfgs, batch_inputs_u)
+        batch_pred_unlab, qz_m ,qz_v = self.module(mfgs, batch_inputs_u)
         bu = batch_inputs_u[pos_graph.nodes()]
         loss,pos, neg = self.loss_fcn(batch_pred_unlab, pos_graph, neg_graph) #* 5
         
@@ -85,20 +85,24 @@ class SAGELightning(LightningModule):
             mean = th.zeros_like(qz_m)
             scale = th.ones_like(qz_v)
 
-            kl_divergence_z = kl(Normal(qz_m, torch.sqrt(qz_v)), Normal(mean, scale)).sum(
-                dim=1)
+            kl_divergence_z = kl(Normal(qz_m, th.sqrt(qz_v)), Normal(mean, scale)).sum(dim=-1)
 
-            predictions = self.module.encoder.encoder_dict['CF'](batch_pred_unlab).argsort(axis=-1)[:,-1]
+            probabilities_unlab = self.module.encoder.encoder_dict['CF'](batch_pred_unlab[pos_graph.nodes()])
+            predictions = probabilities_unlab.argsort(axis=-1)[:,-1]
 
             fake_nghs = {}
             for l in predictions.unique():
-                merged_genes = batch_inputs_u[predictions == l,:].sum(axis=0)
+                l = int(l.detach().numpy())
+                merged_genes = bu[predictions == l,:].sum(axis=0)
                 fake_nghs[l] = merged_genes
-            fake_nghs = [fake_nghs[l] for l in predictions]
-
-
             
-            pass
+            fake_nghs = [fake_nghs[int(l)] for l in predictions]
+            fake_nghs = th.stack(fake_nghs)
+
+            bone_fight_loss = -F.cosine_similarity(probabilities_unlab @ self.reference.T.to(self.device), fake_nghs,dim=0)
+            print(bone_fight_loss.shape)
+            loss2 = bone_fight_loss.mean()+ kl_divergence_z.mean()
+            loss += loss2
 
 
         self.log('train_loss', loss, prog_bar=True, on_step=True, on_epoch=True)
@@ -190,8 +194,8 @@ class SAGE(nn.Module):
 
                 #h = self.encoder.encoder_dict['FC'][l](h)
         
-        mu,var = self.mean_encoder(h), self.var_encoder(h)
-        h = reparameterize_gaussian(mu,th.exp(var)+1e-8)
+        mu,var = self.mean_encoder(h), th.exp(self.var_encoder(h)) + 1e-4
+        h = reparameterize_gaussian(mu,var)
         #h = self.encoder.encoder_dict['FC'][1](h)
         return h,mu,var
 
