@@ -97,12 +97,13 @@ class SAGELightning(LightningModule):
                 fake_nghs[l] = merged_genes
             
             fake_nghs = [fake_nghs[int(l)] for l in predictions]
+            #fake_nghs = [fake_nghs[l] for x in range(probabilities_unlab.shape[1])]
             fake_nghs = th.stack(fake_nghs)
 
             bone_fight_loss = -F.cosine_similarity(probabilities_unlab @ self.reference.T.to(self.device), fake_nghs,dim=0)
-            print(bone_fight_loss.shape)
-            loss2 = bone_fight_loss.mean()+ kl_divergence_z.mean()
-            loss += loss2
+            #print(bone_fight_loss.shape,kl_divergence_z.shape)
+            loss2 = bone_fight_loss+ kl_divergence_z
+            loss += loss2.mean()
 
 
         self.log('train_loss', loss, prog_bar=True, on_step=True, on_epoch=True)
