@@ -102,14 +102,14 @@ class SAGELightning(LightningModule):
 
             bone_fight_loss = -F.cosine_similarity(probabilities_unlab @ self.reference.T.to(self.device), fake_nghs,dim=1)
             #print(bone_fight_loss.shape,kl_divergence_z.shape)
-            #q = th.ones(probabilities_unlab.shape[1],device=self.device)/probabilities_unlab.shape[1]
-            #p = th.log(probabilities_unlab.sum(axis=0)/probabilities_unlab.shape[0])
+            q = th.ones(probabilities_unlab.shape[1],device=self.device)/probabilities_unlab.shape[1]
+            p = th.log(probabilities_unlab.sum(axis=0)/probabilities_unlab.shape[0])
             #print(q,p)
             #kl_loss_uniform = self.kl(p,self.p.to(self.device))
-            #kl_loss_uniform = self.kl(p,q)
+            kl_loss_uniform = self.kl(p,q)
 
             loss2 = bone_fight_loss+ kl_divergence_z
-            loss += loss2.mean() #+ kl_loss_uniform
+            loss += loss2.mean() + kl_loss_uniform
 
 
         self.log('train_loss', loss, prog_bar=True, on_step=True, on_epoch=True)
@@ -198,13 +198,12 @@ class SAGE(nn.Module):
                 #h = self.encoder.encoder_dict['FC'][l](h)
             else:
                 h = layer(block, h,).mean(1)
-
                 #h = self.encoder.encoder_dict['FC'][l](h)
         
         mu,var = self.mean_encoder(h), th.exp(self.var_encoder(h)) + 1e-4
         h = reparameterize_gaussian(mu,var)
         #h = self.encoder.encoder_dict['FC'][1](h)
-        return h,mu,var
+        return mu,mu,var
 
     def inference(self, g, x, device, batch_size, num_workers):
         """
@@ -275,7 +274,7 @@ class Encoder(nn.Module):
             layers = nn.ModuleList()
 
             if supervised:
-                self.norm = PairNorm()
+                self.norm = F.normalize
             else:
                 self.norm = F.normalize#DiffGroupNorm(n_hidden,20) 
 
