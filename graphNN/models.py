@@ -86,30 +86,37 @@ class SAGELightning(LightningModule):
             scale = th.ones_like(qz_v)
 
             kl_divergence_z = kl(Normal(qz_m, th.sqrt(qz_v)), Normal(mean, scale)).sum(dim=-1)
-
             probabilities_unlab = F.softmax(self.module.encoder.encoder_dict['CF'](batch_pred_unlab[pos_graph.nodes()]),dim=-1)
             predictions = probabilities_unlab.argsort(axis=-1)[:,-1]
 
             fake_nghs = {}
+            merged_probs = {}
             for l in predictions.unique():
                 l = int(l.detach().numpy())
                 merged_genes = bu[predictions == l,:].sum(axis=0)
+                averaged_probabilities = F.softmax(probabilities_unlab[predictions == l,:].sum(axis=0),dim=-1)
+                merged_probs[l] = averaged_probabilities
                 fake_nghs[l] = merged_genes
-            
-            fake_nghs = [fake_nghs[int(l)] for l in predictions]
+
+            fake_nghs = [fake_nghs[int(l)] for l in predictions.unique()]
+            merged_probs = [merged_probs[int(l)] for l in predictions.unique()]
             #fake_nghs = [fake_nghs[l] for x in range(probabilities_unlab.shape[1])]
             fake_nghs = th.stack(fake_nghs)
+            merged_probs = th.stack(merged_probs)
 
-            bone_fight_loss = -F.cosine_similarity(probabilities_unlab @ self.reference.T.to(self.device), fake_nghs,dim=1)
+            #print(merged_probs.shape,fake_nghs.shape)
+            bone_fight_loss = -F.cosine_similarity(merged_probs @ self.reference.T.to(self.device), fake_nghs,dim=1).mean()
+            bone_fight_loss += -F.cosine_similarity(merged_probs @ self.reference.T.to(self.device), fake_nghs,dim=0).mean()
+
             #print(bone_fight_loss.shape,kl_divergence_z.shape)
-            q = th.ones(probabilities_unlab.shape[1],device=self.device)/probabilities_unlab.shape[1]
-            p = th.log(probabilities_unlab.sum(axis=0)/probabilities_unlab.shape[0])
+            #q = th.ones(probabilities_unlab.shape[1],device=self.device)/probabilities_unlab.shape[1]
+            #p = th.log(probabilities_unlab.sum(axis=0)/probabilities_unlab.shape[0])
             #print(q,p)
             #kl_loss_uniform = self.kl(p,self.p.to(self.device))
-            kl_loss_uniform = self.kl(p,q)
+            #kl_loss_uniform = self.kl(p,q)
 
-            loss2 = bone_fight_loss+ kl_divergence_z
-            loss += loss2.mean() + kl_loss_uniform
+            #loss2 = bone_fight_loss + kl_divergence_z
+            loss += bone_fight_loss + loss
 
 
         self.log('train_loss', loss, prog_bar=True, on_step=True, on_epoch=True)
@@ -201,7 +208,7 @@ class SAGE(nn.Module):
                 #h = self.encoder.encoder_dict['FC'][l](h)
         
         mu,var = self.mean_encoder(h), th.exp(self.var_encoder(h)) + 1e-4
-        h = reparameterize_gaussian(mu,var)
+        #h = reparameterize_gaussian(mu,var)
         #h = self.encoder.encoder_dict['FC'][1](h)
         return mu,mu,var
 
@@ -249,8 +256,8 @@ class SAGE(nn.Module):
                     h = layer(block, h,).mean(1)
                     #h = self.encoder.encoder_dict['FC'][l](h)
 
-                if layer == 1:
-                    h = self.mean_encoder(h)
+                if l == 1:
+                    h = self.mean_encoder(h)#, th.exp(self.var_encoder(h))+1e-4 )
                 y[output_nodes] = h.cpu().detach()#.numpy()
             x = y
     
