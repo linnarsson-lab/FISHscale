@@ -24,11 +24,7 @@ class Classifier(nn.Module):
         super().__init__()
         self.grl = GradientReversal()
         self.reverse_gradients = reverse_gradients
-        layers = [nn.Sequential(
-                            nn.Linear(n_input , n_hidden, bias=bias),
-                            nn.BatchNorm1d(n_hidden, momentum=0.01, eps=0.001) if use_batch_norm else None,
-                            nn.ReLU() if use_relu else None,
-                            nn.Dropout(p=dropout_rate) if dropout_rate > 0 else None),
+        layers = [
             nn.Linear(n_hidden, n_labels),]
 
         if softmax:
