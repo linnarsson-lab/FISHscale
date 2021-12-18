@@ -691,7 +691,7 @@ class GraphData(pl.LightningDataModule):
                             bgcolor='black',
                             aspect='equal',
                             fig_inches=10,
-                            s=0.1,
+                            s=1,
                             title=str(self.ClusterNames[cl]),
                             color=color_dic[cl])
                     except:
