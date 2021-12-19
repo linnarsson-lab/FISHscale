@@ -106,17 +106,17 @@ class SAGELightning(LightningModule):
 
             #print(merged_probs.shape,fake_nghs.shape)
             bone_fight_loss = -F.cosine_similarity(merged_probs @ self.reference.T.to(self.device), fake_nghs,dim=1).mean()
-            bone_fight_loss += -F.cosine_similarity(merged_probs @ self.reference.T.to(self.device), fake_nghs,dim=0).mean()
+            #bone_fight_loss += -F.cosine_similarity(merged_probs @ self.reference.T.to(self.device), fake_nghs,dim=0).mean()
 
             #print(bone_fight_loss.shape,kl_divergence_z.shape)
-            #q = th.ones(probabilities_unlab.shape[1],device=self.device)/probabilities_unlab.shape[1]
-            #p = th.log(probabilities_unlab.sum(axis=0)/probabilities_unlab.shape[0])
+            q = th.ones(probabilities_unlab.shape[1],device=self.device)/probabilities_unlab.shape[1]
+            p = th.log(probabilities_unlab.sum(axis=0)/probabilities_unlab.shape[0])
             #print(q,p)
             #kl_loss_uniform = self.kl(p,self.p.to(self.device))
-            #kl_loss_uniform = self.kl(p,q)
+            kl_loss_uniform = self.kl(p,q)
 
             #loss2 = bone_fight_loss + kl_divergence_z
-            loss += bone_fight_loss + loss
+            loss += bone_fight_loss + kl_loss_uniform
 
 
         self.log('train_loss', loss, prog_bar=True, on_step=True, on_epoch=True)
