@@ -116,9 +116,9 @@ class SAGELightning(LightningModule):
             kl_loss_uniform = self.kl(p,q)
 
             #loss2 = bone_fight_loss + kl_divergence_z
-            loss += bone_fight_loss + kl_loss_uniform
+            loss += bone_fight_loss #+ kl_loss_uniform
 
-
+        self.log('rcl', bone_fight_loss, prog_bar=True, on_step=True, on_epoch=True)
         self.log('train_loss', loss, prog_bar=True, on_step=True, on_epoch=True)
         return loss
 
