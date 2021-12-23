@@ -1,3 +1,4 @@
+from re import search
 import sys
 from PyQt5.QtWidgets import (QPushButton, QDialog, QTreeWidget,
                             QTreeWidgetItem, QVBoxLayout,
@@ -56,7 +57,15 @@ class Window:
         color_dic: pass dictionary of desired color in RGB for each unique gene in the parquet_file
         
         
-        """            
+        """    
+        
+        QtWidgets.QApplication.setStyle('Fusion')
+        self.App = QtWidgets.QApplication.instance()
+        if self.App is None:
+            self.App = QtWidgets.QApplication(sys.argv)
+        else:
+            print('QApplication instance already exists: %s' % str(self.App))
+        
         r = lambda: random.randint(0,255)
         self.columns= columns
         self.dataset = dataset
@@ -102,7 +111,8 @@ class Window:
                                 show_axis=self.show_axis,
                                 x_alt=self.x_alt,
                                 y_alt=self.y_alt,
-                                alt=self.c_alt)
+                                alt=self.c_alt,
+                                )
 
         self.collapse = CollapsibleDialog(self.dic_pointclouds,
                                             vis=self.vis)
@@ -118,11 +128,15 @@ class Window:
             else:
                 l.list_widget.itemSelectionChanged.connect(l.selectionChanged)
 
-        self.collapse.qbutton.clicked.connect(self.quit)
+        self.collapse.addgene.clicked.connect(self.add_genes)
         self.vis.execute()
-        #self.App.exec_()
+        self.App.exec_()
         #sys.exit(self.App.exec_())
         #self.App.quit()
+    
+    def add_genes(self):
+        self.vis.search_genes = [g for g in self.collapse.lineedit.text().split(' ') if g in self.color_dic]
+        self.widget_lists[0].selectionChanged()
 
     def quit(self):
         self.collapse.break_loop = True
@@ -170,7 +184,8 @@ class Visualizer:
                 show_axis=False,
                 x_alt=None,
                 y_alt=None,
-                alt={}):
+                alt={},
+                ):
 
         self.data = data
         self.color_dic = color_dic
@@ -178,6 +193,7 @@ class Visualizer:
         self.visM.create_window(height=height,width=width,top=0,left=500)
         self.dic_pointclouds= dic_pointclouds
         self.x_alt, self.y_alt, self.alt = x_alt,y_alt,alt
+        self.search_genes = []
 
         points,maxx,minx,maxy,miny= 0,0,0,0,0
         for d in self.data:
@@ -223,6 +239,7 @@ class Visualizer:
 
     def loop_execute(self):
         while True:
+            #QApplication.processEvents()
             if self.break_loop:
                 break
             self.execute()
@@ -263,8 +280,8 @@ class ListWidget(QWidget):
         self.add_items()
 
         self.list_widget.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
+        self.list_widget.setFixedHeight(800)
         self.tissue_selected = [x for x in self.vis.dic_pointclouds['File']]
-
 
     def add_items(self):
         for e in self.subdic:
@@ -278,8 +295,10 @@ class ListWidget(QWidget):
         self.list_widget.sortItems()
         # adding items to the list widget '''
     
-    def selectionChanged(self):
+    def selectionChanged(self,extra=None):
         self.selected = [i.text() for i in self.list_widget.selectedItems()]
+        self.selected += self.vis.search_genes
+
         if self.selected[0] in self.vis.dic_pointclouds['File'] and self.section == 'File':
             self.tissue_selected = [x for x in self.selected if x in self.vis.dic_pointclouds['File']]
         
@@ -349,21 +368,27 @@ class CollapsibleDialog(QDialog,QObject):
             self.define_section(x)  
         self.add_sections()
 
-        self.qbutton = QPushButton('Quit Visualizer')
-        layout.addWidget(self.qbutton)
+        completer = QCompleter(self.dic['g'])
+        self.lineedit = QLineEdit()
+        self.lineedit.setCompleter(completer)
+        layout.addWidget(self.lineedit)
+        self.addgene= QPushButton('Add genes')
+        layout.addWidget(self.addgene)
+
         app_icon = QtGui.QIcon()
         app_icon.addFile('Images/test16x16.png', QtCore.QSize(16,16))
         self.setWindowIcon(app_icon)
     
-    '''def closeEvent(self, event):
+    def closeEvent(self, event):
         reply = QMessageBox.question(self, 'Quit', 'Are You Sure to Quit?', QMessageBox.No | QMessageBox.Yes)
         if reply == QMessageBox.Yes:
             self.break_loop = True
             self.vis.break_loop = True
             self.vis.visM.destroy_window()
             event.accept()
+            QApplication.quitOnLastWindowClosed()
         else:
-            event.ignore()'''
+            event.ignore()
         
     def possible(self):
         for x in self.widget_lists:
