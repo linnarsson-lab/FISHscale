@@ -18,9 +18,19 @@ setup(
 		'umap-learn',  # imported as "umap"
 		'torch',
 		'torchvision',
+        'pytorch-lightning',
 		'dgl',
 		'open3d',
 		'pandas',
+        'pint',
+        'pyarrow',
+        'fastparquet',
+        'PyQt5',
+        'annoy',
+        'geopandas',
+        'shapely',
+        'numba',
+
 	],
 
 	author="Linnarsson Lab",
