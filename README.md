@@ -15,8 +15,6 @@ Software package for the visualization, exploration and analysis of point based 
 
 # Getting started
 
-## Installation
-
 The following instructions should work for Linux and Mac (unfortunately, we have no 
 experience with Windows).
 
