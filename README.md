@@ -14,6 +14,17 @@ Software package for the visualization, exploration and analysis of point based 
 ![](FISHscale_demo.png)  
 
 # Getting started
+
+## Installation
+
+The following instructions should work for Linux and Mac (unfortunately, we have no 
+experience with Windows).
+
+```
+git clone https://github.com/linnarsson-lab/FISHscale.git
+cd FISHscale
+pip install -e.
+```
 Clone or download the repository.  
 Use the [single-dataset](https://github.com/linnarsson-lab/FISHscale/blob/master/example_notebooks/FISHscale_tutorial_single_dataset.ipynb) notebook to get started with single datasets.
   
