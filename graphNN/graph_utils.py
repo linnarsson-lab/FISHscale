@@ -563,11 +563,11 @@ class GraphData(pl.LightningDataModule):
         latent_unlabelled = self.model.module.inference(self.g,self.g.ndata['gene'],'cpu',512,0)#.detach().numpy()
         
         if self.model.supervised:
-            if labelled:
-                latent_labelled = self.model.module.inference(self.g_lab,self.g_lab.ndata['gene'],'cpu',512,0)#.detach().numpy()
-                self.prediction_labelled = self.model.module.encoder.encoder_dict['CF'](latent_labelled).detach().numpy()
+            #if labelled:
+                #latent_labelled = self.model.module.inference(self.g_lab,self.g_lab.ndata['gene'],'cpu',512,0)#.detach().numpy()
+                #self.prediction_labelled = self.model.module.encoder.encoder_dict['CF'](latent_labelled).detach().numpy()
                 #np.save(self.folder+'/probabilities_labelled',self.prediction_labelled)
-                self.latent_labelled = latent_labelled.detach().numpy()
+                #self.latent_labelled = latent_labelled.detach().numpy()
                 #np.save(self.folder+'/latent_labelled',self.latent_labelled)
             self.prediction_unlabelled = self.model.module.encoder.encoder_dict['CF'](latent_unlabelled).detach().numpy()
             np.save(self.folder+'/labels_unlabelled',self.prediction_unlabelled.argsort(axis=-1)[:,-1].astype('str'))
