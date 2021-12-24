@@ -88,10 +88,9 @@ class SAGELightning(LightningModule):
             probabilities_unlab = F.softmax(self.module.encoder.encoder_dict['CF'](batch_pred_unlab[pos_graph.nodes()]),dim=-1)
             predictions = probabilities_unlab.argsort(axis=-1)[:,-1]
 
-
             # Regularize by local nodes:
             local_nghs = mfgs[0].srcdata['ngh'][pos_graph.nodes()]
-            bone_fight_loss = -F.cosine_similarity(probabilities_unlab @ self.reference.T.to(self.device), local_nghs,dim=1).mean()
+            local_loss = -F.cosine_similarity(probabilities_unlab @ self.reference.T.to(self.device), local_nghs,dim=1).mean()
 
             # Add Predicted same class nodes together.
             fake_nghs = {}
@@ -120,9 +119,10 @@ class SAGELightning(LightningModule):
             kl_loss_uniform = self.kl(p,q)
 
             #loss2 = bone_fight_loss + kl_divergence_z
-            loss += bone_fight_loss #+ kl_loss_uniform
+            loss += bone_fight_loss + local_loss
 
         self.log('bone_fight_loss', bone_fight_loss, prog_bar=True, on_step=True, on_epoch=True)
+        self.log('Local_loss', local_loss, prog_bar=True, on_step=True, on_epoch=True)
         self.log('train_loss', loss, prog_bar=True, on_step=True, on_epoch=True)
         return loss
 
