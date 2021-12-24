@@ -32,6 +32,7 @@ setup(
         'shapely',
         'numba',
 		'h5py',
+		'ripleyk',
 
 	],
 
