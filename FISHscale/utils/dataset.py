@@ -17,7 +17,6 @@ from FISHscale.utils.density_1D import Density1D
 from FISHscale.utils.normalization import Normalization
 from FISHscale.visualization.gene_scatter import GeneScatter, MultiGeneScatter, AttributeScatter
 from FISHscale.utils.data_handling import DataLoader, DataLoader_base
-from FISHscale.utils.clustering import Clustering
 from FISHscale.utils.bonefight import BoneFight, BoneFightMulti
 from FISHscale.utils.regionalization_multi import RegionalizeMulti
 from FISHscale.utils.decomposition import Decomposition
