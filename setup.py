@@ -33,6 +33,7 @@ setup(
         'numba',
 		'h5py',
 		'ripleyk',
+		'scikit-image'
 
 	],
 
