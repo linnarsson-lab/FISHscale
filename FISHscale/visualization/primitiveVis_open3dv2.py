@@ -58,7 +58,6 @@ class Window:
         
         
         """    
-        
         QtWidgets.QApplication.setStyle('Fusion')
         self.App = QtWidgets.QApplication.instance()
         if self.App is None:
@@ -239,7 +238,6 @@ class Visualizer:
 
     def loop_execute(self):
         while True:
-            #QApplication.processEvents()
             if self.break_loop:
                 break
             self.execute()
@@ -385,7 +383,9 @@ class CollapsibleDialog(QDialog,QObject):
             self.break_loop = True
             self.vis.break_loop = True
             self.vis.visM.destroy_window()
+            self.vis.visM.close()
             event.accept()
+            QApplication.processEvents()
             QApplication.quitOnLastWindowClosed()
         else:
             event.ignore()
