@@ -1,6 +1,7 @@
 
 # Visual Studio code
 .vscode/*
+.vscode
 .vscode/
 *.code-workspace
 
