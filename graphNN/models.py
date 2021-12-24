@@ -84,13 +84,13 @@ class SAGELightning(LightningModule):
             #bu = batch_inputs_u[pos_graph.nodes()]
             mean = th.zeros_like(qz_m)
             scale = th.ones_like(qz_v)
-            kl_divergence_z = kl(Normal(qz_m, th.sqrt(qz_v)), Normal(mean, scale)).sum(dim=-1)
+            kl_divergence_z = kl(Normal(qz_m, th.sqrt(qz_v)), Normal(mean, scale)).mean(dim=-1)
             probabilities_unlab = F.softmax(self.module.encoder.encoder_dict['CF'](batch_pred_unlab[pos_graph.nodes()]),dim=-1)
             predictions = probabilities_unlab.argsort(axis=-1)[:,-1]
 
             # Regularize by local nodes:
-            local_nghs = mfgs[0].srcdata['ngh'][pos_graph.nodes()]
-            local_loss = -F.cosine_similarity(probabilities_unlab @ self.reference.T.to(self.device), local_nghs,dim=1).mean()
+            #local_nghs = mfgs[0].srcdata['ngh'][pos_graph.nodes()]
+            #local_loss = -F.cosine_similarity(probabilities_unlab @ self.reference.T.to(self.device), local_nghs,dim=1).mean()
 
             # Add Predicted same class nodes together.
             fake_nghs = {}
@@ -119,10 +119,10 @@ class SAGELightning(LightningModule):
             kl_loss_uniform = self.kl(p,q)
 
             #loss2 = bone_fight_loss + kl_divergence_z
-            loss += bone_fight_loss + local_loss
+            loss += bone_fight_loss + kl_divergence_z.mean()
 
         self.log('bone_fight_loss', bone_fight_loss, prog_bar=True, on_step=True, on_epoch=True)
-        self.log('Local_loss', local_loss, prog_bar=True, on_step=True, on_epoch=True)
+        self.log('KL', kl_divergence_z.mean(), prog_bar=True, on_step=True, on_epoch=True)
         self.log('train_loss', loss, prog_bar=True, on_step=True, on_epoch=True)
         return loss
 
@@ -212,9 +212,9 @@ class SAGE(nn.Module):
                 #h = self.encoder.encoder_dict['FC'][l](h)
         
         mu,var = self.mean_encoder(h), th.exp(self.var_encoder(h)) + 1e-4
-        #h = reparameterize_gaussian(mu,var)
+        h = reparameterize_gaussian(mu,var)
         #h = self.encoder.encoder_dict['FC'][1](h)
-        return mu,mu,var
+        return h,mu,var
 
     def inference(self, g, x, device, batch_size, num_workers):
         """
