@@ -34,6 +34,7 @@ setup(
 		'h5py',
 		'ripleyk',
 		'scikit-image',
+		'dask[distributed]',
 	],
 
 	author="Linnarsson Lab",
