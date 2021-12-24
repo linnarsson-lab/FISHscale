@@ -33,8 +33,7 @@ setup(
         'numba',
 		'h5py',
 		'ripleyk',
-		'scikit-image'
-
+		'scikit-image',
 	],
 
 	author="Linnarsson Lab",
