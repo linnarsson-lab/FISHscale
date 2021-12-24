@@ -4,6 +4,7 @@ __version__ = "0.12.0"
 
 setup(
 	name="FISHscale",
+	python_requires ='>=3.6',
 	version=__version__,
 	packages=find_packages(),
 	install_requires=[
@@ -30,6 +31,7 @@ setup(
         'geopandas',
         'shapely',
         'numba',
+		'h5py',
 
 	],
 
