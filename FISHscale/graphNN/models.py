@@ -112,22 +112,10 @@ class SAGELightning(LightningModule):
             #Semantic Loss
             probabilities_unlab = F.softmax(self.module.encoder.encoder_dict['CF'](batch_pred_unlab),dim=-1)
             labels_unlab = probabilities_unlab.argsort(axis=-1)[:,-1]
-            '''
-            self.sl.semantic_loss(pseudo_latent=batch_pred_unlab, 
-                                pseudo_labels=labels_unlab ,
-                                true_latent=batch_pred_lab,
-                                true_labels=labels_pred.argsort(axis=-1)[:,-1],
-                                )
-            '''
 
             # Bonefight regularization of cell types
             bone_fight_loss = -F.cosine_similarity(probabilities_unlab @ self.reference.T.to(self.device), bu,dim=0).mean()
             bone_fight_loss += -F.cosine_similarity(probabilities_unlab @ self.reference.T.to(self.device), bu,dim=1).mean()*0.5
-            '''q = th.ones(probabilities_unlab.shape[1],device=self.device)/probabilities_unlab.shape[1]
-            #print(q.shape, probabilities_unlab.shape)
-            p = th.log(probabilities_unlab.sum(axis=0)/probabilities_unlab.shape[0])
-            kl_loss = self.kl(p,self.p.to(self.device))
-            bone_fight_loss = bone_fight_loss + kl_loss'''
 
             # Will increasingly apply supervised loss, domain adaptation loss
             # from 0 to 1, from iteration 0 to 200, focusing first on unsupervised 
@@ -137,9 +125,6 @@ class SAGELightning(LightningModule):
             #loss = loss*kappa
             #loss = bone_fight_loss + loss +classifier_loss+ kappa*(kappa*classifier_domain_loss + kappa*supervised_loss) #+ semantic_loss.detach()
             loss = bone_fight_loss + classifier_loss + classifier_domain_loss #+ loss+ supervised_loss   #+ semantic_loss.detach()
-            '''opt.zero_grad()
-            self.manual_backward(loss,retain_graph=True)
-            opt.step()'''
 
         self.log('train_loss', loss, prog_bar=True, on_step=True, on_epoch=True)
         return loss

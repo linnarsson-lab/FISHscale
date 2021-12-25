@@ -17,7 +17,6 @@ from FISHscale.utils.density_1D import Density1D
 from FISHscale.utils.normalization import Normalization
 from FISHscale.visualization.gene_scatter import GeneScatter, MultiGeneScatter, AttributeScatter
 from FISHscale.utils.data_handling import DataLoader, DataLoader_base
-from FISHscale.utils.clustering import Clustering
 from FISHscale.utils.bonefight import BoneFight, BoneFightMulti
 from FISHscale.utils.regionalization_multi import RegionalizeMulti
 from FISHscale.utils.decomposition import Decomposition
@@ -48,7 +47,7 @@ except ModuleNotFoundError as e:
 from tqdm import tqdm
 
 class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, AttributeScatter, SpatialMetrics, DataLoader, Normalization, 
-              Density1D, Clustering, BoneFight, Decomposition, Boundaries, Gene_order, Cellpose, 
+              Density1D, BoneFight, Decomposition, Boundaries, Gene_order, Cellpose, 
               Regionalization_Gradient):
     """
     Base Class for FISHscale, still under development
@@ -234,17 +233,9 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             columns (list, optional): List of columns to be plotted with different colors by visualizer. Defaults to [].
             width (int, optional): Frame width. Defaults to 2000.
             height (int, optional): Frame height. Defaults to 2000.
-        """        
-        from PyQt5 import QtWidgets
+        """
         if self.color_dict:
             color_dic = self.color_dict
-
-        QtWidgets.QApplication.setStyle('Fusion')
-        self.App = QtWidgets.QApplication.instance()
-        if self.App is None:
-            self.App = QtWidgets.QApplication(sys.argv)
-        else:
-            print('QApplication instance already exists: %s' % str(self.App))
 
         window = Window(self,
                         columns,
@@ -254,8 +245,6 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                         x_alt=x,
                         y_alt=y,
                         c_alt=c) 
-        
-        self.App.exec_()
         
     def DBsegment(self,
                     label_column,
@@ -818,16 +807,9 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
             width (int, optional): Frame width. Defaults to 2000.
             height (int, optional): Frame height. Defaults to 2000.
         """        
-        from PyQt5 import QtWidgets
+
         if self.color_dict:
             color_dic = self.color_dict
-
-        QtWidgets.QApplication.setStyle('Fusion')
-        self.App = QtWidgets.QApplication.instance()
-        if self.App is None:
-            self.App = QtWidgets.QApplication(sys.argv)
-        else:
-            print('QApplication instance already exists: %s' % str(self.App))
 
         window = Window(self,
                         columns,
