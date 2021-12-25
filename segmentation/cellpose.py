@@ -121,6 +121,85 @@ class Cellpose():
             if dilate_distance != 0:
                 expanded = expand_labels(mask, distance=dilate_distance)
                 pkl.dump(expanded, open(path.join(output_folder, f'{n}_expanded_mask.pkl'), 'wb'))
+    
+    def cellpose_segment_form_zarr(self,
+                         zarr_filename: str,
+                         diameter: float = None,
+                         channels: list = [0,0],
+                         output_folder = 'cellpose_results',
+                         save_mask: bool = True,
+                         save_flows: bool = False,
+                         save_styles : bool = False,
+                         save_diams : bool = False,
+                         dilate_distance: int = 0,
+                         **kwargs):
+        """Cellpose segmentation of list of images. 
+        
+        Cellpose model first needs to be initiated with 
+        self.cellpose_init_model().
+        
+        Cellpose paper: https://doi.org/10.1038/s41592-020-01018-x 
+
+        Args:
+            zarr_filename (str): File location
+                names. Images will be saved with this name. If None provided,
+                will number the images. Defaults to None.
+            diameter (float, optional): Cell diameter prior in pixels. If None
+                is given, Cellpose will calculate the diameter.
+                Defaults to None.
+            channels (list, optional): Channel to segment. First element is 
+                channel to segment, second is nuclear signal. See Cellpose
+                documentation. Defaults to [0,0].
+            output_folder (str, optional): Name or path where output should be 
+                saved. Will create the folder if it does not exist. 
+                Defaults to 'cellpose_results'.
+            save_mask (bool, optional): If True, saves the masks.
+                Defaults to True.
+            save_flows (bool, optional): If True, saves the flows.
+                Defaults to False.
+            save_styles (bool, optional): If True, saves the styles.
+                Defaults to False.
+            save_diams (bool, optional): If True saves the diameters.
+                Defaults to False.
+            dilate_distance (int, optional): Dilate the mask with the given
+                distance. The expanded mask will be saved if a non-zero value
+                is given. Defaults to 0.
+            **kwargs (optional): Kwargs will be passed to the cellpose.eval()
+                function. See Cellpose documentation of details.
+
+        Raises:
+            Exception: If model has not been initiated.
+            
+        Requested output is saved as pickled files in the output folder.
+        """
+        
+        #Check if model exists.
+        if not hasattr(self, 'cellpose_model'):
+            raise Exception('No Cellpose model found. Please intiate model by running: "self.cellpose_init_model()" first')
+        
+            
+        #Make output folder if it does not exist.
+        makedirs(output_folder, exist_ok=True)
+        
+        #Segmentation
+        import zarr
+        zarr_file = zarr.open(zarr_filename, mode='r')
+        for n in zarr_file:
+            for sub in zarr_file[n]:
+                break
+            i = zarr_file[n][sub][:]
+            mask, flow, style, diam = self.cellpose_model.eval(i, diameter=diameter, channels=channels, **kwargs)
+            if save_mask:
+                pkl.dump(mask, open(path.join(output_folder, f'{n}_mask.pkl'), 'wb'))
+            if save_flows:
+                pkl.dump(flow, open(path.join(output_folder, f'{n}_flows.pkl'), 'wb'))
+            if save_styles:
+                pkl.dump(style, open(path.join(output_folder, f'{n}_styles.pkl'), 'wb'))
+            if save_diams:
+                pkl.dump(diam, open(path.join(output_folder, f'{n}_diams.pkl'), 'wb'))
+            if dilate_distance != 0:
+                expanded = expand_labels(mask, distance=dilate_distance)
+                pkl.dump(expanded, open(path.join(output_folder, f'{n}_expanded_mask.pkl'), 'wb'))
                 
     def cellpose_inspect(self, image: np.ndarray, mask: np.ndarray, 
                          figsize: float=15, vmin: float=None, vmax: float=None,
