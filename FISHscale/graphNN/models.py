@@ -90,10 +90,11 @@ class SAGELightning(LightningModule):
             predictions = probabilities_unlab.argsort(axis=-1)[:,-1]
 
             # Regularize by local nodes:
-            #local_nghs = mfgs[0].srcdata['ngh'][pos_graph.nodes()]
-            #local_loss = -F.cosine_similarity(probabilities_unlab @ self.reference.T.to(self.device), local_nghs,dim=1).mean()
-
+            local_nghs = mfgs[0].srcdata['ngh'][pos_graph.nodes()]
+            local_loss = -F.cosine_similarity(probabilities_unlab @ self.reference.T.to(self.device), local_nghs,dim=1).mean()
+            local_loss = -F.cosine_similarity(probabilities_unlab @ self.reference.T.to(self.device), local_nghs,dim=0).mean()
             # Add Predicted same class nodes together.
+
             fake_nghs = {}
             merged_probs = {}
             for l in predictions.unique():
@@ -109,9 +110,8 @@ class SAGELightning(LightningModule):
             fake_nghs = th.stack(fake_nghs)
             merged_probs = th.stack(merged_probs)
 
-            bone_fight_loss = -F.cosine_similarity(merged_probs @ self.reference.T.to(self.device), fake_nghs,dim=1).mean()
+            #bone_fight_loss = -F.cosine_similarity(merged_probs @ self.reference.T.to(self.device), fake_nghs,dim=1).mean()
             #bone_fight_loss += -F.cosine_similarity(merged_probs @ self.reference.T.to(self.device), fake_nghs,dim=0).mean()
-
             #print(bone_fight_loss.shape,kl_divergence_z.shape)
             q = th.ones(probabilities_unlab.shape[1],device=self.device)/probabilities_unlab.shape[1]
             p = th.log(probabilities_unlab.sum(axis=0)/probabilities_unlab.shape[0])
@@ -120,10 +120,10 @@ class SAGELightning(LightningModule):
             kl_loss_uniform = self.kl(p,q)
 
             #loss2 = bone_fight_loss + kl_divergence_z
-            loss += bone_fight_loss + kl_divergence_z.mean()
+            loss += local_loss + kl_divergence_z.mean()
 
-        self.log('bone_fight_loss', bone_fight_loss, prog_bar=True, on_step=True, on_epoch=True)
-        self.log('KL', kl_divergence_z.mean(), prog_bar=True, on_step=True, on_epoch=True)
+        #self.log('bone_fight_loss', bone_fight_loss, prog_bar=True, on_step=True, on_epoch=True)
+        #self.log('KL', kl_divergence_z.mean(), prog_bar=True, on_step=True, on_epoch=True)
         self.log('train_loss', loss, prog_bar=True, on_step=True, on_epoch=True)
         return loss
 
