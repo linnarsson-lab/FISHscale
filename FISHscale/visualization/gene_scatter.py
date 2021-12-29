@@ -446,7 +446,6 @@ class AttributeScatter(AxSize):
 
             colors = [self.color_dict[g] for g in attributes]
         for g, c in zip(attributes, colors):
-            print(g)
             data = self.dask_attrs[section]
             data= data[data[section].isin([g])].compute()
             x = data.x

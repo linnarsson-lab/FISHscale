@@ -220,22 +220,24 @@ class DiffGroupNorm(th.nn.Module):
             uses batch statistics in both training and eval modes.
             (default: :obj:`True`)
     """
-    def __init__(self, in_channels, groups, lamda=0.001, eps=1e-5, momentum=0.1,
+    def __init__(self, in_channels, groups, function=None,lamda=0.001, eps=1e-5, momentum=0.1,
                  affine=True, track_running_stats=True):
         super(DiffGroupNorm, self).__init__()
 
         self.in_channels = in_channels
         self.groups = groups
         self.lamda = lamda
-
-        self.lin = Linear(in_channels, groups, bias=False)
+        if type(function) == type(None):
+            self.lin = Linear(in_channels, groups, bias=False)
+        else:
+            self.lin = function
         self.norm = BatchNorm1d(groups * in_channels, eps, momentum, affine,
                                 track_running_stats)
 
         self.reset_parameters()
 
     def reset_parameters(self):
-        self.lin.reset_parameters()
+        #self.lin.reset_parameters()
         self.norm.reset_parameters()
 
 

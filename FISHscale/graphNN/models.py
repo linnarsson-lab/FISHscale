@@ -85,14 +85,14 @@ class SAGELightning(LightningModule):
             #bu = batch_inputs_u[pos_graph.nodes()]
             mean = th.zeros_like(qz_m)
             scale = th.ones_like(qz_v)
-            kl_divergence_z = kl(Normal(qz_m, th.sqrt(qz_v)), Normal(mean, scale)).mean(dim=-1)
+            kl_divergence_z = kl(Normal(qz_m, th.sqrt(qz_v)), Normal(mean, scale)).sum(dim=-1).mean()
             probabilities_unlab = F.softmax(self.module.encoder.encoder_dict['CF'](batch_pred_unlab[pos_graph.nodes()]),dim=-1)
             predictions = probabilities_unlab.argsort(axis=-1)[:,-1]
 
             # Regularize by local nodes:
             local_nghs = mfgs[0].srcdata['ngh'][pos_graph.nodes()]
-            local_loss = -F.cosine_similarity(probabilities_unlab @ self.reference.T.to(self.device), local_nghs,dim=1).mean()
-            local_loss = -F.cosine_similarity(probabilities_unlab @ self.reference.T.to(self.device), local_nghs,dim=0).mean()
+            #bone_fight_loss = -F.cosine_similarity(probabilities_unlab @ self.reference.T.to(self.device), local_nghs,dim=1).mean()
+            #bone_fight_loss = -F.cosine_similarity(probabilities_unlab @ self.reference.T.to(self.device), local_nghs,dim=0).mean()
             # Add Predicted same class nodes together.
 
             fake_nghs = {}
@@ -104,14 +104,16 @@ class SAGELightning(LightningModule):
                 merged_probs[l] = averaged_probabilities
                 fake_nghs[l] = merged_genes
 
-            fake_nghs = [fake_nghs[int(l)] for l in predictions.unique()]
+            fake_nghs = [fake_nghs[int(l)] for l in predictions]
             merged_probs = [merged_probs[int(l)] for l in predictions.unique()]
             #fake_nghs = [fake_nghs[l] for x in range(probabilities_unlab.shape[1])]
-            fake_nghs = th.stack(fake_nghs)
+            fake_nghs = th.stack(fake_nghs) + local_nghs
             merged_probs = th.stack(merged_probs)
 
-            bone_fight_loss = -F.cosine_similarity(merged_probs @ self.reference.T.to(self.device), fake_nghs,dim=1).mean()
-            bone_fight_loss += -F.cosine_similarity(merged_probs @ self.reference.T.to(self.device), fake_nghs,dim=0).mean()
+            #print(th.log(fake_nghs/fake_nghs.sum(axis=0)))
+            #kl_prob = self.kl(th.log(fake_nghs/fake_nghs.sum(axis=0)),self.reference.T).sum()
+            bone_fight_loss = -F.cosine_similarity(probabilities_unlab @ self.reference.T.to(self.device), fake_nghs,dim=1).mean()
+            bone_fight_loss += -F.cosine_similarity(probabilities_unlab @ self.reference.T.to(self.device), fake_nghs,dim=0).mean()
             
             q = th.ones(probabilities_unlab.shape[1],device=self.device)/probabilities_unlab.shape[1]
             p = th.log(probabilities_unlab.sum(axis=0)/probabilities_unlab.shape[0])
@@ -119,10 +121,11 @@ class SAGELightning(LightningModule):
             #kl_loss_uniform = self.kl(p,q).sum()
 
             #loss2 = bone_fight_loss + kl_divergence_z
-            loss += local_loss + bone_fight_loss
+            loss += bone_fight_loss + kl_loss_uniform #+ kl_divergence_z
 
         #self.log('bone_fight_loss', bone_fight_loss, prog_bar=True, on_step=True, on_epoch=True)
         self.log('KLuniform', kl_loss_uniform, prog_bar=True, on_step=True, on_epoch=True)
+        self.log('BFs', bone_fight_loss, prog_bar=True, on_step=True, on_epoch=True)
         self.log('train_loss', loss, prog_bar=True, on_step=True, on_epoch=True)
         return loss
 
@@ -214,7 +217,7 @@ class SAGE(nn.Module):
         mu,var = self.mean_encoder(h), th.exp(self.var_encoder(h)) + 1e-4
         h = reparameterize_gaussian(mu,var)
         #h = self.encoder.encoder_dict['FC'][1](h)
-        return h,mu,var
+        return mu,mu,var
 
     def inference(self, g, x, device, batch_size, num_workers):
         """
@@ -285,7 +288,15 @@ class Encoder(nn.Module):
             layers = nn.ModuleList()
 
             if supervised:
-                self.norm = F.normalize
+                classifier = Classifier(n_input=n_hidden,
+                                        n_labels=n_classes,
+                                        softmax=False,
+                                        reverse_gradients=False)
+            else:
+                classifier = None
+
+            if supervised:
+                self.norm = F.normalize#DiffGroupNorm(n_hidden,n_classes,classifier) 
             else:
                 self.norm = F.normalize#DiffGroupNorm(n_hidden,20) 
 
@@ -332,14 +343,6 @@ class Encoder(nn.Module):
                                                 #activation=F.relu,
                                                 #norm=F.normalize
                                                 ))
-
-            if supervised:
-                classifier = Classifier(n_input=n_hidden,
-                                        n_labels=n_classes,
-                                        softmax=False,
-                                        reverse_gradients=False)
-            else:
-                classifier = None
 
             self.encoder_dict = nn.ModuleDict({'GS': layers, 
                                                 'mean': self.mean_encoder,
