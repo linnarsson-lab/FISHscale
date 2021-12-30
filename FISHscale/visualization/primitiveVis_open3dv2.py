@@ -385,7 +385,8 @@ class CollapsibleDialog(QDialog,QObject):
             self.vis.visM.destroy_window()
             self.vis.visM.close()
             event.accept()
-            QApplication.processEvents()
+            #QCoreApplication.processEvents()
+            #QCoreApplication.quit()
             QApplication.quitOnLastWindowClosed()
         else:
             event.ignore()

@@ -82,36 +82,36 @@ class SAGELightning(LightningModule):
 
             # Regularize by local nodes:
             local_nghs = mfgs[0].srcdata['ngh'][pos_graph.nodes()]
-            bone_fight_loss = -F.cosine_similarity(probabilities_unlab @ self.reference.T.to(self.device), local_nghs,dim=1).mean()
-            bone_fight_loss = -F.cosine_similarity(probabilities_unlab @ self.reference.T.to(self.device), local_nghs,dim=0).mean()
+            #bone_fight_loss = -F.cosine_similarity(probabilities_unlab @ self.reference.T.to(self.device), local_nghs,dim=1).mean()
+            #bone_fight_loss = -F.cosine_similarity(probabilities_unlab @ self.reference.T.to(self.device), local_nghs,dim=0).mean()
             # Add Predicted same class nodes together.
 
             fake_nghs = {}
-            merged_probs = {}
-            for l in predictions.unique():
-                l = int(l.detach().numpy())
+            assigned_molecules = {}
+            for l in range(probabilities_unlab.shape[1]):
                 merged_genes = bu[predictions == l,:].sum(axis=0)
                 averaged_probabilities = F.softmax(probabilities_unlab[predictions == l,:].sum(axis=0),dim=-1)
-                merged_probs[l] = averaged_probabilities
+                assigned_molecules[l] = (predictions == l).sum()
                 fake_nghs[l] = merged_genes
 
             fake_nghs = [fake_nghs[int(l)] for l in predictions]
-            merged_probs = [merged_probs[int(l)] for l in predictions.unique()]
-            #fake_nghs = [fake_nghs[l] for x in range(probabilities_unlab.shape[1])]
             fake_nghs = th.stack(fake_nghs) + local_nghs
-            merged_probs = th.stack(merged_probs)
             #print(th.log(fake_nghs/fake_nghs.sum(axis=0)))
             #kl_prob = self.kl(th.log(fake_nghs/fake_nghs.sum(axis=0)),self.reference.T).sum()
-            #bone_fight_loss = -F.cosine_similarity(probabilities_unlab @ self.reference.T.to(self.device), fake_nghs,dim=1).mean()
-            #bone_fight_loss += -F.cosine_similarity(probabilities_unlab @ self.reference.T.to(self.device), fake_nghs,dim=0).mean()
+            bone_fight_loss = -F.cosine_similarity(probabilities_unlab @ self.reference.T.to(self.device), fake_nghs,dim=1).mean()
+            bone_fight_loss += -F.cosine_similarity(probabilities_unlab @ self.reference.T.to(self.device), fake_nghs,dim=0).mean()
             
             q = th.ones(probabilities_unlab.shape[1],device=self.device)/probabilities_unlab.shape[1]
             p = th.log(probabilities_unlab.sum(axis=0)/probabilities_unlab.shape[0])
-            kl_loss_uniform = self.kl(p,self.p.to(self.device))
-            #kl_loss_uniform = self.kl(p,q).sum()
+            #assigned_molecules = th.tensor([assigned_molecules[x]for x in range(probabilities_unlab.shape[1])],dtype=th.float32) +1
+            #p = p/assigned_molecules
+            p = th.log(p)
+            # Adjust probabilities for the number of molecules assigned to each cell type:
+            #kl_loss_uniform = self.kl(p,self.p.to(self.device))
+            kl_loss_uniform = self.kl(p,q).sum()
 
             #loss2 = bone_fight_loss + kl_divergence_z
-            loss += kl_loss_uniform +  bone_fight_loss.mean() #+ kl_divergence_z.mean()
+            loss += bone_fight_loss.mean() #+ kl_divergence_z.mean()
 
         #self.log('bone_fight_loss', bone_fight_loss, prog_bar=True, on_step=True, on_epoch=True)
         self.log('KLuniform', kl_loss_uniform, prog_bar=True, on_step=True, on_epoch=True)
