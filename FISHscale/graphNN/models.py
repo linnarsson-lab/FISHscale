@@ -80,10 +80,12 @@ class SAGELightning(LightningModule):
             probabilities_unlab = F.softmax(self.module.encoder.encoder_dict['CF'](batch_pred_unlab[pos_graph.nodes()]),dim=-1)
             predictions = probabilities_unlab.argsort(axis=-1)[:,-1]
 
-            # Regularize by local nodes:
+            # Introduce reference with sampling
+
+            # Regularize by local nodes
             local_nghs = mfgs[0].srcdata['ngh'][pos_graph.nodes()]
-            #bone_fight_loss = -F.cosine_similarity(probabilities_unlab @ self.reference.T.to(self.device), local_nghs,dim=1).mean()
-            #bone_fight_loss = -F.cosine_similarity(probabilities_unlab @ self.reference.T.to(self.device), local_nghs,dim=0).mean()
+            bone_fight_loss = -F.cosine_similarity(probabilities_unlab @ self.reference.T.to(self.device), local_nghs,dim=1).mean()
+            bone_fight_loss = -F.cosine_similarity(probabilities_unlab @ self.reference.T.to(self.device), local_nghs,dim=0).mean()
             # Add Predicted same class nodes together.
 
             fake_nghs = {}
@@ -98,8 +100,8 @@ class SAGELightning(LightningModule):
             fake_nghs = th.stack(fake_nghs) #+ local_nghs
             #print(th.log(fake_nghs/fake_nghs.sum(axis=0)))
             #kl_prob = self.kl(th.log(fake_nghs/fake_nghs.sum(axis=0)),self.reference.T).sum()
-            bone_fight_loss = -F.cosine_similarity(probabilities_unlab @ self.reference.T.to(self.device), fake_nghs,dim=1).mean()
-            bone_fight_loss += -F.cosine_similarity(probabilities_unlab @ self.reference.T.to(self.device), fake_nghs,dim=0).mean()
+            #bone_fight_loss = -F.cosine_similarity(probabilities_unlab @ self.reference.T.to(self.device), fake_nghs,dim=1).mean()
+            #bone_fight_loss += -F.cosine_similarity(probabilities_unlab @ self.reference.T.to(self.device), fake_nghs,dim=0).mean()
             
             q = th.ones(probabilities_unlab.shape[1],device=self.device)/probabilities_unlab.shape[1]
             p = th.log(probabilities_unlab.sum(axis=0))
@@ -111,7 +113,9 @@ class SAGELightning(LightningModule):
             kl_loss_uniform = self.kl(p,q).sum()
 
             #loss2 = bone_fight_loss + kl_divergence_z
-            loss += bone_fight_loss + kl_loss_uniform
+            kappa = 2/(1+10**(-1*((1*self.kappa)/2000)))-1
+            self.kappa += 1
+            loss += bone_fight_loss*kappa + kl_loss_uniform
 
         #self.log('bone_fight_loss', bone_fight_loss, prog_bar=True, on_step=True, on_epoch=True)
         self.log('KLuniform', kl_loss_uniform, prog_bar=True, on_step=True, on_epoch=True)

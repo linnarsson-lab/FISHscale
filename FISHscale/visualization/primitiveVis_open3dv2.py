@@ -355,7 +355,7 @@ class CollapsibleDialog(QDialog,QObject):
         layout = QVBoxLayout()
         layout.addWidget(self.tree)
         self.setLayout(layout)
-        self.setGeometry(100, 100, 200, 800) 
+        self.setGeometry(100, 100, 200, 1000) 
         self.tree.setIndentation(0)
         self.dic = dic
         self.widget_lists = []
