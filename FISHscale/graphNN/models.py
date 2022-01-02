@@ -1,3 +1,5 @@
+import re
+from threading import local
 from numpy.random import poisson
 import torchmetrics
 import dgl
@@ -9,7 +11,7 @@ import dgl.function as fn
 import tqdm
 from pytorch_lightning import LightningModule
 from FISHscale.graphNN.submodules import Classifier, PairNorm, DiffGroupNorm
-from torch.distributions import Gamma,Normal, kl_divergence as kl
+from torch.distributions import Gamma,Normal, NegativeBinomial,Multinomial, kl_divergence as kl
 
 class CrossEntropyLoss(nn.Module):
     def forward(self, block_outputs, pos_graph, neg_graph):
@@ -63,7 +65,7 @@ class SAGELightning(LightningModule):
             p = th.tensor(Ncells*reference.sum(axis=0),dtype=th.float32,device=self.device)
             self.p = p/p.sum()
             self.kl = th.nn.KLDivLoss(reduction='sum')
-            
+            self.ncells = Ncells
 
     def training_step(self, batch, batch_idx):
         if self.supervised:
@@ -74,51 +76,72 @@ class SAGELightning(LightningModule):
         batch_inputs_u = mfgs[0].srcdata['gene']
         batch_pred_unlab = self.module(mfgs, batch_inputs_u)
         bu = batch_inputs_u[pos_graph.nodes()]
-        loss,pos, neg = self.loss_fcn(batch_pred_unlab, pos_graph, neg_graph) #* 5
+        loss,pos, neg = self.loss_fcn(batch_pred_unlab, pos_graph, neg_graph)
         
         if self.supervised:
             probabilities_unlab = F.softmax(self.module.encoder.encoder_dict['CF'](batch_pred_unlab[pos_graph.nodes()]),dim=-1)
             predictions = probabilities_unlab.argsort(axis=-1)[:,-1]
 
-            # Introduce reference with sampling
-
-            # Regularize by local nodes
-            local_nghs = mfgs[0].srcdata['ngh'][pos_graph.nodes()]
-            bone_fight_loss = -F.cosine_similarity(probabilities_unlab @ self.reference.T.to(self.device), local_nghs,dim=1).mean()
-            bone_fight_loss = -F.cosine_similarity(probabilities_unlab @ self.reference.T.to(self.device), local_nghs,dim=0).mean()
-            # Add Predicted same class nodes together.
-
             fake_nghs = {}
             assigned_molecules = {}
+            sampled_reference = []
+
+            prob_dic = {}
+            prob = 0
+            local_nghs = mfgs[0].srcdata['ngh'][pos_graph.nodes()]
+            merged_sum = []
             for l in range(probabilities_unlab.shape[1]):
+                lsum = (predictions == l).sum()
+                merged_sum.append(lsum)
                 merged_genes = bu[predictions == l,:].sum(axis=0)
                 averaged_probabilities = F.softmax(probabilities_unlab[predictions == l,:].sum(axis=0),dim=-1)
-                assigned_molecules[l] = (predictions == l).sum()
+                assigned_molecules[l] = lsum
+                if lsum == 0:
+                    merged_genes += 1
                 fake_nghs[l] = merged_genes
 
-            fake_nghs = [fake_nghs[int(l)] for l in predictions]
-            fake_nghs = th.stack(fake_nghs) #+ local_nghs
-            #print(th.log(fake_nghs/fake_nghs.sum(axis=0)))
-            #kl_prob = self.kl(th.log(fake_nghs/fake_nghs.sum(axis=0)),self.reference.T).sum()
-            #bone_fight_loss = -F.cosine_similarity(probabilities_unlab @ self.reference.T.to(self.device), fake_nghs,dim=1).mean()
-            #bone_fight_loss += -F.cosine_similarity(probabilities_unlab @ self.reference.T.to(self.device), fake_nghs,dim=0).mean()
+                s= Multinomial(1,th.ones([int(self.reference.sum(axis=0)[l])-25])).sample().argsort()[-1] + 35
+                sampled_l_ref = NegativeBinomial(int(s), probs= self.reference[:,l]/self.reference[:,l].sum()).sample()
+                sampled_reference.append(sampled_l_ref)
+
+                
+                if lsum > 0:
+                    merged_genes_ngh = local_nghs[predictions == l,:].sum(axis=0)
+                    dist = NegativeBinomial(int(merged_genes.sum()),probs=self.reference[:,l]/self.reference[:,l].sum())
+                    pdist = -dist.log_prob(merged_genes).mean()
+                else: 
+                    pdist = 0
+                prob_dic[l] = pdist
+                prob += pdist
+
+            # Introduce reference with sampling
+            sampled_reference = th.stack(sampled_reference)
+
+            # Regularize by local nodes
             
-            q = th.ones(probabilities_unlab.shape[1],device=self.device)/probabilities_unlab.shape[1]
-            p = th.log(probabilities_unlab.sum(axis=0))
-            #assigned_molecules = th.tensor([assigned_molecules[x]for x in range(probabilities_unlab.shape[1])],dtype=th.float32) +1
-            #p = p/assigned_molecules
+            bone_fight_loss = -F.cosine_similarity(probabilities_unlab @ self.reference.T, local_nghs,dim=1).mean()
+            bone_fight_loss = -F.cosine_similarity(probabilities_unlab @ self.reference.T, local_nghs,dim=0).mean()
+            # Add Predicted same class nodes together.
+            total_counts = th.stack([ms*th.ones(self.reference.shape[0]) for ms in merged_sum]) + 1
+            probs_per_ct = self.reference/self.reference.sum(axis=0)
+            nb = NegativeBinomial(total_counts, probs=probs_per_ct.T)
+            fake_nghs_probabilities = {fn:-nb.log_prob(fake_nghs[fn]).sum(axis=1) for fn in fake_nghs}
+            fake_nghs_probabilities = th.stack([fake_nghs_probabilities[int(l)] for l in predictions])
+            fake_nghs_probabilities = fake_nghs_probabilities.detach()*probabilities_unlab
+            prob = fake_nghs_probabilities.mean(axis=1).mean()
+
+            p = th.ones_like(local_nghs.sum(axis=1)) @ probabilities_unlab
             p = th.log(p/p.sum())
-            # Adjust probabilities for the number of molecules assigned to each cell type:
-            #kl_loss_uniform = self.kl(p,self.p.to(self.device))
-            kl_loss_uniform = self.kl(p,q).sum()
+            cells_dist = th.tensor(self.ncells/self.ncells.sum(),dtype=th.float32)
+            kl_loss_uniform = self.kl(p,cells_dist).sum()
+            loss += bone_fight_loss + kl_loss_uniform + prob
 
-            #loss2 = bone_fight_loss + kl_divergence_z
-            kappa = 2/(1+10**(-1*((1*self.kappa)/2000)))-1
-            self.kappa += 1
-            loss += bone_fight_loss*kappa + kl_loss_uniform
+        for p in prob_dic:
+            prob_dic[p]
+            self.log(str(p),prob_dic[p],on_step=True)
 
-        #self.log('bone_fight_loss', bone_fight_loss, prog_bar=True, on_step=True, on_epoch=True)
-        self.log('KLuniform', kl_loss_uniform, prog_bar=True, on_step=True, on_epoch=True)
+        self.log('Prob',prob, on_step=True, prog_bar=True)
+        self.log('KLuniform', kl_loss_uniform, on_step=True)
         self.log('BFs', bone_fight_loss.mean(), prog_bar=True, on_step=True, on_epoch=True)
         self.log('train_loss', loss, prog_bar=True, on_step=True, on_epoch=True)
         return loss

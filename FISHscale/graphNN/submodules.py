@@ -11,7 +11,7 @@ class Classifier(nn.Module):
     def __init__(
         self,
         n_input,
-        n_hidden=24,
+        n_hidden=48,
         n_labels=5,
         n_layers=1,
         dropout_rate=0.1,
@@ -25,7 +25,7 @@ class Classifier(nn.Module):
         self.grl = GradientReversal()
         self.reverse_gradients = reverse_gradients
         layers = [
-            nn.Linear(n_hidden, n_labels),]
+            nn.Linear(n_input, n_labels),]
 
         if softmax:
             layers.append(nn.Softmax(dim=-1))
