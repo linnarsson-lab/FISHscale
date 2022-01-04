@@ -71,7 +71,7 @@ class SAGELightning(LightningModule):
     def training_step(self, batch, batch_idx):
         if self.supervised:
             opt = self.optimizers()
-        batch1 = batch['unlabelled']
+        batch1 = batch#['unlabelled']
         _, pos_graph, neg_graph, mfgs = batch1
         mfgs = [mfg.int() for mfg in mfgs]
         batch_inputs_u = mfgs[0].srcdata['gene']

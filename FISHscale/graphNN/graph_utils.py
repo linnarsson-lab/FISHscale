@@ -223,7 +223,7 @@ class GraphData(pl.LightningDataModule):
             glist, _ = dgl.data.utils.load_graphs(dgluns) # glist will be [g1, g2]
             self.g = glist[0]
             #self.g = self.g.to(self.device)
-        '''
+        
         if self.model.supervised:
             self.g.ndata['zero'] = torch.zeros_like(self.g.ndata['gene'])
             self.g.update_all(fn.u_add_v('gene','zero','e'),fn.sum('e','zero'))
@@ -231,7 +231,7 @@ class GraphData(pl.LightningDataModule):
             self.g.ndata['ngh'] = self.g.ndata['zero'] + self.g.ndata['gene']
             del self.g.ndata['zero']
 
-            dglsup =self.save_to+'graph/{}Supervised_smooth{}.graph'.format(self.cells.shape[0],self.smooth)
+            '''dglsup =self.save_to+'graph/{}Supervised_smooth{}.graph'.format(self.cells.shape[0],self.smooth)
             if not os.path.isfile(dglsup):
                 molecules_labelled, edges_labelled, labels = self.cell_types_to_graph(smooth=self.smooth)
                 self.g_lab= dgl.graph((edges_labelled[0,:],edges_labelled[1,:]))
@@ -243,9 +243,8 @@ class GraphData(pl.LightningDataModule):
                 #self.g_lab = self.g_lab.to(self.device)
             else:
                 glist, _ = dgl.data.utils.load_graphs(dglsup) # glist will be [g1, g2]
-                self.g_lab = glist[0]
+                self.g_lab = glist[0]'''
                 #self.g_lab = self.g_lab.to(self.device)
-        '''
         
         if self.aggregator == 'attentional':
             self.g = dgl.add_self_loop(self.g)
