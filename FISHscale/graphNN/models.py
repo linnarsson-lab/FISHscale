@@ -1,3 +1,6 @@
+import re
+from threading import local
+from dgl.convert import graph
 from numpy.random import poisson
 import torchmetrics
 import dgl
@@ -9,6 +12,7 @@ import dgl.function as fn
 import tqdm
 from pytorch_lightning import LightningModule
 from FISHscale.graphNN.submodules import Classifier, PairNorm, DiffGroupNorm
+from torch.distributions import Gamma,Normal, NegativeBinomial,Multinomial, kl_divergence as kl
 
 class CrossEntropyLoss(nn.Module):
     def forward(self, block_outputs, pos_graph, neg_graph):
@@ -62,71 +66,97 @@ class SAGELightning(LightningModule):
             p = th.tensor(Ncells*reference.sum(axis=0),dtype=th.float32,device=self.device)
             self.p = p/p.sum()
             self.kl = th.nn.KLDivLoss(reduction='sum')
-            
+            self.ncells = Ncells
 
     def training_step(self, batch, batch_idx):
         if self.supervised:
             opt = self.optimizers()
-        batch1 = batch['unlabelled']
+        batch1 = batch#['unlabelled']
         _, pos_graph, neg_graph, mfgs = batch1
         mfgs = [mfg.int() for mfg in mfgs]
-        #pos_graph = pos_graph.to(self.device)
-        #neg_graph = neg_graph.to(self.device)
         batch_inputs_u = mfgs[0].srcdata['gene']
         batch_pred_unlab = self.module(mfgs, batch_inputs_u)
         bu = batch_inputs_u[pos_graph.nodes()]
-        loss,pos, neg = self.loss_fcn(batch_pred_unlab, pos_graph, neg_graph) #* 5
+        graph_loss,pos, neg = self.loss_fcn(batch_pred_unlab, pos_graph, neg_graph)
         
         if self.supervised:
-            #bu = batch_inputs_u[pos_graph.nodes()]
-            if self.smooth == False:
-                bu = mfgs[0].srcdata['ngh'][pos_graph.nodes()]
+            probabilities_unlab = F.softmax(self.module.encoder.encoder_dict['CF'](batch_pred_unlab[pos_graph.nodes()]),dim=-1)
+            predictions = probabilities_unlab.argsort(axis=-1)[:,-1]
 
-            batch2 = batch['labelled']
-            _, pos_graph, neg_graph, mfgs = batch2
-            mfgs = [mfg.int() for mfg in mfgs]
-            #pos_graph = pos_graph.to(self.device)
-            #neg_graph = neg_graph.to(self.device)
-            batch_inputs = mfgs[0].srcdata['gene']
-            batch_labels = mfgs[-1].dstdata['label']
-            bl = batch_inputs[pos_graph.nodes()]
-            batch_pred_lab = self.module(mfgs, batch_inputs)
-            supervised_loss,_,_ = self.loss_fcn(batch_pred_lab, pos_graph, neg_graph)
+            fake_nghs = {}
+            assigned_molecules = {}
+            sampled_reference = []
 
-            # Label prediction loss
-            labels_pred = self.module.encoder.encoder_dict['CF'](batch_pred_lab)
-            probabilities_lab = F.softmax(labels_pred,dim=-1)
-            cce = th.nn.CrossEntropyLoss()
-            classifier_loss = cce(labels_pred,batch_labels) #
-            #classifier_loss = -F.cosine_similarity(probabilities_lab @ self.reference.T.to(self.device), bl,dim=0).mean()
-            #classifier_loss += -F.cosine_similarity(probabilities_lab @ self.reference.T.to(self.device), bl,dim=1).mean()*0.5
+            prob_dic = {}
+            prob = 0
+            local_nghs = mfgs[0].srcdata['ngh'][pos_graph.nodes()]
+            merged_sum = []
+            for l in range(probabilities_unlab.shape[1]):
+                lsum = (predictions == l).sum()
+                merged_sum.append(lsum)
+                merged_genes = bu[predictions == l,:].sum(axis=0)
+                averaged_probabilities = F.softmax(probabilities_unlab[predictions == l,:].sum(axis=0),dim=-1)
+                assigned_molecules[l] = lsum
+                if lsum == 0:
+                    merged_genes += 1
+                fake_nghs[l] = merged_genes
 
-            self.train_acc(labels_pred.argsort(axis=-1)[:,-1],batch_labels)
-            self.log('Classifier Loss',classifier_loss)
-            self.log('train_acc', self.train_acc, prog_bar=True, on_step=True)
-            
-            #Domain Adaptation Loss
-            classifier_domain_loss = self.loss_discriminator([batch_pred_unlab, batch_pred_lab],predict_true_class=True)
-            self.log('Classifier_true', classifier_domain_loss, prog_bar=False, on_step=True)
+                s= Multinomial(1,th.ones([int(self.reference.sum(axis=0)[l])-25])).sample().argsort()[-1] + 35
+                sampled_l_ref = Multinomial(int(s), probs= self.reference[:,l]/self.reference[:,l].sum()).sample()
+                sampled_reference.append(sampled_l_ref)
 
-            #Semantic Loss
-            probabilities_unlab = F.softmax(self.module.encoder.encoder_dict['CF'](batch_pred_unlab),dim=-1)
-            labels_unlab = probabilities_unlab.argsort(axis=-1)[:,-1]
+                if lsum > 0:
+                    merged_genes_ngh = local_nghs[predictions == l,:].sum(axis=0)
+                    dist = Multinomial(int(merged_genes.sum()),probs=self.reference[:,l]/self.reference[:,l].sum())
+                    pdist = -dist.log_prob(merged_genes).mean()
+                else: 
+                    pdist = 0
+                prob_dic[l] = pdist
+                prob += pdist
 
-            # Bonefight regularization of cell types
-            bone_fight_loss = -F.cosine_similarity(probabilities_unlab @ self.reference.T.to(self.device), bu,dim=0).mean()
-            bone_fight_loss += -F.cosine_similarity(probabilities_unlab @ self.reference.T.to(self.device), bu,dim=1).mean()*0.5
+            # Introduce reference with sampling
+            sampled_reference = th.stack(sampled_reference)
 
-            # Will increasingly apply supervised loss, domain adaptation loss
-            # from 0 to 1, from iteration 0 to 200, focusing first on unsupervised 
-            # graphsage task
-            kappa = 2/(1+10**(-1*((1*self.kappa)/2000)))-1
+            # Regularize by local nodes
+            bone_fight_loss = -F.cosine_similarity(probabilities_unlab @ self.reference.T, local_nghs,dim=1).mean()
+            bone_fight_loss = -F.cosine_similarity(probabilities_unlab @ self.reference.T, local_nghs,dim=0).mean()
+            # Add Predicted same class nodes together.
+            total_counts = th.stack([ms*th.ones(self.reference.shape[0]) for ms in merged_sum]) + 1
+
+            probs_per_ct = self.reference/self.reference.sum(axis=0)
+            f_probs = []
+            for r in range(predictions.shape[0]):
+                l,local = predictions[r], local_nghs[r,:]
+                lsum = (predictions == l).sum()+local.sum()
+                dist = Multinomial(int(lsum), probs=probs_per_ct.T)
+                fngh_p= -dist.log_prob(fake_nghs[int(l)] +local)[l]#/lsum
+                f_probs.append(fngh_p)
+
+            fake_nghs_log_probabilities = th.stack(f_probs)
+            fake_nghs_log_probabilities = (1-probabilities_unlab.T)*fake_nghs_log_probabilities
+            prob = fake_nghs_log_probabilities.mean()
+
+            p = local_nghs.sum(axis=1) @ probabilities_unlab
+            p = th.log(p/p.sum())
+            cells_dist = th.tensor(self.ncells/self.ncells.sum(),dtype=th.float32)
+            kl_loss_uniform = self.kl(p,self.p).sum()*1
+            kappa = 2/(1+10**(-1*((1*self.kappa)/200)))-1
             self.kappa += 1
-            #loss = loss*kappa
-            #loss = bone_fight_loss + loss +classifier_loss+ kappa*(kappa*classifier_domain_loss + kappa*supervised_loss) #+ semantic_loss.detach()
-            loss = bone_fight_loss + classifier_loss + classifier_domain_loss #+ loss+ supervised_loss   #+ semantic_loss.detach()
+            loss = graph_loss + kappa*(kl_loss_uniform+prob+bone_fight_loss)
 
-        self.log('train_loss', loss, prog_bar=True, on_step=True, on_epoch=True)
+            for p in prob_dic:
+                prob_dic[p]
+                self.log(str(p),prob_dic[p],on_step=True)
+
+            self.log('Prob',prob, on_step=True, prog_bar=True,on_epoch=False)
+            self.log('KLuniform', kl_loss_uniform, prog_bar=False,on_step=True,on_epoch=False)
+            self.log('BFs', bone_fight_loss, prog_bar=True, on_step=True, on_epoch=False)
+            self.log('train_loss', loss, prog_bar=True, on_step=True, on_epoch=True)
+            self.log('Graph Loss', graph_loss, prog_bar=False, on_step=True, on_epoch=False)
+
+        else:
+            loss = graph_loss
+            self.log('train_loss', loss, prog_bar=True, on_step=True, on_epoch=True)
         return loss
 
     def validation_step(self, batch, batch_idx):
@@ -200,6 +230,8 @@ class SAGE(nn.Module):
                                 n_layers,
                                 supervised,
                                 aggregator)
+        self.mean_encoder = self.encoder.encoder_dict['mean']
+        self.var_encoder = self.encoder.encoder_dict['var']
 
     def forward(self, blocks, x):
         h = th.log(x+1)   
@@ -210,15 +242,7 @@ class SAGE(nn.Module):
                 #h = self.encoder.encoder_dict['FC'][l](h)
             else:
                 h = layer(block, h,).mean(1)
-
                 #h = self.encoder.encoder_dict['FC'][l](h)
-
-        '''g = dgl.graph(block.edges())
-        g.ndata['feat'] = feat_n[0]
-        g.update_all(fn.u_add_v('feat','feat','v'),fn.sum('v','feat'))
-        i =th.tensor(block.dstnodes(),dtype=th.int64)
-        h = th.cat([h,g.ndata['feat'][i]],axis=1)'''
-        #h = self.encoder.encoder_dict['FC'][1](h)
         return h
 
     def inference(self, g, x, device, batch_size, num_workers):
@@ -264,6 +288,9 @@ class SAGE(nn.Module):
                 else:
                     h = layer(block, h,).mean(1)
                     #h = self.encoder.encoder_dict['FC'][l](h)
+
+                #if l == 1:
+                #    h = self.mean_encoder(h)#, th.exp(self.var_encoder(h))+1e-4 )
                 y[output_nodes] = h.cpu().detach()#.numpy()
             x = y
     
@@ -281,24 +308,23 @@ class Encoder(nn.Module):
             ):
             super().__init__()
         
-            hidden = [nn.Sequential(
-                                nn.Linear(n_hidden , n_hidden), #if aggregator !='attentional' else nn.Linear(n_hidden*4, n_hidden),
-                                nn.BatchNorm1d(n_hidden,  momentum=0.01, eps=0.001),
-                                nn.ReLU(),
-                                nn.Dropout()) for x in range(1,n_layers )]
 
-            latent = nn.Sequential(
-                        nn.Linear(n_hidden , n_hidden), #if aggregator !='attentional' else nn.Linear(n_hidden, n_hidden), #if not supervised else nn.Linear(n_hidden , self.n_classes),
-                        #nn.BatchNorm1d(n_hidden,  momentum=0.01, eps=0.001), #if not supervised else  nn.BatchNorm1d(self.n_classes),
-                        #nn.ReLU()
-                        )
-
+            self.mean_encoder = nn.Linear(n_hidden, n_hidden)
+            self.var_encoder = nn.Linear(n_hidden, n_hidden)
             layers = nn.ModuleList()
-            #self.norm = PairNorm()
+
             if supervised:
-                self.norm = PairNorm(scale_individually=True)
+                classifier = Classifier(n_input=n_hidden,
+                                        n_labels=n_classes,
+                                        softmax=False,
+                                        reverse_gradients=False)
             else:
-                self.norm = DiffGroupNorm(n_hidden,20) 
+                classifier = None
+
+            if supervised:
+                self.norm = F.normalize#DiffGroupNorm(n_hidden,n_classes,classifier) 
+            else:
+                self.norm = F.normalize#DiffGroupNorm(n_hidden,20) 
 
             for i in range(0,n_layers-1):
                 if i > 0:
@@ -344,14 +370,7 @@ class Encoder(nn.Module):
                                                 #norm=F.normalize
                                                 ))
 
-            if supervised:
-                classifier = Classifier(n_input=n_hidden,
-                                        n_labels=n_classes,
-                                        softmax=False,
-                                        reverse_gradients=False)
-            else:
-                classifier = None
-
             self.encoder_dict = nn.ModuleDict({'GS': layers, 
-                                                'FC': nn.ModuleList([h for h in hidden]+[latent]),
+                                                'mean': self.mean_encoder,
+                                                'var':self.var_encoder,
                                                 'CF':classifier})

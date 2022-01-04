@@ -11,7 +11,7 @@ class Classifier(nn.Module):
     def __init__(
         self,
         n_input,
-        n_hidden=24,
+        n_hidden=48,
         n_labels=5,
         n_layers=1,
         dropout_rate=0.1,
@@ -24,12 +24,8 @@ class Classifier(nn.Module):
         super().__init__()
         self.grl = GradientReversal()
         self.reverse_gradients = reverse_gradients
-        layers = [nn.Sequential(
-                            nn.Linear(n_input , n_hidden, bias=bias),
-                            nn.BatchNorm1d(n_hidden, momentum=0.01, eps=0.001) if use_batch_norm else None,
-                            nn.ReLU() if use_relu else None,
-                            nn.Dropout(p=dropout_rate) if dropout_rate > 0 else None),
-            nn.Linear(n_hidden, n_labels),]
+        layers = [
+            nn.Linear(n_input, n_labels),]
 
         if softmax:
             layers.append(nn.Softmax(dim=-1))
@@ -224,22 +220,24 @@ class DiffGroupNorm(th.nn.Module):
             uses batch statistics in both training and eval modes.
             (default: :obj:`True`)
     """
-    def __init__(self, in_channels, groups, lamda=0.001, eps=1e-5, momentum=0.1,
+    def __init__(self, in_channels, groups, function=None,lamda=0.001, eps=1e-5, momentum=0.1,
                  affine=True, track_running_stats=True):
         super(DiffGroupNorm, self).__init__()
 
         self.in_channels = in_channels
         self.groups = groups
         self.lamda = lamda
-
-        self.lin = Linear(in_channels, groups, bias=False)
+        if type(function) == type(None):
+            self.lin = Linear(in_channels, groups, bias=False)
+        else:
+            self.lin = function
         self.norm = BatchNorm1d(groups * in_channels, eps, momentum, affine,
                                 track_running_stats)
 
         self.reset_parameters()
 
     def reset_parameters(self):
-        self.lin.reset_parameters()
+        #self.lin.reset_parameters()
         self.norm.reset_parameters()
 
 
