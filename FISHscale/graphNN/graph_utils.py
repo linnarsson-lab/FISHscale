@@ -223,7 +223,7 @@ class GraphData(pl.LightningDataModule):
             glist, _ = dgl.data.utils.load_graphs(dgluns) # glist will be [g1, g2]
             self.g = glist[0]
             #self.g = self.g.to(self.device)
-
+        '''
         if self.model.supervised:
             self.g.ndata['zero'] = torch.zeros_like(self.g.ndata['gene'])
             self.g.update_all(fn.u_add_v('gene','zero','e'),fn.sum('e','zero'))
@@ -245,6 +245,7 @@ class GraphData(pl.LightningDataModule):
                 glist, _ = dgl.data.utils.load_graphs(dglsup) # glist will be [g1, g2]
                 self.g_lab = glist[0]
                 #self.g_lab = self.g_lab.to(self.device)
+        '''
         
         if self.aggregator == 'attentional':
             self.g = dgl.add_self_loop(self.g)
