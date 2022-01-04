@@ -1,5 +1,6 @@
 import re
 from threading import local
+from dgl.convert import graph
 from numpy.random import poisson
 import torchmetrics
 import dgl
@@ -76,7 +77,7 @@ class SAGELightning(LightningModule):
         batch_inputs_u = mfgs[0].srcdata['gene']
         batch_pred_unlab = self.module(mfgs, batch_inputs_u)
         bu = batch_inputs_u[pos_graph.nodes()]
-        loss,pos, neg = self.loss_fcn(batch_pred_unlab, pos_graph, neg_graph)
+        graph_loss,pos, neg = self.loss_fcn(batch_pred_unlab, pos_graph, neg_graph)
         
         if self.supervised:
             probabilities_unlab = F.softmax(self.module.encoder.encoder_dict['CF'](batch_pred_unlab[pos_graph.nodes()]),dim=-1)
@@ -101,13 +102,12 @@ class SAGELightning(LightningModule):
                 fake_nghs[l] = merged_genes
 
                 s= Multinomial(1,th.ones([int(self.reference.sum(axis=0)[l])-25])).sample().argsort()[-1] + 35
-                sampled_l_ref = NegativeBinomial(int(s), probs= self.reference[:,l]/self.reference[:,l].sum()).sample()
+                sampled_l_ref = Multinomial(int(s), probs= self.reference[:,l]/self.reference[:,l].sum()).sample()
                 sampled_reference.append(sampled_l_ref)
 
-                
                 if lsum > 0:
                     merged_genes_ngh = local_nghs[predictions == l,:].sum(axis=0)
-                    dist = NegativeBinomial(int(merged_genes.sum()),probs=self.reference[:,l]/self.reference[:,l].sum())
+                    dist = Multinomial(int(merged_genes.sum()),probs=self.reference[:,l]/self.reference[:,l].sum())
                     pdist = -dist.log_prob(merged_genes).mean()
                 else: 
                     pdist = 0
@@ -118,32 +118,45 @@ class SAGELightning(LightningModule):
             sampled_reference = th.stack(sampled_reference)
 
             # Regularize by local nodes
-            
             bone_fight_loss = -F.cosine_similarity(probabilities_unlab @ self.reference.T, local_nghs,dim=1).mean()
             bone_fight_loss = -F.cosine_similarity(probabilities_unlab @ self.reference.T, local_nghs,dim=0).mean()
             # Add Predicted same class nodes together.
             total_counts = th.stack([ms*th.ones(self.reference.shape[0]) for ms in merged_sum]) + 1
-            probs_per_ct = self.reference/self.reference.sum(axis=0)
-            nb = NegativeBinomial(total_counts, probs=probs_per_ct.T)
-            fake_nghs_probabilities = {fn:-nb.log_prob(fake_nghs[fn]).sum(axis=1) for fn in fake_nghs}
-            fake_nghs_probabilities = th.stack([fake_nghs_probabilities[int(l)] for l in predictions])
-            fake_nghs_probabilities = fake_nghs_probabilities.detach()*probabilities_unlab
-            prob = fake_nghs_probabilities.mean(axis=1).mean()
 
-            p = th.ones_like(local_nghs.sum(axis=1)) @ probabilities_unlab
+            probs_per_ct = self.reference/self.reference.sum(axis=0)
+            f_probs = []
+            for r in range(predictions.shape[0]):
+                l,local = predictions[r], local_nghs[r,:]
+                lsum = (predictions == l).sum()+local.sum()
+                dist = Multinomial(int(lsum), probs=probs_per_ct.T)
+                fngh_p= -dist.log_prob(fake_nghs[int(l)] +local)[l]#/lsum
+                f_probs.append(fngh_p)
+
+            fake_nghs_log_probabilities = th.stack(f_probs)
+            fake_nghs_log_probabilities = (1-probabilities_unlab.T)*fake_nghs_log_probabilities
+            prob = fake_nghs_log_probabilities.mean()
+
+            p = local_nghs.sum(axis=1) @ probabilities_unlab
             p = th.log(p/p.sum())
             cells_dist = th.tensor(self.ncells/self.ncells.sum(),dtype=th.float32)
-            kl_loss_uniform = self.kl(p,cells_dist).sum()
-            loss += bone_fight_loss + kl_loss_uniform + prob
+            kl_loss_uniform = self.kl(p,self.p).sum()*1
+            kappa = 2/(1+10**(-1*((1*self.kappa)/200)))-1
+            self.kappa += 1
+            loss = graph_loss + kappa*(kl_loss_uniform+prob+bone_fight_loss)
 
-        for p in prob_dic:
-            prob_dic[p]
-            self.log(str(p),prob_dic[p],on_step=True)
+            for p in prob_dic:
+                prob_dic[p]
+                self.log(str(p),prob_dic[p],on_step=True)
 
-        self.log('Prob',prob, on_step=True, prog_bar=True)
-        self.log('KLuniform', kl_loss_uniform, on_step=True)
-        self.log('BFs', bone_fight_loss.mean(), prog_bar=True, on_step=True, on_epoch=True)
-        self.log('train_loss', loss, prog_bar=True, on_step=True, on_epoch=True)
+            self.log('Prob',prob, on_step=True, prog_bar=True,on_epoch=False)
+            self.log('KLuniform', kl_loss_uniform, prog_bar=False,on_step=True,on_epoch=False)
+            self.log('BFs', bone_fight_loss, prog_bar=True, on_step=True, on_epoch=False)
+            self.log('train_loss', loss, prog_bar=True, on_step=True, on_epoch=True)
+            self.log('Graph Loss', graph_loss, prog_bar=False, on_step=True, on_epoch=False)
+
+        else:
+            loss = graph_loss
+            self.log('train_loss', loss, prog_bar=True, on_step=True, on_epoch=True)
         return loss
 
     def validation_step(self, batch, batch_idx):
