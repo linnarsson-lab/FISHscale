@@ -69,8 +69,6 @@ class SAGELightning(LightningModule):
             self.ncells = Ncells
 
     def training_step(self, batch, batch_idx):
-        if self.supervised:
-            opt = self.optimizers()
         batch1 = batch#['unlabelled']
         _, pos_graph, neg_graph, mfgs = batch1
         mfgs = [mfg.int() for mfg in mfgs]
@@ -86,7 +84,6 @@ class SAGELightning(LightningModule):
             fake_nghs = {}
             assigned_molecules = {}
             sampled_reference = []
-
             prob_dic = {}
             prob = 0
             local_nghs = mfgs[0].srcdata['ngh'][pos_graph.nodes()]
