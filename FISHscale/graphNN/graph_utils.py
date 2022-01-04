@@ -306,36 +306,12 @@ class GraphData(pl.LightningDataModule):
                         drop_last=True,
                         num_workers=self.num_workers,
                         )
-
-        if self.model.supervised:
-            edges = np.arange(self.g_lab.num_edges())
-            random_edges = torch.tensor(np.random.choice(edges,random_edges.shape[0],replace=True))
-            lab = dgl.dataloading.EdgeDataLoader(
-                            self.g_lab,
-                            random_edges,
-                            self.sampler,
-                            negative_sampler=dgl.dataloading.negative_sampler.Uniform(self.negative_samples), # NegativeSampler(self.g, self.negative_samples, False),
-                            device=self.device,
-                            #exclude='self',
-                            #reverse_eids=th.arange(self.g.num_edges()) ^ 1,
-                            batch_size=self.batch_size,
-                            shuffle=True,
-                            drop_last=True,
-                            num_workers=self.num_workers)
-        else:
-            lab = None
-        if type(lab) != type(None):
-            return {'unlabelled':unlab,'labelled':lab}
-        else:
-            return {'unlabelled':unlab}
+        return unlab
 
     def train(self,max_epochs=5,gpus=0):
         if self.device.type == 'cuda':
             gpus=1
-        if self.model.supervised: 
-            trainer = pl.Trainer(gpus=gpus,callbacks=[self.checkpoint_callback], max_epochs=max_epochs)
-        else:
-            trainer = pl.Trainer(gpus=gpus,callbacks=[self.checkpoint_callback], max_epochs=max_epochs)
+        trainer = pl.Trainer(gpus=gpus,callbacks=[self.checkpoint_callback], max_epochs=max_epochs)
         trainer.fit(self.model, train_dataloaders=self.train_dataloader())
 
     def molecules_df(self):
@@ -438,7 +414,7 @@ class GraphData(pl.LightningDataModule):
         else:
             return edges
 
-    def cell_types_to_graph(self,smooth=False):
+    '''def cell_types_to_graph(self,smooth=False):
         """
         cell_types_to_graph [summary]
 
@@ -496,7 +472,7 @@ class GraphData(pl.LightningDataModule):
         all_cl = np.concatenate(all_cl)
         edges = self.buildGraph(75,coords=all_coords)
         print('Fake Molecules: ',all_molecules.shape)
-        return all_molecules, edges, all_cl
+        return all_molecules, edges, all_cl'''
 
     def prepare_reference(self):
         if type(self.ref_celltypes) != type(None):
@@ -564,12 +540,6 @@ class GraphData(pl.LightningDataModule):
         latent_unlabelled = self.model.module.inference(self.g,self.g.ndata['gene'],'cpu',512,0)#.detach().numpy()
         
         if self.model.supervised:
-            #if labelled:
-                #latent_labelled = self.model.module.inference(self.g_lab,self.g_lab.ndata['gene'],'cpu',512,0)#.detach().numpy()
-                #self.prediction_labelled = self.model.module.encoder.encoder_dict['CF'](latent_labelled).detach().numpy()
-                #np.save(self.folder+'/probabilities_labelled',self.prediction_labelled)
-                #self.latent_labelled = latent_labelled.detach().numpy()
-                #np.save(self.folder+'/latent_labelled',self.latent_labelled)
             self.prediction_unlabelled = self.model.module.encoder.encoder_dict['CF'](latent_unlabelled).detach().numpy()
             np.save(self.folder+'/labels_unlabelled',self.prediction_unlabelled.argsort(axis=-1)[:,-1].astype('str'))
             #np.save(self.folder+'/probabilities_unlabelled',self.prediction_unlabelled)
@@ -596,25 +566,6 @@ class GraphData(pl.LightningDataModule):
             )
 
         if self.model.supervised:
-
-            '''mixed = np.concatenate([self.latent_unlabelled,self.latent_labelled])
-            batch = np.concatenate([np.zeros(self.latent_unlabelled.shape[0]),np.ones(self.latent_labelled.shape[0])])
-            some_mixed = np.random.choice(np.arange(mixed.shape[0]),int(random_n/2),replace=False)
-            embedding = reducer.fit_transform(mixed[some_mixed])
-            #embedding = umap_embedding.transform(mixed)
-            Y_umap_mixed = embedding
-            Y_umap_mixed -= np.min(Y_umap_mixed, axis=0)
-            Y_umap_mixed /= np.max(Y_umap_mixed, axis=0)
-
-            fig=plt.figure(figsize=(7,4),dpi=500)
-            cycled = [0,1,2,0]
-            for i in range(3):
-                plt.subplot(1,3,i+1)
-                plt.scatter(Y_umap_mixed[:,cycled[i]], Y_umap_mixed[:,cycled[i+1]], c=batch[some_mixed],  s=0.25, marker='.', linewidths=0, edgecolors=None)
-                plt.xlabel("Y"+str(cycled[i]))
-                plt.ylabel("Y"+str(cycled[i+1]))
-            plt.tight_layout()
-            plt.savefig("{}/umap_supervised.png".format(self.folder), bbox_inches='tight', dpi=500)'''
 
             some = np.random.choice(np.arange(self.latent_unlabelled.shape[0]),random_n,replace=False)
             embedding = reducer.fit_transform(self.latent_unlabelled[some])
