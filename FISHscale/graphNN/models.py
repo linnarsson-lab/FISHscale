@@ -70,6 +70,7 @@ class SAGELightning(LightningModule):
 
     def training_step(self, batch, batch_idx):
         batch1 = batch#['unlabelled']
+        self.reference = self.reference.to(self.device)
         _, pos_graph, neg_graph, mfgs = batch1
         mfgs = [mfg.int() for mfg in mfgs]
         batch_inputs_u = mfgs[0].srcdata['gene']
@@ -98,7 +99,8 @@ class SAGELightning(LightningModule):
                     merged_genes += 1
                 fake_nghs[l] = merged_genes
 
-                s= Multinomial(1,th.ones([int(self.reference.sum(axis=0)[l])-25])).sample().argsort()[-1] + 35
+                ones_tensor = th.ones([int(self.reference.sum(axis=0)[l])])
+                s= Multinomial(1,ones_tensor).sample().argsort()[-1] + 35
                 sampled_l_ref = Multinomial(int(s), probs= self.reference[:,l]/self.reference[:,l].sum()).sample()
                 sampled_reference.append(sampled_l_ref)
 
@@ -113,13 +115,11 @@ class SAGELightning(LightningModule):
 
             # Introduce reference with sampling
             sampled_reference = th.stack(sampled_reference)
-
             # Regularize by local nodes
-            bone_fight_loss = -F.cosine_similarity(probabilities_unlab @ self.reference.T, local_nghs,dim=1).mean()
-            bone_fight_loss = -F.cosine_similarity(probabilities_unlab @ self.reference.T, local_nghs,dim=0).mean()
+            bone_fight_loss = -F.cosine_similarity(probabilities_unlab @ self.reference.T.to(self.device), local_nghs,dim=1).mean()
+            bone_fight_loss = -F.cosine_similarity(probabilities_unlab @ self.reference.T.to(self.device), local_nghs,dim=0).mean()
             # Add Predicted same class nodes together.
-            total_counts = th.stack([ms*th.ones(self.reference.shape[0]) for ms in merged_sum]) + 1
-
+            total_counts = th.stack([ms*th.ones(self.reference.shape[0],device=self.device) for ms in merged_sum]) + 1
             probs_per_ct = self.reference/self.reference.sum(axis=0)
             f_probs = []
             for r in range(predictions.shape[0]):
@@ -136,7 +136,7 @@ class SAGELightning(LightningModule):
             p = local_nghs.sum(axis=1) @ probabilities_unlab
             p = th.log(p/p.sum())
             cells_dist = th.tensor(self.ncells/self.ncells.sum(),dtype=th.float32)
-            kl_loss_uniform = self.kl(p,self.p).sum()*1
+            kl_loss_uniform = self.kl(p,self.p.to(self.device)).sum()*1
             kappa = 2/(1+10**(-1*((1*self.kappa)/200)))-1
             self.kappa += 1
             loss = graph_loss + kappa*(kl_loss_uniform+prob+bone_fight_loss)
