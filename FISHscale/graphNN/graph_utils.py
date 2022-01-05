@@ -207,23 +207,15 @@ class GraphData(pl.LightningDataModule):
             d = self.molecules_df()
             edges = self.buildGraph(self.distance_threshold)
             self.g= dgl.graph((edges[0,:],edges[1,:]))
-            #self.g = dgl.to_bidirected(self.g)
             self.g.ndata['gene'] = th.tensor(d.toarray(), dtype=th.float32)
             graph_labels = {"UnsupervisedDGL": th.tensor([0])}
-            if self.smooth:
-                self.g.ndata['zero'] = torch.zeros_like(self.g.ndata['gene'])
-                self.g.update_all(fn.u_add_v('gene','zero','e'),fn.sum('e','zero'))
-                self.g.ndata['gene'] = self.g.ndata['zero'] + self.g.ndata['gene']
-                del self.g.ndata['zero']
-
-            #self.g.update_all(fn.copy_u('gene', 'g2'), fn.sum('g2', 'gene'))
             dgl.data.utils.save_graphs(dgluns, [self.g], graph_labels)
-            #self.g = self.g.to(self.device)
+
         else:
             glist, _ = dgl.data.utils.load_graphs(dgluns) # glist will be [g1, g2]
             self.g = glist[0]
-            #self.g = self.g.to(self.device)
-        
+            self.g.ndata['gene'] = self.g.ndata['gene']
+
         if self.model.supervised:
             self.g.ndata['zero'] = torch.zeros_like(self.g.ndata['gene'])
             self.g.update_all(fn.u_add_v('gene','zero','e'),fn.sum('e','zero'))
@@ -250,7 +242,12 @@ class GraphData(pl.LightningDataModule):
             self.g = dgl.add_self_loop(self.g)
             if self.supervised:
                 self.g_lab = dgl.add_self_loop(self.g_lab)
-        
+
+        if self.smooth:
+                self.g.ndata['zero'] = torch.zeros_like(self.g.ndata['gene'])
+                self.g.update_all(fn.u_add_v('gene','zero','e'),fn.sum('e','zero'))
+                self.g.ndata['gene'] = self.g.ndata['zero'] + self.g.ndata['gene']
+                del self.g.ndata['zero']
         print(self.g)
 
     def prepare_data(self):
