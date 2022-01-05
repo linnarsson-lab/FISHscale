@@ -19,7 +19,7 @@ setup(
 		'umap-learn',  # imported as "umap"
 		'torch',
 		'torchvision',
-        'pytorch-lightning',
+        'pytorch-lightning==1.4.7',
 		'dgl',
 		'open3d',
 		'pandas',
