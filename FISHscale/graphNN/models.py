@@ -119,7 +119,7 @@ class SAGELightning(LightningModule):
             bone_fight_loss = -F.cosine_similarity(probabilities_unlab @ self.reference.T.to(self.device), local_nghs,dim=1).mean()
             bone_fight_loss = -F.cosine_similarity(probabilities_unlab @ self.reference.T.to(self.device), local_nghs,dim=0).mean()
             # Add Predicted same class nodes together.
-            '''total_counts = th.stack([ms*th.ones(self.reference.shape[0],device=self.device) for ms in merged_sum]) + 1
+            total_counts = th.stack([ms*th.ones(self.reference.shape[0],device=self.device) for ms in merged_sum]) + 1
             probs_per_ct = self.reference/self.reference.sum(axis=0)
             f_probs = []
             for r in range(predictions.shape[0]):
@@ -127,12 +127,12 @@ class SAGELightning(LightningModule):
                 cal = predictions[r], local_nghs[r,:]
                 lsum = (predictions == l).sum()+local.sum()
                 dist = Multinomial(int(lsum), probs=probs_per_ct.T)
-                fngh_p= -dist.log_prob(fake_nghs[int(l)] +local)[l]#/lsum
+                fngh_p= -dist.log_prob(fake_nghs[int(l)] +local)/lsum
                 f_probs.append(fngh_p)
 
             fake_nghs_log_probabilities = th.stack(f_probs)
-            fake_nghs_log_probabilities = (1-probabilities_unlab.T)*fake_nghs_log_probabilities
-            prob = fake_nghs_log_probabilities.mean()'''
+            fake_nghs_log_probabilities = fake_nghs_log_probabilities.detach()*probabilities_unlab
+            prob = fake_nghs_log_probabilities.mean()
 
             p = local_nghs.sum(axis=1) @ probabilities_unlab
             p = th.log(p/p.sum())
@@ -140,7 +140,7 @@ class SAGELightning(LightningModule):
             kl_loss_uniform = self.kl(p,self.p.to(self.device)).sum()*1
             kappa = 2/(1+10**(-1*((1*self.kappa)/200)))-1
             self.kappa += 1
-            loss = graph_loss + kappa*(kl_loss_uniform+bone_fight_loss)
+            loss = graph_loss + 1*(kl_loss_uniform+prob+bone_fight_loss)
 
             for p in prob_dic:
                 prob_dic[p]
