@@ -123,8 +123,7 @@ class SAGELightning(LightningModule):
             probs_per_ct = self.reference/self.reference.sum(axis=0)
             f_probs = []
             for r in range(predictions.shape[0]):
-                l,lo
-                cal = predictions[r], local_nghs[r,:]
+                l,local = predictions[r], local_nghs[r,:]
                 lsum = (predictions == l).sum()+local.sum()
                 dist = Multinomial(int(lsum), probs=probs_per_ct.T)
                 fngh_p= -dist.log_prob(fake_nghs[int(l)] +local)/lsum
@@ -136,8 +135,8 @@ class SAGELightning(LightningModule):
 
             p = local_nghs.sum(axis=1) @ probabilities_unlab
             p = th.log(p/p.sum())
-            cells_dist = th.tensor(self.ncells/self.ncells.sum(),dtype=th.float32)
-            kl_loss_uniform = self.kl(p,self.p.to(self.device)).sum()*1
+            cells_dist = th.tensor(self.ncells/self.ncells.sum(),dtype=th.float32, device=self.device)
+            kl_loss_uniform = self.kl(p,cells_dist).sum()*1
             kappa = 2/(1+10**(-1*((1*self.kappa)/200)))-1
             self.kappa += 1
             loss = graph_loss + 1*(kl_loss_uniform+prob+bone_fight_loss)
