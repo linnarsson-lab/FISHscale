@@ -136,7 +136,8 @@ class SAGELightning(LightningModule):
             p = local_nghs.sum(axis=1) @ probabilities_unlab
             p = th.log(p/p.sum())
             cells_dist = th.tensor(self.ncells/self.ncells.sum(),dtype=th.float32)
-            kl_loss_uniform = self.kl(p,self.p.to(self.device)).sum()*1
+            uniform_dist = th.tensor(th.ones(self.ncells.shape[0])/self.ncells.shape[0],device=self.device)
+            kl_loss_uniform = self.kl(p,uniform_dist).sum()*1
             kappa = 2/(1+10**(-1*((1*self.kappa)/200)))-1
             self.kappa += 1
             loss = graph_loss + 1*(kl_loss_uniform+prob+bone_fight_loss)
