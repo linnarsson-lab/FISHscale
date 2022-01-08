@@ -107,7 +107,7 @@ class SAGELightning(LightningModule):
                 if lsum > 0:
                     merged_genes_ngh = local_nghs[predictions == l,:].sum(axis=0)
                     dist = Multinomial(int(merged_genes.sum()),probs=self.reference[:,l]/self.reference[:,l].sum())
-                    pdist = -dist.log_prob(merged_genes).mean()
+                    pdist = -dist.log_prob(merged_genes)/merged_genes.sum()
                 else: 
                     pdist = 0
                 prob_dic[l] = pdist
@@ -126,11 +126,11 @@ class SAGELightning(LightningModule):
                 l,local = predictions[r], local_nghs[r,:]
                 lsum = (predictions == l).sum()+local.sum()
                 dist = Multinomial(int(lsum), probs=probs_per_ct.T)
-                fngh_p= -dist.log_prob(fake_nghs[int(l)] +local)[l]#/lsum
+                fngh_p= -dist.log_prob(fake_nghs[int(l)] +local)/lsum
                 f_probs.append(fngh_p)
 
             fake_nghs_log_probabilities = th.stack(f_probs)
-            fake_nghs_log_probabilities = (1-probabilities_unlab.T)*fake_nghs_log_probabilities
+            fake_nghs_log_probabilities = fake_nghs_log_probabilities.detach()*probabilities_unlab
             prob = fake_nghs_log_probabilities.mean()
 
             p = local_nghs.sum(axis=1) @ probabilities_unlab
@@ -139,7 +139,7 @@ class SAGELightning(LightningModule):
             kl_loss_uniform = self.kl(p,self.p.to(self.device)).sum()*1
             kappa = 2/(1+10**(-1*((1*self.kappa)/200)))-1
             self.kappa += 1
-            loss = graph_loss + kappa*(kl_loss_uniform+prob+bone_fight_loss)
+            loss = graph_loss + 1*(kl_loss_uniform+prob+bone_fight_loss)
 
             for p in prob_dic:
                 prob_dic[p]
