@@ -248,6 +248,7 @@ class GraphData(pl.LightningDataModule):
                 self.g.update_all(fn.u_add_v('gene','zero','e'),fn.sum('e','zero'))
                 self.g.ndata['gene'] = self.g.ndata['zero'] + self.g.ndata['gene']
                 del self.g.ndata['zero']
+
         print(self.g)
 
     def prepare_data(self):
