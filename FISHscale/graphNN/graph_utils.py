@@ -552,6 +552,14 @@ class GraphData(pl.LightningDataModule):
     #### plotting and latent factors #####
 
     def get_latents(self,labelled=True):
+        """
+        get_latents [summary]
+
+        [extended_summary]
+
+        Args:
+            labelled (bool, optional): [description]. Defaults to True.
+        """        
         self.model.eval()
         latent_unlabelled = self.model.module.inference(self.g,self.g.ndata['gene'],'cpu',512,0)#.detach().numpy()
         
