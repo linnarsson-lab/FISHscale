@@ -83,10 +83,10 @@ class GraphData(pl.LightningDataModule):
 
     """    
     def __init__(self,
-        data, # Data as numpy array of shape (Genes, Cells)
+        data, # Data as FISHscale Dataset (Molecules, Genes)
         model=None, # GraphSAGE model
         analysis_name:str='',
-        cells=None, # Array with cell_ids of shape (Cells)
+        molecules=None, # Array with molecules_ids of shape (molecules)
         ngh_size = 100,
         ngh_sizes = [20, 10],
         minimum_nodes_connected = 5,
@@ -117,7 +117,7 @@ class GraphData(pl.LightningDataModule):
                 will generate automatically a model with 24 latent variables.
                 Defaults to None.
             analysis_name (str,optional): Name of the analysis folder.
-            cells (np.array, optional): Array of molecules to be kept for 
+            molecules (np.array, optional): Array of molecules to be kept for 
                 analysis. Defaults to None.
             ngh_size (int, optional): Maximum number of molecules per 
                 neighborhood. Defaults to 100.
@@ -165,7 +165,7 @@ class GraphData(pl.LightningDataModule):
         self.analysis_name = analysis_name
         self.ngh_sizes = ngh_sizes
         self.data = data
-        self.cells = cells
+        self.molecules = molecules
         self.minimum_nodes_connected = minimum_nodes_connected
         self.train_p = train_p
         self.batch_size = batch_size
@@ -183,6 +183,8 @@ class GraphData(pl.LightningDataModule):
 
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.prepare_reference()
+
+        ### Prepare Model
         if type(self.model) == type(None):
             self.model = SAGELightning(in_feats=self.data.unique_genes.shape[0], 
                                         n_hidden=48,
@@ -199,6 +201,7 @@ class GraphData(pl.LightningDataModule):
         self.model.to(self.device)
         print('model is in: ', self.model.device)
 
+        ### Prepare data
         self.folder = self.save_to+self.analysis_name+ '_' +datetime.now().strftime("%Y-%m-%d-%H%M%S")
         os.mkdir(self.folder)
         if not os.path.isdir(self.save_to+'graph'):
@@ -207,16 +210,16 @@ class GraphData(pl.LightningDataModule):
     
         self.compute_distance_th(distance_factor,max_distance_nodes)
         self.subsample_xy()
-        self.compute_size()
         self.setup()
-        # Save random cell selection
         
-        dgluns = self.save_to+'graph/{}Unsupervised_smooth{}_dst{}.graph'.format(self.cells.shape[0],self.smooth,self.distance_threshold)
+        dgluns = self.save_to+'graph/{}Unsupervised_smooth{}_dst{}.graph'.format(self.molecules.shape[0],self.smooth,self.distance_threshold)
         if not os.path.isfile(dgluns):
+            G = self.buildGraph(self.distance_threshold)
+            self.molecules_connected = np.array(G.nodes())
             d = self.molecules_df()
-            edges = self.buildGraph(self.distance_threshold)
-            self.g= dgl.graph((edges[0,:],edges[1,:]))
-            self.g.ndata['gene'] = th.tensor(d.toarray(), dtype=th.float32)
+            #self.g= dgl.graph((edges[0,:],edges[1,:]))
+            self.g = dgl.from_networkx(G)
+            self.g.ndata['gene'] = th.tensor(d.toarray(), dtype=th.float32)#[self.molecules_connected,:]
             graph_labels = {"UnsupervisedDGL": th.tensor([0])}
             dgl.data.utils.save_graphs(dgluns, [self.g], graph_labels)
 
@@ -232,7 +235,7 @@ class GraphData(pl.LightningDataModule):
             self.g.ndata['ngh'] = self.g.ndata['zero'] + self.g.ndata['gene']
             del self.g.ndata['zero']
 
-            '''dglsup =self.save_to+'graph/{}Supervised_smooth{}.graph'.format(self.cells.shape[0],self.smooth)
+            '''dglsup =self.save_to+'graph/{}Supervised_smooth{}.graph'.format(self.molecules.shape[0],self.smooth)
             if not os.path.isfile(dglsup):
                 molecules_labelled, edges_labelled, labels = self.cell_types_to_graph(smooth=self.smooth)
                 self.g_lab= dgl.graph((edges_labelled[0,:],edges_labelled[1,:]))
@@ -260,6 +263,8 @@ class GraphData(pl.LightningDataModule):
 
         print(self.g)
 
+        self.make_train_test_validation()
+
     def prepare_data(self):
         # do-something
         pass
@@ -283,18 +288,16 @@ class GraphData(pl.LightningDataModule):
             stopping_threshold=0.35,
             )
 
-    def compute_size(self):
-        cells = self.cells
-        #if self.smooth:
-        #    cells = self.molecules_connected
-        np.save(self.folder +'/cells.npy', cells)
-        self.train_size = int((cells.shape[0])*self.train_p)
-        self.test_size = cells.shape[0]-int(cells.shape[0]*self.train_p)  
+    def make_train_test_validation(self):
+        m = self.molecules_connected
+        np.save(self.folder +'/molecules.npy', self.molecules_connected)
+        self.train_size = int((self.molecules.shape[0])*self.train_p)
+        self.test_size = self.molecules.shape[0]-int(self.molecules.shape[0]*self.train_p)  
         random_state = np.random.RandomState(seed=0)
-        permutation = random_state.permutation(cells.shape[0])
+        permutation = random_state.permutation(self.molecules.shape[0])
         self.indices_test = th.tensor(permutation[:self.test_size])
         self.indices_train = th.tensor(permutation[self.test_size : (self.test_size + self.train_size)])
-        self.indices_validation = th.tensor(np.arange(cells.shape[0]))
+        self.indices_validation = th.tensor(np.arange(self.molecules.shape[0]))
 
     def train_dataloader(self):
         edges = np.arange(self.g.num_edges())
@@ -322,7 +325,7 @@ class GraphData(pl.LightningDataModule):
 
     def molecules_df(self):
         rows,cols = [],[]
-        filt = self.data.df.g.values.compute()[self.cells]
+        filt = self.data.df.g.values.compute()[self.molecules_connected]
         for r in trange(self.data.unique_genes.shape[0]):
             g = self.data.unique_genes[r]
             expressed = np.where(filt == g)[0].tolist()
@@ -335,16 +338,15 @@ class GraphData(pl.LightningDataModule):
         return sm
     
     def subsample_xy(self):
-        if type(self.cells) == type(None):
-            #self.cells = self.data.df.index.compute()
-            self.cells = np.arange(self.data.shape[0])
+        if type(self.molecules) == type(None):
+            self.molecules = np.arange(self.data.shape[0])
         if type(self.subsample) == float and self.subsample < 1:
-            self.cells = np.random.randint(0,self.data.shape[0], int(self.subsample*self.data.shape[0]))
+            self.molecules = np.random.randint(0,self.data.shape[0], int(self.subsample*self.data.shape[0]))
         elif type(self.subsample) == dict:
             filt_x =  ((self.data.df.x > self.subsample['x'][0]) & (self.data.df.x < self.subsample['x'][1])).values.compute()
             filt_y =  ((self.data.df.y > self.subsample['y'][0]) & (self.data.df.y < self.subsample['y'][1])).values.compute()
-            self.cells = self.cells[filt_x & filt_y]
-            #self.cells = np.random.choice(self.data.df.index.compute(),size=int(subsample*self.data.shape[0]),replace=False)
+            self.molecules = self.molecules[filt_x & filt_y]
+            #self.molecules = np.random.choice(self.data.df.index.compute(),size=int(subsample*self.data.shape[0]),replace=False)
 
     def compute_distance_th(self,omega,tau):
         if type(tau) == type(None):
@@ -358,13 +360,14 @@ class GraphData(pl.LightningDataModule):
         else:
             self.distance_threshold = tau
             print('Chosen dist: {}'.format(tau))
+
     def buildGraph(self, d_th,coords=None):
         print('Building graph...')
         if type(coords)  == type(None):
             supervised = False
-            edge_file = os.path.join(self.save_to,'graph/DGL-Edges-{}Nodes-dst{}'.format(self.cells.shape[0],self.distance_threshold))
-            tree_file = os.path.join(self.save_to,'graph/DGL-Tree-{}Nodes-dst{}.ann'.format(self.cells.shape[0],self.distance_threshold))
-            coords = np.array([self.data.df.x.values.compute()[self.cells], self.data.df.y.values.compute()[self.cells]]).T
+            edge_file = os.path.join(self.save_to,'graph/DGL-Edges-{}Nodes-dst{}'.format(self.molecules.shape[0],self.distance_threshold))
+            tree_file = os.path.join(self.save_to,'graph/DGL-Tree-{}Nodes-dst{}.ann'.format(self.molecules.shape[0],self.distance_threshold))
+            coords = np.array([self.data.df.x.values.compute()[self.molecules], self.data.df.y.values.compute()[self.molecules]]).T
             neighborhood_size = self.ngh_size
         else:
             supervised=True
@@ -413,14 +416,9 @@ class GraphData(pl.LightningDataModule):
                     node_removed.append(node)
                     G.remove_node(node)
 
-        edges = th.tensor(list(G.edges)).T
-        cells = th.tensor(list(G.nodes))
-
-        if supervised==False:
-            self.molecules_connected = cells
-            return edges
-        else:
-            return edges
+        #edges = th.tensor(list(G.edges)).T
+        #cells = th.tensor(list(G.nodes))
+        return G
 
     '''def cell_types_to_graph(self,smooth=False):
         """
@@ -532,7 +530,7 @@ class GraphData(pl.LightningDataModule):
         print('Smoothing neighborhoods with kernel size: {}'.format(neighborhood_size))
         
         u = AnnoyIndex(2, 'euclidean')
-        u.load(os.path.join(self.save_to,'Tree-{}Nodes-Ngh{}-{}-dst{}.ann'.format(self.cells.shape[0],self.ngh_sizes[0],self.ngh_sizes[1],self.distance_threshold)))
+        u.load(os.path.join(self.save_to,'Tree-{}Nodes-Ngh{}-{}-dst{}.ann'.format(self.molecules.shape[0],self.ngh_sizes[0],self.ngh_sizes[1],self.distance_threshold)))
 
         smoothed_dataframe = []
         molecules_connected = []
@@ -617,7 +615,7 @@ class GraphData(pl.LightningDataModule):
             ax.set_facecolor("black")
             width_cutoff = 1640 # um
             #plt.scatter(DS.df.x.values.compute()[GD.cells], DS.df.y.values.compute()[GD.cells], c=torch.argmax(pred.softmax(dim=-1),dim=-1).numpy(), s=0.2,marker='.',linewidths=0, edgecolors=None,cmap='rainbow')
-            plt.scatter(self.data.df.x.values.compute()[self.cells][some], self.data.df.y.values.compute()[self.cells][some], c=Y_umap, s=0.05,marker='.',linewidths=0, edgecolors=None)
+            plt.scatter(self.data.df.x.values.compute()[self.molecules_connected][some], self.data.df.y.values.compute()[self.molecules_connected][some], c=Y_umap, s=0.05,marker='.',linewidths=0, edgecolors=None)
             plt.xticks(fontsize=2)
             plt.yticks(fontsize=2)
             plt.axis('scaled')
@@ -647,7 +645,7 @@ class GraphData(pl.LightningDataModule):
             ax = fig.add_subplot(1, 1, 1)
             ax.set_facecolor("black")
             width_cutoff = 1640 # um
-            plt.scatter(self.data.df.x.values.compute()[self.cells], self.data.df.y.values.compute()[self.cells], c=clusters_colors, alpha=0.9,s=0.05,marker='.',linewidths=0, edgecolors=None)
+            plt.scatter(self.data.df.x.values.compute()[self.molecules_connected], self.data.df.y.values.compute()[self.molecules_connected], c=clusters_colors, alpha=0.9,s=0.05,marker='.',linewidths=0, edgecolors=None)
             plt.xticks(fontsize=2)
             plt.yticks(fontsize=2)
             plt.axis('scaled')
@@ -655,8 +653,8 @@ class GraphData(pl.LightningDataModule):
 
             import holoviews as hv
             hv.extension('matplotlib')
-            molecules_y = self.data.df.y.values.compute()[self.cells]
-            molecules_x = self.data.df.x.values.compute()[self.cells]
+            molecules_y = self.data.df.y.values.compute()[self.molecules_connected]
+            molecules_x = self.data.df.x.values.compute()[self.molecules_connected]
             nd_dic = {}
 
             allm = 0
@@ -742,7 +740,7 @@ class GraphData(pl.LightningDataModule):
             ax = fig.add_subplot(1, 1, 1)
             ax.set_facecolor("black")
             #plt.scatter(DS.df.x.values.compute()[GD.cells], DS.df.y.values.compute()[GD.cells], c=torch.argmax(pred.softmax(dim=-1),dim=-1).numpy(), s=0.2,marker='.',linewidths=0, edgecolors=None,cmap='rainbow')
-            plt.scatter(self.data.df.x.values.compute()[self.cells], self.data.df.y.values.compute()[self.cells], c=clusters_colors, s=0.05,marker='.',linewidths=0, edgecolors=None)
+            plt.scatter(self.data.df.x.values.compute()[self.molecules_connected], self.data.df.y.values.compute()[self.molecules_connected], c=clusters_colors, s=0.05,marker='.',linewidths=0, edgecolors=None)
             plt.xticks(fontsize=2)
             plt.yticks(fontsize=2)
             plt.axis('scaled')
