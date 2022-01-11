@@ -517,7 +517,7 @@ class GraphData(pl.LightningDataModule):
             self.dist = dist/dist.sum()
         elif self.celltype_distribution == 'ascending':
             n = self.ncells.reshape(-1,1)
-            gm = GaussianMixture(n_components=int(n.shape[0]/5), random_state=42).fit(n)
+            gm = GaussianMixture(n_components=int(n.shape[0]/2.5), random_state=42).fit(n)
             dist = gm.predict(n)
             self.dist = th.tensor(dist/dist.sum(),dtype=th.float32)
         elif self.celltype_distribution == 'cells':
