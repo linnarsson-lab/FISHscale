@@ -217,7 +217,7 @@ class GraphData(pl.LightningDataModule):
             G = self.buildGraph()
             self.molecules_connected = np.array(G.nodes())
             d = self.molecules_df()
-            #self.g= dgl.graph((edges[0,:],edges[1,:]))
+
             self.g = dgl.from_networkx(G)
             self.g.ndata['gene'] = th.tensor(d.toarray(), dtype=th.float32)#[self.molecules_connected,:]
             self.g.ndata['indices'] = th.tensor(self.molecules_connected)
