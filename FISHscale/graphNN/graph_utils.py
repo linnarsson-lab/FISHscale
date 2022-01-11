@@ -418,7 +418,7 @@ class GraphData(pl.LightningDataModule):
             coords ([type], optional): [description]. Defaults to None.
 
         Returns:
-            networkx.Graph: molecule spatial graph.
+            dgl.Graph: molecule spatial graph.
         """        
         print('Building graph...')
         if type(coords)  == type(None):
