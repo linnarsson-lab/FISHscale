@@ -225,22 +225,6 @@ class GraphData(pl.LightningDataModule):
             self.g = glist[0]
             self.molecules_connected = self.g.ndata['indices'].numpy()
             print('Model loaded.')
-
-
-            '''dglsup =self.save_to+'graph/{}Supervised_smooth{}.graph'.format(self.molecules.shape[0],self.smooth)
-            if not os.path.isfile(dglsup):
-                molecules_labelled, edges_labelled, labels = self.cell_types_to_graph(smooth=self.smooth)
-                self.g_lab= dgl.graph((edges_labelled[0,:],edges_labelled[1,:]))
-                self.g_lab = dgl.to_bidirected(self.g_lab)
-                self.g_lab.ndata['gene'] = th.tensor(molecules_labelled.toarray(),dtype=th.float32)
-                self.g_lab.ndata['label'] = th.tensor(labels, dtype=th.long)
-                graph_labels = {"SupervisedDGL": th.tensor([0])}
-                dgl.data.utils.save_graphs(dglsup, [self.g_lab], graph_labels)
-                #self.g_lab = self.g_lab.to(self.device)
-            else:
-                glist, _ = dgl.data.utils.load_graphs(dglsup) # glist will be [g1, g2]
-                self.g_lab = glist[0]'''
-                #self.g_lab = self.g_lab.to(self.device)
         
         if self.aggregator == 'attentional':
             self.g = dgl.add_self_loop(self.g)
@@ -467,7 +451,7 @@ class GraphData(pl.LightningDataModule):
         self.molecules_connected = nodes
         d = self.molecules_df()
         g= dgl.graph((edges[0,:],edges[1,:]))
-        g = dgl.to_bidirected(g)
+        #g = dgl.to_bidirected(g)
         g.ndata['gene'] = th.tensor(d.toarray(), dtype=th.float32)#[self.molecules_connected,:]
 
         g.ndata['zero'] = torch.zeros_like(g.ndata['gene'])
@@ -482,19 +466,6 @@ class GraphData(pl.LightningDataModule):
 
         g.remove_nodes(th.tensor(remove))
         g.ndata['indices'] = th.tensor(self.molecules_connected)
-
-        '''G = nx.Graph()
-        G.add_nodes_from(np.arange(coords.shape[0]))
-        G.add_edges_from(edges)
-        node_removed = []
-        for component in tqdm(list(nx.connected_components(G))):
-            if len(component) < self.minimum_nodes_connected:
-                for node in component:
-                    node_removed.append(node)
-                    G.remove_node(node)'''
-
-        #edges = th.tensor(list(G.edges)).T
-        #cells = th.tensor(list(G.nodes))
         return g
 
     '''def cell_types_to_graph(self,smooth=False):
