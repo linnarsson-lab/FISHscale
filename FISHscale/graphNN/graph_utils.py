@@ -357,7 +357,7 @@ class GraphData(pl.LightningDataModule):
             print('Chosen dist: {}'.format(d_th))
         else:
             self.distance_threshold = tau
-            print('Chosen dist: {}'.format(d_th))
+            print('Chosen dist: {}'.format(tau))
     def buildGraph(self, d_th,coords=None):
         print('Building graph...')
         if type(coords)  == type(None):
