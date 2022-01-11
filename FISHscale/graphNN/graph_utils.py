@@ -19,6 +19,7 @@ import sklearn.metrics as skm
 import dgl
 import dgl.function as fn
 from FISHscale.graphNN.models import SAGELightning
+from sklearn.mixture import GaussianMixture
 
 class UnsupervisedClassification(Callback):
     def on_validation_epoch_start(self, trainer, pl_module):
@@ -87,8 +88,8 @@ class GraphData(pl.LightningDataModule):
         analysis_name:str='',
         cells=None, # Array with cell_ids of shape (Cells)
         ngh_size = 100,
-        minimum_nodes_connected = 5,
         ngh_sizes = [20, 10],
+        minimum_nodes_connected = 5,
         train_p = 0.25,
         batch_size= 512,
         num_workers=0,
@@ -98,18 +99,20 @@ class GraphData(pl.LightningDataModule):
         exclude_clusters:dict={},
         smooth:bool=False,
         negative_samples:int=1,
+<<<<<<< HEAD
         distance_factor:int=4,
         max_distance_nodes=None,
+=======
+        distance_factor:float=2.5,
+>>>>>>> 999cce6861e996f1ee8f19c98d748617e46da979
         device='cpu',
         lr=1e-3,
-        aggregate=1,
-        aggregator='pool'
+        aggregator='pool',
+        celltype_distribution='uniform',
         ):
         """
         GraphData prepared the FISHscale dataset to be analysed in a supervised
         or unsupervised manner by non-linear GraphSage.
-
-        [extended_summary]
 
         Args:
             data (FISHscale.dataset): FISHscale DataSet object. Contains 
@@ -117,15 +120,18 @@ class GraphData(pl.LightningDataModule):
             model (graphNN.model): GraphSage model to be used. If None GraphData
                 will generate automatically a model with 24 latent variables.
                 Defaults to None.
+            analysis_name (str,optional): Name of the analysis folder.
             cells (np.array, optional): Array of molecules to be kept for 
                 analysis. Defaults to None.
+            ngh_size (int, optional): Maximum number of molecules per 
+                neighborhood. Defaults to 100.
+            ngh_sizes (list, optional): GraphSage sampling size.
+                Defaults to [20, 10].
             minimum_nodes_connected (int, optional): Minimum molecules connected
                 in the network. Defaults to 5.
-            ngh_sizes (list, optional): GraphSage sampling size. 
-                Defaults to [20, 10].
-            train_p (float, optional): train_size is generally small if number of 
-                molecules is large enough that information would be redundant 
-                especially if smoothing is performed. Defaults to 0.25.
+            train_p (float, optional): train_size is generally small if number 
+                of molecules is large enough that information would be redundant. 
+                Defaults to 0.25.
             batch_size (int, optional): Mini-batch for training. Defaults to 512.
             num_workers (int, optional): Dataloader parameter. Defaults to 0.
             save_to (str, optional): Folder where analysis will be saved. 
@@ -150,6 +156,12 @@ class GraphData(pl.LightningDataModule):
                 Defaults to 3.
             device (str, optional): Device where pytorch is run. Defaults to 'cpu'.
             lr (float, optional): learning rate .Defaults to 1e-3.
+            aggregator (str, optional). Aggregator type for SAGEConv. Choose 
+                between 'pool','mean','min','lstm'. Defaults to 'pool'.
+            celltype_distribution (str, optional). Supervised cell_type/
+                molecules distribution. Choose between 'uniform','ascending'
+                or 'cell'. Defaults to 'uniform'.
+
         """
         super().__init__()
 
@@ -170,8 +182,8 @@ class GraphData(pl.LightningDataModule):
         self.ngh_size = ngh_size
         self.lr = lr
         self.subsample = subsample
-        self.aggregate = aggregate
         self.aggregator = aggregator
+        self.celltype_distribution = celltype_distribution
 
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.prepare_reference()
@@ -182,11 +194,11 @@ class GraphData(pl.LightningDataModule):
                                         n_classes=self.ref_celltypes.shape[1],
                                         lr=self.lr,
                                         supervised=self.supervised,
-                                        Ncells=self.ncells*self.ref_celltypes.sum(axis=0),
                                         reference=self.ref_celltypes,
                                         device=self.device.type,
                                         smooth=self.smooth,
-                                        aggregator=self.aggregator
+                                        aggregator=self.aggregator,
+                                        celltype_distribution=self.dist,
                                     )
         self.model.to(self.device)
         print('model is in: ', self.model.device)
@@ -507,6 +519,17 @@ class GraphData(pl.LightningDataModule):
             self.ref_celltypes = np.array([[0],[0]])
             self.ncells = 0
 
+        if self.celltype_distribution == 'uniform':
+            dist = th.tensor(self.ncells*self.ref_celltypes.sum(axis=0),dtype=th.float32,device=self.device)
+            self.dist = dist/dist.sum()
+        elif self.celltype_distribution == 'ascending':
+            n = self.ncells.reshape(-1,1)
+            gm = GaussianMixture(n_components=int(n.shape[0]/2.5), random_state=42).fit(n)
+            dist = gm.predict(n)
+            self.dist = th.tensor(dist/dist.sum(),dtype=th.float32)
+        elif self.celltype_distribution == 'cells':
+            self.dist = th.tensor(self.ncells/self.ncells.sum(),dtype=th.float32)
+
         #do something
 
     '''def knn_smooth(self,neighborhood_size=75):
@@ -536,6 +559,14 @@ class GraphData(pl.LightningDataModule):
     #### plotting and latent factors #####
 
     def get_latents(self,labelled=True):
+        """
+        get_latents [summary]
+
+        [extended_summary]
+
+        Args:
+            labelled (bool, optional): [description]. Defaults to True.
+        """        
         self.model.eval()
         latent_unlabelled = self.model.module.inference(self.g,self.g.ndata['gene'],'cpu',512,0)#.detach().numpy()
         

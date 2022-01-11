@@ -42,12 +42,11 @@ class SAGELightning(LightningModule):
                  dropout=0.2,
                  lr=0.001,
                  supervised=False,
-                 kappa=0,
-                 Ncells=0,
                  reference=0,
                  smooth=False,
                  device='cpu',
                  aggregator='attentional',
+                 celltype_distribution=None,
                  ):
         super().__init__()
 
@@ -56,17 +55,14 @@ class SAGELightning(LightningModule):
         self.lr = lr
         self.supervised= supervised
         self.loss_fcn = CrossEntropyLoss()
-        self.kappa = kappa
+        self.kappa = 0
         self.reference=th.tensor(reference,dtype=th.float32)
         self.smooth = smooth
         if self.supervised:
             #self.automatic_optimization = False
-            #self.sl = SemanticLoss(n_hidden,n_classes,ncells=Ncells,device=device)
             self.train_acc = torchmetrics.Accuracy()
-            p = th.tensor(Ncells*reference.sum(axis=0),dtype=th.float32,device=self.device)
-            self.p = p/p.sum()
             self.kl = th.nn.KLDivLoss(reduction='sum')
-            self.ncells = Ncells
+            self.dist = celltype_distribution
 
     def training_step(self, batch, batch_idx):
         batch1 = batch#['unlabelled']
@@ -135,9 +131,7 @@ class SAGELightning(LightningModule):
 
             p = local_nghs.sum(axis=1) @ probabilities_unlab
             p = th.log(p/p.sum())
-            cells_dist = th.tensor(self.ncells/self.ncells.sum(),dtype=th.float32)
-            uniform_dist = th.tensor(th.ones(self.ncells.shape[0])/self.ncells.shape[0],device=self.device)
-            kl_loss_uniform = self.kl(p,uniform_dist).sum()*1
+            kl_loss_uniform = self.kl(p,self.dist.to(self.device)).sum()*1
             kappa = 2/(1+10**(-1*((1*self.kappa)/200)))-1
             self.kappa += 1
             loss = graph_loss + 1*(kl_loss_uniform+prob+bone_fight_loss)
