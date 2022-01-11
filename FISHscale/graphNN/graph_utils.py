@@ -99,7 +99,7 @@ class GraphData(pl.LightningDataModule):
         exclude_clusters:dict={},
         smooth:bool=False,
         negative_samples:int=1,
-        distance_factor:int=2.5,
+        distance_factor:int=4,
         max_distance_nodes=None,
         device='cpu',
         lr=1e-3,
@@ -177,6 +177,7 @@ class GraphData(pl.LightningDataModule):
         self.negative_samples = negative_samples
         self.ngh_size = ngh_size
         self.lr = lr
+        self.distance_factor = distance_factor
         self.subsample = subsample
         self.aggregator = aggregator
         self.celltype_distribution = celltype_distribution
@@ -207,26 +208,26 @@ class GraphData(pl.LightningDataModule):
         if not os.path.isdir(self.save_to+'graph'):
             os.mkdir(self.save_to+'graph')
         #print('Device is: ',self.device)
-    
-        self.compute_distance_th(distance_factor,max_distance_nodes)
+        #self.compute_distance_th(distance_factor,max_distance_nodes)
         self.subsample_xy()
         self.setup()
         
-        dgluns = self.save_to+'graph/{}Unsupervised_smooth{}_dst{}.graph'.format(self.molecules.shape[0],self.smooth,self.distance_threshold)
+        dgluns = self.save_to+'graph/{}Unsupervised_smooth{}_dst{}_mNodes{}.graph'.format(self.molecules.shape[0],self.smooth,self.distance_factor,self.minimum_nodes_connected)
         if not os.path.isfile(dgluns):
-            G = self.buildGraph(self.distance_threshold)
+            G = self.buildGraph()
             self.molecules_connected = np.array(G.nodes())
             d = self.molecules_df()
             #self.g= dgl.graph((edges[0,:],edges[1,:]))
             self.g = dgl.from_networkx(G)
             self.g.ndata['gene'] = th.tensor(d.toarray(), dtype=th.float32)#[self.molecules_connected,:]
+            self.g.ndata['indices'] = th.tensor(self.molecules_connected)
             graph_labels = {"UnsupervisedDGL": th.tensor([0])}
             dgl.data.utils.save_graphs(dgluns, [self.g], graph_labels)
 
         else:
             glist, _ = dgl.data.utils.load_graphs(dgluns) # glist will be [g1, g2]
             self.g = glist[0]
-            self.g.ndata['gene'] = self.g.ndata['gene']
+            self.molecules_connected = self.g.ndata['indices'].numpy()
 
         if self.model.supervised:
             self.g.ndata['zero'] = torch.zeros_like(self.g.ndata['gene'])
@@ -361,50 +362,48 @@ class GraphData(pl.LightningDataModule):
             self.distance_threshold = tau
             print('Chosen dist: {}'.format(tau))
 
-    def buildGraph(self, d_th,coords=None):
+    def buildGraph(self, coords=None):
         print('Building graph...')
         if type(coords)  == type(None):
             supervised = False
-            edge_file = os.path.join(self.save_to,'graph/DGL-Edges-{}Nodes-dst{}'.format(self.molecules.shape[0],self.distance_threshold))
-            tree_file = os.path.join(self.save_to,'graph/DGL-Tree-{}Nodes-dst{}.ann'.format(self.molecules.shape[0],self.distance_threshold))
+            edge_file = os.path.join(self.save_to,'graph/DGL-Edges-{}Nodes-dst{}'.format(self.molecules.shape[0],self.distance_factor))
+            tree_file = os.path.join(self.save_to,'graph/DGL-Tree-{}Nodes-dst{}.ann'.format(self.molecules.shape[0],self.distance_factor))
             coords = np.array([self.data.df.x.values.compute()[self.molecules], self.data.df.y.values.compute()[self.molecules]]).T
             neighborhood_size = self.ngh_size
         else:
             supervised=True
-            edge_file = os.path.join(self.save_to,'graph/DGL-Supervised-Edges-{}Nodes-dst{}'.format(coords.shape[0],self.distance_threshold))
-            tree_file = os.path.join(self.save_to,'graph/DGL-Supervised-Tree-{}Nodes-dst{}.ann'.format(coords.shape[0],self.distance_threshold))
+            edge_file = os.path.join(self.save_to,'graph/DGL-Supervised-Edges-{}Nodes-dst{}'.format(coords.shape[0],self.distance_factor))
+            tree_file = os.path.join(self.save_to,'graph/DGL-Supervised-Tree-{}Nodes-dst{}.ann'.format(coords.shape[0],self.distance_factor))
             neighborhood_size = self.ngh_size
 
-        if not os.path.isfile(edge_file):
-            t = AnnoyIndex(2, 'euclidean')  # Length of item vector that will be indexed
+        t = AnnoyIndex(2, 'euclidean')  # Length of item vector that will be indexed
+        for i in trange(coords.shape[0]):
+            v = coords[i,:]
+            t.add_item(i, v)
+
+        t.build(10) # 10 trees
+        t.save(tree_file)
+
+        #subs_coords = np.random.choice(np.arange(coords.shape[0]),500000,replace=False)
+        dists = np.array([t.get_nns_by_item(i, 2,include_distances=True)[1][1] for i in range(coords.shape[0])])
+        d_th = np.percentile(dists[np.isnan(dists) == False],97)*self.distance_factor
+        self.distance_threshold = d_th
+        print('Chosen dist: {}'.format(self.distance_threshold))
+    
+        def find_nn_distance(coords,tree,distance):
+            print('Find neighbors below distance: {}'.format(d_th))
+            res = []
             for i in trange(coords.shape[0]):
-                v = coords[i,:]
-                t.add_item(i, v)
-
-            t.build(10) # 10 trees
-            t.save(tree_file)
-        
-            def find_nn_distance(coords,tree,distance):
-                print('Find neighbors below distance: {}'.format(d_th))
-                res = []
-                for i in trange(coords.shape[0]):
-                    # 100 sets the number of neighbors to find for each node
-                    #  it is set to 100 since we usually will compute neighbors
-                    #  [20,10]
-                    search = tree.get_nns_by_item(i, neighborhood_size, include_distances=True)
-                    pair = [(i,n) for n,d in zip(search[0],search[1]) if d < distance]
-                    if len(pair) > self.minimum_nodes_connected:
-                        res += pair
-                res= np.array(res)
-                return res
-            edges = find_nn_distance(coords,t,d_th)
-                    
-            with h5py.File(edge_file, 'w') as hf:
-                hf.create_dataset("edges",  data=edges)
-
-        else:
-            with h5py.File(edge_file, 'r+') as hf:
-                edges = hf['edges'][:]
+                # 100 sets the number of neighbors to find for each node
+                #  it is set to 100 since we usually will compute neighbors
+                #  [20,10]
+                search = tree.get_nns_by_item(i, neighborhood_size, include_distances=True)
+                pair = [(i,n) for n,d in zip(search[0],search[1]) if d < distance]
+                if len(pair) > self.minimum_nodes_connected:
+                    res += pair
+            res= np.array(res)
+            return res
+        edges = find_nn_distance(coords,t,self.distance_threshold)
 
         G = nx.Graph()
         G.add_nodes_from(np.arange(coords.shape[0]))
@@ -514,7 +513,8 @@ class GraphData(pl.LightningDataModule):
             self.ncells = 0
 
         if self.celltype_distribution == 'uniform':
-            dist = th.tensor(self.ncells*self.ref_celltypes.sum(axis=0),dtype=th.float32,device=self.device)
+            #dist = th.tensor(self.ncells*self.ref_celltypes.sum(axis=0),dtype=th.float32,device=self.device)
+            dist = th.ones(self.ncells.shape[0])
             self.dist = dist/dist.sum()
         elif self.celltype_distribution == 'ascending':
             n = self.ncells.reshape(-1,1)
