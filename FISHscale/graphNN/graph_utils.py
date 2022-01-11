@@ -99,12 +99,8 @@ class GraphData(pl.LightningDataModule):
         exclude_clusters:dict={},
         smooth:bool=False,
         negative_samples:int=1,
-<<<<<<< HEAD
-        distance_factor:int=4,
+        distance_factor:int=2.5,
         max_distance_nodes=None,
-=======
-        distance_factor:float=2.5,
->>>>>>> 999cce6861e996f1ee8f19c98d748617e46da979
         device='cpu',
         lr=1e-3,
         aggregator='pool',
