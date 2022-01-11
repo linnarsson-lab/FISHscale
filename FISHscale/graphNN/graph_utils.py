@@ -222,13 +222,15 @@ class GraphData(pl.LightningDataModule):
             self.g.ndata['gene'] = th.tensor(d.toarray(), dtype=th.float32)#[self.molecules_connected,:]
             self.g.ndata['indices'] = th.tensor(self.molecules_connected)
             graph_labels = {"UnsupervisedDGL": th.tensor([0])}
+            print('Saving model...')
             dgl.data.utils.save_graphs(dgluns, [self.g], graph_labels)
-
+            print('Model saved.')
         else:
+            print('Loading model.')
             glist, _ = dgl.data.utils.load_graphs(dgluns) # glist will be [g1, g2]
             self.g = glist[0]
             self.molecules_connected = self.g.ndata['indices'].numpy()
-
+            print('Model loaded.')
         if self.model.supervised:
             self.g.ndata['zero'] = torch.zeros_like(self.g.ndata['gene'])
             self.g.update_all(fn.u_add_v('gene','zero','e'),fn.sum('e','zero'))
