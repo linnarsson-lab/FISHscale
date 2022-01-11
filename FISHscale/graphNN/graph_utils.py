@@ -214,13 +214,7 @@ class GraphData(pl.LightningDataModule):
         
         dgluns = self.save_to+'graph/{}Unsupervised_smooth{}_dst{}_mNodes{}.graph'.format(self.molecules.shape[0],self.smooth,self.distance_factor,self.minimum_nodes_connected)
         if not os.path.isfile(dgluns):
-            G = self.buildGraph()
-            self.molecules_connected = np.array(G.nodes())
-            d = self.molecules_df()
-
-            self.g = dgl.from_networkx(G)
-            self.g.ndata['gene'] = th.tensor(d.toarray(), dtype=th.float32)#[self.molecules_connected,:]
-            self.g.ndata['indices'] = th.tensor(self.molecules_connected)
+            self.g = self.buildGraph()
             graph_labels = {"UnsupervisedDGL": th.tensor([0])}
             print('Saving model...')
             dgl.data.utils.save_graphs(dgluns, [self.g], graph_labels)
@@ -231,12 +225,7 @@ class GraphData(pl.LightningDataModule):
             self.g = glist[0]
             self.molecules_connected = self.g.ndata['indices'].numpy()
             print('Model loaded.')
-        if self.model.supervised:
-            self.g.ndata['zero'] = torch.zeros_like(self.g.ndata['gene'])
-            self.g.update_all(fn.u_add_v('gene','zero','e'),fn.sum('e','zero'))
-            self.g.ndata['gene'] = self.g.ndata['gene']
-            self.g.ndata['ngh'] = self.g.ndata['zero'] + self.g.ndata['gene']
-            del self.g.ndata['zero']
+
 
             '''dglsup =self.save_to+'graph/{}Supervised_smooth{}.graph'.format(self.molecules.shape[0],self.smooth)
             if not os.path.isfile(dglsup):
@@ -429,7 +418,7 @@ class GraphData(pl.LightningDataModule):
             coords ([type], optional): [description]. Defaults to None.
 
         Returns:
-            networkx.Graph: molecule spatial graph.
+            dgl.Graph: molecule spatial graph.
         """        
         print('Building graph...')
         if type(coords)  == type(None):
@@ -471,9 +460,30 @@ class GraphData(pl.LightningDataModule):
                     res += pair
             res= np.array(res)
             return res
-        edges = find_nn_distance(coords,t,self.distance_threshold)
 
-        G = nx.Graph()
+        edges = th.tensor(find_nn_distance(coords,t,self.distance_threshold)).T
+        nodes = np.arange(coords.shape[0])
+
+        self.molecules_connected = nodes
+        d = self.molecules_df()
+        g= dgl.graph((edges[0,:],edges[1,:]))
+        g = dgl.to_bidirected(g)
+        g.ndata['gene'] = th.tensor(d.toarray(), dtype=th.float32)#[self.molecules_connected,:]
+
+        g.ndata['zero'] = torch.zeros_like(g.ndata['gene'])
+        g.update_all(fn.u_add_v('gene','zero','e'),fn.sum('e','zero'))
+        g.ndata['gene'] = g.ndata['gene']
+        g.ndata['ngh'] = g.ndata['zero'] + g.ndata['gene']
+        del g.ndata['zero']
+
+        sum_nodes_connected = g.ndata['ngh'].sum(axis=1)
+        self.molecules_connected = nodes[sum_nodes_connected > self.minimum_nodes_connected]
+        remove = nodes[sum_nodes_connected.numpy() <= self.minimum_nodes_connected]
+
+        g.remove_nodes(th.tensor(remove))
+        g.ndata['indices'] = th.tensor(self.molecules_connected)
+
+        '''G = nx.Graph()
         G.add_nodes_from(np.arange(coords.shape[0]))
         G.add_edges_from(edges)
         node_removed = []
@@ -481,11 +491,11 @@ class GraphData(pl.LightningDataModule):
             if len(component) < self.minimum_nodes_connected:
                 for node in component:
                     node_removed.append(node)
-                    G.remove_node(node)
+                    G.remove_node(node)'''
 
         #edges = th.tensor(list(G.edges)).T
         #cells = th.tensor(list(G.nodes))
-        return G
+        return g
 
     '''def cell_types_to_graph(self,smooth=False):
         """
