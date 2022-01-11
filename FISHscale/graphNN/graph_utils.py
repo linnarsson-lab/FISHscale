@@ -99,6 +99,7 @@ class GraphData(pl.LightningDataModule):
         smooth:bool=False,
         negative_samples:int=1,
         distance_factor:int=4,
+        max_distance_nodes=None,
         device='cpu',
         lr=1e-3,
         aggregate=1,
@@ -196,7 +197,7 @@ class GraphData(pl.LightningDataModule):
             os.mkdir(self.save_to+'graph')
         #print('Device is: ',self.device)
     
-        self.compute_distance_th(distance_factor)
+        self.compute_distance_th(distance_factor,max_distance_nodes)
         self.subsample_xy()
         self.compute_size()
         self.setup()
@@ -337,16 +338,18 @@ class GraphData(pl.LightningDataModule):
             self.cells = self.cells[filt_x & filt_y]
             #self.cells = np.random.choice(self.data.df.index.compute(),size=int(subsample*self.data.shape[0]),replace=False)
 
-    def compute_distance_th(self,omega):
-        from scipy.spatial import cKDTree as KDTree
-        from matplotlib import pyplot as plt
-        x,y = self.data.df.x.values.compute(),self.data.df.y.values.compute()
-        kdT = KDTree(np.array([x,y]).T)
-        d,i = kdT.query(np.array([x,y]).T,k=2)
-        d_th = np.percentile(d[:,1],97)*omega
-        self.distance_threshold = d_th
-        print('Chosen dist: {}'.format(d_th))
-
+    def compute_distance_th(self,omega,tau):
+        if type(tau) == type(None):
+            from scipy.spatial import cKDTree as KDTree
+            x,y = self.data.df.x.values.compute(),self.data.df.y.values.compute()
+            kdT = KDTree(np.array([x,y]).T)
+            d,i = kdT.query(np.array([x,y]).T,k=2)
+            d_th = np.percentile(d[:,1],97)*omega
+            self.distance_threshold = d_th
+            print('Chosen dist: {}'.format(d_th))
+        else:
+            self.distance_threshold = tau
+            print('Chosen dist: {}'.format(d_th))
     def buildGraph(self, d_th,coords=None):
         print('Building graph...')
         if type(coords)  == type(None):
