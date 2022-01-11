@@ -263,7 +263,6 @@ class GraphData(pl.LightningDataModule):
                 del self.g.ndata['zero']
 
         print(self.g)
-
         self.make_train_test_validation()
 
     def prepare_data(self):
@@ -290,6 +289,13 @@ class GraphData(pl.LightningDataModule):
             )
 
     def make_train_test_validation(self):
+        """
+        make_train_test_validation
+
+        Splits the data into train, test and validation. Test data is not used for
+        because at the moment the model performance cannot be checked against labelled
+        data.
+        """        
         m = self.molecules_connected
         np.save(self.folder +'/molecules.npy', self.molecules_connected)
         self.train_size = int((self.molecules.shape[0])*self.train_p)
@@ -301,6 +307,14 @@ class GraphData(pl.LightningDataModule):
         self.indices_validation = th.tensor(np.arange(self.molecules.shape[0]))
 
     def train_dataloader(self):
+        """
+        train_dataloader
+
+        Prepare dataloader
+
+        Returns:
+            dgl.dataloading.EdgeDataLoader: Deep Graph Library dataloader.
+        """        
         edges = np.arange(self.g.num_edges())
         random_edges = torch.tensor(np.random.choice(edges,int(edges.shape[0]*(self.train_p/(self.g.num_edges()/self.g.num_nodes()))),replace=False))
         unlab = dgl.dataloading.EdgeDataLoader(
@@ -319,12 +333,34 @@ class GraphData(pl.LightningDataModule):
         return unlab
 
     def train(self,max_epochs=5,gpus=0):
+        """
+        train
+
+        Pytorch-Lightning trainer
+
+        Args:
+            max_epochs (int, optional): Maximum epochs. Defaults to 5.
+            gpus (int, optional): Whether to use GPU. Defaults to 0.
+        """        
         if self.device.type == 'cuda':
             gpus=1
-        trainer = pl.Trainer(gpus=gpus,callbacks=[self.checkpoint_callback], max_epochs=max_epochs)
+        trainer = pl.Trainer(gpus=gpus,
+                            log_every_n_steps=50,
+                            callbacks=[self.checkpoint_callback], 
+                            max_epochs=max_epochs)
         trainer.fit(self.model, train_dataloaders=self.train_dataloader())
 
     def molecules_df(self):
+        """
+        molecules_df 
+
+        Transforms molecules FISHscale Dataset into a matrix of size 
+        (molecules,genes), where contains only a positive value for the gene the
+        molecule corresponds to.
+
+        Returns:
+            [type]: [description]
+        """        
         rows,cols = [],[]
         filt = self.data.df.g.values.compute()[self.molecules_connected]
         for r in trange(self.data.unique_genes.shape[0]):
@@ -339,6 +375,12 @@ class GraphData(pl.LightningDataModule):
         return sm
     
     def subsample_xy(self):
+        """
+        subsample_xy
+
+        Deprecated. Data can be subsampled, but preferably just use instead of
+        FISHscale Dataset polygon option to crop the region to run GraphSage on.
+        """        
         if type(self.molecules) == type(None):
             self.molecules = np.arange(self.data.shape[0])
         if type(self.subsample) == float and self.subsample < 1:
@@ -350,6 +392,16 @@ class GraphData(pl.LightningDataModule):
             #self.molecules = np.random.choice(self.data.df.index.compute(),size=int(subsample*self.data.shape[0]),replace=False)
 
     def compute_distance_th(self,omega,tau):
+        """
+        compute_distance_th: deprecated, now inside BuildGraph
+
+        Computes the distance at which 97 percentile molecules are connected to
+        at least one other molecule. Like PArtel & Wahlby
+
+        Args:
+            omega ([type]): [description]
+            tau ([type]): [description]
+        """        
         if type(tau) == type(None):
             from scipy.spatial import cKDTree as KDTree
             x,y = self.data.df.x.values.compute(),self.data.df.y.values.compute()
@@ -363,6 +415,20 @@ class GraphData(pl.LightningDataModule):
             print('Chosen dist: {}'.format(tau))
 
     def buildGraph(self, coords=None):
+        """
+        buildGraph: makes networkx graph.
+
+        Dataset coordinates are turned into a graph based on nearest neighbors.
+        The graph will only generate a maximum of ngh_size (defaults to 100) 
+        neighbors to avoid having a huge graph in memory and those neighbors at
+        a distance below self.distance_threshold*self.distance_factor. 
+
+        Args:
+            coords ([type], optional): [description]. Defaults to None.
+
+        Returns:
+            networkx.Graph: molecule spatial graph.
+        """        
         print('Building graph...')
         if type(coords)  == type(None):
             supervised = False
@@ -480,6 +546,13 @@ class GraphData(pl.LightningDataModule):
         return all_molecules, edges, all_cl'''
 
     def prepare_reference(self):
+        """
+        prepare_reference: reference matrix for semi-supervised learning.
+
+        Wraps the celltype by gene expression matrix and prepares it for the
+        model. Sorts the gene list as the one in Dataset.unique_genes. Must have
+        the number of cell per cluster (NCells) and the clusternames.
+        """        
         if type(self.ref_celltypes) != type(None):
             self.supervised = True
             import loompy
@@ -554,9 +627,11 @@ class GraphData(pl.LightningDataModule):
 
     def get_latents(self,labelled=True):
         """
-        get_latents [summary]
-
-        [extended_summary]
+        get_latents: get the new embedding for each molecule
+        
+        Passes the validation data through the model to generatehe neighborhood 
+        embedding. If the model is in supervised version, the model will also
+        output the predicted cell type.
 
         Args:
             labelled (bool, optional): [description]. Defaults to True.
