@@ -228,14 +228,12 @@ class GraphData(pl.LightningDataModule):
         
         if self.aggregator == 'attentional':
             self.g = dgl.add_self_loop(self.g)
-            if self.supervised:
-                self.g_lab = dgl.add_self_loop(self.g_lab)
 
         if self.smooth:
-                self.g.ndata['zero'] = torch.zeros_like(self.g.ndata['gene'])
-                self.g.update_all(fn.u_add_v('gene','zero','e'),fn.sum('e','zero'))
-                self.g.ndata['gene'] = self.g.ndata['zero'] + self.g.ndata['gene']
-                del self.g.ndata['zero']
+            self.g.ndata['zero'] = torch.zeros_like(self.g.ndata['gene'])
+            self.g.update_all(fn.u_add_v('gene','zero','e'),fn.sum('e','zero'))
+            self.g.ndata['gene'] = self.g.ndata['zero'] + self.g.ndata['gene']
+            del self.g.ndata['zero']
 
         print(self.g)
         self.make_train_test_validation()
