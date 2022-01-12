@@ -314,7 +314,7 @@ class Encoder(nn.Module):
                 classifier = None
 
             if supervised:
-                self.norm = F.normalize#DiffGroupNorm(n_hidden,n_classes,classifier) 
+                self.norm = DiffGroupNorm(n_hidden,n_classes,classifier) 
             else:
                 self.norm = F.normalize#DiffGroupNorm(n_hidden,20) 
 
