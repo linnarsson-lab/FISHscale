@@ -430,23 +430,27 @@ class GraphData(pl.LightningDataModule):
     
         def find_nn_distance(coords,tree,distance):
             print('Find neighbors below distance: {}'.format(d_th))
-            res = []
+            res,nodes = [],[]
             for i in trange(coords.shape[0]):
                 # 100 sets the number of neighbors to find for each node
                 #  it is set to 100 since we usually will compute neighbors
                 #  [20,10]
                 search = tree.get_nns_by_item(i, neighborhood_size, include_distances=True)
                 pair = [(i,n) for n,d in zip(search[0],search[1]) if d < distance]
+                add_node = 0
                 if len(pair) > self.minimum_nodes_connected:
                     res += pair
+                    add_node += 1
+                if add_node:
+                    nodes.append(i)
+
             res= np.array(res)
-            return res
+            nodes = np.array(nodes)
+            return res,nodes
 
-        edges = th.tensor(find_nn_distance(coords,t,self.distance_threshold)).T
-        nodes = np.arange(coords.shape[0])
-
-        molecules_connected = nodes
-        d = self.molecules_df(molecules_connected)
+        edges,nodes = th.tensor(find_nn_distance(coords,t,self.distance_threshold)).T
+        molecules = th.tensor(nodes)
+        d = self.molecules_df(molecules)
         g= dgl.graph((edges[0,:],edges[1,:]))
         #g = dgl.to_bidirected(g)
         g.ndata['gene'] = th.tensor(d.toarray(), dtype=th.float32)#[self.g.ndata['indices'].numpy(),:]
