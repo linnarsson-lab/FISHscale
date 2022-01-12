@@ -443,15 +443,17 @@ class GraphData(pl.LightningDataModule):
                     add_node += 1
                 if add_node:
                     nodes.append(i)
+                else: 
+                    res += [(i,i)] # Add node to itself to prevent errors
+                    nodes.append(i)
 
-            res= np.array(res)
-            nodes = np.array(nodes)
+            res= th.tensor(np.array(res)).T
+            nodes = th.tensor(np.array(nodes))
             return res,nodes
 
-        edges,nodes = th.tensor(find_nn_distance(coords,t,self.distance_threshold)).T
-        molecules = th.tensor(nodes)
+        edges, molecules= find_nn_distance(coords,t,self.distance_threshold)
         d = self.molecules_df(molecules)
-        g= dgl.graph((edges[0,:],edges[1,:]))
+        g= dgl.graph((edges[0,:],edges[1,:]),)
         #g = dgl.to_bidirected(g)
         g.ndata['gene'] = th.tensor(d.toarray(), dtype=th.float32)#[self.g.ndata['indices'].numpy(),:]
 
@@ -462,8 +464,8 @@ class GraphData(pl.LightningDataModule):
         del g.ndata['zero']
 
         sum_nodes_connected = g.ndata['ngh'].sum(axis=1)
-        molecules_connected = nodes[sum_nodes_connected >= self.minimum_nodes_connected]
-        remove = nodes[sum_nodes_connected.numpy() < self.minimum_nodes_connected]
+        molecules_connected = molecules[sum_nodes_connected >= self.minimum_nodes_connected]
+        remove = molecules[sum_nodes_connected.numpy() < self.minimum_nodes_connected]
 
         g.remove_nodes(th.tensor(remove))
         g.ndata['indices'] = th.tensor(molecules_connected)
