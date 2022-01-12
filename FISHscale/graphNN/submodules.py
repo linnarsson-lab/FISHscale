@@ -220,7 +220,7 @@ class DiffGroupNorm(th.nn.Module):
             uses batch statistics in both training and eval modes.
             (default: :obj:`True`)
     """
-    def __init__(self, in_channels, groups, function=None,lamda=0.0001, eps=1e-5, momentum=0.1,
+    def __init__(self, in_channels, groups, function=None,lamda=0.00001, eps=1e-5, momentum=0.1,
                  affine=True, track_running_stats=True):
         super(DiffGroupNorm, self).__init__()
 
