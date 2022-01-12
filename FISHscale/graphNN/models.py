@@ -314,9 +314,9 @@ class Encoder(nn.Module):
                 classifier = None
 
             if supervised:
-                self.norm = PairNorm()#DiffGroupNorm(n_hidden,n_classes,None) 
+                self.norm = DiffGroupNorm(n_hidden,n_classes,classifier) 
             else:
-                self.norm = PairNorm()#F.normalize#DiffGroupNorm(n_hidden,20) 
+                self.norm = F.normalize#DiffGroupNorm(n_hidden,20) 
 
             for i in range(0,n_layers-1):
                 if i > 0:
