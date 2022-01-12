@@ -223,7 +223,6 @@ class GraphData(pl.LightningDataModule):
             print('Loading model.')
             glist, _ = dgl.data.utils.load_graphs(dgluns) # glist will be [g1, g2]
             self.g = glist[0]
-            self.molecules_connected = self.g.ndata['indices'].numpy()
             print('Model loaded.')
         
         if self.aggregator == 'attentional':
@@ -263,21 +262,21 @@ class GraphData(pl.LightningDataModule):
 
     def make_train_test_validation(self):
         """
-        make_train_test_validation
+        make_train_test_validation: only self.indices_validation is used.
 
         Splits the data into train, test and validation. Test data is not used for
         because at the moment the model performance cannot be checked against labelled
         data.
         """        
-        m = self.molecules_connected
-        np.save(self.folder +'/molecules.npy', self.molecules_connected)
-        self.train_size = int((self.molecules.shape[0])*self.train_p)
-        self.test_size = self.molecules.shape[0]-int(self.molecules.shape[0]*self.train_p)  
+        m =self.g.ndata['indices'].numpy()
+        np.save(self.folder +'/molecules.npy',self.g.ndata['indices'].numpy())
+        self.train_size = int((m.shape[0])*self.train_p)
+        self.test_size = m.shape[0]-int(m.shape[0]*self.train_p)  
         random_state = np.random.RandomState(seed=0)
-        permutation = random_state.permutation(self.molecules.shape[0])
+        permutation = random_state.permutation(m.shape[0])
         self.indices_test = th.tensor(permutation[:self.test_size])
         self.indices_train = th.tensor(permutation[self.test_size : (self.test_size + self.train_size)])
-        self.indices_validation = th.tensor(np.arange(self.molecules.shape[0]))
+        self.indices_validation = th.tensor(np.arange(m.shape[0]))
 
     def train_dataloader(self):
         """
@@ -323,7 +322,7 @@ class GraphData(pl.LightningDataModule):
                             max_epochs=max_epochs)
         trainer.fit(self.model, train_dataloaders=self.train_dataloader())
 
-    def molecules_df(self):
+    def molecules_df(self, filter_molecules):
         """
         molecules_df 
 
@@ -335,7 +334,7 @@ class GraphData(pl.LightningDataModule):
             [type]: [description]
         """        
         rows,cols = [],[]
-        filt = self.data.df.g.values.compute()[self.molecules_connected]
+        filt = self.data.df.g.values.compute()[filter_molecules]
         for r in trange(self.data.unique_genes.shape[0]):
             g = self.data.unique_genes[r]
             expressed = np.where(filt == g)[0].tolist()
@@ -446,11 +445,11 @@ class GraphData(pl.LightningDataModule):
         edges = th.tensor(find_nn_distance(coords,t,self.distance_threshold)).T
         nodes = np.arange(coords.shape[0])
 
-        self.molecules_connected = nodes
-        d = self.molecules_df()
+        molecules_connected = nodes
+        d = self.molecules_df(molecules_connected)
         g= dgl.graph((edges[0,:],edges[1,:]))
         #g = dgl.to_bidirected(g)
-        g.ndata['gene'] = th.tensor(d.toarray(), dtype=th.float32)#[self.molecules_connected,:]
+        g.ndata['gene'] = th.tensor(d.toarray(), dtype=th.float32)#[self.g.ndata['indices'].numpy(),:]
 
         g.ndata['zero'] = torch.zeros_like(g.ndata['gene'])
         g.update_all(fn.u_add_v('gene','zero','e'),fn.sum('e','zero'))
@@ -459,11 +458,11 @@ class GraphData(pl.LightningDataModule):
         del g.ndata['zero']
 
         sum_nodes_connected = g.ndata['ngh'].sum(axis=1)
-        self.molecules_connected = nodes[sum_nodes_connected > self.minimum_nodes_connected]
-        remove = nodes[sum_nodes_connected.numpy() <= self.minimum_nodes_connected]
+        molecules_connected = nodes[sum_nodes_connected >= self.minimum_nodes_connected]
+        remove = nodes[sum_nodes_connected.numpy() < self.minimum_nodes_connected]
 
         g.remove_nodes(th.tensor(remove))
-        g.ndata['indices'] = th.tensor(self.molecules_connected)
+        g.ndata['indices'] = th.tensor(molecules_connected)
         return g
 
     '''def cell_types_to_graph(self,smooth=False):
@@ -602,7 +601,7 @@ class GraphData(pl.LightningDataModule):
 
         smoothed_dataframe= np.concatenate(smoothed_dataframe)
         self.d = sparse.csr_matrix(smoothed_dataframe)
-        self.molecules_connected = np.array(molecules_connected)'''
+        self.g.ndata['indices'].numpy() = np.array(molecules_connected)'''
 
     #### plotting and latent factors #####
 
@@ -671,7 +670,7 @@ class GraphData(pl.LightningDataModule):
             ax.set_facecolor("black")
             width_cutoff = 1640 # um
             #plt.scatter(DS.df.x.values.compute()[GD.cells], DS.df.y.values.compute()[GD.cells], c=torch.argmax(pred.softmax(dim=-1),dim=-1).numpy(), s=0.2,marker='.',linewidths=0, edgecolors=None,cmap='rainbow')
-            plt.scatter(self.data.df.x.values.compute()[self.molecules_connected][some], self.data.df.y.values.compute()[self.molecules_connected][some], c=Y_umap, s=0.05,marker='.',linewidths=0, edgecolors=None)
+            plt.scatter(self.data.df.x.values.compute()[self.g.ndata['indices'].numpy()][some], self.data.df.y.values.compute()[self.g.ndata['indices'].numpy()][some], c=Y_umap, s=0.05,marker='.',linewidths=0, edgecolors=None)
             plt.xticks(fontsize=2)
             plt.yticks(fontsize=2)
             plt.axis('scaled')
@@ -701,7 +700,7 @@ class GraphData(pl.LightningDataModule):
             ax = fig.add_subplot(1, 1, 1)
             ax.set_facecolor("black")
             width_cutoff = 1640 # um
-            plt.scatter(self.data.df.x.values.compute()[self.molecules_connected], self.data.df.y.values.compute()[self.molecules_connected], c=clusters_colors, alpha=0.9,s=0.05,marker='.',linewidths=0, edgecolors=None)
+            plt.scatter(self.data.df.x.values.compute()[self.g.ndata['indices'].numpy()], self.data.df.y.values.compute()[self.g.ndata['indices'].numpy()], c=clusters_colors, alpha=0.9,s=0.05,marker='.',linewidths=0, edgecolors=None)
             plt.xticks(fontsize=2)
             plt.yticks(fontsize=2)
             plt.axis('scaled')
@@ -709,8 +708,8 @@ class GraphData(pl.LightningDataModule):
 
             import holoviews as hv
             hv.extension('matplotlib')
-            molecules_y = self.data.df.y.values.compute()[self.molecules_connected]
-            molecules_x = self.data.df.x.values.compute()[self.molecules_connected]
+            molecules_y = self.data.df.y.values.compute()[self.g.ndata['indices'].numpy()]
+            molecules_x = self.data.df.x.values.compute()[self.g.ndata['indices'].numpy()]
             nd_dic = {}
 
             allm = 0
@@ -796,7 +795,7 @@ class GraphData(pl.LightningDataModule):
             ax = fig.add_subplot(1, 1, 1)
             ax.set_facecolor("black")
             #plt.scatter(DS.df.x.values.compute()[GD.cells], DS.df.y.values.compute()[GD.cells], c=torch.argmax(pred.softmax(dim=-1),dim=-1).numpy(), s=0.2,marker='.',linewidths=0, edgecolors=None,cmap='rainbow')
-            plt.scatter(self.data.df.x.values.compute()[self.molecules_connected], self.data.df.y.values.compute()[self.molecules_connected], c=clusters_colors, s=0.05,marker='.',linewidths=0, edgecolors=None)
+            plt.scatter(self.data.df.x.values.compute()[self.g.ndata['indices'].numpy()], self.data.df.y.values.compute()[self.g.ndata['indices'].numpy()], c=clusters_colors, s=0.05,marker='.',linewidths=0, edgecolors=None)
             plt.xticks(fontsize=2)
             plt.yticks(fontsize=2)
             plt.axis('scaled')
