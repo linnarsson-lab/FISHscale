@@ -301,8 +301,8 @@ class Encoder(nn.Module):
             super().__init__()
         
 
-            #self.mean_encoder = nn.Linear(n_hidden, n_hidden)
-            #self.var_encoder = nn.Linear(n_hidden, n_hidden)
+            self.mean_encoder = nn.Linear(n_hidden, n_hidden)
+            self.var_encoder = nn.Linear(n_hidden, n_hidden)
             layers = nn.ModuleList()
 
             if supervised:
