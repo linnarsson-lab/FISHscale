@@ -160,35 +160,8 @@ class SAGELightning(LightningModule):
 
     def configure_optimizers(self):
         optimizer = th.optim.Adam(self.module.parameters(), lr=self.lr)
-        '''if self.supervised:
-            d_opt = th.optim.Adam(self.module.domain_adaptation.parameters(), lr=1e-3)
-            return [optimizer, d_opt]'''
         return optimizer
 
-    def loss_discriminator(self, latent_tensors, 
-        predict_true_class: bool = True,
-        return_details: bool = False,
-        ):
-        n_classes = 2
-        losses = []
-        for i, z in enumerate(latent_tensors):
-            cls_logits = self.module.domain_adaptation(z)
-
-            if predict_true_class:
-                cls_target = th.zeros_like(cls_logits,dtype=th.float32,device=z.device)
-                cls_target[:,i] = 1
-            else:
-                cls_target = th.ones_like(cls_logits,dtype=th.float32,device=z.device)
-                cls_target[:,i] = 0.0
-
-            bcloss = th.nn.BCEWithLogitsLoss()(cls_logits,cls_target)
-            losses.append(bcloss)
-
-        if return_details:
-            return losses
-
-        total_loss = th.stack(losses).sum()
-        return total_loss
 
 class SAGE(nn.Module):
     '''def __init__(self, in_feats, n_hidden, n_classes, n_layers, activation, dropout):
