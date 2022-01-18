@@ -1,5 +1,6 @@
 from multiprocessing import cpu_count
 from os import path, makedirs, environ
+from re import L
 environ['NUMEXPR_MAX_THREADS'] = str(cpu_count())
 from typing import Union, Optional
 import pandas as pd
@@ -244,14 +245,16 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                         color_dic,
                         x_alt=x,
                         y_alt=y,
-                        c_alt=c) 
+                        c_alt=c)
+        del window
         
-    def DBsegment(self,
+    def segment(self,
                     label_column,
-                    eps=50,
-                    min_samples=10,
-                    cutoff=4,
-                    save_to=None):
+                    save_to=None,
+                    func=None,
+                    adjust_n_clusters=None,
+                    ):
+                    
         from tqdm import trange
         """
         Run DBscan segmentation on self.data, this will reassign a column on self.data with column_name
@@ -264,8 +267,13 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         """        
         def segmentation(partition):
             cl_molecules_xy = partition.loc[:,['x','y']].values
-            segmentation = DBSCAN(eps,min_samples=min_samples).fit(cl_molecules_xy)
-            return segmentation.labels_
+            if type(adjust_n_clusters) != type(None):
+                if hasattr(func,'n_clusters'):
+                    func.n_clusters = int(cl_molecules_xy.shape[0]/adjust_n_clusters)+1
+                elif hasattr(func,'n_components'):
+                    func.n_components = int(cl_molecules_xy.shape[0]/adjust_n_clusters)+1
+            segmentation = func.fit_predict(cl_molecules_xy)
+            return segmentation
 
         def get_counts(cell_i):
             cell_i,dblabel, centroid = cell_i[1], cell_i[0],(cell_i[1].x.mean(),cell_i[1].y.mean())
@@ -279,8 +287,8 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 return data, dblabel, centroid
 
         def get_cells(partition):
-            cl_molecules_xy = partition.loc[:,['x','y','g','DBscan',label_column]]
-            clr= cl_molecules_xy.groupby('DBscan')#.applymap(get_counts)
+            cl_molecules_xy = partition.loc[:,['x','y','g','segment',label_column]]
+            clr= cl_molecules_xy.groupby('segment')#.applymap(get_counts)
             dblabel, centroids, data = [],[],[]
             try:
                 cl = cl_molecules_xy[label_column].values[0]
@@ -314,19 +322,30 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             matrices = pd.concat(matrices,axis=1)
 
             if type(save_to) == type(None):
-                file = path.join(self.dataset_folder,self.filename.split('.')[0]+'_DBcells.loom')
+                file = path.join(self.dataset_folder,self.filename.split('.')[0]+'_cells.loom')
             else:
-                file = path.join(save_to+'DBcells.loom')
+                file = path.join(save_to+'cells.loom')
             row_attrs = {'Gene':matrices.index.values}
-            col_attrs = {'DBlabel':matrices.columns.values, 'Centroid':centroids, label_column:clusters}
+            col_attrs = {'Segmentation_label':matrices.columns.values, 'Centroid':centroids, label_column:clusters}
             loompy.create(file,matrices.values,row_attrs,col_attrs)
 
-        print('Running DBscan by: {}'.format(label_column))
-        r = self.dask_attrs[label_column].groupby(label_column).apply(segmentation, meta=object).compute()
-        result = [r[self.dask_attrs[label_column].partitions[x][label_column].compute().values[0]] for x in range(self.dask_attrs[label_column].npartitions)]
-        self.dask_attrs[label_column] = self.dask_attrs[label_column].merge(pd.DataFrame(np.concatenate(result),index=self.dask_attrs[label_column].index,columns=['DBscan']))
+        print('Running segmentation by: {}'.format(label_column))
+        #r = self.dask_attrs[label_column].groupby(label_column).apply(segmentation, meta=object).compute()
+        #print(r)
+        idx, result = [], []
+        count = -1
+        for x in trange(self.dask_attrs[label_column].npartitions):
+            partition = self.dask_attrs[label_column].partitions[x]
+            s = segmentation(partition)
+            result.append(s+count)
+            idx.append(partition.index.values.compute())
+            count += s.max()
+        result,idx = np.concatenate(result, axis=0), np.concatenate(idx)
+        print('Number of cells founds: {}'.format(count))
+        #self.dask_attrs[label_column] = self.dask_attrs[label_column].merge(pd.DataFrame(np.concatenate(result),index=self.dask_attrs[label_column].index,columns=['DBscan']))
+        self.dask_attrs[label_column] = self.dask_attrs[label_column].merge(pd.DataFrame(result,index=idx,columns=['segment']))
         print('DBscan results added to dask attributes. Generating gene by cell matrix as loom file.')
-        gene_by_cell_loom(self.dask_attrs[label_column])
+        #gene_by_cell_loom(self.dask_attrs[label_column])
         
                     
 
@@ -820,5 +839,5 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
                         y_alt=y,
                         c_alt=c) 
         
-        self.App.exec_()
+        
         

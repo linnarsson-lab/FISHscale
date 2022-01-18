@@ -337,9 +337,12 @@ class ListWidget(QWidget):
                         colors.append(cs)
                     
             ps,cs = np.concatenate(points), np.concatenate(colors)
-            self.vis.pcd.points = o3d.utility.Vector3dVector(ps)
-            self.vis.pcd.colors = o3d.utility.Vector3dVector(cs)
-            self.vis.visM.update_geometry(self.vis.pcd)
+            self.vis.visM.clear_geometries()
+
+            pcd = o3d.geometry.PointCloud()
+            pcd.points = o3d.utility.Vector3dVector(ps)
+            pcd.colors = o3d.utility.Vector3dVector(cs)
+            self.vis.visM.add_geometry(pcd)
             self.vis.loop_execute()
 
 class CollapsibleDialog(QDialog,QObject):
@@ -382,6 +385,7 @@ class CollapsibleDialog(QDialog,QObject):
         if reply == QMessageBox.Yes:
             self.break_loop = True
             self.vis.break_loop = True
+            self.vis.visM.clear_geometries()
             self.vis.visM.destroy_window()
             self.vis.visM.close()
             event.accept()
@@ -443,8 +447,3 @@ class CollapsibleDialog(QDialog,QObject):
         section.setDisabled(True)
         self.tree.setItemWidget(section, 0, widget)
         return section
-        
-
-        
-        
-
