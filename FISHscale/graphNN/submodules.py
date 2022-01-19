@@ -3,6 +3,7 @@ from torch import nn
 from torch import Tensor
 from torch.nn import Linear, BatchNorm1d
 from torch.autograd import Function
+from torch.distributions import Distribution, Gamma, Poisson, constraints
 
 class Classifier(nn.Module):
     """Basic fully-connected NN classifier
@@ -289,3 +290,125 @@ class DiffGroupNorm(th.nn.Module):
     def __repr__(self):
         return '{}({}, groups={})'.format(self.__class__.__name__,
                                           self.in_channels, self.groups)
+
+
+def _convert_mean_disp_to_counts_logits(mu, theta, eps=1e-6):
+    r"""NB parameterizations conversion
+    Parameters
+    ----------
+    mu :
+        mean of the NB distribution.
+    theta :
+        inverse overdispersion.
+    eps :
+        constant used for numerical log stability. (Default value = 1e-6)
+    Returns
+    -------
+    type
+        the number of failures until the experiment is stopped
+        and the success probability.
+    """
+    assert (mu is None) == (
+        theta is None
+    ), "If using the mu/theta NB parameterization, both parameters must be specified"
+    logits = (mu + eps).log() - (theta + eps).log()
+    total_count = theta
+    return total_count, logits
+
+
+def _convert_counts_logits_to_mean_disp(total_count, logits):
+    """NB parameterizations conversion
+    Parameters
+    ----------
+    total_count :
+        Number of failures until the experiment is stopped.
+    logits :
+        success logits.
+    Returns
+    -------
+    type
+        the mean and inverse overdispersion of the NB distribution.
+    """
+    theta = total_count
+    mu = logits.exp() * theta
+    return mu, theta
+
+
+class NegativeBinomial(Distribution):
+    r"""Negative Binomial(NB) distribution using two parameterizations:
+    - (`total_count`, `probs`) where `total_count` is the number of failures
+        until the experiment is stopped
+        and `probs` the success probability.
+    - The (`mu`, `theta`) parameterization is the one used by scVI. These parameters respectively
+    control the mean and overdispersion of the distribution.
+    `_convert_mean_disp_to_counts_logits` and `_convert_counts_logits_to_mean_disp` provide ways to convert
+    one parameterization to another.
+    Parameters
+    ----------
+    Returns
+    -------
+    """
+    arg_constraints = {
+        "mu": constraints.greater_than_eq(0),
+        "theta": constraints.greater_than_eq(0),
+    }
+    support = constraints.nonnegative_integer
+
+    def __init__(
+        self,
+        total_count: th.Tensor = None,
+        probs: th.Tensor = None,
+        logits: th.Tensor = None,
+        mu: th.Tensor = None,
+        theta: th.Tensor = None,
+        validate_args=True,
+    ):
+        self._eps = 1e-8
+        if (mu is None) == (total_count is None):
+            raise ValueError(
+                "Please use one of the two possible parameterizations. Refer to the documentation for more information."
+            )
+
+        using_param_1 = total_count is not None and (
+            logits is not None or probs is not None
+        )
+        if using_param_1:
+            logits = logits if logits is not None else probs_to_logits(probs)
+            total_count = total_count.type_as(logits)
+            total_count, logits = broadcast_all(total_count, logits)
+            mu, theta = _convert_counts_logits_to_mean_disp(total_count, logits)
+        else:
+            mu, theta = broadcast_all(mu, theta)
+        self.mu = mu
+        self.theta = theta
+        super().__init__(validate_args=validate_args)
+
+    def sample(self, sample_shape=th.Size()):
+        gamma_d = self._gamma()
+        p_means = gamma_d.sample(sample_shape)
+
+        # Clamping as distributions objects can have buggy behaviors when
+        # their parameters are too high
+        l_train = th.clamp(p_means, max=1e8)
+        counts = Poisson(
+            l_train
+        ).sample()  # Shape : (n_samples, n_cells_batch, n_genes)
+        return counts
+
+    def log_prob(self, value):
+        if self._validate_args:
+            try:
+                self._validate_sample(value)
+            except ValueError:
+                warnings.warn(
+                    "The value argument must be within the support of the distribution",
+                    UserWarning,
+                )
+        return log_nb_positive(value, mu=self.mu, theta=self.theta, eps=self._eps)
+
+    def _gamma(self):
+        concentration = self.theta
+        rate = self.theta / self.mu
+        # Important remark: Gamma is parametrized by the rate = 1/scale!
+        gamma_d = Gamma(concentration=concentration, rate=rate)
+        return gamma_d

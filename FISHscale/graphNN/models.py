@@ -11,8 +11,8 @@ import dgl.nn.pytorch as dglnn
 import dgl.function as fn
 import tqdm
 from pytorch_lightning import LightningModule
-from FISHscale.graphNN.submodules import Classifier, PairNorm, DiffGroupNorm
-from torch.distributions import Gamma,Normal, NegativeBinomial,Multinomial, kl_divergence as kl
+from FISHscale.graphNN.submodules import Classifier, PairNorm, DiffGroupNorm,NegativeBinomial
+from torch.distributions import Gamma,Normal, Multinomial, kl_divergence as kl
 
 class CrossEntropyLoss(nn.Module):
     def forward(self, block_outputs, pos_graph, neg_graph):
@@ -77,78 +77,27 @@ class SAGELightning(LightningModule):
         if self.supervised:
             probabilities_unlab = F.softmax(self.module.encoder.encoder_dict['CF'](batch_pred_unlab[pos_graph.nodes()]),dim=-1)
             predictions = probabilities_unlab.argsort(axis=-1)[:,-1]
-
-            fake_nghs = {}
-            assigned_molecules = {}
-            sampled_reference = []
-            prob_dic = {}
-            prob = 0
             local_nghs = mfgs[0].srcdata['ngh'][pos_graph.nodes()]
-            merged_sum = []
-            for l in range(probabilities_unlab.shape[1]):
-                lsum = (predictions == l).sum()
-                merged_sum.append(lsum)
-                merged_genes = bu[predictions == l,:].sum(axis=0)
-                averaged_probabilities = F.softmax(probabilities_unlab[predictions == l,:].sum(axis=0),dim=-1)
-                assigned_molecules[l] = lsum
-                if lsum == 0:
-                    merged_genes += 1
-                fake_nghs[l] = merged_genes
+            mu = probabilities_unlab @ self.reference
+            alpha = 1/local_nghs.mean(axis=0).pow(2)
+            rate = alpha/mu
 
-                ones_tensor = th.ones([int(self.reference.sum(axis=0)[l])])
-                s= Multinomial(1,ones_tensor).sample().argsort()[-1] + 35
-                sampled_l_ref = Multinomial(int(s), probs= self.reference[:,l]/self.reference[:,l].sum()).sample()
-                sampled_reference.append(sampled_l_ref)
-
-                if lsum > 0:
-                    merged_genes_ngh = local_nghs[predictions == l,:].sum(axis=0)
-                    dist = Multinomial(int(merged_genes.sum()),probs=self.reference[:,l]/self.reference[:,l].sum())
-                    pdist = -dist.log_prob(merged_genes)/merged_genes.sum()
-                else: 
-                    pdist = 0
-                prob_dic[l] = pdist
-                prob += pdist
-
+            NB = NegativeBinomial(concentration=alpha,rate=rate)#.log_prob(local_nghs).mean(axis=-1).mean()
+            nb_loss = NB.log_prob(local_nghs).mean(axis=-1).mean()
             # Introduce reference with sampling
-            sampled_reference = th.stack(sampled_reference)
             # Regularize by local nodes
-            bone_fight_loss = -F.cosine_similarity(probabilities_unlab @ self.reference.T.to(self.device), local_nghs,dim=1).mean()
-            bone_fight_loss = -F.cosine_similarity(probabilities_unlab @ self.reference.T.to(self.device), local_nghs,dim=0).mean()
+            #bone_fight_loss = -F.cosine_similarity(probabilities_unlab @ self.reference.T.to(self.device), local_nghs,dim=1).mean()
+            #bone_fight_loss = -F.cosine_similarity(probabilities_unlab @ self.reference.T.to(self.device), local_nghs,dim=0).mean()
             # Add Predicted same class nodes together.
-            total_counts = th.stack([ms*th.ones(self.reference.shape[0],device=self.device) for ms in merged_sum]) + 1
-            probs_per_ct = self.reference/self.reference.sum(axis=0)
-            f_probs = []
-            for r in range(predictions.shape[0]):
-                l,local = predictions[r], local_nghs[r,:]
-                lsum = (predictions == l).sum()+local.sum()
-                dist = Multinomial(int(lsum), probs=probs_per_ct.T)
-                fngh_p= -dist.log_prob(fake_nghs[int(l)] +local)/lsum
-                f_probs.append(fngh_p)
-
-            fake_nghs_log_probabilities = th.stack(f_probs)
-            fake_nghs_log_probabilities = fake_nghs_log_probabilities.detach()*probabilities_unlab
-            prob = fake_nghs_log_probabilities.mean()
-
-            p = local_nghs.sum(axis=1) @ probabilities_unlab
-            p = th.log(p/p.sum())
-            kl_loss_uniform = self.kl(p,self.dist.to(self.device)).sum()*1
-            kappa = 2/(1+10**(-1*((1*self.kappa)/200)))-1
-            self.kappa += 1
-            loss = graph_loss + 1*(kl_loss_uniform+prob+bone_fight_loss)
-
-            for p in prob_dic:
-                prob_dic[p]
-                self.log(str(p),prob_dic[p],on_step=True)
-
-            self.log('Prob',prob, on_step=True, prog_bar=True,on_epoch=False)
-            self.log('KLuniform', kl_loss_uniform, prog_bar=False,on_step=True,on_epoch=False)
-            self.log('BFs', bone_fight_loss, prog_bar=True, on_step=True, on_epoch=False)
+            loss = graph_loss + nb_loss
             self.log('train_loss', loss, prog_bar=True, on_step=True, on_epoch=True)
+            self.log('nb_loss', nb_loss, prog_bar=True, on_step=True, on_epoch=True)
             self.log('Graph Loss', graph_loss, prog_bar=False, on_step=True, on_epoch=False)
 
         else:
             loss = graph_loss
             self.log('train_loss', loss, prog_bar=True, on_step=True, on_epoch=True)
+        
         return loss
 
     def validation_step(self, batch, batch_idx):
