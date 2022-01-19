@@ -11,7 +11,8 @@ import dgl.nn.pytorch as dglnn
 import dgl.function as fn
 import tqdm
 from pytorch_lightning import LightningModule
-from FISHscale.graphNN.submodules import Classifier, PairNorm, DiffGroupNorm,NegativeBinomial
+from FISHscale.graphNN.submodules import Classifier, PairNorm, DiffGroupNorm
+from pyro.distributions import GammaPoisson
 from torch.distributions import Gamma,Normal, Multinomial, kl_divergence as kl
 
 class CrossEntropyLoss(nn.Module):
@@ -78,18 +79,22 @@ class SAGELightning(LightningModule):
             probabilities_unlab = F.softmax(self.module.encoder.encoder_dict['CF'](batch_pred_unlab[pos_graph.nodes()]),dim=-1)
             predictions = probabilities_unlab.argsort(axis=-1)[:,-1]
             local_nghs = mfgs[0].srcdata['ngh'][pos_graph.nodes()]
-            mu = probabilities_unlab @ self.reference
+            mu = probabilities_unlab @ self.reference.T
             alpha = 1/local_nghs.mean(axis=0).pow(2)
             rate = alpha/mu
 
-            NB = NegativeBinomial(concentration=alpha,rate=rate)#.log_prob(local_nghs).mean(axis=-1).mean()
-            nb_loss = NB.log_prob(local_nghs).mean(axis=-1).mean()
+            NB = GammaPoisson(concentration=alpha,rate=rate)#.log_prob(local_nghs).mean(axis=-1).mean()
+            nb_loss = -NB.log_prob(local_nghs).mean(axis=-1).mean()
             # Introduce reference with sampling
             # Regularize by local nodes
             #bone_fight_loss = -F.cosine_similarity(probabilities_unlab @ self.reference.T.to(self.device), local_nghs,dim=1).mean()
             #bone_fight_loss = -F.cosine_similarity(probabilities_unlab @ self.reference.T.to(self.device), local_nghs,dim=0).mean()
             # Add Predicted same class nodes together.
-            loss = graph_loss + nb_loss
+            p = local_nghs.sum(axis=1) @ probabilities_unlab
+            p = th.log(p/p.sum())
+            kl_loss_uniform = self.kl(p,self.dist.to(self.device)).sum()*1
+
+            loss = graph_loss + nb_loss + kl_loss_uniform
             self.log('train_loss', loss, prog_bar=True, on_step=True, on_epoch=True)
             self.log('nb_loss', nb_loss, prog_bar=True, on_step=True, on_epoch=True)
             self.log('Graph Loss', graph_loss, prog_bar=False, on_step=True, on_epoch=False)
