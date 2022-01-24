@@ -87,7 +87,7 @@ class GraphData(pl.LightningDataModule):
         model=None, # GraphSAGE model
         analysis_name:str='',
         molecules=None, # Array with molecules_ids of shape (molecules)
-        ngh_size = 100,
+        ngh_size = 200,
         ngh_sizes = [20, 10],
         minimum_nodes_connected = 5,
         train_p = 0.25,
@@ -138,10 +138,10 @@ class GraphData(pl.LightningDataModule):
                 Defaults to 1.
             ref_celltypes (loomfile, optional): Rerence data of cell types for 
                 supervised analysis. Contains mean expression for gene/cell type
-                and must contain ds.ca['Ncells'] and ds.ca['ClusterNames'] 
+                and must contain ds.ca['Ncells'] and ds.ca['ClusterName'] 
                 attributes. Defaults to None.
             exclude_clusters (list, optional): List of clusters present in 
-                ds.ca['ClusterNames'] to exclude. Defaults to [''].
+                ds.ca['ClusterName'] to exclude. Defaults to [''].
             smooth (bool, optional): Smooth knn in the network data. Improves 
                 both supervised and unsupervised network performance.
                 Defaults to True.
@@ -198,6 +198,7 @@ class GraphData(pl.LightningDataModule):
                                         smooth=self.smooth,
                                         aggregator=self.aggregator,
                                         celltype_distribution=self.dist,
+                                        ncells=self.ncells
                                     )
         self.model.to(self.device)
         print('model is in: ', self.model.device)
@@ -572,13 +573,15 @@ class GraphData(pl.LightningDataModule):
             self.ncells = 0
 
         if self.celltype_distribution == 'uniform':
-            #dist = th.tensor(self.ncells*self.ref_celltypes.sum(axis=0),dtype=th.float32,device=self.device)
             dist = th.ones(self.ncells.shape[0])
             self.dist = dist/dist.sum()
         elif self.celltype_distribution == 'ascending':
             n = self.ncells.reshape(-1,1)
             gm = GaussianMixture(n_components=int(n.shape[0]/2.5), random_state=42).fit(n)
             dist = gm.predict(n)
+            self.dist = th.tensor(dist/dist.sum(),dtype=th.float32)
+        elif self.celltype_distribution == 'molecules':
+            dist = self.ncells*self.ref_celltypes.sum(axis=0)
             self.dist = th.tensor(dist/dist.sum(),dtype=th.float32)
         elif self.celltype_distribution == 'cells':
             self.dist = th.tensor(self.ncells/self.ncells.sum(),dtype=th.float32)

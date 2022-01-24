@@ -48,6 +48,7 @@ class SAGELightning(LightningModule):
                  device='cpu',
                  aggregator='attentional',
                  celltype_distribution=None,
+                 ncells = None,
                  ):
         super().__init__()
 
@@ -64,6 +65,7 @@ class SAGELightning(LightningModule):
             self.train_acc = torchmetrics.Accuracy()
             self.kl = th.nn.KLDivLoss(reduction='sum')
             self.dist = celltype_distribution
+            self.ncells = ncells
 
     def training_step(self, batch, batch_idx):
         batch1 = batch#['unlabelled']
@@ -81,10 +83,11 @@ class SAGELightning(LightningModule):
             local_nghs = mfgs[0].srcdata['ngh'][pos_graph.nodes()]
 
             alpha = 1/th.exp(self.module.encoder.a_d(local_nghs+1e-4)).mean(axis=0)#.pow(2)
-            m_g = th.exp(self.module.encoder.m_g(local_nghs)+1e-4)
-            y_s = th.exp(self.module.encoder.y_s(local_nghs)+1e-4)
+            #m_g = th.exp(self.module.encoder.m_g(local_nghs)+1e-6)
+            y_s = th.exp(self.module.encoder.y_s(local_nghs)+1e-6)
+            z_s = th.exp(self.module.encoder.z_s(batch_pred_unlab)+1e-6)
             mu = probabilities_unlab @ self.reference.T
-            mu = m_g * mu * y_s
+            mu = mu * y_s * z_s
             rate = alpha/mu
 
             NB = GammaPoisson(concentration=alpha,rate=rate)#.log_prob(local_nghs).mean(axis=-1).mean()
@@ -93,11 +96,25 @@ class SAGELightning(LightningModule):
             # Add Predicted same class nodes together.
             p = local_nghs.sum(axis=1) @ probabilities_unlab
             #p = th.ones(probabilities_unlab.shape[0]) @ probabilities_unlab
-            p = th.log(p/p.sum())
-            kl_loss_uniform = self.kl(p,self.dist.to(self.device)).sum()
+            #option 1 
+            loss_dist = []
+            sum_nghs = local_nghs.sum(axis=0)
+            for n in range(p.shape[0]):
+                c = int((probabilities_unlab.argsort(dim=-1)[:,-1] == n).sum()) + 1
+                #print(c)
+                m_cell = Multinomial(c, probs=self.dist)
 
-            loss = graph_loss + nb_loss #+ kl_loss_uniform
+                loss_dist.append(- Multinomial(total_count=c, probs=p/p.sum()).log_prob(m_cell.sample())/c)
+            loss_dist = th.stack(loss_dist).mean()
+            #option 2
+            #p = th.ones(probabilities_unlab.shape[0]) @ probabilities_unlab
+            #p = th.log(p/p.sum())
+            #loss_dist = self.kl(p,self.dist.to(self.device)).sum()
+
+
+            loss = graph_loss + nb_loss + loss_dist
             self.log('train_loss', loss, prog_bar=True, on_step=True, on_epoch=True)
+            self.log('Loss Dist', loss_dist, prog_bar=True, on_step=True, on_epoch=True)
             self.log('nb_loss', nb_loss, prog_bar=True, on_step=True, on_epoch=True)
             self.log('Graph Loss', graph_loss, prog_bar=False, on_step=True, on_epoch=False)
 
@@ -296,7 +313,13 @@ class Encoder(nn.Module):
                                                 'var':self.var_encoder,
                                                 'CF':classifier})
 
-
+            # Adjust for each ngh
             self.m_g = nn.Linear(in_feats, in_feats)
+            # Adjust for batch effects, currently makes no sense, should have
+            # shape (batch_size, n_batches), but only 1 batch is implemented now.
             self.y_s = nn.Linear(in_feats, 1)
+            self.z_s = nn.Linear(n_hidden,1)
+            # Adjust for technology effects
+            #self.t_ngh = nn.Linear(1,1)
+            # Adjust overdispersion parameter. This seems to help.
             self.a_d = nn.Linear(in_feats,in_feats)
