@@ -1,7 +1,3 @@
-import re
-from threading import local
-from dgl.convert import graph
-from numpy.random import poisson
 import torchmetrics
 import dgl
 import torch as th
@@ -111,7 +107,6 @@ class SAGELightning(LightningModule):
             #p = th.ones(probabilities_unlab.shape[0]) @ probabilities_unlab
             #p = th.log(p/p.sum())
             #loss_dist = self.kl(p,self.dist.to(self.device)).sum()
-
 
             loss = graph_loss + nb_loss + loss_dist
             self.log('train_loss', loss, prog_bar=True, on_step=True, on_epoch=True)
