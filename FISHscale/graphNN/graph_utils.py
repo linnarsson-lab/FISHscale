@@ -626,10 +626,17 @@ class GraphData(pl.LightningDataModule):
             labelled (bool, optional): [description]. Defaults to True.
         """        
         self.model.eval()
-        latent_unlabelled = self.model.module.inference(self.g,self.g.ndata['gene'],'cpu',512,0)#.detach().numpy()
+        latent_unlabelled = self.model.module.inference(self.g,self.g.ndata['gene'],'cpu',10*512,0)#.detach().numpy()
         
         if self.model.supervised:
-            self.prediction_unlabelled = self.model.module.encoder.encoder_dict['CF'](latent_unlabelled).detach().numpy()
+            #prediction_unlabelled = self.model.module.encoder.encoder_dict['CF'](latent_unlabelled).softmax(dim=-1)#.detach().numpy()
+            prediction_unlabelled = latent_unlabelled.softmax(dim=-1)
+            c_s = torch.nn.functional.softplus(self.model.module.encoder.c_s(self.g.ndata['ngh']))
+            y_s = torch.nn.functional.softplus(self.model.module.encoder.c_s(self.g.ndata['ngh']))
+            prediction_unlabelled = prediction_unlabelled*c_s
+            self.c_s = c_s.detach().numpy()
+            self.prediction_unlabelled = prediction_unlabelled.detach().numpy()
+
             np.save(self.folder+'/labels_unlabelled',self.prediction_unlabelled.argsort(axis=-1)[:,-1].astype('str'))
             #np.save(self.folder+'/probabilities_unlabelled',self.prediction_unlabelled)
 
@@ -747,7 +754,7 @@ class GraphData(pl.LightningDataModule):
             print('Generating plots for molecule cluster probabilities...')
             os.mkdir('{}/ClusterProbabilities'.format(self.folder))
             for n in range(self.ClusterNames.shape[0]):
-                ps = pred_labels.softmax(axis=-1).detach().numpy()[:,n][:,np.newaxis]
+                ps = pred_labels.detach().numpy()[:,n][:,np.newaxis]
                 pdata= np.concatenate([merge,ps],axis=1)#[ps[:,0]>0.1,:]               
                 scatter= hv.Scatter(pdata,
                                     kdims=['x','y'],vdims=[str(self.ClusterNames[n])]).opts(cmap='Viridis',

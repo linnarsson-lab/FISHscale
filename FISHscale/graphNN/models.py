@@ -73,21 +73,22 @@ class SAGELightning(LightningModule):
         _, pos_graph, neg_graph, mfgs = batch1
         mfgs = [mfg.int() for mfg in mfgs]
         batch_inputs_u = mfgs[0].srcdata['gene']
-        batch_pred_unlab = self.module(mfgs, batch_inputs_u)
+        embedding = self.module(mfgs, batch_inputs_u)
         bu = batch_inputs_u[pos_graph.nodes()]
-        graph_loss,pos, neg = self.loss_fcn(batch_pred_unlab, pos_graph, neg_graph)
         
         if self.supervised:
-            probabilities_unlab = F.softmax(self.module.encoder.encoder_dict['CF'](batch_pred_unlab[pos_graph.nodes()]),dim=-1)
-            predictions = probabilities_unlab.argsort(axis=-1)[:,-1]
+            #class_ = self.module.encoder.encoder_dict['CF'](embedding)
+            probabilities_unlab = F.softmax(embedding, dim=-1)
+            graph_loss,pos, neg = self.loss_fcn(embedding, pos_graph, neg_graph)
             local_nghs = mfgs[0].srcdata['ngh'][pos_graph.nodes()]
 
             alpha = 1/th.exp(self.module.encoder.a_d(local_nghs+1e-4)).mean(axis=0)#.pow(2)
             #m_g = th.exp(self.module.encoder.m_g(local_nghs)+1e-6)
-            y_s = th.exp(self.module.encoder.y_s(local_nghs)+1e-6)
-            z_s = th.exp(self.module.encoder.z_s(batch_pred_unlab)+1e-6)
-            mu = probabilities_unlab @ self.reference.T
-            mu = mu * y_s * z_s
+            y_s = F.softplus(self.module.encoder.y_s(local_nghs))
+            c_s = F.softplus(self.module.encoder.c_s(local_nghs))
+
+            mu = (probabilities_unlab*c_s) @ self.reference.T 
+            mu = mu * y_s
             rate = alpha/mu
 
             NB = GammaPoisson(concentration=alpha,rate=rate)#.log_prob(local_nghs).mean(axis=-1).mean()
@@ -119,6 +120,7 @@ class SAGELightning(LightningModule):
             self.log('Graph Loss', graph_loss, prog_bar=False, on_step=True, on_epoch=False)
 
         else:
+            graph_loss,pos, neg = self.loss_fcn(embedding, pos_graph, neg_graph)
             loss = graph_loss
             self.log('train_loss', loss, prog_bar=True, on_step=True, on_epoch=True)
         
@@ -157,6 +159,7 @@ class SAGE(nn.Module):
         self.supervised = supervised
         self.aggregator = aggregator
         if self.supervised:
+            self.n_hidden =n_classes
             self.domain_adaptation = Classifier(n_input=n_hidden,
                                                 n_labels=2,
                                                 softmax=False,
@@ -168,13 +171,10 @@ class SAGE(nn.Module):
                                 n_layers,
                                 supervised,
                                 aggregator)
-        self.mean_encoder = self.encoder.encoder_dict['mean']
-        self.var_encoder = self.encoder.encoder_dict['var']
 
     def forward(self, blocks, x):
         h = th.log(x+1)   
         for l, (layer, block) in enumerate(zip(self.encoder.encoder_dict['GS'], blocks)):
-            feat_n = []
             if self.aggregator != 'attentional':
                 h = layer(block, h,)#.mean(1)
                 #h = self.encoder.encoder_dict['FC'][l](h)
@@ -199,9 +199,9 @@ class SAGE(nn.Module):
         self.eval()
         for l, layer in enumerate(self.encoder.encoder_dict['GS']):
             if l ==  0:
-                y = th.zeros(g.num_nodes(), self.n_hidden) #if not self.supervised else th.zeros(g.num_nodes(), self.n_classes)
+                y = th.zeros(g.num_nodes(), self.n_classes) #if not self.supervised else th.zeros(g.num_nodes(), self.n_classes)
             else: 
-                y = th.zeros(g.num_nodes(), self.n_hidden)
+                y = th.zeros(g.num_nodes(), self.n_classes)
 
             sampler = dgl.dataloading.MultiLayerFullNeighborSampler(1)
             dataloader = dgl.dataloading.NodeDataLoader(
@@ -214,7 +214,8 @@ class SAGE(nn.Module):
                 num_workers=num_workers)
 
             for input_nodes, output_nodes, blocks in tqdm.tqdm(dataloader):
-                block = blocks[0]
+                
+                block = blocks[0]#.srcdata['gene']
                 block = block.int()
                 if l == 0:
                     h = th.log(x[input_nodes]+1)#.to(device)
@@ -246,9 +247,6 @@ class Encoder(nn.Module):
             ):
             super().__init__()
         
-
-            self.mean_encoder = nn.Linear(n_hidden, n_hidden)
-            self.var_encoder = nn.Linear(n_hidden, n_hidden)
             layers = nn.ModuleList()
 
             if supervised:
@@ -261,6 +259,7 @@ class Encoder(nn.Module):
 
             if supervised:
                 self.norm = F.normalize#DiffGroupNorm(n_hidden,n_classes,None) 
+                n_hidden = n_classes
             else:
                 self.norm = F.normalize#DiffGroupNorm(n_hidden,20) 
 
@@ -309,8 +308,6 @@ class Encoder(nn.Module):
                                                 ))
 
             self.encoder_dict = nn.ModuleDict({'GS': layers, 
-                                                'mean': self.mean_encoder,
-                                                'var':self.var_encoder,
                                                 'CF':classifier})
 
             # Adjust for each ngh
@@ -318,7 +315,9 @@ class Encoder(nn.Module):
             # Adjust for batch effects, currently makes no sense, should have
             # shape (batch_size, n_batches), but only 1 batch is implemented now.
             self.y_s = nn.Linear(in_feats, 1)
-            self.z_s = nn.Linear(n_hidden,1)
+
+            #Cell types_per_location
+            self.c_s = nn.Linear(in_feats,n_classes)
             # Adjust for technology effects
             #self.t_ngh = nn.Linear(1,1)
             # Adjust overdispersion parameter. This seems to help.
