@@ -160,10 +160,6 @@ class SAGE(nn.Module):
         self.aggregator = aggregator
         if self.supervised:
             self.n_hidden =n_classes
-            self.domain_adaptation = Classifier(n_input=n_hidden,
-                                                n_labels=2,
-                                                softmax=False,
-                                                reverse_gradients=True)
 
         self.encoder = Encoder(in_feats,
                                 n_hidden,
@@ -250,14 +246,6 @@ class Encoder(nn.Module):
             layers = nn.ModuleList()
 
             if supervised:
-                classifier = Classifier(n_input=n_hidden,
-                                        n_labels=n_classes,
-                                        softmax=False,
-                                        reverse_gradients=False)
-            else:
-                classifier = None
-
-            if supervised:
                 self.norm = F.normalize#DiffGroupNorm(n_hidden,n_classes,None) 
                 n_hidden = n_classes
             else:
@@ -307,8 +295,7 @@ class Encoder(nn.Module):
                                                 #norm=F.normalize
                                                 ))
 
-            self.encoder_dict = nn.ModuleDict({'GS': layers, 
-                                                'CF':classifier})
+            self.encoder_dict = nn.ModuleDict({'GS': layers})
 
             # Adjust for each ngh
             self.m_g = nn.Linear(in_feats, in_feats)
