@@ -99,7 +99,7 @@ class SAGELightning(LightningModule):
             for n in range(p.shape[0]):
                 c = int((probabilities_unlab.argsort(dim=-1)[:,-1] == n).sum()) + 1
                 #print(c)
-                m_cell = Multinomial(c, probs=self.dist)
+                m_cell = Multinomial(c, probs=self.dist.to(self.device))
 
                 loss_dist.append(- Multinomial(total_count=c, probs=p/p.sum()).log_prob(m_cell.sample())/c)
             loss_dist = th.stack(loss_dist).mean()
