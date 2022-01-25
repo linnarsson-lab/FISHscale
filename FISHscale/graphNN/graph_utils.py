@@ -323,7 +323,7 @@ class GraphData(pl.LightningDataModule):
                             max_epochs=max_epochs)
         trainer.fit(self.model, train_dataloaders=self.train_dataloader())
 
-    def molecules_df(self, filter_molecules):
+    def molecules_df(self, filter_molecules=None):
         """
         molecules_df 
 
@@ -335,8 +335,12 @@ class GraphData(pl.LightningDataModule):
             [type]: [description]
         """        
         rows,cols = [],[]
-        filt = self.data.df.g.values.compute()[filter_molecules]
-        for r in trange(self.data.unique_genes.shape[0]):
+        if type(filter_molecules) == type(None):
+            filt = self.data.df.g.values.compute()
+        else:
+            filt = self.data.df.g.values.compute()[filter_molecules]
+
+        for r in range(self.data.unique_genes.shape[0]):
             g = self.data.unique_genes[r]
             expressed = np.where(filt == g)[0].tolist()
             cols += expressed
@@ -428,16 +432,22 @@ class GraphData(pl.LightningDataModule):
         d_th = np.percentile(dists[np.isnan(dists) == False],97)*self.distance_factor
         self.distance_threshold = d_th
         print('Chosen dist: {}'.format(self.distance_threshold))
-    
-        def find_nn_distance(coords,tree,distance):
+        
+        def find_nn_distance(coords,tree,distance,m):
             print('Find neighbors below distance: {}'.format(d_th))
-            res,nodes = [],[]
+            res,nodes,ngh_ = [],[],[]
             for i in trange(coords.shape[0]):
                 # 100 sets the number of neighbors to find for each node
                 #  it is set to 100 since we usually will compute neighbors
                 #  [20,10]
                 search = tree.get_nns_by_item(i, neighborhood_size, include_distances=True)
                 pair = [(i,n) for n,d in zip(search[0],search[1]) if d < distance]
+                
+                # Create Neighborhood for each molecule
+                nns = [i] + [n[1] for n in pair]
+                nns_sum = m[nns,:].sum(axis=0)
+                ngh_.append(nns_sum)
+
                 add_node = 0
                 if len(pair) > self.minimum_nodes_connected:
                     res += pair
@@ -450,24 +460,30 @@ class GraphData(pl.LightningDataModule):
 
             res= th.tensor(np.array(res)).T
             nodes = th.tensor(np.array(nodes))
-            return res,nodes
+            ngh_ = th.tensor(np.array(ngh_))
 
-        edges, molecules= find_nn_distance(coords,t,self.distance_threshold)
-        d = self.molecules_df(molecules)
+            return res,nodes,ngh_
+
+        d = self.molecules_df()
+        edges, molecules, ngh_ = find_nn_distance(coords,t,self.distance_threshold,d)
+        d,ngh_ = d[molecules,:], ngh_[molecules,:]
+
+        #d = self.molecules_df(molecules)
         g= dgl.graph((edges[0,:],edges[1,:]),)
         #g = dgl.to_bidirected(g)
         g.ndata['gene'] = th.tensor(d.toarray(), dtype=th.float32)#[self.g.ndata['indices'].numpy(),:]
-
+        g.ndata['ngh'] = ngh_[:,0,:]
+        '''
         g.ndata['zero'] = torch.zeros_like(g.ndata['gene'])
         g.update_all(fn.u_add_v('gene','zero','e'),fn.sum('e','zero'))
         g.ndata['gene'] = g.ndata['gene']
         g.ndata['ngh'] = g.ndata['zero'] + g.ndata['gene']
         del g.ndata['zero']
+        '''
 
         sum_nodes_connected = g.ndata['ngh'].sum(axis=1)
         molecules_connected = molecules[sum_nodes_connected >= self.minimum_nodes_connected]
         remove = molecules[sum_nodes_connected.numpy() < self.minimum_nodes_connected]
-
         g.remove_nodes(th.tensor(remove))
         g.ndata['indices'] = th.tensor(molecules_connected)
         return g
