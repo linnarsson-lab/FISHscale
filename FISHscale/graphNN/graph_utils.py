@@ -477,7 +477,7 @@ class GraphData(pl.LightningDataModule):
         nghs = []
         for n in tqdm(ngh_):
             nghs.append(th.tensor(g.ndata['gene'][n,:].sum(axis=0)))
-        nghs = th.stack(nghs)[:,0,:]
+        nghs = th.stack(nghs)
         g.ndata['ngh'] = nghs
 
         '''sampler = dgl.dataloading.MultiLayerFullNeighborSampler(1)
