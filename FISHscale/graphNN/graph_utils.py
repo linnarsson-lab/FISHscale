@@ -460,7 +460,7 @@ class GraphData(pl.LightningDataModule):
 
             res= th.tensor(np.array(res)).T
             nodes = th.tensor(np.array(nodes))
-            ngh_ = th.tensor(np.array(ngh_))
+            ngh_ = th.tensor(np.array(ngh_),dtype=th.float32)
 
             return res,nodes,ngh_
 
