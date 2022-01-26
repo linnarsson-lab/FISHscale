@@ -424,7 +424,7 @@ class GraphData(pl.LightningDataModule):
             v = coords[i,:]
             t.add_item(i, v)
 
-        t.build(10) # 10 trees
+        t.build(5) # 10 trees
         t.save(tree_file)
 
         #subs_coords = np.random.choice(np.arange(coords.shape[0]),500000,replace=False)
@@ -435,14 +435,19 @@ class GraphData(pl.LightningDataModule):
         
         def find_nn_distance(coords,tree,distance):
             print('Find neighbors below distance: {}'.format(d_th))
-            res,nodes = [],[]
+            res,nodes,ngh_ = [],[],[]
             for i in trange(coords.shape[0]):
                 # 100 sets the number of neighbors to find for each node
                 #  it is set to 100 since we usually will compute neighbors
                 #  [20,10]
                 search = tree.get_nns_by_item(i, neighborhood_size, include_distances=True)
-                pair = [(i,n) for n,d in zip(search[0],search[1]) if d < distance]
-
+                pair = []
+                n_ = []
+                for n,d in zip(search[0],search[1]):
+                    if d < distance:
+                        pair.append((i,n))
+                        n_.append(n)
+                ngh_.append(n_)
                 #search = tree.get_nns_by_item(i, neighborhood_size)
                 #pair = [(i,n) for n in search]
 
@@ -458,17 +463,23 @@ class GraphData(pl.LightningDataModule):
 
             res= th.tensor(np.array(res)).T
             nodes = th.tensor(np.array(nodes))
-            return res,nodes
+            return res,nodes,ngh_
 
         d = self.molecules_df()
-        edges, molecules = find_nn_distance(coords,t,self.distance_threshold)
+        edges, molecules,ngh_ = find_nn_distance(coords,t,self.distance_threshold)
         d= d[molecules,:]
 
         #d = self.molecules_df(molecules)
         g= dgl.graph((edges[0,:],edges[1,:]),)
         #g = dgl.to_bidirected(g)
         g.ndata['gene'] = th.tensor(d.toarray(), dtype=th.float32)#[self.g.ndata['indices'].numpy(),:]
-        sampler = dgl.dataloading.MultiLayerFullNeighborSampler(1)
+        nghs = []
+        for n in tqdm(ngh_):
+            nghs.append(th.tensor(d[n,:].sum(axis=0)))
+        nghs = th.stack(nghs)[:,0,:]
+        g.ndata['ngh'] = nghs
+
+        '''sampler = dgl.dataloading.MultiLayerFullNeighborSampler(1)
         dataloader = dgl.dataloading.NodeDataLoader(
             g,
             th.arange(g.num_nodes()),#.to(g.device),
@@ -482,8 +493,8 @@ class GraphData(pl.LightningDataModule):
         for _, _, blocks in tqdm(dataloader):
             ngh_.append(blocks[0].srcdata['gene'].sum(axis=0))
         ngh_ = th.stack(ngh_)
-        g.ndata['ngh'] = ngh_
-
+        g.ndata['ngh'] = ngh_'''
+        # Finding fastest algorithm
         '''
         g.ndata['zero'] = torch.zeros_like(g.ndata['gene'])
         g.update_all(fn.u_add_v('gene','zero','e'),fn.sum('e','zero'))
