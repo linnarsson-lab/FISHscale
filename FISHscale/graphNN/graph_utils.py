@@ -468,11 +468,9 @@ class GraphData(pl.LightningDataModule):
         d = self.molecules_df()
         edges, molecules,ngh_ = find_nn_distance(coords,t,self.distance_threshold)
         d= d[molecules,:]
-
         #d = self.molecules_df(molecules)
         g= dgl.graph((edges[0,:],edges[1,:]),)
         #g = dgl.to_bidirected(g)]
-        
         g.ndata['gene'] = th.tensor(d.toarray(), dtype=th.float32)#[self.g.ndata['indices'].numpy(),:]
         nghs = []
         for n in tqdm(ngh_):
