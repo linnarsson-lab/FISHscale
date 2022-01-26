@@ -424,7 +424,7 @@ class GraphData(pl.LightningDataModule):
             v = coords[i,:]
             t.add_item(i, v)
 
-        t.build(10) # 10 trees
+        t.build(5) # 5 trees
         t.save(tree_file)
 
         #subs_coords = np.random.choice(np.arange(coords.shape[0]),500000,replace=False)
@@ -466,7 +466,8 @@ class GraphData(pl.LightningDataModule):
 
         #d = self.molecules_df(molecules)
         g= dgl.graph((edges[0,:],edges[1,:]),)
-        #g = dgl.to_bidirected(g)
+        #g = dgl.to_bidirected(g)]
+        
         g.ndata['gene'] = th.tensor(d.toarray(), dtype=th.float32)#[self.g.ndata['indices'].numpy(),:]
         sampler = dgl.dataloading.MultiLayerFullNeighborSampler(1)
         dataloader = dgl.dataloading.NodeDataLoader(
