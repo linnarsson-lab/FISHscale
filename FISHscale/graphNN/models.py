@@ -78,10 +78,11 @@ class SAGELightning(LightningModule):
             graph_loss,pos, neg = self.loss_fcn(embedding, pos_graph, neg_graph)
             local_nghs = mfgs[0].srcdata['ngh'][pos_graph.nodes()]
 
-            alpha = 1/th.exp(self.module.encoder.a_d(local_nghs+1e-4)).mean(axis=0)#.pow(2)
+            input_local_ngh = th.log(local_nghs+1)
+            alpha = 1/th.exp(self.module.encoder.a_d(input_local_ngh)).mean(axis=0)#.pow(2)
             #m_g = th.exp(self.module.encoder.m_g(local_nghs)+1e-6)
-            y_s = F.softplus(self.module.encoder.y_s(local_nghs))
-            c_s = F.softplus(self.module.encoder.c_s(local_nghs))
+            y_s = F.softplus(self.module.encoder.y_s(input_local_ngh))
+            c_s = F.softplus(self.module.encoder.c_s(input_local_ngh))
 
             mu = (probabilities_unlab*c_s) @ self.reference.T 
             mu = mu * y_s
