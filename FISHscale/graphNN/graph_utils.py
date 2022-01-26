@@ -475,7 +475,7 @@ class GraphData(pl.LightningDataModule):
         g.ndata['gene'] = th.tensor(d.toarray(), dtype=th.float32)#[self.g.ndata['indices'].numpy(),:]
         nghs = []
         for n in tqdm(ngh_):
-            nghs.append(th.tensor(d[n,:].sum(axis=0)))
+            nghs.append(th.tensor(g.ndata['gene'][n,:].sum(axis=0)))
         nghs = th.stack(nghs)[:,0,:]
         g.ndata['ngh'] = nghs
 
