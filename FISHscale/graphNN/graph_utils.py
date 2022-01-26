@@ -87,7 +87,7 @@ class GraphData(pl.LightningDataModule):
         model=None, # GraphSAGE model
         analysis_name:str='',
         molecules=None, # Array with molecules_ids of shape (molecules)
-        ngh_size = 200,
+        ngh_size = 500,
         ngh_sizes = [20, 10],
         minimum_nodes_connected = 5,
         train_p = 0.25,
