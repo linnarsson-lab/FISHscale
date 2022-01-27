@@ -562,6 +562,8 @@ class GraphData(pl.LightningDataModule):
             self.dist = th.tensor(dist/dist.sum(),dtype=th.float32)
         elif self.celltype_distribution == 'cells':
             self.dist = th.tensor(self.ncells/self.ncells.sum(),dtype=th.float32)
+        else:
+            self.dist = None
 
     #### plotting and latent factors #####
 
