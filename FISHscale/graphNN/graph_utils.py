@@ -509,66 +509,6 @@ class GraphData(pl.LightningDataModule):
         g.ndata['indices'] = th.tensor(molecules_connected)
         return g
 
-    '''def cell_types_to_graph(self,smooth=False):
-        """
-        cell_types_to_graph [summary]
-
-        Transform data (Ncells, genes) into fake molecule neighborhoods
-
-        Args:
-            data ([type]): [description]
-            Ncells ([type]): [description]
-
-        Returns:
-            [type]: [description]
-        """        
-        all_molecules = []
-        all_coords = []
-        all_cl = []
-        data = self.ref_celltypes#/data.sum(axis=0)
-
-        #data = (data*1000).astype('int')
-        print('Converting clusters into simulated molecule neighborhoods...')
-        for i in trange(data.shape[1]):
-            molecules = []
-            # Reduce number of cells by Ncells.min() to avoid having a huge dataframe, since it is actually simulated data
-            cl_i = data[:,i]#*(Ncells[i]/(Ncells.min()*100)).astype('int')
-            if smooth == False:
-                random_molecules = np.random.choice(data.shape[0],size=2500,p=cl_i/cl_i.sum())
-                for x in random_molecules:
-                    dot = np.zeros_like(cl_i)
-                    dot[x] = 1
-                    try:
-                        #dot = np.stack([dot]*int(cl_i[x]))
-                        molecules.append(dot)
-                    except:
-                        pass
-            else:
-                for x in range(2500):
-                    p = np.random.poisson(cl_i,size=(1,cl_i.shape[0]))[0,:]
-                    p[p < 0] = 0
-                    p = p/p.sum()
-                    random_molecules = np.random.choice(data.shape[0],size=50,p=p)
-                    dot = np.zeros_like(cl_i)
-                    for x in random_molecules:
-                        dot[x] = dot[x]+1
-                    molecules.append(dot)
-
-            molecules = np.stack(molecules)
-            #molecules = np.concatenate(molecules)
-            all_molecules.append(molecules)
-            
-            all_coords.append(np.random.normal(loc=i*1000,scale=25,size=[molecules.shape[0],2]))
-            #all_coords.append(np.ones_like(molecules)*50*i)
-            all_cl.append(np.ones(molecules.shape[0])*i)
-
-        all_molecules = sparse.csr_matrix(np.concatenate(all_molecules))
-        all_coords = np.concatenate(all_coords)
-        all_cl = np.concatenate(all_cl)
-        edges = self.buildGraph(75,coords=all_coords)
-        print('Fake Molecules: ',all_molecules.shape)
-        return all_molecules, edges, all_cl'''
-
     def prepare_reference(self):
         """
         prepare_reference: reference matrix for semi-supervised learning.
@@ -622,32 +562,6 @@ class GraphData(pl.LightningDataModule):
             self.dist = th.tensor(dist/dist.sum(),dtype=th.float32)
         elif self.celltype_distribution == 'cells':
             self.dist = th.tensor(self.ncells/self.ncells.sum(),dtype=th.float32)
-
-        #do something
-
-    '''def knn_smooth(self,neighborhood_size=75):
-        print('Smoothing neighborhoods with kernel size: {}'.format(neighborhood_size))
-        
-        u = AnnoyIndex(2, 'euclidean')
-        u.load(os.path.join(self.save_to,'Tree-{}Nodes-Ngh{}-{}-dst{}.ann'.format(self.molecules.shape[0],self.ngh_sizes[0],self.ngh_sizes[1],self.distance_threshold)))
-
-        smoothed_dataframe = []
-        molecules_connected = []
-        for i in trange(self.d.shape[0]):
-            search = u.get_nns_by_item(i, neighborhood_size, include_distances=True)
-            neighbors = [n for n,d in zip(search[0],search[1]) if d < self.distance_threshold]
-
-            try:
-                rnd_neighbors = np.random.choice(neighbors, size=neighborhood_size,replace=False)
-                smoothed_nn = self.d[rnd_neighbors,:].sum(axis=0)
-                smoothed_dataframe.append(smoothed_nn)
-                molecules_connected.append(i)
-            except:
-                smoothed_dataframe.append(self.d[i,:].toarray())
-
-        smoothed_dataframe= np.concatenate(smoothed_dataframe)
-        self.d = sparse.csr_matrix(smoothed_dataframe)
-        self.g.ndata['indices'].numpy() = np.array(molecules_connected)'''
 
     #### plotting and latent factors #####
 
