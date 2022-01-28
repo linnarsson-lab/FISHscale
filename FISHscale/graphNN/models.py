@@ -90,24 +90,29 @@ class SAGELightning(LightningModule):
 
             NB = GammaPoisson(concentration=alpha,rate=rate)#.log_prob(local_nghs).mean(axis=-1).mean()
             nb_loss = -NB.log_prob(local_nghs).mean(axis=-1).mean()
+        
             # Regularize by local nodes
             # Add Predicted same class nodes together.
-            p = local_nghs.sum(axis=1) @ probabilities_unlab
-            #p = th.ones(probabilities_unlab.shape[0]) @ probabilities_unlab
-            #option 1 
-            loss_dist = []
-            sum_nghs = local_nghs.sum(axis=0)
-            for n in range(p.shape[0]):
-                c = int((probabilities_unlab.argsort(dim=-1)[:,-1] == n).sum()) + 1
-                #print(c)
-                m_cell = Multinomial(c, probs=self.dist.to(self.device))
+            if type(self.dist) != type(None):
+                #option 2
+                #p = th.ones(probabilities_unlab.shape[0]) @ probabilities_unlab
+                #p = th.log(p/p.sum())
+                #loss_dist = self.kl(p,self.dist.to(self.device)).sum()
 
-                loss_dist.append(- Multinomial(total_count=c, probs=p/p.sum()).log_prob(m_cell.sample())/c)
-            loss_dist = th.stack(loss_dist).mean()
-            #option 2
-            #p = th.ones(probabilities_unlab.shape[0]) @ probabilities_unlab
-            #p = th.log(p/p.sum())
-            #loss_dist = self.kl(p,self.dist.to(self.device)).sum()
+                p = local_nghs.sum(axis=1) @ probabilities_unlab
+                #p = th.ones(probabilities_unlab.shape[0]) @ probabilities_unlab
+                #option 1 
+                loss_dist = []
+                sum_nghs = local_nghs.sum(axis=0)
+                for n in range(p.shape[0]):
+                    c = int((probabilities_unlab.argsort(dim=-1)[:,-1] == n).sum()) + 1
+                    #print(c)
+                    m_cell = Multinomial(c, probs=self.dist.to(self.device))
+
+                    loss_dist.append(- Multinomial(total_count=c, probs=p/p.sum()).log_prob(m_cell.sample())/c)
+                loss_dist = th.stack(loss_dist).mean()
+            else:
+                loss_dist = 0
 
             loss = graph_loss + nb_loss + loss_dist
             self.log('train_loss', loss, prog_bar=True, on_step=True, on_epoch=True)
