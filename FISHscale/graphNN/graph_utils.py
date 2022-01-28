@@ -229,12 +229,6 @@ class GraphData(pl.LightningDataModule):
         if self.aggregator == 'attentional':
             self.g = dgl.add_self_loop(self.g)
 
-        if self.smooth:
-            self.g.ndata['zero'] = torch.zeros_like(self.g.ndata['gene'])
-            self.g.update_all(fn.u_add_v('gene','zero','e'),fn.sum('e','zero'))
-            self.g.ndata['gene'] = self.g.ndata['zero'] + self.g.ndata['gene']
-            del self.g.ndata['zero']
-
         print(self.g)
         self.make_train_test_validation()
 
@@ -476,7 +470,13 @@ class GraphData(pl.LightningDataModule):
         for n in tqdm(ngh_):
             nghs.append(th.tensor(g.ndata['gene'][n,:].sum(axis=0)))
         nghs = th.stack(nghs)
-        g.ndata['ngh'] = nghs
+
+        if self.smooth:
+            #self.g.ndata['zero'] = torch.zeros_like(self.g.ndata['gene'])
+            #self.g.update_all(fn.u_add_v('gene','zero','e'),fn.sum('e','zero'))
+            #self.g.ndata['gene'] = self.g.ndata['zero'] + self.g.ndata['gene']
+            #del self.g.ndata['zero']
+            g.ndata['gene'] = nghs
 
         '''sampler = dgl.dataloading.MultiLayerFullNeighborSampler(1)
         dataloader = dgl.dataloading.NodeDataLoader(
