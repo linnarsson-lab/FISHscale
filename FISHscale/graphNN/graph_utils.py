@@ -476,7 +476,7 @@ class GraphData(pl.LightningDataModule):
             #self.g.update_all(fn.u_add_v('gene','zero','e'),fn.sum('e','zero'))
             #self.g.ndata['gene'] = self.g.ndata['zero'] + self.g.ndata['gene']
             #del self.g.ndata['zero']
-            g.ndata['gene'] = nghs
+            g.ndata['nghs'] = nghs
 
         '''sampler = dgl.dataloading.MultiLayerFullNeighborSampler(1)
         dataloader = dgl.dataloading.NodeDataLoader(
