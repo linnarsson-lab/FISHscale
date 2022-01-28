@@ -683,18 +683,22 @@ class GraphData(pl.LightningDataModule):
 
             allm = 0
             print('Generating plots for cluster assigned to molecules...')
+            os.mkdir('{}/Clusters'.format(self.folder))
             for cl in range(self.ClusterNames.shape[0]):
                     try:
                         x, y = molecules_x[clusters == cl], molecules_y[clusters == cl]
                         allm += x.shape[0]
                         color = ['red']*x.shape[0]
-                        nd_dic[self.ClusterNames[cl]] = hv.Scatter(np.array([x,y]).T).opts(
+                        scatter =  hv.Scatter(np.array([x,y]).T).opts(
                             bgcolor='black',
                             aspect='equal',
-                            fig_inches=10,
+                            fig_inches=50,
                             s=1,
                             title=str(self.ClusterNames[cl]),
                             color=color_dic[cl])
+                        nd_dic[self.ClusterNames[cl]] = scatter
+                        hv.save(scatter,"{}/Clusters/{}.png".format(self.folder,str(self.ClusterNames[cl])))
+                        
                     except:
                         pass
 
