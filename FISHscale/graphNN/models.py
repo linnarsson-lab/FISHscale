@@ -10,6 +10,8 @@ from pytorch_lightning import LightningModule
 from FISHscale.graphNN.submodules import Classifier, PairNorm, DiffGroupNorm
 from pyro.distributions import GammaPoisson
 from torch.distributions import Gamma,Normal, Multinomial, kl_divergence as kl
+import pyro
+from pyro import distributions as dist
 
 class CrossEntropyLoss(nn.Module):
     def forward(self, block_outputs, pos_graph, neg_graph):
@@ -62,6 +64,53 @@ class SAGELightning(LightningModule):
             self.kl = th.nn.KLDivLoss(reduction='sum')
             self.dist = celltype_distribution
             self.ncells = ncells
+
+    def model(self, x):
+        # register PyTorch module `decoder` with Pyro
+        self.reference = self.reference.to(self.device)
+
+        hyp_alpha, hyp_beta = th.tensor(9),th.tensor(3)
+        alpha_g_phi_hyp = pyro.sample("alpha_g_phi_hyp",
+                dist.Gamma(hyp_alpha, hyp_beta),
+                )
+        
+        alpha_g_inverse = pyro.sample(
+            "alpha_g_inverse",
+            dist.Exponential(alpha_g_phi_hyp).expand([1, x.shape[1]]).to_event(1),
+        )  # (self.n_batch, self.n_vars)
+
+
+        pyro.module("decoder", self)
+        with pyro.plate("data", x.shape[0]):
+            # setup hyperparameters for prior p(z)
+            z_loc = x.new_zeros(th.Size((x.shape[0], self.z_dim)))
+            z_scale = x.new_ones(th.Size((x.shape[0], self.z_dim)))
+            # sample from prior (value will be sampled by guide when computing the ELBO)
+            z = pyro.sample("latent", dist.Normal(z_loc, z_scale).to_event(1))
+
+            cps_shape, cps_rate = th.tensor([4]), th.tensor([4])
+            c_s = pyro.sample('c_s',
+                                    dist.Gamma(th.ones([z.shape[0], 1]) * th.tensor(cps_shape),
+                                                th.ones([z.shape[0], 1]) * th.tensor(cps_rate)))
+
+
+            probabilities_unlab = F.softmax(z, dim=-1)
+            mu = (probabilities_unlab*c_s) @ self.reference.T 
+            mu = mu
+            rate = alpha/mu
+
+            # score against actual images
+            pyro.sample("obs", dist.GammaPoisson(concentration=alpha, rate=rate).to_event(1), obs=x)
+
+    # define the guide (i.e. variational distribution) q(z|x)
+    def guide(self, x):
+        # register PyTorch module `encoder` with Pyro
+        pyro.module("Graph_encoder", self.module)
+        with pyro.plate("data", x.shape[0]):
+            # use the encoder to get the parameters used to define q(z|x)
+            z_loc, z_scale = self.module(x)
+            # sample the latent code z
+            pyro.sample("latent", dist.Normal(z_loc, z_scale).to_event(1))
 
     def training_step(self, batch, batch_idx):
         batch1 = batch#['unlabelled']
@@ -169,6 +218,10 @@ class SAGE(nn.Module):
                                 supervised,
                                 aggregator)
 
+        self.encoder_mz = nn.Linear(n_hidden,n_hidden)
+        self.encoder_vz = nn.Linear(n_hidden,n_hidden)
+        self.softplus =  nn.Softplus()
+
     def forward(self, blocks, x):
         h = th.log(x+1)   
         for l, (layer, block) in enumerate(zip(self.encoder.encoder_dict['GS'], blocks)):
@@ -177,8 +230,11 @@ class SAGE(nn.Module):
                 #h = self.encoder.encoder_dict['FC'][l](h)
             else:
                 h = layer(block, h,).mean(1)
-                #h = self.encoder.encoder_dict['FC'][l](h)
-        return h
+        
+        h = self.softplus(h)
+        mz,vz = self.encoder_mz(h), th.exp(self.encoder_vz(h))
+        #h = self.encoder.encoder_dict['FC'][l](h)
+        return mz,vz
 
     def inference(self, g, x, device, batch_size, num_workers):
         """
@@ -225,7 +281,9 @@ class SAGE(nn.Module):
                     h = layer(block, h,).mean(1)
                     #h = self.encoder.encoder_dict['FC'][l](h)
 
-                #if l == 1:
+                if l == 1:
+                    h = self.softplus(h)
+                    h= self.encoder_mz(h)
                 #    h = self.mean_encoder(h)#, th.exp(self.var_encoder(h))+1e-4 )
                 y[output_nodes] = h.cpu().detach()#.numpy()
             x = y
