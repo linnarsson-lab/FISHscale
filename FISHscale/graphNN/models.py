@@ -59,7 +59,7 @@ class SAGELightning(LightningModule):
         self.reference=th.tensor(reference,dtype=th.float32)
         self.smooth = smooth
         if self.supervised:
-            #self.automatic_optimization = False
+            automatic_optimization = False
             self.train_acc = torchmetrics.Accuracy()
             self.kl = th.nn.KLDivLoss(reduction='sum')
             self.dist = celltype_distribution
@@ -88,15 +88,15 @@ class SAGELightning(LightningModule):
             # sample from prior (value will be sampled by guide when computing the ELBO)
             z = pyro.sample("latent", dist.Normal(z_loc, z_scale).to_event(1))
 
-            cps_shape, cps_rate = th.tensor([4]), th.tensor([4])
+            cps_shape, cps_rate = th.tensor(4), th.tensor(4)
             c_s = pyro.sample('c_s',
-                                    dist.Gamma(th.ones([z.shape[0], 1]) * th.tensor(cps_shape),
-                                                th.ones([z.shape[0], 1]) * th.tensor(cps_rate)))
-
+                                    dist.Gamma(th.ones([z.shape[0], z.shape[1]]) * th.tensor(cps_shape),
+                                    th.ones([z.shape[0], z.shape[1]]) * th.tensor(cps_rate))).to_event(1)
 
             probabilities_unlab = F.softmax(z, dim=-1)
             mu = (probabilities_unlab*c_s) @ self.reference.T 
             mu = mu
+            alpha = 1/alpha_g_inverse.pow(2)
             rate = alpha/mu
 
             # score against actual images
@@ -106,9 +106,26 @@ class SAGELightning(LightningModule):
     def guide(self, x):
         # register PyTorch module `encoder` with Pyro
         pyro.module("Graph_encoder", self.module)
+
+        hyp_alpha, hyp_beta = th.tensor(9),th.tensor(3)
+        alpha_g_phi_hyp = pyro.sample("alpha_g_phi_hyp",
+                dist.Gamma(hyp_alpha, hyp_beta),
+        )
+                
+        alpha_g_inverse = pyro.sample(
+            "alpha_g_inverse",
+            dist.Exponential(alpha_g_phi_hyp).expand([1, x.shape[1]]).to_event(1),
+        )  # (self.n_batch, self.n_vars)
+
         with pyro.plate("data", x.shape[0]):
             # use the encoder to get the parameters used to define q(z|x)
             z_loc, z_scale = self.module(x)
+
+            cps_shape, cps_rate = th.tensor(4), th.tensor(4)
+            c_s = pyro.sample('c_s',
+                        dist.Gamma(th.ones([z_loc.shape[0], 1]) * th.tensor(cps_shape),
+                                    th.ones([z_loc.shape[0], 1]) * th.tensor(cps_rate)))
+
             # sample the latent code z
             pyro.sample("latent", dist.Normal(z_loc, z_scale).to_event(1))
 
