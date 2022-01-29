@@ -95,11 +95,11 @@ class SAGELightning(LightningModule):
             # Add Predicted same class nodes together.
             if type(self.dist) != type(None):
                 #option 2
-                #p = th.ones(probabilities_unlab.shape[0]) @ probabilities_unlab
-                #p = th.log(p/p.sum())
-                #loss_dist = self.kl(p,self.dist.to(self.device)).sum()
+                p = th.ones(probabilities_unlab.shape[0]) @ probabilities_unlab
+                p = th.log(p/p.sum())
+                loss_dist = self.kl(p,self.dist.to(self.device)).sum()
 
-                p = local_nghs.sum(axis=1) @ probabilities_unlab
+                '''p = local_nghs.sum(axis=1) @ probabilities_unlab
                 #p = th.ones(probabilities_unlab.shape[0]) @ probabilities_unlab
                 #option 1 
                 loss_dist = []
@@ -110,7 +110,7 @@ class SAGELightning(LightningModule):
                     m_cell = Multinomial(c, probs=self.dist.to(self.device))
 
                     loss_dist.append(- Multinomial(total_count=c, probs=p/p.sum()).log_prob(m_cell.sample())/c)
-                loss_dist = th.stack(loss_dist).mean()
+                loss_dist = th.stack(loss_dist).mean()'''
             else:
                 loss_dist = 0
 
