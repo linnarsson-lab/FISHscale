@@ -12,6 +12,7 @@ from pyro.distributions import GammaPoisson
 from torch.distributions import Gamma,Normal, Multinomial, kl_divergence as kl
 import pyro
 from pyro import distributions as dist
+from pyro.nn import PyroModule, PyroSample
 
 class CrossEntropyLoss(nn.Module):
     def forward(self, block_outputs, pos_graph, neg_graph):
@@ -31,7 +32,7 @@ class CrossEntropyLoss(nn.Module):
         #loss = F.binary_cross_entropy_with_logits(score, label.float())
         return loss, pos_loss, neg_loss
 
-class SAGELightning(LightningModule):
+class SAGELightning(PyroModule):
     def __init__(self,
                  in_feats,
                  n_hidden,
@@ -50,7 +51,6 @@ class SAGELightning(LightningModule):
                  ):
         super().__init__()
 
-        self.save_hyperparameters()
         self.module = SAGE(in_feats, n_hidden, n_classes, n_layers, activation, dropout, supervised,aggregator)
         self.lr = lr
         self.supervised= supervised
@@ -65,47 +65,13 @@ class SAGELightning(LightningModule):
             self.dist = celltype_distribution
             self.ncells = ncells
 
-    def model(self, x):
+    def forward(self, x):
+        _, pos_graph, neg_graph, mfgs = x
+        mfgs = [mfg.int() for mfg in mfgs]
+        batch_inputs_u = mfgs[0].srcdata['gene']
+        x = batch_inputs_u[pos_graph.nodes()]
         # register PyTorch module `decoder` with Pyro
-        self.reference = self.reference.to(self.device)
-
-        hyp_alpha, hyp_beta = th.tensor(9),th.tensor(3)
-        alpha_g_phi_hyp = pyro.sample("alpha_g_phi_hyp",
-                dist.Gamma(hyp_alpha, hyp_beta),
-                )
-        
-        alpha_g_inverse = pyro.sample(
-            "alpha_g_inverse",
-            dist.Exponential(alpha_g_phi_hyp).expand([1, x.shape[1]]).to_event(1),
-        )  # (self.n_batch, self.n_vars)
-
-
-        pyro.module("decoder", self)
-        with pyro.plate("data", x.shape[0]):
-            # setup hyperparameters for prior p(z)
-            z_loc = x.new_zeros(th.Size((x.shape[0], self.z_dim)))
-            z_scale = x.new_ones(th.Size((x.shape[0], self.z_dim)))
-            # sample from prior (value will be sampled by guide when computing the ELBO)
-            z = pyro.sample("latent", dist.Normal(z_loc, z_scale).to_event(1))
-
-            cps_shape, cps_rate = th.tensor(4), th.tensor(4)
-            c_s = pyro.sample('c_s',
-                                    dist.Gamma(th.ones([z.shape[0], z.shape[1]]) * th.tensor(cps_shape),
-                                    th.ones([z.shape[0], z.shape[1]]) * th.tensor(cps_rate))).to_event(1)
-
-            probabilities_unlab = F.softmax(z, dim=-1)
-            mu = (probabilities_unlab*c_s) @ self.reference.T 
-            mu = mu
-            alpha = 1/alpha_g_inverse.pow(2)
-            rate = alpha/mu
-
-            # score against actual images
-            pyro.sample("obs", dist.GammaPoisson(concentration=alpha, rate=rate).to_event(1), obs=x)
-
-    # define the guide (i.e. variational distribution) q(z|x)
-    def guide(self, x):
-        # register PyTorch module `encoder` with Pyro
-        pyro.module("Graph_encoder", self.module)
+        embedding = self.module(mfgs, batch_inputs_u)
 
         hyp_alpha, hyp_beta = th.tensor(9),th.tensor(3)
         alpha_g_phi_hyp = pyro.sample("alpha_g_phi_hyp",
@@ -117,21 +83,26 @@ class SAGELightning(LightningModule):
             dist.Exponential(alpha_g_phi_hyp).expand([1, x.shape[1]]).to_event(1),
         )  # (self.n_batch, self.n_vars)
 
+
         with pyro.plate("data", x.shape[0]):
-            # use the encoder to get the parameters used to define q(z|x)
-            z_loc, z_scale = self.module(x)
+            # setup hyperparameters for prior p(z)
 
-            cps_shape, cps_rate = th.tensor(4), th.tensor(4)
-            c_s = pyro.sample('c_s',
-                        dist.Gamma(th.ones([z_loc.shape[0], 1]) * th.tensor(cps_shape),
-                                    th.ones([z_loc.shape[0], 1]) * th.tensor(cps_rate)))
+            c_s = pyro.sample('scale',
+                dist.Gamma(th.tensor(3),th.tensor(9))).to_event(1)
 
-            # sample the latent code z
-            pyro.sample("latent", dist.Normal(z_loc, z_scale).to_event(1))
+            probabilities_unlab = F.softmax(embedding, dim=-1)
+            mu = (probabilities_unlab*c_s) @ self.reference.T 
+            mu = mu
+            alpha = th.ones_like
+            alpha = 1/th.tensor(alpha_g_inverse).pow(2)
+            rate = alpha/mu
 
+            # score against actual images
+            pyro.sample("obs", dist.GammaPoisson(concentration=alpha, rate=rate).to_event(1), obs=x)
+
+            
     def training_step(self, batch, batch_idx):
         batch1 = batch#['unlabelled']
-        self.reference = self.reference.to(self.device)
         _, pos_graph, neg_graph, mfgs = batch1
         mfgs = [mfg.int() for mfg in mfgs]
         batch_inputs_u = mfgs[0].srcdata['gene']
@@ -205,7 +176,7 @@ class SAGELightning(LightningModule):
         return optimizer
 
 
-class SAGE(nn.Module):
+class SAGE(PyroModule):
     '''def __init__(self, in_feats, n_hidden, n_classes, n_layers, activation, dropout):
         super().__init__()
         self.init(in_feats, n_hidden, n_classes, n_layers, activation, dropout)'''
@@ -226,7 +197,7 @@ class SAGE(nn.Module):
         self.supervised = supervised
         self.aggregator = aggregator
         if self.supervised:
-            self.n_hidden =n_classes
+            n_hidden =n_classes
 
         self.encoder = Encoder(in_feats,
                                 n_hidden,
@@ -235,9 +206,10 @@ class SAGE(nn.Module):
                                 supervised,
                                 aggregator)
 
-        self.encoder_mz = nn.Linear(n_hidden,n_hidden)
-        self.encoder_vz = nn.Linear(n_hidden,n_hidden)
-        self.softplus =  nn.Softplus()
+        print('nclasses',n_hidden)
+        self.encoder_latent = PyroModule[nn.Linear](n_hidden,n_hidden)
+        self.encoder_latent.weight = PyroSample(dist.Normal(0., 1.).expand([n_hidden,n_hidden]).to_event(2))
+        self.encoder_latent.bias = PyroSample(dist.Normal(0., 10.).expand([n_hidden]).to_event(1))
 
     def forward(self, blocks, x):
         h = th.log(x+1)   
@@ -248,10 +220,9 @@ class SAGE(nn.Module):
             else:
                 h = layer(block, h,).mean(1)
         
-        h = self.softplus(h)
-        mz,vz = self.encoder_mz(h), th.exp(self.encoder_vz(h))
+        h = self.encoder_latent(h)
         #h = self.encoder.encoder_dict['FC'][l](h)
-        return mz,vz
+        return h
 
     def inference(self, g, x, device, batch_size, num_workers):
         """
@@ -299,8 +270,8 @@ class SAGE(nn.Module):
                     #h = self.encoder.encoder_dict['FC'][l](h)
 
                 if l == 1:
-                    h = self.softplus(h)
-                    h= self.encoder_mz(h)
+                    h = self.encoder_latent(h)
+
                 #    h = self.mean_encoder(h)#, th.exp(self.var_encoder(h))+1e-4 )
                 y[output_nodes] = h.cpu().detach()#.numpy()
             x = y

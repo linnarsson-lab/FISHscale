@@ -201,7 +201,7 @@ class GraphData(pl.LightningDataModule):
                                         ncells=self.ncells
                                     )
         self.model.to(self.device)
-        print('model is in: ', self.model.device)
+        #print('model is in: ', self.model.device)
 
         ### Prepare data
         self.folder = self.save_to+self.analysis_name+ '_' +datetime.now().strftime("%Y-%m-%d-%H%M%S")
