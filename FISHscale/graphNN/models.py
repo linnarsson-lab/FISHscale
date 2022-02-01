@@ -66,14 +66,14 @@ class SAGELightning(PyroModule):
             self.ncells = ncells
 
     def forward(self, x):
-        _, pos_graph, neg_graph, mfgs = x
+        _, n, mfgs = x
+        x = mfgs[1].dstdata['ngh']
         mfgs = [mfg.int() for mfg in mfgs]
         batch_inputs_u = mfgs[0].srcdata['gene']
-        x = batch_inputs_u[pos_graph.nodes()]
         # register PyTorch module `decoder` with Pyro
         embedding = self.module(mfgs, batch_inputs_u)
 
-        hyp_alpha, hyp_beta = th.tensor(9),th.tensor(3)
+        hyp_alpha, hyp_beta = th.tensor(9.0),th.tensor(3.0)
         alpha_g_phi_hyp = pyro.sample("alpha_g_phi_hyp",
                 dist.Gamma(hyp_alpha, hyp_beta),
         )
@@ -83,15 +83,14 @@ class SAGELightning(PyroModule):
             dist.Exponential(alpha_g_phi_hyp).expand([1, x.shape[1]]).to_event(1),
         )  # (self.n_batch, self.n_vars)
 
-
         with pyro.plate("data", x.shape[0]):
             # setup hyperparameters for prior p(z)
-
             c_s = pyro.sample('scale',
-                dist.Gamma(th.tensor(3),th.tensor(9))).to_event(1)
-
+                dist.Gamma(th.tensor(3.0),th.tensor(9.0)))
             probabilities_unlab = F.softmax(embedding, dim=-1)
-            mu = (probabilities_unlab*c_s) @ self.reference.T 
+            #print(probabilities_unlab.shape)
+            #print(self.reference.T.shape)
+            mu = (probabilities_unlab.T*c_s).T @ self.reference.T 
             mu = mu
             alpha = th.ones_like
             alpha = 1/th.tensor(alpha_g_inverse).pow(2)
@@ -121,7 +120,7 @@ class SAGELightning(PyroModule):
             y_s = F.softplus(self.module.encoder.y_s(input_local_ngh))
             c_s = F.softplus(self.module.encoder.c_s(input_local_ngh))
 
-            mu = (probabilities_unlab*c_s) @ self.reference.T 
+            mu = (probabilities_unlab) @ self.reference.T 
             mu = mu * y_s
             rate = alpha/mu
 
@@ -269,8 +268,8 @@ class SAGE(PyroModule):
                     h = layer(block, h,).mean(1)
                     #h = self.encoder.encoder_dict['FC'][l](h)
 
-                if l == 1:
-                    h = self.encoder_latent(h)
+                '''if l == 1:
+                    h = self.encoder_latent(h)'''
 
                 #    h = self.mean_encoder(h)#, th.exp(self.var_encoder(h))+1e-4 )
                 y[output_nodes] = h.cpu().detach()#.numpy()

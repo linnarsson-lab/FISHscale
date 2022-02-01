@@ -299,6 +299,29 @@ class GraphData(pl.LightningDataModule):
                         )
         return unlab
 
+    def train_dataloader_pyro(self):
+        """
+        train_dataloader
+
+        Prepare dataloader
+
+        Returns:
+            dgl.dataloading.EdgeDataLoader: Deep Graph Library dataloader.
+        """        
+        
+        random_nodes = th.tensor(np.random.choice(self.g.num_nodes(),int(self.g.num_nodes()*self.train_p),replace=False))
+        unlab = dgl.dataloading.NodeDataLoader(
+                        self.g,
+                        random_nodes,
+                        self.sampler,
+                        device=self.device,
+                        batch_size=self.batch_size,
+                        shuffle=True,
+                        drop_last=True,
+                        num_workers=self.num_workers,
+                        )
+        return unlab
+
     def train(self,max_epochs=5,gpus=0):
         """
         train
