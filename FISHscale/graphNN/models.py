@@ -84,7 +84,8 @@ class SAGELightning(LightningModule):
             y_s = F.softplus(self.module.encoder.y_s(input_local_ngh))
             c_s = F.softplus(self.module.encoder.c_s(input_local_ngh))
 
-            mu = (probabilities_unlab*c_s) @ self.reference.T 
+            probabilities_unlab = probabilities_unlab * c_s
+            mu = probabilities_unlab @ self.reference.T 
             mu = mu * y_s
             rate = alpha/mu
 
