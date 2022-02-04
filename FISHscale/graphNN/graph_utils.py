@@ -20,6 +20,15 @@ import dgl
 import dgl.function as fn
 from FISHscale.graphNN.models import SAGELightning
 from sklearn.mixture import GaussianMixture
+from pyro.distributions.util import broadcast_shape
+from pyro import poutine
+from pyro.optim import MultiStepLR
+from torch.optim import Adam
+from pyro.optim import Adam as AdamPyro
+from pyro.infer.autoguide import init_to_mean
+from pyro.infer import SVI, config_enumerate, Trace_ELBO
+from pyro.infer.autoguide import AutoDiagonalNormal, AutoGuideList, AutoNormal, AutoDelta
+
 
 class UnsupervisedClassification(Callback):
     def on_validation_epoch_start(self, trainer, pl_module):
@@ -185,24 +194,6 @@ class GraphData(pl.LightningDataModule):
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.prepare_reference()
 
-        ### Prepare Model
-        if type(self.model) == type(None):
-            self.model = SAGELightning(in_feats=self.data.unique_genes.shape[0], 
-                                        n_hidden=48,
-                                        n_layers=len(self.ngh_sizes),
-                                        n_classes=self.ref_celltypes.shape[1],
-                                        lr=self.lr,
-                                        supervised=self.supervised,
-                                        reference=self.ref_celltypes,
-                                        device=self.device.type,
-                                        smooth=self.smooth,
-                                        aggregator=self.aggregator,
-                                        celltype_distribution=self.dist,
-                                        ncells=self.ncells
-                                    )
-        self.model.to(self.device)
-        #print('model is in: ', self.model.device)
-
         ### Prepare data
         self.folder = self.save_to+self.analysis_name+ '_' +datetime.now().strftime("%Y-%m-%d-%H%M%S")
         os.mkdir(self.folder)
@@ -232,6 +223,24 @@ class GraphData(pl.LightningDataModule):
         print(self.g)
         self.make_train_test_validation()
 
+                ### Prepare Model
+        if type(self.model) == type(None):
+            self.model = SAGELightning(in_feats=self.data.unique_genes.shape[0], 
+                                        n_hidden=48,
+                                        n_layers=len(self.ngh_sizes),
+                                        n_classes=self.ref_celltypes.shape[1],
+                                        lr=self.lr,
+                                        supervised=self.supervised,
+                                        reference=self.ref_celltypes,
+                                        device=self.device.type,
+                                        smooth=self.smooth,
+                                        aggregator=self.aggregator,
+                                        celltype_distribution=self.dist,
+                                        ncells=self.ncells,
+                                        n_obs=self.g.num_nodes()
+                                    )
+        self.model.to(self.device)
+
     def prepare_data(self):
         # do-something
         pass
@@ -254,6 +263,40 @@ class GraphData(pl.LightningDataModule):
             mode='min',
             stopping_threshold=0.35,
             )
+
+    def pyro_guide(self):
+        # Setup a variational objective for gradient-based learning.
+        # Note we use TraceEnum_ELBO in order to leverage Pyro's machinery
+        # for automatic enumeration of the discrete latent variable y.
+        self.guide = AutoGuideList(self.model)
+        self.guide.append(AutoNormal(poutine.block(self.model,expose_all=True, hide_all=False, hide=['test'],)
+                    ,init_loc_fn=init_to_mean))
+        #self.guide = AutoNormal(self.model,init_loc_fn=init_to_mean,create_plates=self.model.create_plates)
+
+    def pyro_train(self, n_epochs=100):
+        # Training loop.
+        # We train for 80 epochs, although this isn't enough to achieve full convergence.
+        # For optimal results it is necessary to tweak the optimization parameters.
+        # For our purposes, however, 80 epochs of training is sufficient.
+        # Training should take about 8 minutes on a GPU-equipped Colab instance.
+        self.elbo = Trace_ELBO()
+        
+        svi = SVI(self.model, self.guide, AdamPyro({'lr':0.002}), self.elbo)
+
+        print('Training')
+        for epoch in range(n_epochs):
+            losses = []
+
+            # Take a gradient step for each mini-batch in the dataset
+            for batch in self.train_dataloader_pyro():
+
+                loss = svi.step(batch)
+                losses.append(loss)
+
+            # Tell the scheduler we've done one epoch.
+            #scheduler.step()
+            print("[Epoch %02d]  Loss: %.5f" % (epoch, np.mean(losses)))
+        print("Finished training!")
 
     def make_train_test_validation(self):
         """
@@ -321,6 +364,29 @@ class GraphData(pl.LightningDataModule):
                         num_workers=self.num_workers,
                         )
         return unlab
+
+    def validation_dataloader_pyro(self):
+        """
+        train_dataloader
+
+        Prepare dataloader
+
+        Returns:
+            dgl.dataloading.EdgeDataLoader: Deep Graph Library dataloader.
+        """        
+        
+        validation = dgl.dataloading.NodeDataLoader(
+                        self.g,
+                        th.arange(self.g.num_nodes(),),
+                        self.sampler,
+                        device=self.device,
+                        batch_size=self.batch_size,
+                        shuffle=True,
+                        drop_last=True,
+                        num_workers=self.num_workers,
+                        )
+        return validation
+
 
     def train(self,max_epochs=5,gpus=0):
         """
@@ -608,13 +674,11 @@ class GraphData(pl.LightningDataModule):
         if self.model.supervised:
             #prediction_unlabelled = self.model.module.encoder.encoder_dict['CF'](latent_unlabelled).softmax(dim=-1)#.detach().numpy()
             prediction_unlabelled = latent_unlabelled.softmax(dim=-1)
-            c_s = torch.nn.functional.softplus(self.model.module.encoder.c_s(self.g.ndata['ngh']))
-            y_s = torch.nn.functional.softplus(self.model.module.encoder.c_s(self.g.ndata['ngh']))
-            prediction_unlabelled = prediction_unlabelled*c_s
-            self.c_s = c_s.detach().numpy()
-            self.prediction_unlabelled = prediction_unlabelled.detach().numpy()
+            #prediction_unlabelled = prediction_unlabelled
+            #self.c_s = c_s.detach().numpy()
+            #self.prediction_unlabelled = prediction_unlabelled.detach().numpy()
 
-            np.save(self.folder+'/labels_unlabelled',self.prediction_unlabelled.argsort(axis=-1)[:,-1].astype('str'))
+            #np.save(self.folder+'/labels_unlabelled',self.prediction_unlabelled.argsort(axis=-1)[:,-1].astype('str'))
             #np.save(self.folder+'/probabilities_unlabelled',self.prediction_unlabelled)
 
         self.latent_unlabelled = latent_unlabelled.detach().numpy()

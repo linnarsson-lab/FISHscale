@@ -48,6 +48,7 @@ class SAGELightning(PyroModule):
                  aggregator='attentional',
                  celltype_distribution=None,
                  ncells = None,
+                 n_obs = None,
                  ):
         super().__init__()
 
@@ -58,6 +59,8 @@ class SAGELightning(PyroModule):
         self.kappa = 0
         self.reference=th.tensor(reference,dtype=th.float32)
         self.smooth = smooth
+        self.n_hidden = n_hidden
+
         if self.supervised:
             automatic_optimization = False
             self.train_acc = torchmetrics.Accuracy()
@@ -65,41 +68,72 @@ class SAGELightning(PyroModule):
             self.dist = celltype_distribution
             self.ncells = ncells
 
+            A_factors_per_location, B_groups_per_location = 7 , 7
+            self.factors_per_groups = A_factors_per_location / B_groups_per_location
+            self.n_groups = self.module.n_hidden
+            self.n_factors = self.module.n_classes
+            self.n_obs= n_obs
+
     def forward(self, x):
-        _, n, mfgs = x
+        _, nids, mfgs = x
         x = mfgs[1].dstdata['ngh']
         mfgs = [mfg.int() for mfg in mfgs]
         batch_inputs_u = mfgs[0].srcdata['gene']
+
+        obs_plate = self.create_plates(x_data=x,idx=nids)
         # register PyTorch module `decoder` with Pyro
-        embedding = self.module(mfgs, batch_inputs_u)
+        embedding = th.exp(self.module(mfgs, batch_inputs_u)+1e-6)
 
         hyp_alpha, hyp_beta = th.tensor(9.0),th.tensor(3.0)
+        
         alpha_g_phi_hyp = pyro.sample("alpha_g_phi_hyp",
                 dist.Gamma(hyp_alpha, hyp_beta),
         )
-                
+        #print('alpha_g_phi_hyp',alpha_g_phi_hyp.shape, alpha_g_phi_hyp.event_shape)
+
         alpha_g_inverse = pyro.sample(
             "alpha_g_inverse",
-            dist.Exponential(alpha_g_phi_hyp).expand([1, x.shape[1]]).to_event(1),
+            dist.Exponential(alpha_g_phi_hyp).expand([1, x.shape[1]]).to_event(2),
         )  # (self.n_batch, self.n_vars)
 
-        with pyro.plate("data", x.shape[0]):
-            # setup hyperparameters for prior p(z)
-            c_s = pyro.sample('scale',
-                dist.Gamma(th.tensor(3.0),th.tensor(9.0)))
-            probabilities_unlab = F.softmax(embedding, dim=-1)
-            #print(probabilities_unlab.shape)
-            #print(self.reference.T.shape)
-            mu = (probabilities_unlab.T*c_s).T @ self.reference.T 
-            mu = mu
-            alpha = th.ones_like
-            alpha = 1/th.tensor(alpha_g_inverse).pow(2)
-            rate = alpha/mu
+        #print('alpha_g_inverse',alpha_g_inverse.shape, alpha_g_inverse.batch_shape, alpha_g_inverse.event_shape)
 
-            # score against actual images
-            pyro.sample("obs", dist.GammaPoisson(concentration=alpha, rate=rate).to_event(1), obs=x)
+        k_r_factors_per_groups = pyro.sample(
+            "k_r_factors_per_groups",
+            dist.Gamma(self.factors_per_groups, th.ones((1,1))).expand([self.n_groups, 1]).to_event(2),
+        )  # (self.n_groups, 1) #n_groups=50
 
-            
+        c2f_shape = k_r_factors_per_groups / self.n_hidden
+
+        x_fr_group2fact = pyro.sample(
+            "x_fr_group2fact",
+            dist.Gamma(c2f_shape, k_r_factors_per_groups).expand([self.n_groups, self.n_factors]).to_event(2),
+        )  # (self.n_groups, self.n_factors)
+
+        with obs_plate as ind:
+            groups_per_embedding = 2
+            w_shape = groups_per_embedding*embedding
+            w_rate = th.ones_like(embedding)*groups_per_embedding
+            w_sf = pyro.sample(
+                    "w_sf",
+                    dist.Gamma(
+                        w_shape,
+                        w_rate,
+                    ),
+                ) # (self.n_obs, self.n_factors)
+
+        mu = embedding @ x_fr_group2fact
+        mu = mu @ self.reference.T 
+        alpha = 1/th.tensor(alpha_g_inverse).pow(2)
+        alpha = th.ones_like(mu)*alpha
+        rate = alpha/mu
+
+        with obs_plate:
+            pyro.sample("data_target", dist.GammaPoisson(concentration=alpha, rate=rate), obs=x)
+
+    def create_plates(self, x_data, idx):
+        return pyro.plate("obs_plate", size=self.n_obs,subsample=idx,dim=-2)
+
     def training_step(self, batch, batch_idx):
         batch1 = batch#['unlabelled']
         _, pos_graph, neg_graph, mfgs = batch1
@@ -195,8 +229,8 @@ class SAGE(PyroModule):
         self.n_classes = n_classes
         self.supervised = supervised
         self.aggregator = aggregator
-        if self.supervised:
-            n_hidden =n_classes
+        #if self.supervised:
+        #    n_hidden =n_classes
 
         self.encoder = Encoder(in_feats,
                                 n_hidden,
@@ -205,10 +239,9 @@ class SAGE(PyroModule):
                                 supervised,
                                 aggregator)
 
-        print('nclasses',n_hidden)
-        self.encoder_latent = PyroModule[nn.Linear](n_hidden,n_hidden)
-        self.encoder_latent.weight = PyroSample(dist.Normal(0., 1.).expand([n_hidden,n_hidden]).to_event(2))
-        self.encoder_latent.bias = PyroSample(dist.Normal(0., 10.).expand([n_hidden]).to_event(1))
+        self.encoder_latent = nn.Linear(n_hidden,n_hidden)
+        #self.encoder_latent.weight = PyroSample(dist.Normal(0., 1.).expand([n_hidden,n_hidden]).to_event(2))
+        #self.encoder_latent.bias = PyroSample(dist.Normal(0., 10.).expand([n_hidden]).to_event(1))
 
     def forward(self, blocks, x):
         h = th.log(x+1)   
@@ -239,9 +272,9 @@ class SAGE(PyroModule):
         self.eval()
         for l, layer in enumerate(self.encoder.encoder_dict['GS']):
             if l ==  0:
-                y = th.zeros(g.num_nodes(), self.n_classes) #if not self.supervised else th.zeros(g.num_nodes(), self.n_classes)
+                y = th.zeros(g.num_nodes(), self.n_hidden) #if not self.supervised else th.zeros(g.num_nodes(), self.n_classes)
             else: 
-                y = th.zeros(g.num_nodes(), self.n_classes)
+                y = th.zeros(g.num_nodes(), self.n_hidden)
 
             sampler = dgl.dataloading.MultiLayerFullNeighborSampler(1)
             dataloader = dgl.dataloading.NodeDataLoader(
@@ -268,8 +301,8 @@ class SAGE(PyroModule):
                     h = layer(block, h,).mean(1)
                     #h = self.encoder.encoder_dict['FC'][l](h)
 
-                '''if l == 1:
-                    h = self.encoder_latent(h)'''
+                if l == 1:
+                    h = self.encoder_latent(h)
 
                 #    h = self.mean_encoder(h)#, th.exp(self.var_encoder(h))+1e-4 )
                 y[output_nodes] = h.cpu().detach()#.numpy()
@@ -293,7 +326,7 @@ class Encoder(nn.Module):
 
             if supervised:
                 self.norm = F.normalize#DiffGroupNorm(n_hidden,n_classes,None) 
-                n_hidden = n_classes
+                #n_hidden = n_classes
             else:
                 self.norm = F.normalize#DiffGroupNorm(n_hidden,20) 
 
@@ -342,16 +375,3 @@ class Encoder(nn.Module):
                                                 ))
 
             self.encoder_dict = nn.ModuleDict({'GS': layers})
-
-            # Adjust for each ngh
-            self.m_g = nn.Linear(in_feats, in_feats)
-            # Adjust for batch effects, currently makes no sense, should have
-            # shape (batch_size, n_batches), but only 1 batch is implemented now.
-            self.y_s = nn.Linear(in_feats, 1)
-
-            #Cell types_per_location
-            self.c_s = nn.Linear(in_feats,n_classes)
-            # Adjust for technology effects
-            #self.t_ngh = nn.Linear(1,1)
-            # Adjust overdispersion parameter. This seems to help.
-            self.a_d = nn.Linear(in_feats,in_feats)
