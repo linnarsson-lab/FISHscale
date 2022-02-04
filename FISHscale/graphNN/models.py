@@ -89,6 +89,7 @@ class SAGELightning(PyroModule):
         alpha_g_phi_hyp = pyro.sample("alpha_g_phi_hyp",
                 dist.Gamma(hyp_alpha, hyp_beta),
         )
+        #print(alpha_g_phi_hyp.shape)
         #print('alpha_g_phi_hyp',alpha_g_phi_hyp.shape, alpha_g_phi_hyp.event_shape)
 
         alpha_g_inverse = pyro.sample(

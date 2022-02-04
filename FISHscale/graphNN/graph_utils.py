@@ -268,10 +268,10 @@ class GraphData(pl.LightningDataModule):
         # Setup a variational objective for gradient-based learning.
         # Note we use TraceEnum_ELBO in order to leverage Pyro's machinery
         # for automatic enumeration of the discrete latent variable y.
-        self.guide = AutoGuideList(self.model)
-        self.guide.append(AutoNormal(poutine.block(self.model,expose_all=True, hide_all=False, hide=['test'],)
-                    ,init_loc_fn=init_to_mean))
-        #self.guide = AutoNormal(self.model,init_loc_fn=init_to_mean,create_plates=self.model.create_plates)
+        #self.guide = AutoGuideList(self.model)
+        #self.guide.append(AutoNormal(poutine.block(self.model,expose_all=True, hide_all=False, hide=['test'],)
+                   #,init_loc_fn=init_to_mean))
+        self.guide = AutoNormal(self.model,init_loc_fn=init_to_mean)
 
     def pyro_train(self, n_epochs=100):
         # Training loop.
@@ -281,7 +281,7 @@ class GraphData(pl.LightningDataModule):
         # Training should take about 8 minutes on a GPU-equipped Colab instance.
         self.elbo = Trace_ELBO()
         
-        svi = SVI(self.model, self.guide, AdamPyro({'lr':0.002}), self.elbo)
+        svi = SVI(self.model, self.guide, AdamPyro({'lr':0.006}), self.elbo)
 
         print('Training')
         for epoch in range(n_epochs):
@@ -679,6 +679,35 @@ class GraphData(pl.LightningDataModule):
             #self.prediction_unlabelled = prediction_unlabelled.detach().numpy()
 
             #np.save(self.folder+'/labels_unlabelled',self.prediction_unlabelled.argsort(axis=-1)[:,-1].astype('str'))
+            #np.save(self.folder+'/probabilities_unlabelled',self.prediction_unlabelled)
+
+        self.latent_unlabelled = latent_unlabelled.detach().numpy()
+        np.save(self.folder+'/latent_unlabelled',latent_unlabelled)
+
+    def get_latents_pyro(self,labelled=True):
+        """
+        get_latents: get the new embedding for each molecule
+        
+        Passes the validation data through the model to generatehe neighborhood 
+        embedding. If the model is in supervised version, the model will also
+        output the predicted cell type.
+
+        Args:
+            labelled (bool, optional): [description]. Defaults to True.
+        """        
+        self.model.eval()
+
+        latent_unlabelled = self.guide.quantiles([0.5])['w_sf'][0,:,:]
+        #latent_unlabelled = self.model.module.inference(self.g,self.g.ndata['gene'],'cpu',10*512,0)#.detach().numpy()
+        #print(latent_unlabelled.shape)
+        if self.model.supervised:
+            x_fr_group2fact = self.guide.quantiles([0.5])['x_fr_group2fact'][0,:,:]
+            print(x_fr_group2fact.shape)
+            prediction_unlabelled = latent_unlabelled@x_fr_group2fact
+            prediction_unlabelled = prediction_unlabelled.softmax(dim=-1)
+            self.prediction_unlabelled = prediction_unlabelled.detach().numpy()
+
+            np.save(self.folder+'/labels_unlabelled',self.prediction_unlabelled.argsort(axis=-1)[:,-1].astype('str'))
             #np.save(self.folder+'/probabilities_unlabelled',self.prediction_unlabelled)
 
         self.latent_unlabelled = latent_unlabelled.detach().numpy()
