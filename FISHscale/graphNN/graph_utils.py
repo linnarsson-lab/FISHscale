@@ -336,8 +336,8 @@ class GraphData(pl.LightningDataModule):
                         #exclude='self',
                         #reverse_eids=th.arange(self.g.num_edges()) ^ 1,
                         batch_size=self.batch_size,
-                        shuffle=True,
-                        drop_last=True,
+                        shuffle=False,
+                        drop_last=False,
                         num_workers=self.num_workers,
                         )
         return unlab

@@ -113,27 +113,30 @@ class SAGELightning(PyroModule):
 
         with obs_plate as ind:
             groups_per_embedding = 2
-            w_shape = groups_per_embedding*embedding
-            w_rate = th.ones_like(embedding)*groups_per_embedding
+            w_shape = 1/(th.ones([embedding.shape[1]])*groups_per_embedding)
+            w_rate = 1/embedding
             w_sf = pyro.sample(
                     "w_sf",
                     dist.Gamma(
                         w_shape,
                         w_rate,
-                    ),
+                    )#.to_event(1),
                 ) # (self.n_obs, self.n_factors)
 
-        mu = embedding @ x_fr_group2fact
+        mu = w_sf @ x_fr_group2fact
         mu = mu @ self.reference.T 
         alpha = 1/th.tensor(alpha_g_inverse).pow(2)
         alpha = th.ones_like(mu)*alpha
         rate = alpha/mu
 
         with obs_plate:
-            pyro.sample("data_target", dist.GammaPoisson(concentration=alpha, rate=rate), obs=x)
+            pyro.sample("data_target", 
+                dist.GammaPoisson(concentration=alpha, rate=rate)#.to_event(1)
+                ,obs=x
+            )
 
     def create_plates(self, x_data, idx):
-        return pyro.plate("obs_plate", size=self.n_obs,subsample=idx,dim=-2)
+        return pyro.plate("obs_plate", size=self.n_obs,dim=-2,subsample=idx)
 
     def training_step(self, batch, batch_idx):
         batch1 = batch#['unlabelled']
