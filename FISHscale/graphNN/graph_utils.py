@@ -271,7 +271,7 @@ class GraphData(pl.LightningDataModule):
         #self.guide = AutoGuideList(self.model)
         #self.guide.append(AutoNormal(poutine.block(self.model,expose_all=True, hide_all=False, hide=['test'],)
                    #,init_loc_fn=init_to_mean))
-        self.guide = AutoNormal(self.model,init_loc_fn=init_to_mean)
+        self.guide = self.model.guide
 
     def pyro_train(self, n_epochs=100):
         # Training loop.
@@ -280,8 +280,7 @@ class GraphData(pl.LightningDataModule):
         # For our purposes, however, 80 epochs of training is sufficient.
         # Training should take about 8 minutes on a GPU-equipped Colab instance.
         self.elbo = Trace_ELBO()
-        
-        svi = SVI(self.model, self.guide, AdamPyro({'lr':0.006}), self.elbo)
+        svi = SVI(self.model.model, self.guide, AdamPyro({'lr':0.006}), self.elbo)
 
         print('Training')
         for epoch in range(n_epochs):
@@ -673,16 +672,16 @@ class GraphData(pl.LightningDataModule):
         
         if self.model.supervised:
             #prediction_unlabelled = self.model.module.encoder.encoder_dict['CF'](latent_unlabelled).softmax(dim=-1)#.detach().numpy()
+            prediction_unlabelled =  self.model.module.decoder(latent_unlabelled)
             prediction_unlabelled = latent_unlabelled.softmax(dim=-1)
             #prediction_unlabelled = prediction_unlabelled
             #self.c_s = c_s.detach().numpy()
-            #self.prediction_unlabelled = prediction_unlabelled.detach().numpy()
-
-            #np.save(self.folder+'/labels_unlabelled',self.prediction_unlabelled.argsort(axis=-1)[:,-1].astype('str'))
+            self.prediction_unlabelled = prediction_unlabelled.detach().numpy()
+            np.save(self.folder+'/labels_unlabelled',self.prediction_unlabelled.argsort(axis=-1)[:,-1].astype('str'))
             #np.save(self.folder+'/probabilities_unlabelled',self.prediction_unlabelled)
 
         self.latent_unlabelled = latent_unlabelled.detach().numpy()
-        np.save(self.folder+'/latent_unlabelled',latent_unlabelled)
+        np.save(self.folder+'/latent_unlabelled',self.latent_unlabelled)
 
     def get_latents_pyro(self,labelled=True):
         """

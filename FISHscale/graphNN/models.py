@@ -32,7 +32,7 @@ class CrossEntropyLoss(nn.Module):
         #loss = F.binary_cross_entropy_with_logits(score, label.float())
         return loss, pos_loss, neg_loss
 
-class SAGELightning(PyroModule):
+class SAGELightning(nn.Module):
     def __init__(self,
                  in_feats,
                  n_hidden,
@@ -74,132 +74,44 @@ class SAGELightning(PyroModule):
             self.n_factors = self.module.n_classes
             self.n_obs= n_obs
 
-    def forward(self, x):
+    def model(self, x):
+        pyro.module("graph_predict", self.module.decoder)
         _, nids, mfgs = x
         x = mfgs[1].dstdata['ngh']
         mfgs = [mfg.int() for mfg in mfgs]
         batch_inputs_u = mfgs[0].srcdata['gene']
 
-        obs_plate = self.create_plates(x_data=x,idx=nids)
         # register PyTorch module `decoder` with Pyro
-        embedding = th.exp(self.module(mfgs, batch_inputs_u)+1e-6)
+        #embedding = self.module(mfgs, batch_inputs_u)
+        with pyro.plate("obs_plate", x.shape[0]):
 
-        hyp_alpha, hyp_beta = th.tensor(9.0),th.tensor(3.0)
-        
-        alpha_g_phi_hyp = pyro.sample("alpha_g_phi_hyp",
-                dist.Gamma(hyp_alpha, hyp_beta),
-        )
-        #print(alpha_g_phi_hyp.shape)
-        #print('alpha_g_phi_hyp',alpha_g_phi_hyp.shape, alpha_g_phi_hyp.event_shape)
+            z_loc = x.new_zeros(th.Size((x.shape[0], self.n_hidden)))
+            z_scale = x.new_ones(th.Size((x.shape[0], self.n_hidden)))
+            z = pyro.sample("data_target",
+                    dist.Normal(z_loc, z_scale).to_event(1)     
+                )
 
-        alpha_g_inverse = pyro.sample(
-            "alpha_g_inverse",
-            dist.Exponential(alpha_g_phi_hyp).expand([1, x.shape[1]]).to_event(2),
-        )  # (self.n_batch, self.n_vars)
-
-        #print('alpha_g_inverse',alpha_g_inverse.shape, alpha_g_inverse.batch_shape, alpha_g_inverse.event_shape)
-
-        k_r_factors_per_groups = pyro.sample(
-            "k_r_factors_per_groups",
-            dist.Gamma(self.factors_per_groups, th.ones((1,1))).expand([self.n_groups, 1]).to_event(2),
-        )  # (self.n_groups, 1) #n_groups=50
-
-        c2f_shape = k_r_factors_per_groups / self.n_hidden
-
-        x_fr_group2fact = pyro.sample(
-            "x_fr_group2fact",
-            dist.Gamma(c2f_shape, k_r_factors_per_groups).expand([self.n_groups, self.n_factors]).to_event(2),
-        )  # (self.n_groups, self.n_factors)
-
-        with obs_plate as ind:
-            groups_per_embedding = 2
-            w_shape = 1/(th.ones([embedding.shape[1]])*groups_per_embedding)
-            w_rate = 1/embedding
-            w_sf = pyro.sample(
-                    "w_sf",
-                    dist.Gamma(
-                        w_shape,
-                        w_rate,
-                    )#.to_event(1),
-                ) # (self.n_obs, self.n_factors)
-
-        mu = w_sf @ x_fr_group2fact
-        mu = mu @ self.reference.T 
-        alpha = 1/th.tensor(alpha_g_inverse).pow(2)
-        alpha = th.ones_like(mu)*alpha
-        rate = alpha/mu
-
-        with obs_plate:
-            pyro.sample("data_target", 
-                dist.GammaPoisson(concentration=alpha, rate=rate)#.to_event(1)
-                ,obs=x
-            )
-
-    def create_plates(self, x_data, idx):
-        return pyro.plate("obs_plate", size=self.n_obs,dim=-2,subsample=idx)
-
-    def training_step(self, batch, batch_idx):
-        batch1 = batch#['unlabelled']
-        _, pos_graph, neg_graph, mfgs = batch1
-        mfgs = [mfg.int() for mfg in mfgs]
-        batch_inputs_u = mfgs[0].srcdata['gene']
-        embedding = self.module(mfgs, batch_inputs_u)
-        bu = batch_inputs_u[pos_graph.nodes()]
-        
-        if self.supervised:
-            #class_ = self.module.encoder.encoder_dict['CF'](embedding)
-            probabilities_unlab = F.softmax(embedding, dim=-1)
-            graph_loss,pos, neg = self.loss_fcn(embedding, pos_graph, neg_graph)
-            local_nghs = mfgs[0].srcdata['ngh'][pos_graph.nodes()]
-
-            input_local_ngh = th.log(local_nghs+1)
-            alpha = 1/th.exp(self.module.encoder.a_d(input_local_ngh)).mean(axis=0)#.pow(2)
-            #m_g = th.exp(self.module.encoder.m_g(local_nghs)+1e-6)
-            y_s = F.softplus(self.module.encoder.y_s(input_local_ngh))
-            c_s = F.softplus(self.module.encoder.c_s(input_local_ngh))
-
-            mu = (probabilities_unlab) @ self.reference.T 
-            mu = mu * y_s
+            rate, shape = self.module.decoder(z)
+            mu = rate @ self.reference.T
+            alpha = 1/shape
             rate = alpha/mu
 
-            NB = GammaPoisson(concentration=alpha,rate=rate)#.log_prob(local_nghs).mean(axis=-1).mean()
-            nb_loss = -NB.log_prob(local_nghs).mean(axis=-1).mean()
-        
-            # Regularize by local nodes
-            # Add Predicted same class nodes together.
-            if type(self.dist) != type(None):
-                #option 2
-                p = th.ones(probabilities_unlab.shape[0]) @ probabilities_unlab
-                p = th.log(p/p.sum())
-                loss_dist = self.kl(p,self.dist.to(self.device)).sum()
+            pyro.sample("obs", 
+                dist.GammaPoisson(concentration=alpha, rate=rate).to_event(1)
+                ,obs=x
+            )
+    
+    def guide(self,x):
+        pyro.module("graph_predict", self.module)
+        _, nids, mfgs = x
+        x = mfgs[1].dstdata['ngh']
+        mfgs = [mfg.int() for mfg in mfgs]
+        batch_inputs_u = mfgs[0].srcdata['gene']
+        # register PyTorch module `decoder` with Pyro
 
-                '''p = local_nghs.sum(axis=1) @ probabilities_unlab
-                #p = th.ones(probabilities_unlab.shape[0]) @ probabilities_unlab
-                #option 1 
-                loss_dist = []
-                sum_nghs = local_nghs.sum(axis=0)
-                for n in range(p.shape[0]):
-                    c = int((probabilities_unlab.argsort(dim=-1)[:,-1] == n).sum()) + 1
-                    #print(c)
-                    m_cell = Multinomial(c, probs=self.dist.to(self.device))
-
-                    loss_dist.append(- Multinomial(total_count=c, probs=p/p.sum()).log_prob(m_cell.sample())/c)
-                loss_dist = th.stack(loss_dist).mean()'''
-            else:
-                loss_dist = 0
-
-            loss = graph_loss + nb_loss + loss_dist
-            self.log('train_loss', loss, prog_bar=True, on_step=True, on_epoch=True)
-            self.log('Loss Dist', loss_dist, prog_bar=True, on_step=True, on_epoch=True)
-            self.log('nb_loss', nb_loss, prog_bar=True, on_step=True, on_epoch=True)
-            self.log('Graph Loss', graph_loss, prog_bar=False, on_step=True, on_epoch=False)
-
-        else:
-            graph_loss,pos, neg = self.loss_fcn(embedding, pos_graph, neg_graph)
-            loss = graph_loss
-            self.log('train_loss', loss, prog_bar=True, on_step=True, on_epoch=True)
-        
-        return loss
+        with pyro.plate("data", x.shape[0]):
+            z_loc, z_scale = self.module(mfgs, batch_inputs_u)
+            z = pyro.sample("z", dist.Normal(z_loc, z_scale).to_event(1))
 
     def validation_step(self, batch, batch_idx):
         input_nodes, output_nodes, mfgs = batch
@@ -213,7 +125,7 @@ class SAGELightning(PyroModule):
         return optimizer
 
 
-class SAGE(PyroModule):
+class SAGE(nn.Module):
     '''def __init__(self, in_feats, n_hidden, n_classes, n_layers, activation, dropout):
         super().__init__()
         self.init(in_feats, n_hidden, n_classes, n_layers, activation, dropout)'''
@@ -243,9 +155,7 @@ class SAGE(PyroModule):
                                 supervised,
                                 aggregator)
 
-        self.encoder_latent = nn.Linear(n_hidden,n_hidden)
-        #self.encoder_latent.weight = PyroSample(dist.Normal(0., 1.).expand([n_hidden,n_hidden]).to_event(2))
-        #self.encoder_latent.bias = PyroSample(dist.Normal(0., 10.).expand([n_hidden]).to_event(1))
+        self.decoder = Decoder(n_classes,n_hidden)
 
     def forward(self, blocks, x):
         h = th.log(x+1)   
@@ -256,9 +166,12 @@ class SAGE(PyroModule):
             else:
                 h = layer(block, h,).mean(1)
         
-        h = self.encoder_latent(h)
-        #h = self.encoder.encoder_dict['FC'][l](h)
-        return h
+        hidden = self.encoder.softplus(h)
+        # then return a mean vector and a (positive) square root covariance
+        # each of size batch_size x z_dim
+        z_loc = self.encoder.fc21(hidden)
+        z_scale = th.exp(self.encoder.fc22(hidden))
+        return z_loc, z_scale
 
     def inference(self, g, x, device, batch_size, num_workers):
         """
@@ -306,7 +219,12 @@ class SAGE(PyroModule):
                     #h = self.encoder.encoder_dict['FC'][l](h)
 
                 if l == 1:
-                    h = self.encoder_latent(h)
+                    hidden = self.encoder.softplus(h)
+                    # then return a mean vector and a (positive) square root covariance
+                    # each of size batch_size x z_dim
+                    h = self.encoder.fc21(hidden)
+                    #z_scale = th.exp(self.encoder.fc22(hidden))
+                    
 
                 #    h = self.mean_encoder(h)#, th.exp(self.var_encoder(h))+1e-4 )
                 y[output_nodes] = h.cpu().detach()#.numpy()
@@ -315,67 +233,103 @@ class SAGE(PyroModule):
         return y
 
 class Encoder(nn.Module):
-        def __init__(
-            self,
-            in_feats,
-            n_hidden,
-            n_classes,
-            n_layers,
-            supervised,
-            aggregator,
-            ):
-            super().__init__()
-        
-            layers = nn.ModuleList()
+    def __init__(
+        self,
+        in_feats,
+        n_hidden,
+        n_classes,
+        n_layers,
+        supervised,
+        aggregator,
+        ):
+        super().__init__()
+    
+        layers = nn.ModuleList()
 
-            if supervised:
-                self.norm = F.normalize#DiffGroupNorm(n_hidden,n_classes,None) 
-                #n_hidden = n_classes
+        if supervised:
+            self.norm = F.normalize#DiffGroupNorm(n_hidden,n_classes,None) 
+            #n_hidden = n_classes
+        else:
+            self.norm = F.normalize#DiffGroupNorm(n_hidden,20)
+
+
+        for i in range(0,n_layers-1):
+            if i > 0:
+                in_feats = n_hidden
+                x = 0.2
             else:
-                self.norm = F.normalize#DiffGroupNorm(n_hidden,20) 
-
-            for i in range(0,n_layers-1):
-                if i > 0:
-                    in_feats = n_hidden
-                    x = 0.2
-                else:
-                    x = 0
-
-                if aggregator == 'attentional':
-                    layers.append(dglnn.GATConv(in_feats, 
-                                                n_hidden, 
-                                                num_heads=4,
-                                                feat_drop=x,
-                                                activation=F.relu,
-                                                norm=self.norm,
-                                                #allow_zero_in_degree=False
-                                                ))
-
-                else:
-                    layers.append(dglnn.SAGEConv(in_feats, 
-                                                n_hidden, 
-                                                aggregator_type=aggregator,
-                                                #feat_drop=0.2,
-                                                activation=F.relu,
-                                                norm=self.norm,
-                                                ))
+                x = 0
 
             if aggregator == 'attentional':
-                layers.append(dglnn.GATConv(n_hidden, 
+                layers.append(dglnn.GATConv(in_feats, 
                                             n_hidden, 
-                                            num_heads=4, 
-                                            feat_drop=0.2,
-                                            #activation=F.relu,
+                                            num_heads=4,
+                                            feat_drop=x,
+                                            activation=F.relu,
+                                            norm=self.norm,
                                             #allow_zero_in_degree=False
                                             ))
 
             else:
-                layers.append(dglnn.SAGEConv(n_hidden, 
-                                                n_hidden, 
-                                                aggregator_type=aggregator,
-                                                feat_drop=0.2,
-                                                #activation=F.relu,
-                                                #norm=F.normalize
-                                                ))
+                layers.append(dglnn.SAGEConv(in_feats, 
+                                            n_hidden, 
+                                            aggregator_type=aggregator,
+                                            #feat_drop=0.2,
+                                            activation=F.relu,
+                                            norm=self.norm,
+                                            ))
 
-            self.encoder_dict = nn.ModuleDict({'GS': layers})
+        if aggregator == 'attentional':
+            layers.append(dglnn.GATConv(n_hidden, 
+                                        n_hidden, 
+                                        num_heads=4, 
+                                        feat_drop=0.2,
+                                        #activation=F.relu,
+                                        #allow_zero_in_degree=False
+                                        ))
+
+        else:
+            layers.append(dglnn.SAGEConv(n_hidden, 
+                                            n_hidden, 
+                                            aggregator_type=aggregator,
+                                            feat_drop=0.2,
+                                            #activation=F.relu,
+                                            #norm=F.normalize
+                                            ))
+
+        self.encoder_dict = nn.ModuleDict({'GS': layers})
+        self.fc21 = nn.Linear(n_hidden, n_hidden)
+        self.fc22 = nn.Linear(n_hidden, n_hidden)
+        # setup the non-linearities
+        self.softplus = nn.Softplus() 
+
+
+class Decoder(nn.Module):
+    def __init__(
+        self,
+        in_feats,
+        n_hidden,
+        
+        ):
+        super().__init__()
+
+        self.fc = nn.Sequential(
+                    nn.Linear(n_hidden, n_hidden),
+                    nn.BatchNorm1d(n_hidden),
+                    nn.ReLU()      
+                )
+        self.softplus =  nn.Softplus()
+    
+        self.rate = nn.Linear(n_hidden, in_feats)
+        self.shape = nn.Linear(n_hidden, 33)
+
+    def forward(self, z):
+        # define the forward computation on the latent z
+        # first compute the hidden units
+
+        hidden = self.softplus(self.fc(z))
+        # return the parameter for the output Bernoulli
+        # each is of size batch_size x 784
+        rate = self.softplus(self.rate(hidden))
+        shape = self.softplus(self.shape(hidden))
+        return rate, shape
