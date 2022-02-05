@@ -379,7 +379,7 @@ class GraphData(pl.LightningDataModule):
                         th.arange(self.g.num_nodes(),),
                         dgl.dataloading.MultiLayerNeighborSampler([-1,-1]),
                         device=self.device,
-                        batch_size=self.batch_size*10,
+                        batch_size=self.batch_size*1,
                         shuffle=False,
                         drop_last=False,
                         num_workers=self.num_workers,
