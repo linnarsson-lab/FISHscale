@@ -101,7 +101,7 @@ class SAGELightning(nn.Module):
 
             rate, shape = self.module.decoder(z)
             mu = rate @ self.reference.T
-            alpha = th.tensor(1.)
+            alpha = 1/alpha_g_inverse.pow(2)
             rate = alpha/mu
 
             pyro.sample("obs", 
