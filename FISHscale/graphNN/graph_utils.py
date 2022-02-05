@@ -280,7 +280,7 @@ class GraphData(pl.LightningDataModule):
         # For our purposes, however, 80 epochs of training is sufficient.
         # Training should take about 8 minutes on a GPU-equipped Colab instance.
         self.elbo = Trace_ELBO()
-        svi = SVI(self.model.model, self.guide, AdamPyro({'lr':0.006}), self.elbo)
+        svi = SVI(self.model.model, self.guide, AdamPyro({'lr':1e-4}), self.elbo)
 
         print('Training')
         for epoch in range(n_epochs):
@@ -696,7 +696,7 @@ class GraphData(pl.LightningDataModule):
         """        
         self.model.eval()
 
-        latent_unlabelled = self.guide.quantiles([0.5])['w_sf'][0,:,:]
+        '''latent_unlabelled = self.guide.quantiles([0.5])['w_sf'][0,:,:]
         #latent_unlabelled = self.model.module.inference(self.g,self.g.ndata['gene'],'cpu',10*512,0)#.detach().numpy()
         #print(latent_unlabelled.shape)
         if self.model.supervised:
@@ -710,7 +710,14 @@ class GraphData(pl.LightningDataModule):
             #np.save(self.folder+'/probabilities_unlabelled',self.prediction_unlabelled)
 
         self.latent_unlabelled = latent_unlabelled.detach().numpy()
-        np.save(self.folder+'/latent_unlabelled',latent_unlabelled)
+        np.save(self.folder+'/latent_unlabelled',latent_unlabelled)'''
+
+        latent = []
+        for _,_,blocks in tqdm(self.validation_dataloader_pyro()):
+            x = blocks[0].srcdata['gene']
+            z,_ = self.model.module.encoder(x, blocks)
+            latent.append(z.detach().numpy())
+        self.latent_unlabelled = np.concatenate(latent)
 
 
     def get_umap(self,random_n=50000,n_clusters=50):

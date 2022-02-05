@@ -75,11 +75,11 @@ class SAGELightning(nn.Module):
             self.n_obs= n_obs
 
     def model(self, x):
-        pyro.module("graph_predict", self.module.decoder)
+        pyro.module("decoder", self.module.decoder)
         _, nids, mfgs = x
         x = mfgs[1].dstdata['ngh']
         mfgs = [mfg.int() for mfg in mfgs]
-        batch_inputs_u = mfgs[0].srcdata['gene']
+        batch_inputs = mfgs[0].srcdata['gene']
 
         # register PyTorch module `decoder` with Pyro
         #embedding = self.module(mfgs, batch_inputs_u)
@@ -92,7 +92,7 @@ class SAGELightning(nn.Module):
                 )
 
             rate, shape = self.module.decoder(z)
-            mu = rate @ self.reference.T
+            mu = rate #@ self.reference.T
             alpha = 1/shape
             rate = alpha/mu
 
@@ -102,15 +102,16 @@ class SAGELightning(nn.Module):
             )
     
     def guide(self,x):
-        pyro.module("graph_predict", self.module)
+        pyro.module("graph_predict", self.module.encoder)
         _, nids, mfgs = x
         x = mfgs[1].dstdata['ngh']
         mfgs = [mfg.int() for mfg in mfgs]
-        batch_inputs_u = mfgs[0].srcdata['gene']
+        batch_inputs = mfgs[0].srcdata['gene']
         # register PyTorch module `decoder` with Pyro
 
         with pyro.plate("data", x.shape[0]):
-            z_loc, z_scale = self.module(mfgs, batch_inputs_u)
+            #z_loc, z_scale = self.module(mfgs, batch_inputs_u)
+            z_loc, z_scale = self.module.encoder(batch_inputs,mfgs)
             z = pyro.sample("z", dist.Normal(z_loc, z_scale).to_event(1))
 
     def validation_step(self, batch, batch_idx):
@@ -126,10 +127,6 @@ class SAGELightning(nn.Module):
 
 
 class SAGE(nn.Module):
-    '''def __init__(self, in_feats, n_hidden, n_classes, n_layers, activation, dropout):
-        super().__init__()
-        self.init(in_feats, n_hidden, n_classes, n_layers, activation, dropout)'''
-
     def __init__(self, 
                 in_feats, 
                 n_hidden, 
@@ -155,23 +152,11 @@ class SAGE(nn.Module):
                                 supervised,
                                 aggregator)
 
-        self.decoder = Decoder(n_classes,n_hidden)
+        self.decoder = Decoder(in_feats,n_hidden)
 
-    def forward(self, blocks, x):
-        h = th.log(x+1)   
-        for l, (layer, block) in enumerate(zip(self.encoder.encoder_dict['GS'], blocks)):
-            if self.aggregator != 'attentional':
-                h = layer(block, h,)#.mean(1)
-                #h = self.encoder.encoder_dict['FC'][l](h)
-            else:
-                h = layer(block, h,).mean(1)
-        
-        hidden = self.encoder.softplus(h)
-        # then return a mean vector and a (positive) square root covariance
-        # each of size batch_size x z_dim
-        z_loc = self.encoder.fc21(hidden)
-        z_scale = th.exp(self.encoder.fc22(hidden))
-        return z_loc, z_scale
+    def inference_(self, x):
+
+        z_loc,z_scale = self.encoder(x)
 
     def inference(self, g, x, device, batch_size, num_workers):
         """
@@ -204,7 +189,7 @@ class SAGE(nn.Module):
                 num_workers=num_workers)
 
             for input_nodes, output_nodes, blocks in tqdm.tqdm(dataloader):
-                
+  
                 block = blocks[0]#.srcdata['gene']
                 block = block.int()
                 if l == 0:
@@ -219,10 +204,10 @@ class SAGE(nn.Module):
                     #h = self.encoder.encoder_dict['FC'][l](h)
 
                 if l == 1:
-                    hidden = self.encoder.softplus(h)
+                    h,_ = self.encoder(h)
                     # then return a mean vector and a (positive) square root covariance
                     # each of size batch_size x z_dim
-                    h = self.encoder.fc21(hidden)
+
                     #z_scale = th.exp(self.encoder.fc22(hidden))
                     
 
@@ -243,10 +228,115 @@ class Encoder(nn.Module):
         aggregator,
         ):
         super().__init__()
-    
+        self.aggregator = aggregator
         layers = nn.ModuleList()
-
         if supervised:
+            self.norm = F.normalize#DiffGroupNorm(n_hidden,n_classes,None) 
+            #n_hidden = n_classes
+        else:
+            self.norm = F.normalize#DiffGroupNorm(n_hidden,20)
+
+        for i in range(0,n_layers-1):
+            if i > 0:
+                in_feats = n_hidden
+                x = 0.2
+            else:
+                x = 0
+
+            if aggregator == 'attentional':
+                layers.append(dglnn.GATConv(in_feats, 
+                                            n_hidden, 
+                                            num_heads=4,
+                                            feat_drop=x,
+                                            activation=F.relu,
+                                            norm=self.norm,
+                                            #allow_zero_in_degree=False
+                                            ))
+
+            else:
+                layers.append(dglnn.SAGEConv(in_feats, 
+                                            n_hidden, 
+                                            aggregator_type=aggregator,
+                                            #feat_drop=0.2,
+                                            activation=F.relu,
+                                            norm=self.norm,
+                                            ))
+
+        if aggregator == 'attentional':
+            layers.append(dglnn.GATConv(n_hidden, 
+                                        n_hidden, 
+                                        num_heads=4, 
+                                        feat_drop=0.2,
+                                        #activation=F.relu,
+                                        #allow_zero_in_degree=False
+                                        ))
+
+        else:
+            layers.append(dglnn.SAGEConv(n_hidden, 
+                                            n_hidden, 
+                                            aggregator_type=aggregator,
+                                            feat_drop=0.2,
+                                            #activation=F.relu,
+                                            #norm=F.normalize
+                                            ))
+
+        self.encoder_dict = nn.ModuleDict({'GS': layers})
+        self.fc = nn.Sequential(
+                nn.Linear(n_hidden, n_hidden),
+                nn.BatchNorm1d(n_hidden),
+                nn.ReLU()      
+            )
+        self.fc21 = nn.Linear(n_hidden, n_hidden)
+        self.fc22 = nn.Linear(n_hidden, n_hidden)
+        self.softplus = nn.Softplus()
+    
+    def forward(self,x, blocks=None):
+        h = th.log(x+1)   
+        for l, (layer, block) in enumerate(zip(self.encoder_dict['GS'], blocks)):
+            if self.aggregator != 'attentional':
+                h = layer(block, h,)
+            else:
+                h = layer(block, h,).mean(1)
+        h = self.fc(h)
+        h = self.softplus(h)
+        # then return a mean vector and a (positive) square root covariance
+        # each of size batch_size x z_dim
+        z_loc = self.fc21(h)
+        z_scale = th.exp(self.fc22(h))
+        return z_loc, z_scale
+
+class Decoder(nn.Module):
+    def __init__(
+        self,
+        in_feats,
+        n_hidden,
+        
+        ):
+        super().__init__()
+
+        self.fc = nn.Sequential(
+                    nn.Linear(n_hidden, n_hidden),
+                    nn.BatchNorm1d(n_hidden),
+                    nn.ReLU()      
+                )
+        self.softplus =  nn.Softplus()
+    
+        self.rate = nn.Linear(n_hidden, in_feats)
+        self.shape = nn.Linear(n_hidden, in_feats)
+
+    def forward(self, z):
+        # define the forward computation on the latent z
+        # first compute the hidden units
+
+        hidden = self.softplus(self.fc(z))
+        # return the parameter for the output Bernoulli
+        # each is of size batch_size x 784
+        rate = self.softplus(self.rate(hidden))
+        shape = self.softplus(self.shape(hidden))
+        return rate, shape
+
+
+"""if supervised:
             self.norm = F.normalize#DiffGroupNorm(n_hidden,n_classes,None) 
             #n_hidden = n_classes
         else:
@@ -297,39 +387,5 @@ class Encoder(nn.Module):
                                             #norm=F.normalize
                                             ))
 
-        self.encoder_dict = nn.ModuleDict({'GS': layers})
-        self.fc21 = nn.Linear(n_hidden, n_hidden)
-        self.fc22 = nn.Linear(n_hidden, n_hidden)
-        # setup the non-linearities
-        self.softplus = nn.Softplus() 
-
-
-class Decoder(nn.Module):
-    def __init__(
-        self,
-        in_feats,
-        n_hidden,
-        
-        ):
-        super().__init__()
-
-        self.fc = nn.Sequential(
-                    nn.Linear(n_hidden, n_hidden),
-                    nn.BatchNorm1d(n_hidden),
-                    nn.ReLU()      
-                )
-        self.softplus =  nn.Softplus()
-    
-        self.rate = nn.Linear(n_hidden, in_feats)
-        self.shape = nn.Linear(n_hidden, 33)
-
-    def forward(self, z):
-        # define the forward computation on the latent z
-        # first compute the hidden units
-
-        hidden = self.softplus(self.fc(z))
-        # return the parameter for the output Bernoulli
-        # each is of size batch_size x 784
-        rate = self.softplus(self.rate(hidden))
-        shape = self.softplus(self.shape(hidden))
-        return rate, shape
+    self.encoder_dict = nn.ModuleDict({'GS': layers})
+"""
