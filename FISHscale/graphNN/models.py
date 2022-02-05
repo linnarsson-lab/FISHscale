@@ -81,8 +81,16 @@ class SAGELightning(nn.Module):
         mfgs = [mfg.int() for mfg in mfgs]
         batch_inputs = mfgs[0].srcdata['gene']
 
-        # register PyTorch module `decoder` with Pyro
-        #embedding = self.module(mfgs, batch_inputs_u)
+        hyp_alpha = th.tensor(9.0)
+        hyp_beta = th.tensor(3.0)
+        alpha_g_phi_hyp = pyro.sample("alpha_g_phi_hyp",
+                dist.Gamma(hyp_alpha, hyp_beta),
+        )
+        alpha_g_inverse = pyro.sample(
+            "alpha_g_inverse",
+            dist.Exponential(alpha_g_phi_hyp).expand([1, x.shape[1]]).to_event(2),
+        )  # (self.n_batch, self.n_vars)
+
         with pyro.plate("obs_plate", x.shape[0]):
 
             z_loc = x.new_zeros(th.Size((x.shape[0], self.n_hidden)))
@@ -108,6 +116,17 @@ class SAGELightning(nn.Module):
         mfgs = [mfg.int() for mfg in mfgs]
         batch_inputs = mfgs[0].srcdata['gene']
         # register PyTorch module `decoder` with Pyro
+    
+        hyp_alpha= pyro.param('hyp_alpha',th.tensor(9.0))
+        hyp_beta = pyro.param('hyp_beta', th.tensor(3.0))
+        
+        alpha_g_phi_hyp = pyro.sample("alpha_g_phi_hyp",
+                dist.Gamma(hyp_alpha, hyp_beta),
+        )
+        alpha_g_inverse = pyro.sample(
+            "alpha_g_inverse",
+            dist.Exponential(alpha_g_phi_hyp).expand([1, x.shape[1]]).to_event(2),
+        )  # (self.n_batch, self.n_vars)
 
         with pyro.plate("obs_plate", x.shape[0]):
             #z_loc, z_scale = self.module(mfgs, batch_inputs_u)
