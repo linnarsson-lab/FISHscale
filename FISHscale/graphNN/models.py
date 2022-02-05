@@ -120,7 +120,7 @@ class SAGELightning(PyroModule):
                     dist.Gamma(
                         w_shape,
                         w_rate,
-                    )#.to_event(1),
+                    ).to_event(1),
                 ) # (self.n_obs, self.n_factors)
 
         mu = w_sf @ x_fr_group2fact
@@ -131,12 +131,12 @@ class SAGELightning(PyroModule):
 
         with obs_plate:
             pyro.sample("data_target", 
-                dist.GammaPoisson(concentration=alpha, rate=rate)#.to_event(1)
+                dist.GammaPoisson(concentration=alpha, rate=rate).to_event(1)
                 ,obs=x
             )
 
     def create_plates(self, x_data, idx):
-        return pyro.plate("obs_plate", size=self.n_obs,dim=-2,subsample=idx)
+        return pyro.plate("obs_plate", size=self.n_obs,dim=-1,subsample=idx)
 
     def training_step(self, batch, batch_idx):
         batch1 = batch#['unlabelled']
@@ -256,7 +256,7 @@ class SAGE(PyroModule):
             else:
                 h = layer(block, h,).mean(1)
         
-        h = self.encoder_latent(h)
+        '''h = self.encoder_latent(h)'''
         #h = self.encoder.encoder_dict['FC'][l](h)
         return h
 
@@ -305,8 +305,8 @@ class SAGE(PyroModule):
                     h = layer(block, h,).mean(1)
                     #h = self.encoder.encoder_dict['FC'][l](h)
 
-                if l == 1:
-                    h = self.encoder_latent(h)
+                '''if l == 1:
+                    h = self.encoder_latent(h)'''
 
                 #    h = self.mean_encoder(h)#, th.exp(self.var_encoder(h))+1e-4 )
                 y[output_nodes] = h.cpu().detach()#.numpy()

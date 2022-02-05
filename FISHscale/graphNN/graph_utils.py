@@ -26,7 +26,7 @@ from pyro.optim import MultiStepLR
 from torch.optim import Adam
 from pyro.optim import Adam as AdamPyro
 from pyro.infer.autoguide import init_to_mean
-from pyro.infer import SVI, config_enumerate, Trace_ELBO
+from pyro.infer import SVI, config_enumerate, Trace_ELBO, JitTrace_ELBO
 from pyro.infer.autoguide import AutoDiagonalNormal, AutoGuideList, AutoNormal, AutoDelta
 
 
@@ -268,20 +268,19 @@ class GraphData(pl.LightningDataModule):
         # Setup a variational objective for gradient-based learning.
         # Note we use TraceEnum_ELBO in order to leverage Pyro's machinery
         # for automatic enumeration of the discrete latent variable y.
-        #self.guide = AutoGuideList(self.model)
-        #self.guide.append(AutoNormal(poutine.block(self.model,expose_all=True, hide_all=False, hide=['test'],)
-                   #,init_loc_fn=init_to_mean))
-        self.guide = AutoNormal(self.model,init_loc_fn=init_to_mean)
+        self.guide = AutoGuideList(self.model)
+        self.guide.append(AutoNormal(poutine.block(self.model,expose_all=True, hide_all=False, hide=['test'],)
+                   ,))
+        #self.guide = AutoNormal(self.model)
 
     def pyro_train(self, n_epochs=100):
         # Training loop.
         # We train for 80 epochs, although this isn't enough to achieve full convergence.
         # For optimal results it is necessary to tweak the optimization parameters.
         # For our purposes, however, 80 epochs of training is sufficient.
-        # Training should take about 8 minutes on a GPU-equipped Colab instance.
-        self.elbo = Trace_ELBO()
+        # Training should take about 8 minutes on a GPU-equipped Colab instance
         
-        svi = SVI(self.model, self.guide, AdamPyro({'lr':0.006}), self.elbo)
+        svi = SVI(self.model, self.guide, AdamPyro({'lr':1e-3}), Trace_ELBO())
 
         print('Training')
         for epoch in range(n_epochs):
