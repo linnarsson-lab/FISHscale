@@ -87,13 +87,13 @@ class SAGELightning(nn.Module):
 
             z_loc = x.new_zeros(th.Size((x.shape[0], self.n_hidden)))
             z_scale = x.new_ones(th.Size((x.shape[0], self.n_hidden)))
-            z = pyro.sample("data_target",
+            z = pyro.sample("z",
                     dist.Normal(z_loc, z_scale).to_event(1)     
                 )
 
             rate, shape = self.module.decoder(z)
-            mu = rate #@ self.reference.T
-            alpha = 1/shape
+            mu = rate @ self.reference.T
+            alpha = th.tensor(1.)
             rate = alpha/mu
 
             pyro.sample("obs", 
@@ -109,7 +109,7 @@ class SAGELightning(nn.Module):
         batch_inputs = mfgs[0].srcdata['gene']
         # register PyTorch module `decoder` with Pyro
 
-        with pyro.plate("data", x.shape[0]):
+        with pyro.plate("obs_plate", x.shape[0]):
             #z_loc, z_scale = self.module(mfgs, batch_inputs_u)
             z_loc, z_scale = self.module.encoder(batch_inputs,mfgs)
             z = pyro.sample("z", dist.Normal(z_loc, z_scale).to_event(1))
@@ -152,70 +152,10 @@ class SAGE(nn.Module):
                                 supervised,
                                 aggregator)
 
-        self.decoder = Decoder(in_feats,n_hidden)
+        self.decoder = Decoder(n_classes,n_hidden)
 
     def inference_(self, x):
-
         z_loc,z_scale = self.encoder(x)
-
-    def inference(self, g, x, device, batch_size, num_workers):
-        """
-        Inference with the GraphSAGE model on full neighbors (i.e. without neighbor sampling).
-        g : the entire graph.
-        x : the input of entire node set.
-        The inference code is written in a fashion that it could handle any number of nodes and
-        layers.
-        """
-        # During inference with sampling, multi-layer blocks are very inefficient because
-        # lots of computations in the first few layers are repeated.
-        # Therefore, we compute the representation of all nodes layer by layer.  The nodes
-        # on each layer are of course splitted in batches.
-        # TODO: can we standardize this?
-        self.eval()
-        for l, layer in enumerate(self.encoder.encoder_dict['GS']):
-            if l ==  0:
-                y = th.zeros(g.num_nodes(), self.n_hidden) #if not self.supervised else th.zeros(g.num_nodes(), self.n_classes)
-            else: 
-                y = th.zeros(g.num_nodes(), self.n_hidden)
-
-            sampler = dgl.dataloading.MultiLayerFullNeighborSampler(1)
-            dataloader = dgl.dataloading.NodeDataLoader(
-                g,
-                th.arange(g.num_nodes()),#.to(g.device),
-                sampler,
-                batch_size=batch_size,
-                shuffle=False,
-                drop_last=False,
-                num_workers=num_workers)
-
-            for input_nodes, output_nodes, blocks in tqdm.tqdm(dataloader):
-  
-                block = blocks[0]#.srcdata['gene']
-                block = block.int()
-                if l == 0:
-                    h = th.log(x[input_nodes]+1)#.to(device)
-                else:
-                    h = x[input_nodes]
-
-                if self.aggregator != 'attentional':
-                    h = layer(block, h,)
-                else:
-                    h = layer(block, h,).mean(1)
-                    #h = self.encoder.encoder_dict['FC'][l](h)
-
-                if l == 1:
-                    h,_ = self.encoder(h)
-                    # then return a mean vector and a (positive) square root covariance
-                    # each of size batch_size x z_dim
-
-                    #z_scale = th.exp(self.encoder.fc22(hidden))
-                    
-
-                #    h = self.mean_encoder(h)#, th.exp(self.var_encoder(h))+1e-4 )
-                y[output_nodes] = h.cpu().detach()#.numpy()
-            x = y
-    
-        return y
 
 class Encoder(nn.Module):
     def __init__(

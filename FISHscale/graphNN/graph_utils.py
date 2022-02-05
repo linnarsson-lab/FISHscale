@@ -280,7 +280,7 @@ class GraphData(pl.LightningDataModule):
         # For our purposes, however, 80 epochs of training is sufficient.
         # Training should take about 8 minutes on a GPU-equipped Colab instance.
         self.elbo = Trace_ELBO()
-        svi = SVI(self.model.model, self.guide, AdamPyro({'lr':1e-4}), self.elbo)
+        svi = SVI(self.model.model, self.guide, AdamPyro({'lr':1e-3}), self.elbo)
 
         print('Training')
         for epoch in range(n_epochs):
@@ -377,11 +377,11 @@ class GraphData(pl.LightningDataModule):
         validation = dgl.dataloading.NodeDataLoader(
                         self.g,
                         th.arange(self.g.num_nodes(),),
-                        self.sampler,
+                        dgl.dataloading.MultiLayerNeighborSampler([-1,-1]),
                         device=self.device,
-                        batch_size=self.batch_size,
-                        shuffle=True,
-                        drop_last=True,
+                        batch_size=self.batch_size*10,
+                        shuffle=False,
+                        drop_last=False,
                         num_workers=self.num_workers,
                         )
         return validation
@@ -713,12 +713,19 @@ class GraphData(pl.LightningDataModule):
         np.save(self.folder+'/latent_unlabelled',latent_unlabelled)'''
 
         latent = []
+        prediction_unlabelled = []
         for _,_,blocks in tqdm(self.validation_dataloader_pyro()):
+            #x = blocks[0].srcdata['gene']
             x = blocks[0].srcdata['gene']
             z,_ = self.model.module.encoder(x, blocks)
+            mu,_ = self.model.module.decoder(z)
             latent.append(z.detach().numpy())
+            prediction_unlabelled.append(mu)
+        
         self.latent_unlabelled = np.concatenate(latent)
-
+        prediction_unlabelled = th.concat(prediction_unlabelled)
+        print(prediction_unlabelled.shape)
+        self.prediction_unlabelled = prediction_unlabelled.softmax(dim=-1).detach().numpy()
 
     def get_umap(self,random_n=50000,n_clusters=50):
         import umap
