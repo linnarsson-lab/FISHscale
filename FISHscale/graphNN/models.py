@@ -248,6 +248,8 @@ class Encoder(nn.Module):
         self.fc21 = nn.Linear(n_hidden, n_hidden)
         self.fc22 = nn.Linear(n_hidden, n_hidden)
         self.softplus = nn.Softplus()
+
+    
     
     def forward(self,x, blocks=None):
         h = th.log(x+1)   
