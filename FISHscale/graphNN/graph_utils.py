@@ -264,7 +264,13 @@ class GraphData(pl.LightningDataModule):
             stopping_threshold=0.35,
             )
 
-    def pyro_guide(self):
+    def pyro_train(self, n_epochs=100):
+        # Training loop.
+        # We train for 80 epochs, although this isn't enough to achieve full convergence.
+        # For optimal results it is necessary to tweak the optimization parameters.
+        # For our purposes, however, 80 epochs of training is sufficient.
+        # Training should take about 8 minutes on a GPU-equipped Colab instance.
+        
         # Setup a variational objective for gradient-based learning.
         # Note we use TraceEnum_ELBO in order to leverage Pyro's machinery
         # for automatic enumeration of the discrete latent variable y.
@@ -272,15 +278,8 @@ class GraphData(pl.LightningDataModule):
         #self.guide.append(AutoNormal(poutine.block(self.model,expose_all=True, hide_all=False, hide=['test'],)
                    #,init_loc_fn=init_to_mean))
         self.guide = self.model.guide
-
-    def pyro_train(self, n_epochs=100):
-        # Training loop.
-        # We train for 80 epochs, although this isn't enough to achieve full convergence.
-        # For optimal results it is necessary to tweak the optimization parameters.
-        # For our purposes, however, 80 epochs of training is sufficient.
-        # Training should take about 8 minutes on a GPU-equipped Colab instance.
         self.elbo = Trace_ELBO()
-        svi = SVI(self.model.model, self.guide, AdamPyro({'lr':1e-3}), self.elbo)
+        svi = SVI(self.model.model, self.guide, AdamPyro({'lr':1e-4}), self.elbo)
 
         print('Training')
         for epoch in range(n_epochs):
@@ -695,36 +694,12 @@ class GraphData(pl.LightningDataModule):
             labelled (bool, optional): [description]. Defaults to True.
         """        
         self.model.eval()
+        self.latent_unlabelled, prediction_unlabelled = self.model.module.inference(self.g,
+                        self.g.ndata['gene'],
+                        'cpu',
+                        10*512,
+                        0)#.detach().numpy()
 
-        '''latent_unlabelled = self.guide.quantiles([0.5])['w_sf'][0,:,:]
-        #latent_unlabelled = self.model.module.inference(self.g,self.g.ndata['gene'],'cpu',10*512,0)#.detach().numpy()
-        #print(latent_unlabelled.shape)
-        if self.model.supervised:
-            x_fr_group2fact = self.guide.quantiles([0.5])['x_fr_group2fact'][0,:,:]
-            print(x_fr_group2fact.shape)
-            prediction_unlabelled = latent_unlabelled@x_fr_group2fact
-            prediction_unlabelled = prediction_unlabelled.softmax(dim=-1)
-            self.prediction_unlabelled = prediction_unlabelled.detach().numpy()
-
-            np.save(self.folder+'/labels_unlabelled',self.prediction_unlabelled.argsort(axis=-1)[:,-1].astype('str'))
-            #np.save(self.folder+'/probabilities_unlabelled',self.prediction_unlabelled)
-
-        self.latent_unlabelled = latent_unlabelled.detach().numpy()
-        np.save(self.folder+'/latent_unlabelled',latent_unlabelled)'''
-
-        latent = []
-        prediction_unlabelled = []
-        for _,_,blocks in tqdm(self.validation_dataloader_pyro()):
-            #x = blocks[0].srcdata['gene']
-            x = blocks[0].srcdata['gene']
-            z,_ = self.model.module.encoder(x, blocks)
-            mu,_ = self.model.module.decoder(z)
-            latent.append(z.detach().numpy())
-            prediction_unlabelled.append(mu)
-        
-        self.latent_unlabelled = np.concatenate(latent)
-        prediction_unlabelled = th.concat(prediction_unlabelled)
-        print(prediction_unlabelled.shape)
         self.prediction_unlabelled = prediction_unlabelled.softmax(dim=-1).detach().numpy()
 
     def get_umap(self,random_n=50000,n_clusters=50):
