@@ -93,10 +93,10 @@ class SAGELightning(nn.Module):
 
         with pyro.plate("obs_plate", x.shape[0]):
 
-            z_loc = x.new_zeros(th.Size((x.shape[0], self.n_hidden)))
-            z_scale = x.new_ones(th.Size((x.shape[0], self.n_hidden)))
+            z_loc = x.new_ones(th.Size((x.shape[0], self.n_hidden)))*10
+            z_scale = x.new_ones(th.Size((x.shape[0], self.n_hidden)))*2
             z = pyro.sample("z",
-                    dist.Normal(z_loc, z_scale).to_event(1)     
+                    dist.Normal(1/z_loc, z_scale/z_loc).to_event(1)     
                 )
 
             rate, shape = self.module.decoder(z)
@@ -131,7 +131,7 @@ class SAGELightning(nn.Module):
         with pyro.plate("obs_plate", x.shape[0]):
             #z_loc, z_scale = self.module(mfgs, batch_inputs_u)
             z_loc, z_scale = self.module.encoder(batch_inputs,mfgs)
-            z = pyro.sample("z", dist.Normal(z_loc, z_scale).to_event(1))
+            z = pyro.sample("z", dist.Gamma(1/z_scale, z_scale/z_loc).to_event(1))
 
     def validation_step(self, batch, batch_idx):
         input_nodes, output_nodes, mfgs = batch
@@ -248,8 +248,6 @@ class Encoder(nn.Module):
         self.fc21 = nn.Linear(n_hidden, n_hidden)
         self.fc22 = nn.Linear(n_hidden, n_hidden)
         self.softplus = nn.Softplus()
-
-    
     
     def forward(self,x, blocks=None):
         h = th.log(x+1)   
@@ -262,7 +260,7 @@ class Encoder(nn.Module):
         h = self.softplus(h)
         # then return a mean vector and a (positive) square root covariance
         # each of size batch_size x z_dim
-        z_loc = self.fc21(h)
+        z_loc = th.exp(self.fc21(h))
         z_scale = th.exp(self.fc22(h))
         return z_loc, z_scale
 
