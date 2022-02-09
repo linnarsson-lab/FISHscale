@@ -27,7 +27,7 @@ from torch.optim import Adam
 from pyro.optim import Adam as AdamPyro
 from pyro.infer.autoguide import init_to_mean
 from pyro.infer import SVI, config_enumerate, Trace_ELBO, JitTrace_ELBO
-from pyro.infer.autoguide import AutoMultivariateNormal, AutoGuideList, AutoNormal, AutoDelta
+from pyro.infer import autoguide
 
 
 class UnsupervisedClassification(Callback):
@@ -270,8 +270,8 @@ class GraphData(pl.LightningDataModule):
         # For optimal results it is necessary to tweak the optimization parameters.
         # For our purposes, however, 80 epochs of training is sufficient.
         # Training should take about 8 minutes on a GPU-equipped Colab instance
-        self.guide = AutoGuideList(self.model)
-        self.guide.append(AutoMultivariateNormal(poutine.block(self.model,expose_all=True, hide_all=False, hide=['test'],)
+        self.guide = autoguide.AutoGuideList(self.model)
+        self.guide.append(autoguide.AutoMultivariateNormal(poutine.block(self.model,expose_all=True, hide_all=False, hide=['test'],)
                    ,))
         #self.guide = AutoNormal(self.model)
 
@@ -691,8 +691,8 @@ class GraphData(pl.LightningDataModule):
         """        
         self.model.eval()
 
-        latent_unlabelled = self.guide.quantiles([0.5])['w_sf'][0,:,:]
-        #latent_unlabelled = self.model.module.inference(self.g,self.g.ndata['gene'],'cpu',10*512,0)#.detach().numpy()
+        #latent_unlabelled = self.guide.quantiles([0.5])['w_sf'][0,:,:]
+        latent_unlabelled = self.model.module.inference(self.g,self.g.ndata['gene'],'cpu',10*512,0)#.detach().numpy()
         #print(latent_unlabelled.shape)
         if self.model.supervised:
             x_fr_group2fact = self.guide.quantiles([0.5])['x_fr_group2fact'][0,:,:]
