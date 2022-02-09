@@ -98,8 +98,7 @@ class SAGELightning(nn.Module):
             z = pyro.sample("z",
                     dist.Normal(z_loc, z_scale).to_event(1)     
                 )
-            #z_tmp = dist.Normal(z_loc, z_scale)
-            #print('z',z_tmp.shape, z_tmp.batch_shape, z_tmp.event_shape)
+
             rate, shape = self.module.decoder(z)
             mu = rate @ self.reference.T
             alpha = 1/alpha_g_inverse.pow(2)
@@ -109,10 +108,6 @@ class SAGELightning(nn.Module):
                 dist.GammaPoisson(concentration=alpha, rate=rate).to_event(1)
                 ,obs=x
             )
-
-            #p_tmp = dist.GammaPoisson(concentration=alpha, rate=rate)
-            #print('p_tmp',p_tmp.shape, p_tmp.batch_shape, p_tmp.event_shape)
-
     
     def guide(self,x):
         pyro.module("graph_predict", self.module.encoder)
@@ -136,8 +131,7 @@ class SAGELightning(nn.Module):
         with pyro.plate("obs_plate", x.shape[0]):
             #z_loc, z_scale = self.module(mfgs, batch_inputs_u)
             z_loc, z_scale = self.module.encoder(batch_inputs,mfgs)
-            z = pyro.sample("z", dist.Normal(z_loc, z_scale).to_event(1)
-            )
+            z = pyro.sample("z", dist.Normal(z_loc, z_scale).to_event(1))
 
     def validation_step(self, batch, batch_idx):
         input_nodes, output_nodes, mfgs = batch
@@ -179,62 +173,8 @@ class SAGE(nn.Module):
 
         self.decoder = Decoder(n_classes,n_hidden)
 
-    def inference(self, g, x, device, batch_size, num_workers):
-            """
-            Inference with the GraphSAGE model on full neighbors (i.e. without 
-            neighbor sampling).
-            
-            This is used to reduce computing of all neighbors for more than 1-hop 
-            aggregation which generates a large computing graph in memory and 
-            slows down generating the embedding.
-
-            g : the entire graph.
-            x : the input of entire node set.
-            The inference code is written in a fashion that it could handle any number of nodes and
-            layers.
-            """
-            self.eval()
-            for l, layer in enumerate(self.encoder.graphsage):
-
-                y = th.zeros(g.num_nodes(), self.n_hidden) #if not self.supervised else th.zeros(g.num_nodes(), self.n_classes)
-                p = th.zeros(g.num_nodes(), self.n_classes)
-
-
-                sampler = dgl.dataloading.MultiLayerFullNeighborSampler(1)
-                dataloader = dgl.dataloading.NodeDataLoader(
-                    g,
-                    th.arange(g.num_nodes()),#.to(g.device),
-                    sampler,
-                    batch_size=batch_size,
-                    shuffle=False,
-                    drop_last=False,
-                    num_workers=num_workers)
-
-                for input_nodes, output_nodes, blocks in tqdm.tqdm(dataloader):
-                    block = blocks[0]#.srcdata['gene']
-                    block = block.int()
-                    if l == 0:
-                        h = th.log(x[input_nodes]+1)#.to(device)
-                    else:
-                        h = x[input_nodes]
-
-                    if self.aggregator != 'attentional':
-                        h = layer(block, h,)
-                    else:
-                        h = layer(block, h,).mean(1)
-                        #h = self.encoder.encoder_dict['FC'][l](h)
-
-                    if l == self.n_layers -1:
-                        h = self.encoder.fc(h)
-                        h = self.encoder.softplus(h)
-                        h = self.encoder.fc21(h)
-                        mu,_ = self.decoder(h)
-                        p[output_nodes] = mu.cpu().detach()
-                    
-                    y[output_nodes] = h.cpu().detach()#.numpy()
-                x = y
-        
-            return y,p
+    def inference_(self, x):
+        z_loc,z_scale = self.encoder(x)
 
 class Encoder(nn.Module):
     def __init__(
@@ -247,10 +187,8 @@ class Encoder(nn.Module):
         aggregator,
         ):
         super().__init__()
-        
         self.aggregator = aggregator
         layers = nn.ModuleList()
-        
         if supervised:
             self.norm = F.normalize#DiffGroupNorm(n_hidden,n_classes,None) 
             #n_hidden = n_classes
@@ -301,20 +239,21 @@ class Encoder(nn.Module):
                                             #norm=F.normalize
                                             ))
 
-        self.graphsage = layers
+        self.encoder_dict = nn.ModuleDict({'GS': layers})
         self.fc = nn.Sequential(
                 nn.Linear(n_hidden, n_hidden),
                 nn.BatchNorm1d(n_hidden),
                 nn.ReLU()      
             )
-
         self.fc21 = nn.Linear(n_hidden, n_hidden)
         self.fc22 = nn.Linear(n_hidden, n_hidden)
         self.softplus = nn.Softplus()
+
+    
     
     def forward(self,x, blocks=None):
         h = th.log(x+1)   
-        for l, (layer, block) in enumerate(zip(self.graphsage, blocks)):
+        for l, (layer, block) in enumerate(zip(self.encoder_dict['GS'], blocks)):
             if self.aggregator != 'attentional':
                 h = layer(block, h,)
             else:
@@ -349,6 +288,7 @@ class Decoder(nn.Module):
     def forward(self, z):
         # define the forward computation on the latent z
         # first compute the hidden units
+
         hidden = self.softplus(self.fc(z))
         # return the parameter for the output Bernoulli
         # each is of size batch_size x 784
