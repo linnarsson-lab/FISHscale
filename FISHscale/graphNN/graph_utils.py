@@ -222,6 +222,7 @@ class GraphData(pl.LightningDataModule):
 
         print(self.g)
         self.make_train_test_validation()
+        l_loc,l_scale= self.compute_library_size()
 
                 ### Prepare Model
         if type(self.model) == type(None):
@@ -237,7 +238,10 @@ class GraphData(pl.LightningDataModule):
                                         aggregator=self.aggregator,
                                         celltype_distribution=self.dist,
                                         ncells=self.ncells,
-                                        n_obs=self.g.num_nodes()
+                                        n_obs=self.g.num_nodes(),
+                                        l_loc=l_loc[0][0],
+                                        l_scale= l_scale[0][0],
+                                        scale_factor=1/(batch_size*self.data.unique_genes.shape[0]),
                                     )
         self.model.to(self.device)
 
@@ -279,7 +283,7 @@ class GraphData(pl.LightningDataModule):
                    #,init_loc_fn=init_to_mean))
         self.guide = self.model.guide
         self.elbo = Trace_ELBO()
-        svi = SVI(self.model.model, self.guide, AdamPyro({'lr':1e-4}), self.elbo)
+        svi = SVI(self.model.model, self.guide, AdamPyro({'lr':1e-3}), self.elbo)
 
         print('Training')
         for epoch in range(n_epochs):
@@ -334,8 +338,8 @@ class GraphData(pl.LightningDataModule):
                         #exclude='self',
                         #reverse_eids=th.arange(self.g.num_edges()) ^ 1,
                         batch_size=self.batch_size,
-                        shuffle=False,
-                        drop_last=False,
+                        shuffle=True,
+                        drop_last=True,
                         num_workers=self.num_workers,
                         )
         return unlab
@@ -471,6 +475,15 @@ class GraphData(pl.LightningDataModule):
         else:
             self.distance_threshold = tau
             print('Chosen dist: {}'.format(tau))
+
+    def compute_library_size(self):
+        data= self.g.ndata['ngh'].T
+        sum_counts = data.sum(axis=1)
+        masked_log_sum = np.ma.log(sum_counts)
+        log_counts = masked_log_sum.filled(0)
+        local_mean = (np.mean(log_counts).reshape(-1, 1)).astype(np.float32)
+        local_var = (np.var(log_counts).reshape(-1, 1)).astype(np.float32)
+        return local_mean, local_var
 
     def buildGraph(self, coords=None):
         """
@@ -695,7 +708,7 @@ class GraphData(pl.LightningDataModule):
         """        
         self.model.eval()
         self.latent_unlabelled, prediction_unlabelled = self.model.module.inference(self.g,
-                        self.g.ndata['gene'],
+                        self.g.ndata['gene'], self.g.ndata['ngh'],
                         'cpu',
                         10*512,
                         0)#.detach().numpy()

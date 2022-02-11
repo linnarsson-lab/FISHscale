@@ -136,7 +136,8 @@ class GeneScatter(AxSize):
                     scalebar: bool=True, show_axes: bool=False,
                     show_legend: bool = True, title: str = None, ax = None, 
                     save: bool=False, save_name: str='', dpi: int=300, 
-                    file_format: str='.eps', alpha=1) -> None:
+                    file_format: str='.eps', alpha=1, invert_yaxis=False,
+                    invert_xaxis=False) -> None:
         """Make a scatter plot of the data.
 
         Uses a black background. Plots in real size if `ax_scale_factor` is 1. 
@@ -204,6 +205,11 @@ class GeneScatter(AxSize):
                 y = y[filt]
             ax.scatter(x, y, s=s, color=c, zorder=0, label=g, alpha=alpha)
             del data
+        
+        if invert_yaxis:
+            ax.invert_yaxis()
+        if invert_xaxis:
+            ax.invert_xaxis()
         
         #Rescale
         if isinstance(view, list):

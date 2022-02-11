@@ -13,6 +13,8 @@ from torch.distributions import Gamma,Normal, Multinomial, kl_divergence as kl
 import pyro
 from pyro import distributions as dist
 from pyro.nn import PyroModule, PyroSample
+from pyro.distributions import constraints
+from pyro import poutine
 
 class CrossEntropyLoss(nn.Module):
     def forward(self, block_outputs, pos_graph, neg_graph):
@@ -49,6 +51,9 @@ class SAGELightning(nn.Module):
                  celltype_distribution=None,
                  ncells = None,
                  n_obs = None,
+                 l_loc = None,
+                 l_scale = None,
+                 scale_factor = 1,
                  ):
         super().__init__()
 
@@ -63,6 +68,8 @@ class SAGELightning(nn.Module):
 
         if self.supervised:
             automatic_optimization = False
+            self.l_loc = l_loc
+            self.l_scale = l_scale
             self.train_acc = torchmetrics.Accuracy()
             self.kl = th.nn.KLDivLoss(reduction='sum')
             self.dist = celltype_distribution
@@ -73,15 +80,16 @@ class SAGELightning(nn.Module):
             self.n_groups = self.module.n_hidden
             self.n_factors = self.module.n_classes
             self.n_obs= n_obs
+            self.scale_factor = 1
 
     def model(self, x):
         pyro.module("decoder", self.module.decoder)
-        _, nids, mfgs = x
+        _, pos,neg, mfgs = x
         x = mfgs[1].dstdata['ngh']
         mfgs = [mfg.int() for mfg in mfgs]
         batch_inputs = mfgs[0].srcdata['gene']
 
-        hyp_alpha = th.tensor(9.0)
+        '''hyp_alpha = th.tensor(9.0)
         hyp_beta = th.tensor(3.0)
         alpha_g_phi_hyp = pyro.sample("alpha_g_phi_hyp",
                 dist.Gamma(hyp_alpha, hyp_beta),
@@ -89,35 +97,60 @@ class SAGELightning(nn.Module):
         alpha_g_inverse = pyro.sample(
             "alpha_g_inverse",
             dist.Exponential(alpha_g_phi_hyp).expand([1, x.shape[1]]).to_event(2),
-        )  # (self.n_batch, self.n_vars)
+        )  # (self.n_batch, self.n_vars)'''
 
-        with pyro.plate("obs_plate", x.shape[0]):
+        theta = pyro.param("inverse_dispersion", 10.0 * x.new_ones(x.shape[1]),
+                    constraint=constraints.positive)
 
-            z_loc = x.new_ones(th.Size((x.shape[0], self.n_hidden)))*10
-            z_scale = x.new_ones(th.Size((x.shape[0], self.n_hidden)))*2
-            z = pyro.sample("z",
-                    dist.Normal(1/z_loc, z_scale/z_loc).to_event(1)     
+        with pyro.plate("obs_plate", x.shape[0],  poutine.scale(scale=self.scale_factor)):
+
+            zn_loc = x.new_ones(th.Size((x.shape[0], self.n_hidden)))*0
+            zn_scale = x.new_ones(th.Size((x.shape[0], self.n_hidden)))*1
+            zn = pyro.sample("zn",
+                    dist.Normal(zn_loc, zn_scale).to_event(1)     
                 )
 
-            rate, shape = self.module.decoder(z)
-            mu = rate @ self.reference.T
-            alpha = 1/alpha_g_inverse.pow(2)
-            rate = alpha/mu
+            zm_loc = x.new_ones(th.Size((x.shape[0], self.n_hidden)))*0
+            zm_scale = x.new_ones(th.Size((x.shape[0], self.n_hidden)))*1
+            zm = pyro.sample("zm",
+                    dist.Normal(zm_loc, zm_scale).to_event(1)     
+                )
+
+            l_scale = self.l_scale * x.new_ones(1)
+            #print('model l', l_scale.shape)
+            #print(x.shape)
+            zl = pyro.sample("zl",
+                    dist.LogNormal(self.l_loc, l_scale).to_event(1)     
+                )
+            
+            z = zn*zm
+            mu, gate_logits = self.module.decoder(z)
+            mu = mu @ self.reference.T
+
+            nb_logits = (zl * mu + 1e-6).log() - (theta + 1e-6).log()
+
+            x_dist = dist.ZeroInflatedNegativeBinomial(gate_logits=gate_logits, total_count=theta,
+                                                       logits=nb_logits)
 
             pyro.sample("obs", 
-                dist.GammaPoisson(concentration=alpha, rate=rate).to_event(1)
+                x_dist.to_event(1)
                 ,obs=x
             )
+
+            '''pyro.sample("obs", 
+                dist.GammaPoisson(concentration=1/shape, rate=rate).to_event(1)
+                ,obs=x
+            )'''
     
     def guide(self,x):
         pyro.module("graph_predict", self.module.encoder)
-        _, nids, mfgs = x
+        _, pos, neg, mfgs = x
         x = mfgs[1].dstdata['ngh']
         mfgs = [mfg.int() for mfg in mfgs]
         batch_inputs = mfgs[0].srcdata['gene']
         # register PyTorch module `decoder` with Pyro
     
-        hyp_alpha= pyro.param('hyp_alpha',th.tensor(9.0))
+        '''hyp_alpha= pyro.param('hyp_alpha',th.tensor(9.0))
         hyp_beta = pyro.param('hyp_beta', th.tensor(3.0))
         
         alpha_g_phi_hyp = pyro.sample("alpha_g_phi_hyp",
@@ -127,11 +160,22 @@ class SAGELightning(nn.Module):
             "alpha_g_inverse",
             dist.Exponential(alpha_g_phi_hyp).expand([1, x.shape[1]]).to_event(2),
         )  # (self.n_batch, self.n_vars)
+        '''
 
-        with pyro.plate("obs_plate", x.shape[0]):
-            #z_loc, z_scale = self.module(mfgs, batch_inputs_u)
-            z_loc, z_scale = self.module.encoder(batch_inputs,mfgs)
-            z = pyro.sample("z", dist.Gamma(1/z_scale, z_scale/z_loc).to_event(1))
+        with pyro.plate("obs_plate", x.shape[0], poutine.scale(scale=self.scale_factor)):            
+            zn_loc, zn_scale = self.module.encoder(batch_inputs,
+                                                    mfgs
+                                                    )
+
+            graph_loss = 0
+            
+            zm_loc, zm_scale, zl_loc, zl_scale = self.module.encoder_molecule(x,
+                                                                                )
+
+            zn = pyro.sample("zn", dist.Normal(zn_loc, zn_scale).to_event(1))
+            zm = pyro.sample("zm", dist.Normal(zm_loc, zm_scale).to_event(1))
+            zl = pyro.sample("zl", dist.LogNormal(zl_loc, zl_scale).to_event(1))
+
 
     def validation_step(self, batch, batch_idx):
         input_nodes, output_nodes, mfgs = batch
@@ -143,7 +187,6 @@ class SAGELightning(nn.Module):
     def configure_optimizers(self):
         optimizer = th.optim.Adam(self.module.parameters(), lr=self.lr)
         return optimizer
-
 
 class SAGE(nn.Module):
     def __init__(self, 
@@ -170,11 +213,75 @@ class SAGE(nn.Module):
                                 n_layers,
                                 supervised,
                                 aggregator)
+        
+        self.encoder_molecule = EncoderMolecule(in_feats,
+                                                    n_hidden
+                                            )
 
-        self.decoder = Decoder(n_classes,n_hidden)
+        self.decoder = Decoder(in_feats, 
+                                n_hidden,
+                                n_classes,
+                            )
 
-    def inference_(self, x):
-        z_loc,z_scale = self.encoder(x)
+    def inference(self, g, x, ngh,device, batch_size, num_workers):
+            """
+            Inference with the GraphSAGE model on full neighbors (i.e. without neighbor sampling).
+            g : the entire graph.
+            x : the input of entire node set.
+            The inference code is written in a fashion that it could handle any number of nodes and
+            layers.
+            """
+            # During inference with sampling, multi-layer blocks are very inefficient because
+            # lots of computations in the first few layers are repeated.
+            # Therefore, we compute the representation of all nodes layer by layer.  The nodes
+            # on each layer are of course splitted in batches.
+            # TODO: can we standardize this?
+            self.eval()
+            for l, layer in enumerate(self.encoder.encoder_dict['GS']):
+                y = th.zeros(g.num_nodes(), self.n_hidden) #if not self.supervised else th.zeros(g.num_nodes(), self.n_classes)
+                p_class = th.zeros(g.num_nodes(), self.n_classes)
+
+                sampler = dgl.dataloading.MultiLayerFullNeighborSampler(1)
+                dataloader = dgl.dataloading.NodeDataLoader(
+                    g,
+                    th.arange(g.num_nodes()),#.to(g.device),
+                    sampler,
+                    batch_size=batch_size,
+                    shuffle=False,
+                    drop_last=False,
+                    num_workers=num_workers)
+
+                for input_nodes, output_nodes, blocks in tqdm.tqdm(dataloader):
+                    
+                    block = blocks[0]#.srcdata['gene']
+                    block = block.int()
+                    if l == 0:
+                        h = th.log(x[input_nodes]+1)#.to(device)
+                    else:
+                        h = x[input_nodes]
+
+                    if self.aggregator != 'attentional':
+                        h = layer(block, h,)
+                    else:
+                        h = layer(block, h,).mean(1)
+                        #h = self.encoder.encoder_dict['FC'][l](h)
+
+                    if l == self.n_layers -1:
+                        n = blocks[-1].dstdata['ngh']
+                        h = self.encoder.gs_mu(h)
+                        hm,_,_,_ = self.encoder_molecule(n)
+                        h2 = h*hm
+                        #h = self.encoder.softplus(h)
+                        # then return a mean vector and a (positive) square root covariance
+                        # each of size batch_size x z_dim
+                        rate,_ = self.decoder(h2)
+                        p_class[output_nodes] = rate.cpu().detach()
+
+                    #    h = self.mean_encoder(h)#, th.exp(self.var_encoder(h))+1e-4 )
+                    y[output_nodes] = h.cpu().detach()#.numpy()
+                x = y
+        
+            return y, p_class
 
 class Encoder(nn.Module):
     def __init__(
@@ -226,7 +333,7 @@ class Encoder(nn.Module):
                                         n_hidden, 
                                         num_heads=4, 
                                         feat_drop=0.2,
-                                        #activation=F.relu,
+                                        activation=F.relu,
                                         #allow_zero_in_degree=False
                                         ))
 
@@ -235,18 +342,13 @@ class Encoder(nn.Module):
                                             n_hidden, 
                                             aggregator_type=aggregator,
                                             feat_drop=0.2,
-                                            #activation=F.relu,
-                                            #norm=F.normalize
+                                            activation=F.relu,
+                                            norm=F.normalize
                                             ))
 
         self.encoder_dict = nn.ModuleDict({'GS': layers})
-        self.fc = nn.Sequential(
-                nn.Linear(n_hidden, n_hidden),
-                nn.BatchNorm1d(n_hidden),
-                nn.ReLU()      
-            )
-        self.fc21 = nn.Linear(n_hidden, n_hidden)
-        self.fc22 = nn.Linear(n_hidden, n_hidden)
+        self.gs_mu = nn.Linear(n_hidden, n_hidden)
+        self.gs_var = nn.Linear(n_hidden, n_hidden)
         self.softplus = nn.Softplus()
     
     def forward(self,x, blocks=None):
@@ -256,19 +358,55 @@ class Encoder(nn.Module):
                 h = layer(block, h,)
             else:
                 h = layer(block, h,).mean(1)
-        h = self.fc(h)
-        h = self.softplus(h)
-        # then return a mean vector and a (positive) square root covariance
-        # each of size batch_size x z_dim
-        z_loc = th.exp(self.fc21(h))
-        z_scale = th.exp(self.fc22(h))
+
+        z_loc = self.gs_mu(h)
+        z_scale = self.softplus(self.gs_var(h))
         return z_loc, z_scale
+
+    
+class EncoderMolecule(nn.Module):
+    def __init__(
+        self,
+        in_feats,
+        n_hidden,
+
+        ):
+        super().__init__()
+
+        self.softplus = nn.Softplus()
+        self.fc = nn.Sequential(
+                nn.Linear(in_feats, n_hidden),
+                nn.BatchNorm1d(n_hidden),
+                nn.ReLU()      
+            )
+        self.mu = nn.Linear(n_hidden, n_hidden)
+        self.var = nn.Linear(n_hidden, n_hidden)
+
+        self.fc_l = nn.Sequential(
+                nn.Linear(in_feats, n_hidden),
+                nn.BatchNorm1d(n_hidden),
+                nn.ReLU()      
+            )
+        self.mu_l = nn.Linear(n_hidden, 1)
+        self.var_l = nn.Linear(n_hidden, 1)
+    
+    def forward(self,x):
+        x = th.log(x+1)   
+        h = self.fc(x)
+        z_loc = self.mu(h)
+        z_scale = self.softplus(self.var(h))
+
+        h = self.fc_l(x)
+        l_loc = self.mu_l(h)
+        l_scale = self.softplus(self.var_l(h))
+        return z_loc, z_scale, l_loc, l_scale
 
 class Decoder(nn.Module):
     def __init__(
         self,
         in_feats,
         n_hidden,
+        n_classes,
         
         ):
         super().__init__()
@@ -276,20 +414,20 @@ class Decoder(nn.Module):
         self.fc = nn.Sequential(
                     nn.Linear(n_hidden, n_hidden),
                     nn.BatchNorm1d(n_hidden),
-                    nn.ReLU()      
+                    nn.ReLU()   
                 )
-        self.softplus =  nn.Softplus()
-    
-        self.rate = nn.Linear(n_hidden, in_feats)
-        self.shape = nn.Linear(n_hidden, in_feats)
+
+        self.rate = nn.Linear(n_hidden, n_classes)
+        self.gate = nn.Linear(n_hidden, in_feats)
+        self.softplus = nn.Softplus()
 
     def forward(self, z):
         # define the forward computation on the latent z
         # first compute the hidden units
 
-        hidden = self.softplus(self.fc(z))
+        hidden = self.fc(z)
         # return the parameter for the output Bernoulli
         # each is of size batch_size x 784
-        rate = self.softplus(self.rate(hidden))
-        shape = self.softplus(self.shape(hidden))
-        return rate, shape
+        mu = self.rate(hidden).softmax(dim=-1)
+        gate = self.softplus(self.gate(hidden))
+        return mu, gate
