@@ -290,7 +290,7 @@ class GraphData(pl.LightningDataModule):
             losses = []
 
             # Take a gradient step for each mini-batch in the dataset
-            for batch in self.train_dataloader_pyro():
+            for batch in self.train_dataloader():
 
                 loss = svi.step(batch)
                 losses.append(loss)

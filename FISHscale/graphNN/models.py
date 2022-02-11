@@ -81,6 +81,7 @@ class SAGELightning(nn.Module):
             self.n_factors = self.module.n_classes
             self.n_obs= n_obs
             self.scale_factor = 1
+            self.alpha = 1
 
     def model(self, x):
         pyro.module("decoder", self.module.decoder)
@@ -102,7 +103,7 @@ class SAGELightning(nn.Module):
         theta = pyro.param("inverse_dispersion", 10.0 * x.new_ones(x.shape[1]),
                     constraint=constraints.positive)
 
-        with pyro.plate("obs_plate", x.shape[0],  poutine.scale(scale=self.scale_factor)):
+        with pyro.plate("obs_plate", x.shape[0]),  poutine.scale(scale=self.scale_factor):
 
             zn_loc = x.new_ones(th.Size((x.shape[0], self.n_hidden)))*0
             zn_scale = x.new_ones(th.Size((x.shape[0], self.n_hidden)))*1
@@ -162,12 +163,12 @@ class SAGELightning(nn.Module):
         )  # (self.n_batch, self.n_vars)
         '''
 
-        with pyro.plate("obs_plate", x.shape[0], poutine.scale(scale=self.scale_factor)):            
+        with pyro.plate("obs_plate", x.shape[0]), poutine.scale(scale=self.scale_factor):            
             zn_loc, zn_scale = self.module.encoder(batch_inputs,
                                                     mfgs
                                                     )
 
-            graph_loss = 0
+            graph_loss = self.loss_fcn(mfgs, pos, neg)
             
             zm_loc, zm_scale, zl_loc, zl_scale = self.module.encoder_molecule(x,
                                                                                 )
@@ -175,6 +176,9 @@ class SAGELightning(nn.Module):
             zn = pyro.sample("zn", dist.Normal(zn_loc, zn_scale).to_event(1))
             zm = pyro.sample("zm", dist.Normal(zm_loc, zm_scale).to_event(1))
             zl = pyro.sample("zl", dist.LogNormal(zl_loc, zl_scale).to_event(1))
+
+            pyro.factor("classification_loss", -self.alpha * graph_loss, has_rsample=False)
+
 
 
     def validation_step(self, batch, batch_idx):
