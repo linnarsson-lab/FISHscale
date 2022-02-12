@@ -318,6 +318,13 @@ class GraphData(pl.LightningDataModule):
         self.indices_train = th.tensor(permutation[self.test_size : (self.test_size + self.train_size)])
         self.indices_validation = th.tensor(np.arange(m.shape[0]))
 
+        edges = np.arange(self.g.num_edges())
+        self.random_edges = torch.tensor(np.random.choice(edges,
+                                                        int(edges.shape[0]*(self.train_p/(self.g.num_edges()/self.g.num_nodes()))),
+                                                        replace=False)
+                                                        )
+        print('Training on {} edges.'.format(self.random_edges.shape[0]))
+
     def train_dataloader(self):
         """
         train_dataloader
@@ -327,11 +334,9 @@ class GraphData(pl.LightningDataModule):
         Returns:
             dgl.dataloading.EdgeDataLoader: Deep Graph Library dataloader.
         """        
-        edges = np.arange(self.g.num_edges())
-        random_edges = torch.tensor(np.random.choice(edges,int(edges.shape[0]*(self.train_p/(self.g.num_edges()/self.g.num_nodes()))),replace=False))
         unlab = dgl.dataloading.EdgeDataLoader(
                         self.g,
-                        random_edges,
+                        self.random_edges,
                         self.sampler,
                         negative_sampler=dgl.dataloading.negative_sampler.Uniform(self.negative_samples), # NegativeSampler(self.g, self.negative_samples, False),
                         device=self.device,
