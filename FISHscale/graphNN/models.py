@@ -27,12 +27,12 @@ class CrossEntropyLoss(nn.Module):
             neg_graph.apply_edges(fn.u_mul_v('h', 'h', 'score'))
             neg_score = neg_graph.edata['score']
         
-        pos_loss, neg_loss=  -F.logsigmoid(pos_score.sum(-1)).mean(), - F.logsigmoid(-neg_score.sum(-1)).mean()
-        loss = pos_loss + neg_loss
-        #score = th.cat([pos_score, neg_score])
-        #label = th.cat([th.ones_like(pos_score), th.zeros_like(neg_score)]).long()
-        #loss = F.binary_cross_entropy_with_logits(score, label.float())
-        return loss, pos_loss, neg_loss
+        #pos_loss, neg_loss=  -F.logsigmoid(pos_score.sum(-1)), - F.logsigmoid(-neg_score.sum(-1))#.mean()
+        #loss = pos_loss + neg_loss
+        score = th.cat([pos_score, neg_score])
+        label = th.cat([th.ones_like(pos_score), th.zeros_like(neg_score)]).long()
+        loss = F.binary_cross_entropy_with_logits(score, label.float())
+        return loss#, pos_loss, neg_loss
 
 class SAGELightning(nn.Module):
     def __init__(self,
@@ -80,7 +80,7 @@ class SAGELightning(nn.Module):
             self.n_groups = self.module.n_hidden
             self.n_factors = self.module.n_classes
             self.n_obs= n_obs
-            self.scale_factor = 1
+            self.scale_factor = scale_factor
             self.alpha = 1
 
     def model(self, x):
@@ -88,7 +88,7 @@ class SAGELightning(nn.Module):
         _, pos,neg, mfgs = x
         x = mfgs[1].dstdata['ngh']
         mfgs = [mfg.int() for mfg in mfgs]
-        batch_inputs = mfgs[0].srcdata['gene']
+        #batch_inputs = mfgs[0].srcdata['gene']
 
         '''hyp_alpha = th.tensor(9.0)
         hyp_beta = th.tensor(3.0)
@@ -118,14 +118,12 @@ class SAGELightning(nn.Module):
                 )
 
             l_scale = self.l_scale * x.new_ones(1)
-            #print('model l', l_scale.shape)
-            #print(x.shape)
             zl = pyro.sample("zl",
                     dist.LogNormal(self.l_loc, l_scale).to_event(1)     
                 )
             
             z = zn*zm
-            mu, gate_logits = self.module.decoder(z)
+            mu, gate_logits = self.module.decoder(zm)
             mu = mu @ self.reference.T
 
             nb_logits = (zl * mu + 1e-6).log() - (theta + 1e-6).log()
@@ -168,17 +166,14 @@ class SAGELightning(nn.Module):
                                                     mfgs
                                                     )
 
-            graph_loss = self.loss_fcn(mfgs, pos, neg)
-            
-            zm_loc, zm_scale, zl_loc, zl_scale = self.module.encoder_molecule(x,
-                                                                                )
+            graph_loss = self.loss_fcn(zn_loc, pos, neg).mean()
+            zm_loc, zm_scale, zl_loc, zl_scale = self.module.encoder_molecule(x)
 
             zn = pyro.sample("zn", dist.Normal(zn_loc, zn_scale).to_event(1))
             zm = pyro.sample("zm", dist.Normal(zm_loc, zm_scale).to_event(1))
             zl = pyro.sample("zl", dist.LogNormal(zl_loc, zl_scale).to_event(1))
 
-            pyro.factor("classification_loss", -self.alpha * graph_loss, has_rsample=False)
-
+        #pyro.factor("graph_loss", -self.alpha * graph_loss, has_rsample=False)
 
 
     def validation_step(self, batch, batch_idx):
