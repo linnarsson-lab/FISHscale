@@ -62,7 +62,7 @@ class SAGELightning(nn.Module):
         self.supervised= supervised
         self.loss_fcn = CrossEntropyLoss()
         self.kappa = 0
-        self.reference=th.tensor(reference,dtype=th.float32)
+        self.reference=th.tensor(reference,dtype=th.float32,device=device)
         self.smooth = smooth
         self.n_hidden = n_hidden
 
@@ -82,6 +82,7 @@ class SAGELightning(nn.Module):
             self.n_obs= n_obs
             self.scale_factor = scale_factor
             self.alpha = 1
+            self.device=device
 
     def model(self, x):
         pyro.module("decoder", self.module.decoder)
@@ -123,23 +124,21 @@ class SAGELightning(nn.Module):
                 )
             
             z = zn*zm
-            mu, gate_logits = self.module.decoder(zm)
+            mu, gate_logits = self.module.decoder(z)
             mu = mu @ self.reference.T
 
-            nb_logits = (zl * mu + 1e-6).log() - (theta + 1e-6).log()
+            '''nb_logits = (zl * mu + 1e-6).log() - (theta + 1e-6).log()
 
             x_dist = dist.ZeroInflatedNegativeBinomial(gate_logits=gate_logits, total_count=theta,
-                                                       logits=nb_logits)
+                                                       logits=nb_logits)'''
+
+            x_dist =  dist.GammaPoisson(concentration=1/gate_logits, rate=1/(mu*gate_logits)).to_event(1)
 
             pyro.sample("obs", 
                 x_dist.to_event(1)
                 ,obs=x
             )
 
-            '''pyro.sample("obs", 
-                dist.GammaPoisson(concentration=1/shape, rate=rate).to_event(1)
-                ,obs=x
-            )'''
     
     def guide(self,x):
         pyro.module("graph_predict", self.module.encoder)
@@ -173,7 +172,7 @@ class SAGELightning(nn.Module):
             zm = pyro.sample("zm", dist.Normal(zm_loc, zm_scale).to_event(1))
             zl = pyro.sample("zl", dist.LogNormal(zl_loc, zl_scale).to_event(1))
 
-        #pyro.factor("graph_loss", -self.alpha * graph_loss, has_rsample=False)
+        pyro.factor("graph_loss", -self.alpha * graph_loss, has_rsample=False)
 
 
     def validation_step(self, batch, batch_idx):
