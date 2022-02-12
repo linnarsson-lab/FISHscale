@@ -62,11 +62,7 @@ class SAGELightning(nn.Module):
         self.supervised= supervised
         self.loss_fcn = CrossEntropyLoss()
         self.kappa = 0
-<<<<<<< HEAD
-        self.reference=th.tensor(reference,dtype=th.float32,device=device)
-=======
         self.reference=th.tensor(reference,dtype=th.float32, device=device)
->>>>>>> 9872977dd07dfa85298d6df3a81499da15eb0a73
         self.smooth = smooth
         self.n_hidden = n_hidden
         self.device= device
@@ -252,6 +248,7 @@ class SAGE(nn.Module):
                     batch_size=batch_size,
                     shuffle=False,
                     drop_last=False,
+                    device=device,
                     num_workers=num_workers)
 
                 for input_nodes, output_nodes, blocks in tqdm.tqdm(dataloader):
@@ -259,7 +256,10 @@ class SAGE(nn.Module):
                     block = blocks[0]#.srcdata['gene']
                     block = block.int()
                     if l == 0:
-                        h = th.log(x[input_nodes]+1)#.to(device)
+                        h = th.log(x[input_nodes]+1).to(device)
+                        print('h',h.device)
+
+                        print(block.device)
                     else:
                         h = x[input_nodes]
 
