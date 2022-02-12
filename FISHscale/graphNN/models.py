@@ -62,9 +62,14 @@ class SAGELightning(nn.Module):
         self.supervised= supervised
         self.loss_fcn = CrossEntropyLoss()
         self.kappa = 0
+<<<<<<< HEAD
         self.reference=th.tensor(reference,dtype=th.float32,device=device)
+=======
+        self.reference=th.tensor(reference,dtype=th.float32, device=device)
+>>>>>>> 9872977dd07dfa85298d6df3a81499da15eb0a73
         self.smooth = smooth
         self.n_hidden = n_hidden
+        self.device= device
 
         if self.supervised:
             automatic_optimization = False
