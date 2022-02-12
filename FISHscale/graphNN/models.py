@@ -257,11 +257,10 @@ class SAGE(nn.Module):
                     block = block.int()
                     if l == 0:
                         h = th.log(x[input_nodes]+1).to(device)
-                        print('h',h.device)
-
-                        print(block.device)
+                        #print('h',h.device)
+                        #print(block.device)
                     else:
-                        h = x[input_nodes]
+                        h = x[input_nodes].to(device)
 
                     if self.aggregator != 'attentional':
                         h = layer(block, h,)
