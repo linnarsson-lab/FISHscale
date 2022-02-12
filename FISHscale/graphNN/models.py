@@ -62,9 +62,10 @@ class SAGELightning(nn.Module):
         self.supervised= supervised
         self.loss_fcn = CrossEntropyLoss()
         self.kappa = 0
-        self.reference=th.tensor(reference,dtype=th.float32)
+        self.reference=th.tensor(reference,dtype=th.float32, device=device)
         self.smooth = smooth
         self.n_hidden = n_hidden
+        self.device= device
 
         if self.supervised:
             automatic_optimization = False
@@ -123,8 +124,9 @@ class SAGELightning(nn.Module):
                 )
             
             z = zn*zm
-            mu, gate_logits = self.module.decoder(zm)
-            mu = mu @ self.reference.T
+            print(z.shape)
+            mu, gate_logits = self.module.decoder(z)
+            mu = mu @ self.reference.T#.to(self.device)
 
             nb_logits = (zl * mu + 1e-6).log() - (theta + 1e-6).log()
 
