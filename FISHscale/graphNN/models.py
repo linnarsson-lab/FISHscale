@@ -141,7 +141,6 @@ class SAGELightning(nn.Module):
                 ,obs=x
             )
 
-    
     def guide(self,x):
         pyro.module("graph", self.module.encoder)
         pyro.module("molecule", self.module.encoder_molecule)
@@ -195,12 +194,34 @@ class SAGELightning(nn.Module):
                                                     )
 
         val_loss = self.loss_fcn(zn_loc, pos, neg).mean()
-
         return val_loss
 
+    def training_step(self, batch, batch_idx):
+        #x,y = batch
+        #yhat = self.forward(x)
+        
+        loss = self.svi.step(batch)
+        loss = th.tensor(loss).requires_grad_(True)
+        tensorboard_logs = {'running/loss': loss}
+        return {'loss': loss, 'log': tensorboard_logs}
+
     def configure_optimizers(self):
-        optimizer = th.optim.Adam(self.module.parameters(), lr=self.lr)
-        return optimizer
+        # REQUIRED
+        # can return multiple optimizers and learning_rate schedulers
+        # (LBFGS it is automatically supported, no need for closure function)
+        self.svi = PyroOptWrap(model=self.model,
+                guide=self.guide,
+                optim=pyro.optim.Adam({"lr": self.lr}),
+                loss=pyro.infer.Trace_ELBO())
+
+        return [self.svi]
+
+class PyroOptWrap(pyro.infer.SVI):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def state_dict(self,):
+        return {}
 
 class SAGE(nn.Module):
     def __init__(self, 

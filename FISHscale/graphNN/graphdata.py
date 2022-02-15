@@ -134,6 +134,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
         os.mkdir(self.folder)
         if not os.path.isdir(self.save_to+'graph'):
             os.mkdir(self.save_to+'graph')
+            
         #print('Device is: ',self.device)
         #self.compute_distance_th(distance_factor,max_distance_nodes)
         self.subsample_xy()
