@@ -13,7 +13,7 @@ import pytorch_lightning as pl
 import dgl
 from FISHscale.graphNN.models import SAGELightning
 from FISHscale.graphNN.graph_utils import GraphUtils, GraphPlotting
-from sklearn.mixture import GaussianMixture
+
 from pyro.distributions.util import broadcast_shape
 from torch.optim import Adam
 from pyro.optim import Adam as AdamPyro
@@ -134,7 +134,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
         os.mkdir(self.folder)
         if not os.path.isdir(self.save_to+'graph'):
             os.mkdir(self.save_to+'graph')
-            
+
         #print('Device is: ',self.device)
         #self.compute_distance_th(distance_factor,max_distance_nodes)
         self.subsample_xy()

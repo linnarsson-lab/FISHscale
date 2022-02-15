@@ -8,6 +8,10 @@ import os
 from annoy import AnnoyIndex
 import networkx as nx
 from tqdm import trange
+import dgl
+from tqdm import tqdm
+from sklearn.mixture import GaussianMixture
+import loompy
 
 class GraphUtils(object):
 
@@ -176,7 +180,7 @@ class GraphUtils(object):
         g.ndata['ngh'] = nghs
 
         if self.smooth:
-            #self.g.ndata['zero'] = torch.zeros_like(self.g.ndata['gene'])
+            #self.g.ndata['zero'] = th.zeros_like(self.g.ndata['gene'])
             #self.g.update_all(fn.u_add_v('gene','zero','e'),fn.sum('e','zero'))
             #self.g.ndata['gene'] = self.g.ndata['zero'] + self.g.ndata['gene']
             #del self.g.ndata['zero']
@@ -199,7 +203,7 @@ class GraphUtils(object):
         g.ndata['ngh'] = ngh_'''
         # Finding fastest algorithm
         '''
-        g.ndata['zero'] = torch.zeros_like(g.ndata['gene'])
+        g.ndata['zero'] = th.zeros_like(g.ndata['gene'])
         g.update_all(fn.u_add_v('gene','zero','e'),fn.sum('e','zero'))
         g.ndata['gene'] = g.ndata['gene']
         g.ndata['ngh'] = g.ndata['zero'] + g.ndata['gene']
@@ -312,7 +316,7 @@ class GraphPlotting:
             ax = fig.add_subplot(1, 1, 1)
             ax.set_facecolor("black")
             width_cutoff = 1640 # um
-            #plt.scatter(DS.df.x.values.compute()[GD.cells], DS.df.y.values.compute()[GD.cells], c=torch.argmax(pred.softmax(dim=-1),dim=-1).numpy(), s=0.2,marker='.',linewidths=0, edgecolors=None,cmap='rainbow')
+            #plt.scatter(DS.df.x.values.compute()[GD.cells], DS.df.y.values.compute()[GD.cells], c=th.argmax(pred.softmax(dim=-1),dim=-1).numpy(), s=0.2,marker='.',linewidths=0, edgecolors=None,cmap='rainbow')
             plt.scatter(self.data.df.x.values.compute()[self.g.ndata['indices'].numpy()][some], self.data.df.y.values.compute()[self.g.ndata['indices'].numpy()][some], c=Y_umap, s=0.05,marker='.',linewidths=0, edgecolors=None)
             plt.xticks(fontsize=2)
             plt.yticks(fontsize=2)
@@ -379,7 +383,7 @@ class GraphPlotting:
             layout = hv.Layout([nd_dic[x] for x in nd_dic]).cols(5)
             hv.save(layout,"{}/molecule_prediction.png".format(self.folder))
 
-            pred_labels = torch.tensor(self.prediction_unlabelled)
+            pred_labels = th.tensor(self.prediction_unlabelled)
             merge = np.concatenate([molecules_x[:,np.newaxis],molecules_y[:,np.newaxis]],axis=1)
             L = []
             print('Generating plots for molecule cluster probabilities...')
@@ -441,30 +445,12 @@ class GraphPlotting:
             fig=plt.figure(figsize=(2,2),dpi=1000,)
             ax = fig.add_subplot(1, 1, 1)
             ax.set_facecolor("black")
-            #plt.scatter(DS.df.x.values.compute()[GD.cells], DS.df.y.values.compute()[GD.cells], c=torch.argmax(pred.softmax(dim=-1),dim=-1).numpy(), s=0.2,marker='.',linewidths=0, edgecolors=None,cmap='rainbow')
+            #plt.scatter(DS.df.x.values.compute()[GD.cells], DS.df.y.values.compute()[GD.cells], c=th.argmax(pred.softmax(dim=-1),dim=-1).numpy(), s=0.2,marker='.',linewidths=0, edgecolors=None,cmap='rainbow')
             plt.scatter(self.data.df.x.values.compute()[self.g.ndata['indices'].numpy()], self.data.df.y.values.compute()[self.g.ndata['indices'].numpy()], c=clusters_colors, s=0.05,marker='.',linewidths=0, edgecolors=None)
             plt.xticks(fontsize=2)
             plt.yticks(fontsize=2)
             plt.axis('scaled')
             plt.savefig("{}/spatial_umap_embedding.png".format(self.folder), bbox_inches='tight', dpi=5000)
-
-
-class UnsupervisedClassification(Callback):
-    def on_validation_epoch_start(self, trainer, pl_module):
-        self.val_outputs = []
-
-    def on_validation_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx):
-        self.val_outputs.append(outputs)
-
-    def on_validation_epoch_end(self, trainer, pl_module):
-        node_emb = th.cat(self.val_outputs, 0)
-        g = trainer.datamodule.g
-        labels = g.ndata['labels']
-        f1_micro, f1_macro = compute_acc_unsupervised(
-            node_emb, labels, trainer.datamodule.train_nid,
-            trainer.datamodule.val_nid, trainer.datamodule.test_nid)
-        pl_module.log('val_f1_micro', f1_micro)
-
 
 class NegativeSampler(object):
     def __init__(self, g, k, neg_share=False):
