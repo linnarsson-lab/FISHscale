@@ -180,7 +180,7 @@ class SAGELightning(nn.Module):
             zm = pyro.sample("zm", dist.Normal(zm_loc, th.sqrt(zm_scale)).to_event(1))
             zl = pyro.sample("zl", dist.LogNormal(zl_loc, th.sqrt(zl_scale)).to_event(1))
 
-            pyro.factor("graph_loss", -self.alpha * graph_loss, has_rsample=False,)
+            pyro.factor("graph_loss", self.alpha * graph_loss, has_rsample=False,)
 
 
     def validation_step(self,batch):
