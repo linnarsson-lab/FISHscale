@@ -27,11 +27,11 @@ class CrossEntropyLoss(nn.Module):
             neg_graph.apply_edges(fn.u_mul_v('h', 'h', 'score'))
             neg_score = neg_graph.edata['score']
         
-        #pos_loss, neg_loss=  -F.logsigmoid(pos_score.sum(-1)), - F.logsigmoid(-neg_score.sum(-1))#.mean()
-        #loss = pos_loss + neg_loss
-        score = th.cat([pos_score, neg_score])
-        label = th.cat([th.ones_like(pos_score), th.zeros_like(neg_score)]).long()
-        loss = F.binary_cross_entropy_with_logits(score, label.float())
+        pos_loss, neg_loss=  -F.logsigmoid(pos_score.sum(-1)), - F.logsigmoid(-neg_score.sum(-1))#.mean()
+        loss = pos_loss + neg_loss
+        #score = th.cat([pos_score, neg_score])
+        #label = th.cat([th.ones_like(pos_score), th.zeros_like(neg_score)]).long()
+        #loss = F.binary_cross_entropy_with_logits(score, label.float())
         return loss#, pos_loss, neg_loss
 
 class SAGELightning(nn.Module):
@@ -88,11 +88,13 @@ class SAGELightning(nn.Module):
     def model(self, x):
         pyro.module("decoder", self.module.decoder)
         _, pos,neg, mfgs = x
+        pos_ids = pos.edges()[0]
         x = mfgs[1].dstdata['ngh']
+        x= x[pos_ids,:]
         mfgs = [mfg.int() for mfg in mfgs]
         #batch_inputs = mfgs[0].srcdata['gene']
 
-        '''hyp_alpha = th.tensor(9.0)
+        hyp_alpha = th.tensor(9.0)
         hyp_beta = th.tensor(3.0)
         alpha_g_phi_hyp = pyro.sample("alpha_g_phi_hyp",
                 dist.Gamma(hyp_alpha, hyp_beta),
@@ -100,10 +102,10 @@ class SAGELightning(nn.Module):
         alpha_g_inverse = pyro.sample(
             "alpha_g_inverse",
             dist.Exponential(alpha_g_phi_hyp).expand([1, x.shape[1]]).to_event(2),
-        )  # (self.n_batch, self.n_vars)'''
+        )  # (self.n_batch, self.n_vars)
 
-        theta = pyro.param("inverse_dispersion", 10.0 * x.new_ones(x.shape[1]),
-                    constraint=constraints.positive)
+        #theta = pyro.param("inverse_dispersion", 10.0 * x.new_ones(x.shape[1]),
+        #            constraint=constraints.positive)
 
         with pyro.plate("obs_plate", x.shape[0]),  poutine.scale(scale=self.scale_factor):
 
@@ -128,13 +130,12 @@ class SAGELightning(nn.Module):
             mu, gate_logits = self.module.decoder(z)
             mu = mu @ self.reference.T
 
-            '''nb_logits = (zl * mu + 1e-6).log() - (theta + 1e-6).log()
-
-            x_dist = dist.ZeroInflatedNegativeBinomial(gate_logits=gate_logits, total_count=theta,
+            #nb_logits = (zl * mu + 6e-3).log() - (theta + 6e-3).log()
+            gp_logits = zl * mu 
+            '''x_dist = dist.ZeroInflatedNegativeBinomial(gate_logits=gate_logits, total_count=theta,
                                                        logits=nb_logits)'''
 
-            x_dist =  dist.GammaPoisson(concentration=1/gate_logits, rate=1/(mu*gate_logits)).to_event(1)
-
+            x_dist =  dist.GammaPoisson(concentration=1/alpha_g_inverse, rate=1/(gp_logits*alpha_g_inverse)).to_event(1)
             pyro.sample("obs", 
                 x_dist.to_event(1)
                 ,obs=x
@@ -142,14 +143,17 @@ class SAGELightning(nn.Module):
 
     
     def guide(self,x):
-        pyro.module("graph_predict", self.module.encoder)
+        pyro.module("graph", self.module.encoder)
+        pyro.module("molecule", self.module.encoder_molecule)
         _, pos, neg, mfgs = x
+        pos_ids = pos.edges()[0]
         x = mfgs[1].dstdata['ngh']
+        x= x[pos_ids,:]
         mfgs = [mfg.int() for mfg in mfgs]
         batch_inputs = mfgs[0].srcdata['gene']
         # register PyTorch module `decoder` with Pyro
     
-        '''hyp_alpha= pyro.param('hyp_alpha',th.tensor(9.0))
+        hyp_alpha= pyro.param('hyp_alpha',th.tensor(9.0))
         hyp_beta = pyro.param('hyp_beta', th.tensor(3.0))
         
         alpha_g_phi_hyp = pyro.sample("alpha_g_phi_hyp",
@@ -159,29 +163,40 @@ class SAGELightning(nn.Module):
             "alpha_g_inverse",
             dist.Exponential(alpha_g_phi_hyp).expand([1, x.shape[1]]).to_event(2),
         )  # (self.n_batch, self.n_vars)
-        '''
+        
 
         with pyro.plate("obs_plate", x.shape[0]), poutine.scale(scale=self.scale_factor):            
             zn_loc, zn_scale = self.module.encoder(batch_inputs,
                                                     mfgs
                                                     )
-
-            graph_loss = self.loss_fcn(zn_loc, pos, neg).mean()
+            graph_loss = self.loss_fcn(zn_loc, pos, neg)#.mean()
             zm_loc, zm_scale, zl_loc, zl_scale = self.module.encoder_molecule(x)
+            
+            zn_loc,zn_scale = zn_loc[pos_ids,:], zn_scale[pos_ids,:],
+            zm_loc, zm_scale = zm_loc[pos_ids,:],zm_scale[pos_ids,:]
+            zl_loc, zl_scale =  zl_loc[pos_ids,:], zl_scale[pos_ids,:]
 
-            zn = pyro.sample("zn", dist.Normal(zn_loc, zn_scale).to_event(1))
-            zm = pyro.sample("zm", dist.Normal(zm_loc, zm_scale).to_event(1))
-            zl = pyro.sample("zl", dist.LogNormal(zl_loc, zl_scale).to_event(1))
+            zn = pyro.sample("zn", dist.Normal(zn_loc, th.sqrt(zn_scale)).to_event(1))
+            zm = pyro.sample("zm", dist.Normal(zm_loc, th.sqrt(zm_scale)).to_event(1))
+            zl = pyro.sample("zl", dist.LogNormal(zl_loc, th.sqrt(zl_scale)).to_event(1))
 
-        pyro.factor("graph_loss", -self.alpha * graph_loss, has_rsample=False)
+            pyro.factor("graph_loss", -self.alpha * graph_loss, has_rsample=False,)
 
 
-    def validation_step(self, batch, batch_idx):
-        input_nodes, output_nodes, mfgs = batch
+    def validation_step(self,batch):
+        _, pos, neg, mfgs = batch
+        pos_ids = pos.edges()[0]
+        x = mfgs[1].dstdata['ngh']
+        x= x[pos_ids,:]
         mfgs = [mfg.int() for mfg in mfgs]
         batch_inputs = mfgs[0].srcdata['gene']
-        batch_pred = self.module(mfgs, batch_inputs)
-        return batch_pred
+        zn_loc, zn_scale = self.module.encoder(batch_inputs,
+                                                    mfgs
+                                                    )
+
+        val_loss = self.loss_fcn(zn_loc, pos, neg).mean()
+
+        return val_loss
 
     def configure_optimizers(self):
         optimizer = th.optim.Adam(self.module.parameters(), lr=self.lr)
@@ -272,11 +287,11 @@ class SAGE(nn.Module):
                         n = blocks[-1].dstdata['ngh']
                         h = self.encoder.gs_mu(h)
                         hm,_,_,_ = self.encoder_molecule(n)
-                        h2 = h*hm
+                        h = h*hm
                         #h = self.encoder.softplus(h)
                         # then return a mean vector and a (positive) square root covariance
                         # each of size batch_size x z_dim
-                        rate,_ = self.decoder(h2)
+                        rate,_ = self.decoder(h)
                         p_class[output_nodes] = rate.cpu().detach()
 
                     #    h = self.mean_encoder(h)#, th.exp(self.var_encoder(h))+1e-4 )
@@ -362,7 +377,7 @@ class Encoder(nn.Module):
                 h = layer(block, h,).mean(1)
 
         z_loc = self.gs_mu(h)
-        z_scale = self.softplus(self.gs_var(h))
+        z_scale = th.exp(self.gs_var(h))
         return z_loc, z_scale
 
     
@@ -396,11 +411,11 @@ class EncoderMolecule(nn.Module):
         x = th.log(x+1)   
         h = self.fc(x)
         z_loc = self.mu(h)
-        z_scale = self.softplus(self.var(h))
+        z_scale = th.exp(self.var(h))
 
         h = self.fc_l(x)
         l_loc = self.mu_l(h)
-        l_scale = self.softplus(self.var_l(h))
+        l_scale = th.exp(self.var_l(h))
         return z_loc, z_scale, l_loc, l_scale
 
 class Decoder(nn.Module):
@@ -421,7 +436,6 @@ class Decoder(nn.Module):
 
         self.rate = nn.Linear(n_hidden, n_classes)
         self.gate = nn.Linear(n_hidden, in_feats)
-        self.softplus = nn.Softplus()
 
     def forward(self, z):
         # define the forward computation on the latent z
@@ -431,5 +445,5 @@ class Decoder(nn.Module):
         # return the parameter for the output Bernoulli
         # each is of size batch_size x 784
         mu = self.rate(hidden).softmax(dim=-1)
-        gate = self.softplus(self.gate(hidden))
+        gate = th.exp(self.gate(hidden))
         return mu, gate

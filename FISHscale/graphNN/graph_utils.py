@@ -284,14 +284,14 @@ class GraphData(pl.LightningDataModule):
         self.guide = self.model.guide
         self.elbo = Trace_ELBO()
         svi = SVI(self.model.model, self.guide, AdamPyro({'lr':1e-3}), self.elbo)
+        dl = self.train_dataloader()
 
         print('Training')
         for epoch in range(n_epochs):
             losses = []
 
             # Take a gradient step for each mini-batch in the dataset
-            for batch in self.train_dataloader():
-
+            for batch_idx, batch in enumerate(dl):
                 loss = svi.step(batch)
                 losses.append(loss)
 
@@ -342,29 +342,6 @@ class GraphData(pl.LightningDataModule):
                         device=self.device,
                         #exclude='self',
                         #reverse_eids=th.arange(self.g.num_edges()) ^ 1,
-                        batch_size=self.batch_size,
-                        shuffle=True,
-                        drop_last=True,
-                        num_workers=self.num_workers,
-                        )
-        return unlab
-
-    def train_dataloader_pyro(self):
-        """
-        train_dataloader
-
-        Prepare dataloader
-
-        Returns:
-            dgl.dataloading.EdgeDataLoader: Deep Graph Library dataloader.
-        """        
-        
-        random_nodes = th.tensor(np.random.choice(self.g.num_nodes(),int(self.g.num_nodes()*self.train_p),replace=False))
-        unlab = dgl.dataloading.NodeDataLoader(
-                        self.g,
-                        random_nodes,
-                        self.sampler,
-                        device=self.device,
                         batch_size=self.batch_size,
                         shuffle=True,
                         drop_last=True,
