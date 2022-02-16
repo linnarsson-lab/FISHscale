@@ -43,7 +43,7 @@ class SAGELightning(LightningModule):
                  n_layers,
                  n_hidden=48,
                  dropout=0.1,
-                 lr=0.001,
+                 lr=0.0001,
                  supervised=False,
                  reference=0,
                  smooth=False,
@@ -73,6 +73,7 @@ class SAGELightning(LightningModule):
         self.kappa = 0
         self.reference=th.tensor(reference,dtype=th.float32, device=device)
         self.smooth = smooth
+        self.in_feats = in_feats
         self.n_hidden = n_hidden
         self.n_latent = n_latent
 
@@ -89,14 +90,9 @@ class SAGELightning(LightningModule):
             self.kl = th.nn.KLDivLoss(reduction='sum')
             self.dist = celltype_distribution
             self.ncells = ncells
-
-            A_factors_per_location, B_groups_per_location = 7 , 7
-            self.factors_per_groups = A_factors_per_location / B_groups_per_location
-            self.n_groups = self.module.n_hidden
-            self.n_factors = self.module.n_classes
-            self.n_obs= n_obs
             self.scale_factor = scale_factor
             self.alpha = 1
+
 
     def model(self, x):
         pyro.module("decoder", self.module.decoder)
@@ -106,19 +102,6 @@ class SAGELightning(LightningModule):
         x= x[pos_ids,:]
         mfgs = [mfg.int() for mfg in mfgs]
         #batch_inputs = mfgs[0].srcdata['gene']
-
-        hyp_alpha = th.tensor(9.0)
-        hyp_beta = th.tensor(3.0)
-        alpha_g_phi_hyp = pyro.sample("alpha_g_phi_hyp",
-                dist.Gamma(hyp_alpha, hyp_beta),
-        )
-        alpha_g_inverse = pyro.sample(
-            "alpha_g_inverse",
-            dist.Exponential(alpha_g_phi_hyp).expand([1, x.shape[1]]).to_event(2),
-        )  # (self.n_batch, self.n_vars)
-
-        #theta = pyro.param("inverse_dispersion", 10.0 * x.new_ones(x.shape[1]),
-        #            constraint=constraints.positive)
 
         with pyro.plate("obs_plate", x.shape[0]),  poutine.scale(scale=self.scale_factor):
 
@@ -134,6 +117,12 @@ class SAGELightning(LightningModule):
                     dist.Normal(zm_loc, zm_scale).to_event(1)     
                 )
 
+            za_loc = x.new_ones(th.Size((x.shape[0], self.in_feats)))*0
+            za_scale = x.new_ones(th.Size((x.shape[0], self.in_feats)))*1
+            za = pyro.sample("za",
+                    dist.Normal(za_loc, za_scale).to_event(1)     
+                )
+
             l_scale = self.l_scale * x.new_ones(1)
             zl = pyro.sample("zl",
                     dist.LogNormal(self.l_loc, l_scale).to_event(1)     
@@ -142,13 +131,12 @@ class SAGELightning(LightningModule):
             z = zn*zm
             mu, gate_logits = self.module.decoder(z)
             mu = mu @ self.reference.T
+            mu = zl * mu 
 
-            #nb_logits = (zl * mu + 6e-3).log() - (theta + 6e-3).log()
-            gp_logits = zl * mu 
-            '''x_dist = dist.ZeroInflatedNegativeBinomial(gate_logits=gate_logits, total_count=theta,
-                                                       logits=nb_logits)'''
+            alpha = 1/(th.exp(za).mean(axis=0).pow(2)) + 1e-6
+            rate = alpha/mu
 
-            x_dist =  dist.GammaPoisson(concentration=1/alpha_g_inverse, rate=1/(gp_logits*alpha_g_inverse)).to_event(1)
+            x_dist =  dist.GammaPoisson(concentration=alpha, rate=rate).to_event(1)
             pyro.sample("obs", 
                 x_dist.to_event(1)
                 ,obs=x
@@ -165,35 +153,23 @@ class SAGELightning(LightningModule):
         batch_inputs = mfgs[0].srcdata['gene']
         # register PyTorch module `decoder` with Pyro
     
-        hyp_alpha= pyro.param('hyp_alpha',th.tensor(9.0))
-        hyp_beta = pyro.param('hyp_beta', th.tensor(3.0))
-        
-        alpha_g_phi_hyp = pyro.sample("alpha_g_phi_hyp",
-                dist.Gamma(hyp_alpha, hyp_beta),
-        )
-        alpha_g_inverse = pyro.sample(
-            "alpha_g_inverse",
-            dist.Exponential(alpha_g_phi_hyp).expand([1, x.shape[1]]).to_event(2),
-        )  # (self.n_batch, self.n_vars)
-        
-
         with pyro.plate("obs_plate", x.shape[0]), poutine.scale(scale=self.scale_factor):            
             zn_loc, zn_scale = self.module.encoder(batch_inputs,
                                                     mfgs
                                                     )
             graph_loss = self.loss_fcn(zn_loc, pos, neg)#.mean()
-            zm_loc, zm_scale, zl_loc, zl_scale = self.module.encoder_molecule(x)
+            zm_loc, zm_scale, zl_loc, zl_scale, za_loc, za_scale = self.module.encoder_molecule(x)
             
             zn_loc,zn_scale = zn_loc[pos_ids,:], zn_scale[pos_ids,:],
             zm_loc, zm_scale = zm_loc[pos_ids,:],zm_scale[pos_ids,:]
             zl_loc, zl_scale =  zl_loc[pos_ids,:], zl_scale[pos_ids,:]
+            za_loc, za_scale =  za_loc[pos_ids,:], za_scale[pos_ids,:]
 
             zn = pyro.sample("zn", dist.Normal(zn_loc, th.sqrt(zn_scale)).to_event(1))
             zm = pyro.sample("zm", dist.Normal(zm_loc, th.sqrt(zm_scale)).to_event(1))
             zl = pyro.sample("zl", dist.LogNormal(zl_loc, th.sqrt(zl_scale)).to_event(1))
-
+            za = pyro.sample("za", dist.Normal(za_loc, th.sqrt(za_scale)).to_event(1))
             pyro.factor("graph_loss", self.alpha * graph_loss, has_rsample=False,)
-
 
     def validation_step(self,batch):
         _, pos, neg, mfgs = batch
@@ -202,17 +178,13 @@ class SAGELightning(LightningModule):
         x= x[pos_ids,:]
         mfgs = [mfg.int() for mfg in mfgs]
         batch_inputs = mfgs[0].srcdata['gene']
-        zn_loc, zn_scale = self.module.encoder(batch_inputs,
-                                                    mfgs
-                                                    )
-
+        zn_loc, zn_scale = self.module.encoder(batch_inputs,mfgs)
         val_loss = self.loss_fcn(zn_loc, pos, neg).mean()
         return val_loss
 
     def training_step(self, batch, batch_idx):
         loss = self.svi.step(batch)
         self.log('train_loss',loss, prog_bar=True)
-
 
     def configure_optimizers(self):
         pass
@@ -316,7 +288,7 @@ class SAGE(nn.Module):
                     if l == self.n_layers -1:
                         n = blocks[-1].dstdata['ngh']
                         h = self.encoder.gs_mu(h)
-                        hm,_,_,_ = self.encoder_molecule(n)
+                        hm,_,_,_,_,_ = self.encoder_molecule(n)
                         h = h*hm
                         #h = self.encoder.softplus(h)
                         # then return a mean vector and a (positive) square root covariance
@@ -421,7 +393,6 @@ class EncoderMolecule(nn.Module):
         ):
         super().__init__()
 
-        self.softplus = nn.Softplus()
         self.fc = FCLayers(in_feats, n_hidden)
         self.mu = nn.Linear(n_hidden, n_latent)
         self.var = nn.Linear(n_hidden, n_latent)
@@ -429,6 +400,10 @@ class EncoderMolecule(nn.Module):
         self.fc_l =FCLayers(in_feats, n_hidden)   
         self.mu_l = nn.Linear(n_hidden, 1)
         self.var_l = nn.Linear(n_hidden, 1)
+
+        self.fc_a =FCLayers(in_feats, n_hidden)   
+        self.mu_a = nn.Linear(n_hidden, in_feats)
+        self.var_a = nn.Linear(n_hidden, in_feats)
     
     def forward(self,x):
         x = th.log(x+1)   
@@ -439,7 +414,11 @@ class EncoderMolecule(nn.Module):
         hl = self.fc_l(x)
         l_loc = self.mu_l(hl)
         l_scale = th.exp(self.var_l(hl))
-        return z_loc, z_scale, l_loc, l_scale
+
+        ha = self.fc_a(x)
+        a_loc = self.mu_a(ha)
+        a_scale = th.exp(self.var_l(ha))
+        return z_loc, z_scale, l_loc, l_scale, a_loc, a_scale
 
 class Decoder(nn.Module):
     def __init__(
