@@ -163,9 +163,10 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
                 ### Prepare Model
         if type(self.model) == type(None):
             self.model = SAGELightning(in_feats=self.data.unique_genes.shape[0], 
-                                        n_hidden=48,
+                                        n_latent=24,
                                         n_layers=len(self.ngh_sizes),
                                         n_classes=self.ref_celltypes.shape[1],
+                                        n_hidden=48,
                                         lr=self.lr,
                                         supervised=self.supervised,
                                         reference=self.ref_celltypes,
@@ -235,6 +236,24 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
             #scheduler.step()
             print("[Epoch %02d]  Loss: %.5f" % (epoch, np.mean(losses)))
         print("Finished training!")
+
+    def train(self,max_epochs=15,gpus=0):
+        """
+        train
+
+        Pytorch-Lightning trainer
+
+        Args:
+            max_epochs (int, optional): Maximum epochs. Defaults to 5.
+            gpus (int, optional): Whether to use GPU. Defaults to 0.
+        """        
+        if self.device.type == 'cuda':
+            gpus=1
+        trainer = pl.Trainer(gpus=gpus,
+                            log_every_n_steps=50,
+                            callbacks=[self.checkpoint_callback], 
+                            max_epochs=max_epochs)
+        trainer.fit(self.model, train_dataloaders=self.train_dataloader())
 
     def make_train_test_validation(self):
         """

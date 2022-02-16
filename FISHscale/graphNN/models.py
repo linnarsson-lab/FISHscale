@@ -15,6 +15,7 @@ from pyro import distributions as dist
 from pyro.nn import PyroModule, PyroSample
 from pyro.distributions import constraints
 from pyro import poutine
+from scvi.nn import FCLayers
 
 class CrossEntropyLoss(nn.Module):
     def forward(self, block_outputs, pos_graph, neg_graph):
@@ -34,14 +35,14 @@ class CrossEntropyLoss(nn.Module):
         #loss = F.binary_cross_entropy_with_logits(score, label.float())
         return loss#, pos_loss, neg_loss
 
-class SAGELightning(nn.Module):
+class SAGELightning(LightningModule):
     def __init__(self,
                  in_feats,
-                 n_hidden,
+                 n_latent,
                  n_classes,
                  n_layers,
-                 activation=F.relu,
-                 dropout=0.2,
+                 n_hidden=48,
+                 dropout=0.1,
                  lr=0.001,
                  supervised=False,
                  reference=0,
@@ -57,7 +58,15 @@ class SAGELightning(nn.Module):
                  ):
         super().__init__()
 
-        self.module = SAGE(in_feats, n_hidden, n_classes, n_layers, activation, dropout, supervised,aggregator)
+        self.module = SAGE(in_feats=in_feats, 
+                            n_hidden=n_hidden,
+                            n_latent=n_latent, 
+                            n_classes=n_classes, 
+                            n_layers=n_layers,
+                            dropout=dropout, 
+                            supervised=supervised,
+                            aggregator= aggregator)
+
         self.lr = lr
         self.supervised= supervised
         self.loss_fcn = CrossEntropyLoss()
@@ -65,10 +74,15 @@ class SAGELightning(nn.Module):
         self.reference=th.tensor(reference,dtype=th.float32, device=device)
         self.smooth = smooth
         self.n_hidden = n_hidden
-        self.device= device
+        self.n_latent = n_latent
+
+        self.svi = PyroOptWrap(model=self.model,
+                guide=self.guide,
+                optim=pyro.optim.Adam({"lr": self.lr}),
+                loss=pyro.infer.Trace_ELBO())
 
         if self.supervised:
-            automatic_optimization = False
+            self.automatic_optimization = False
             self.l_loc = l_loc
             self.l_scale = l_scale
             self.train_acc = torchmetrics.Accuracy()
@@ -83,7 +97,6 @@ class SAGELightning(nn.Module):
             self.n_obs= n_obs
             self.scale_factor = scale_factor
             self.alpha = 1
-            self.device=device
 
     def model(self, x):
         pyro.module("decoder", self.module.decoder)
@@ -109,14 +122,14 @@ class SAGELightning(nn.Module):
 
         with pyro.plate("obs_plate", x.shape[0]),  poutine.scale(scale=self.scale_factor):
 
-            zn_loc = x.new_ones(th.Size((x.shape[0], self.n_hidden)))*0
-            zn_scale = x.new_ones(th.Size((x.shape[0], self.n_hidden)))*1
+            zn_loc = x.new_ones(th.Size((x.shape[0], self.n_latent)))*0
+            zn_scale = x.new_ones(th.Size((x.shape[0], self.n_latent)))*1
             zn = pyro.sample("zn",
                     dist.Normal(zn_loc, zn_scale).to_event(1)     
                 )
 
-            zm_loc = x.new_ones(th.Size((x.shape[0], self.n_hidden)))*0
-            zm_scale = x.new_ones(th.Size((x.shape[0], self.n_hidden)))*1
+            zm_loc = x.new_ones(th.Size((x.shape[0], self.n_latent)))*0
+            zm_scale = x.new_ones(th.Size((x.shape[0], self.n_latent)))*1
             zm = pyro.sample("zm",
                     dist.Normal(zm_loc, zm_scale).to_event(1)     
                 )
@@ -197,24 +210,13 @@ class SAGELightning(nn.Module):
         return val_loss
 
     def training_step(self, batch, batch_idx):
-        #x,y = batch
-        #yhat = self.forward(x)
-        
         loss = self.svi.step(batch)
-        loss = th.tensor(loss).requires_grad_(True)
-        tensorboard_logs = {'running/loss': loss}
-        return {'loss': loss, 'log': tensorboard_logs}
+        self.log('train_loss',loss, prog_bar=True)
+
 
     def configure_optimizers(self):
-        # REQUIRED
-        # can return multiple optimizers and learning_rate schedulers
-        # (LBFGS it is automatically supported, no need for closure function)
-        self.svi = PyroOptWrap(model=self.model,
-                guide=self.guide,
-                optim=pyro.optim.Adam({"lr": self.lr}),
-                loss=pyro.infer.Trace_ELBO())
+        pass
 
-        return [self.svi]
 
 class PyroOptWrap(pyro.infer.SVI):
     def __init__(self, *args, **kwargs):
@@ -226,37 +228,40 @@ class PyroOptWrap(pyro.infer.SVI):
 class SAGE(nn.Module):
     def __init__(self, 
                 in_feats, 
-                n_hidden, 
+                n_hidden,
+                n_latent,
                 n_classes, 
                 n_layers, 
-                activation, 
                 dropout,
                 supervised,
                 aggregator):
         super().__init__()
         self.n_layers = n_layers
         self.n_hidden = n_hidden
+        self.n_latent = n_latent
         self.n_classes = n_classes
         self.supervised = supervised
         self.aggregator = aggregator
-        #if self.supervised:
-        #    n_hidden =n_classes
 
-        self.encoder = Encoder(in_feats,
-                                n_hidden,
-                                n_classes,
-                                n_layers,
-                                supervised,
-                                aggregator)
+        self.encoder = Encoder(in_feats=in_feats,
+                                n_hidden=n_hidden,
+                                n_latent=n_latent,
+                                n_layers=n_layers,
+                                supervised=supervised,
+                                aggregator=aggregator,
+                                dropout= dropout,
+                                )
         
-        self.encoder_molecule = EncoderMolecule(in_feats,
-                                                    n_hidden
+        self.encoder_molecule = EncoderMolecule(in_feats=in_feats,
+                                                    n_hidden=n_hidden,
+                                                    n_latent= n_latent
                                             )
 
-        self.decoder = Decoder(in_feats, 
-                                n_hidden,
-                                n_classes,
-                            )
+        self.decoder = Decoder(in_feats=in_feats,
+                                n_hidden=n_hidden,
+                                n_latent= n_latent,
+                                n_classes= n_classes,
+                        )
 
     def inference(self, g, x, ngh,device, batch_size, num_workers):
             """
@@ -273,7 +278,11 @@ class SAGE(nn.Module):
             # TODO: can we standardize this?
             self.eval()
             for l, layer in enumerate(self.encoder.encoder_dict['GS']):
-                y = th.zeros(g.num_nodes(), self.n_hidden) #if not self.supervised else th.zeros(g.num_nodes(), self.n_classes)
+                if l == self.n_layers - 1:
+
+                    y = th.zeros(g.num_nodes(), self.n_latent) #if not self.supervised else th.zeros(g.num_nodes(), self.n_classes)
+                else:
+                    y = th.zeros(g.num_nodes(), self.n_hidden)
                 p_class = th.zeros(g.num_nodes(), self.n_classes)
 
                 sampler = dgl.dataloading.MultiLayerFullNeighborSampler(1)
@@ -326,10 +335,11 @@ class Encoder(nn.Module):
         self,
         in_feats,
         n_hidden,
-        n_classes,
+        n_latent,
         n_layers,
         supervised,
         aggregator,
+        dropout,
         ):
         super().__init__()
         self.aggregator = aggregator
@@ -370,7 +380,7 @@ class Encoder(nn.Module):
             layers.append(dglnn.GATConv(n_hidden, 
                                         n_hidden, 
                                         num_heads=4, 
-                                        feat_drop=0.2,
+                                        feat_drop=dropout,
                                         activation=F.relu,
                                         #allow_zero_in_degree=False
                                         ))
@@ -379,15 +389,14 @@ class Encoder(nn.Module):
             layers.append(dglnn.SAGEConv(n_hidden, 
                                             n_hidden, 
                                             aggregator_type=aggregator,
-                                            feat_drop=0.2,
+                                            feat_drop=dropout,
                                             activation=F.relu,
                                             norm=F.normalize
                                             ))
 
         self.encoder_dict = nn.ModuleDict({'GS': layers})
-        self.gs_mu = nn.Linear(n_hidden, n_hidden)
-        self.gs_var = nn.Linear(n_hidden, n_hidden)
-        self.softplus = nn.Softplus()
+        self.gs_mu = nn.Linear(n_hidden, n_latent)
+        self.gs_var = nn.Linear(n_hidden, n_latent)
     
     def forward(self,x, blocks=None):
         h = th.log(x+1)   
@@ -406,25 +415,18 @@ class EncoderMolecule(nn.Module):
     def __init__(
         self,
         in_feats,
-        n_hidden,
+        n_hidden=64,
+        n_latent=24,
 
         ):
         super().__init__()
 
         self.softplus = nn.Softplus()
-        self.fc = nn.Sequential(
-                nn.Linear(in_feats, n_hidden),
-                nn.BatchNorm1d(n_hidden),
-                nn.ReLU()      
-            )
-        self.mu = nn.Linear(n_hidden, n_hidden)
-        self.var = nn.Linear(n_hidden, n_hidden)
+        self.fc = FCLayers(in_feats, n_hidden)
+        self.mu = nn.Linear(n_hidden, n_latent)
+        self.var = nn.Linear(n_hidden, n_latent)
 
-        self.fc_l = nn.Sequential(
-                nn.Linear(in_feats, n_hidden),
-                nn.BatchNorm1d(n_hidden),
-                nn.ReLU()      
-            )
+        self.fc_l =FCLayers(in_feats, n_hidden)   
         self.mu_l = nn.Linear(n_hidden, 1)
         self.var_l = nn.Linear(n_hidden, 1)
     
@@ -434,9 +436,9 @@ class EncoderMolecule(nn.Module):
         z_loc = self.mu(h)
         z_scale = th.exp(self.var(h))
 
-        h = self.fc_l(x)
-        l_loc = self.mu_l(h)
-        l_scale = th.exp(self.var_l(h))
+        hl = self.fc_l(x)
+        l_loc = self.mu_l(hl)
+        l_scale = th.exp(self.var_l(hl))
         return z_loc, z_scale, l_loc, l_scale
 
 class Decoder(nn.Module):
@@ -444,16 +446,13 @@ class Decoder(nn.Module):
         self,
         in_feats,
         n_hidden,
+        n_latent,
         n_classes,
         
         ):
         super().__init__()
 
-        self.fc = nn.Sequential(
-                    nn.Linear(n_hidden, n_hidden),
-                    nn.BatchNorm1d(n_hidden),
-                    nn.ReLU()   
-                )
+        self.fc = FCLayers(n_latent,n_hidden)
 
         self.rate = nn.Linear(n_hidden, n_classes)
         self.gate = nn.Linear(n_hidden, in_feats)
