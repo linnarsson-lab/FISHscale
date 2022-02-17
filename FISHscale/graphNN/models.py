@@ -431,7 +431,6 @@ class Encoder(nn.Module):
         z_scale = th.exp(self.gs_var(h))
         return z_loc, z_scale
 
-    
 class EncoderMolecule(nn.Module):
     def __init__(
         self,
@@ -442,6 +441,7 @@ class EncoderMolecule(nn.Module):
         ):
         super().__init__()
 
+        self.softplus = nn.Softplus()
         self.fc = FCLayers(in_feats, n_hidden)
         self.mu = nn.Linear(n_hidden, n_latent)
         self.var = nn.Linear(n_hidden, n_latent)
@@ -474,16 +474,25 @@ class Decoder(nn.Module):
 
         self.fc = FCLayers(n_latent,n_hidden)
 
-        self.rate = nn.Linear(n_hidden, n_classes)
-        self.gate = nn.Linear(n_hidden, in_feats)
+        self.px_scale_decoder = nn.Sequential(
+            nn.Linear(n_hidden, n_classes),
+            nn.Softmax(dim=-1)
+            )
+
+        # dispersion: here we only deal with gene-cell dispersion case
+        self.px_r_decoder = nn.Linear(n_hidden, in_feats)
+        # dropout
+        self.px_dropout_decoder = nn.Linear(n_hidden, in_feats)
 
     def forward(self, z):
         # define the forward computation on the latent z
         # first compute the hidden units
-
-        hidden = self.fc(z)
+        px = self.fc(z)
         # return the parameter for the output Bernoulli
         # each is of size batch_size x 784
-        mu = self.rate(hidden).softmax(dim=-1)
-        gate = th.exp(self.gate(hidden))
-        return mu, gate
+        px_scale = self.px_scale_decoder(px)
+        px_dropout = self.px_dropout_decoder(px)
+        # Clamp to high value: exp(12) ~ 160000 to avoid nans (computational stability)
+        #   # torch.clamp( , max=12)
+        px_r = self.px_r_decoder(px)
+        return px_scale, px_r, px_dropout
