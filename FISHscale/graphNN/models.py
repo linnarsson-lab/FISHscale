@@ -300,7 +300,6 @@ class SAGE(nn.Module):
             self.eval()
             for l, layer in enumerate(self.encoder.encoder_dict['GS']):
                 if l == self.n_layers - 1:
-
                     y = th.zeros(g.num_nodes(), self.n_latent) #if not self.supervised else th.zeros(g.num_nodes(), self.n_classes)
                 else:
                     y = th.zeros(g.num_nodes(), self.n_hidden)
@@ -342,8 +341,8 @@ class SAGE(nn.Module):
                         #h = self.encoder.softplus(h)
                         # then return a mean vector and a (positive) square root covariance
                         # each of size batch_size x z_dim
-                        rate,_ = self.decoder(h)
-                        p_class[output_nodes] = rate.cpu().detach()
+                        px_scale, px_r, px_dropout = self.decoder(h)
+                        p_class[output_nodes] = px_scale.cpu().detach()
 
                     #    h = self.mean_encoder(h)#, th.exp(self.var_encoder(h))+1e-4 )
                     y[output_nodes] = h.cpu().detach()#.numpy()
