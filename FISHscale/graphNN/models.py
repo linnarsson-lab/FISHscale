@@ -117,11 +117,11 @@ class SAGELightning(LightningModule):
                     dist.Normal(zm_loc, zm_scale).to_event(1)     
                 )
 
-            za_loc = x.new_ones(th.Size((x.shape[0], self.in_feats)))*0
+            '''za_loc = x.new_ones(th.Size((x.shape[0], self.in_feats)))*0
             za_scale = x.new_ones(th.Size((x.shape[0], self.in_feats)))*1
             za = pyro.sample("za",
                     dist.Normal(za_loc, za_scale).to_event(1)     
-                )
+                )'''
 
             l_scale = self.l_scale * x.new_ones(1)
             zl = pyro.sample("zl",
@@ -133,7 +133,7 @@ class SAGELightning(LightningModule):
             mu = mu @ self.reference.T
             mu = zl * mu 
 
-            alpha = 1/(th.exp(za).mean(axis=0).pow(2)) + 1e-6
+            alpha = 1/(th.exp(gate_logits).pow(2)) + 1e-6
             rate = alpha/mu
 
             x_dist =  dist.GammaPoisson(concentration=alpha, rate=rate).to_event(1)
@@ -158,17 +158,17 @@ class SAGELightning(LightningModule):
                                                     mfgs
                                                     )
             graph_loss = self.loss_fcn(zn_loc, pos, neg)#.mean()
-            zm_loc, zm_scale, zl_loc, zl_scale, za_loc, za_scale = self.module.encoder_molecule(x)
+            zm_loc, zm_scale, zl_loc, zl_scale = self.module.encoder_molecule(x)
             
             zn_loc,zn_scale = zn_loc[pos_ids,:], zn_scale[pos_ids,:],
             zm_loc, zm_scale = zm_loc[pos_ids,:],zm_scale[pos_ids,:]
             zl_loc, zl_scale =  zl_loc[pos_ids,:], zl_scale[pos_ids,:]
-            za_loc, za_scale =  za_loc[pos_ids,:], za_scale[pos_ids,:]
+            #za_loc, za_scale =  za_loc[pos_ids,:], za_scale[pos_ids,:]
 
             zn = pyro.sample("zn", dist.Normal(zn_loc, th.sqrt(zn_scale)).to_event(1))
             zm = pyro.sample("zm", dist.Normal(zm_loc, th.sqrt(zm_scale)).to_event(1))
             zl = pyro.sample("zl", dist.LogNormal(zl_loc, th.sqrt(zl_scale)).to_event(1))
-            za = pyro.sample("za", dist.Normal(za_loc, th.sqrt(za_scale)).to_event(1))
+            #za = pyro.sample("za", dist.Normal(za_loc, th.sqrt(za_scale)).to_event(1))
             pyro.factor("graph_loss", self.alpha * graph_loss, has_rsample=False,)
 
     def validation_step(self,batch):
@@ -288,7 +288,7 @@ class SAGE(nn.Module):
                     if l == self.n_layers -1:
                         n = blocks[-1].dstdata['ngh']
                         h = self.encoder.gs_mu(h)
-                        hm,_,_,_,_,_ = self.encoder_molecule(n)
+                        hm,_,_,_ = self.encoder_molecule(n)
                         h = h*hm
                         #h = self.encoder.softplus(h)
                         # then return a mean vector and a (positive) square root covariance
@@ -401,9 +401,9 @@ class EncoderMolecule(nn.Module):
         self.mu_l = nn.Linear(n_hidden, 1)
         self.var_l = nn.Linear(n_hidden, 1)
 
-        self.fc_a =FCLayers(in_feats, n_hidden)   
+        '''self.fc_a =FCLayers(in_feats, n_hidden)   
         self.mu_a = nn.Linear(n_hidden, in_feats)
-        self.var_a = nn.Linear(n_hidden, in_feats)
+        self.var_a = nn.Linear(n_hidden, in_feats)'''
     
     def forward(self,x):
         x = th.log(x+1)   
@@ -415,10 +415,10 @@ class EncoderMolecule(nn.Module):
         l_loc = self.mu_l(hl)
         l_scale = th.exp(self.var_l(hl))
 
-        ha = self.fc_a(x)
+        '''ha = self.fc_a(x)
         a_loc = self.mu_a(ha)
-        a_scale = th.exp(self.var_l(ha))
-        return z_loc, z_scale, l_loc, l_scale, a_loc, a_scale
+        a_scale = th.exp(self.var_l(ha))'''
+        return z_loc, z_scale, l_loc, l_scale#, a_loc, a_scale
 
 class Decoder(nn.Module):
     def __init__(
