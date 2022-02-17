@@ -49,6 +49,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
         lr=1e-3,
         aggregator='pool',
         celltype_distribution='uniform',
+        inference_type='deterministic',
         ):
         """
         GraphData prepared the FISHscale dataset to be analysed in a supervised
@@ -125,6 +126,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
         self.subsample = subsample
         self.aggregator = aggregator
         self.celltype_distribution = celltype_distribution
+        self.inference_type = inference_type
 
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.prepare_reference()
@@ -175,7 +177,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
                                         aggregator=self.aggregator,
                                         celltype_distribution=self.dist,
                                         ncells=self.ncells,
-                                        n_obs=self.g.num_nodes(),
+                                        inference_type=self.inference_type,
                                         l_loc=l_loc[0][0],
                                         l_scale= l_scale[0][0],
                                         scale_factor=1/(batch_size*self.data.unique_genes.shape[0]),

@@ -51,7 +51,7 @@ class SAGELightning(LightningModule):
                  aggregator='attentional',
                  celltype_distribution=None,
                  ncells = None,
-                 n_obs = None,
+                 inference_type='deterministic',
                  l_loc = None,
                  l_scale = None,
                  scale_factor = 1,
@@ -76,11 +76,13 @@ class SAGELightning(LightningModule):
         self.in_feats = in_feats
         self.n_hidden = n_hidden
         self.n_latent = n_latent
+        self.inference_type = inference_type
 
-        self.svi = PyroOptWrap(model=self.model,
-                guide=self.guide,
-                optim=pyro.optim.Adam({"lr": self.lr}),
-                loss=pyro.infer.Trace_ELBO())
+        if self.inference_type == 'VI':
+            self.svi = PyroOptWrap(model=self.model,
+                    guide=self.guide,
+                    optim=pyro.optim.Adam({"lr": self.lr}),
+                    loss=pyro.infer.Trace_ELBO())
 
         if self.supervised:
             self.automatic_optimization = False
@@ -116,12 +118,6 @@ class SAGELightning(LightningModule):
             zm = pyro.sample("zm",
                     dist.Normal(zm_loc, zm_scale).to_event(1)     
                 )
-
-            '''za_loc = x.new_ones(th.Size((x.shape[0], self.in_feats)))*0
-            za_scale = x.new_ones(th.Size((x.shape[0], self.in_feats)))*1
-            za = pyro.sample("za",
-                    dist.Normal(za_loc, za_scale).to_event(1)     
-                )'''
 
             l_scale = self.l_scale * x.new_ones(1)
             zl = pyro.sample("zl",
@@ -183,8 +179,59 @@ class SAGELightning(LightningModule):
         return val_loss
 
     def training_step(self, batch, batch_idx):
-        loss = self.svi.step(batch)
-        self.log('train_loss',loss, prog_bar=True)
+        if self. inference_type == 'VI':
+            loss = self.svi.step(batch)
+            self.log('train_loss',loss, prog_bar=True)
+
+        else:
+            self.reference = self.reference.to(self.device)
+            _, pos, neg, mfgs = batch
+            pos_ids = pos.edges()[0]
+            x = mfgs[1].dstdata['ngh']
+            x= x[pos_ids,:]
+            mfgs = [mfg.int() for mfg in mfgs]
+            batch_inputs = mfgs[0].srcdata['gene']
+            zn_loc, _ = self.module.encoder(batch_inputs,mfgs)
+            graph_loss = self.loss_fcn(zn_loc, pos, neg).mean()
+
+            
+            if self.supervised:
+                zm_loc, _, zl_loc, _ = self.module.encoder_molecule(x)
+
+                zn_loc = zn_loc[pos_ids,:]
+                zm_loc = zm_loc[pos_ids,:]
+                zl_loc =  zl_loc[pos_ids,:]
+
+                z = zn_loc*zm_loc
+                px_scale,px_r, px_dropout = self.module.decoder(z)
+                px_scale = px_scale @ self.reference.T
+                px_rate = zl_loc * px_scale 
+                alpha = 1/(th.exp(px_r).pow(2)) + 1e-6
+                rate = alpha/px_rate
+                NB = GammaPoisson(concentration=alpha,rate=rate)#.log_prob(local_nghs).mean(axis=-1).mean()
+                nb_loss = -NB.log_prob(x).mean(axis=-1).mean()
+            
+                # Regularize by local nodes
+                # Add Predicted same class nodes together.
+                if type(self.dist) != type(None):
+                    #option 2
+                    p = th.ones(px_scale.shape[0]) @ px_scale
+                    p = th.log(p/p.sum())
+                    loss_dist = self.kl(p,self.dist.to(self.device)).sum()
+                else:
+                    loss_dist = 0
+
+                loss = graph_loss + nb_loss + loss_dist
+                self.log('train_loss', loss, prog_bar=True, on_step=True, on_epoch=True)
+                self.log('Loss Dist', loss_dist, prog_bar=True, on_step=True, on_epoch=True)
+                self.log('nb_loss', nb_loss, prog_bar=True, on_step=True, on_epoch=True)
+                self.log('Graph Loss', graph_loss, prog_bar=False, on_step=True, on_epoch=False)
+
+            else:
+                loss = graph_loss
+                self.log('train_loss', loss, prog_bar=True, on_step=True, on_epoch=True)
+        
+        return loss
 
     def configure_optimizers(self):
         pass
@@ -400,10 +447,6 @@ class EncoderMolecule(nn.Module):
         self.fc_l =FCLayers(in_feats, n_hidden)   
         self.mu_l = nn.Linear(n_hidden, 1)
         self.var_l = nn.Linear(n_hidden, 1)
-
-        '''self.fc_a =FCLayers(in_feats, n_hidden)   
-        self.mu_a = nn.Linear(n_hidden, in_feats)
-        self.var_a = nn.Linear(n_hidden, in_feats)'''
     
     def forward(self,x):
         x = th.log(x+1)   
@@ -414,10 +457,6 @@ class EncoderMolecule(nn.Module):
         hl = self.fc_l(x)
         l_loc = self.mu_l(hl)
         l_scale = th.exp(self.var_l(hl))
-
-        '''ha = self.fc_a(x)
-        a_loc = self.mu_a(ha)
-        a_scale = th.exp(self.var_l(ha))'''
         return z_loc, z_scale, l_loc, l_scale#, a_loc, a_scale
 
 class Decoder(nn.Module):
