@@ -411,8 +411,8 @@ class Encoder(nn.Module):
                                             n_hidden, 
                                             aggregator_type=aggregator,
                                             feat_drop=dropout,
-                                            #activation=F.relu,
-                                            #norm=F.normalize
+                                            activation=F.relu,
+                                            norm=F.normalize
                                             ))
 
         self.encoder_dict = nn.ModuleDict({'GS': layers})
