@@ -79,13 +79,14 @@ class SAGELightning(LightningModule):
         self.inference_type = inference_type
 
         if self.inference_type == 'VI':
+            self.automatic_optimization = False
             self.svi = PyroOptWrap(model=self.model,
                     guide=self.guide,
                     optim=pyro.optim.Adam({"lr": self.lr}),
                     loss=pyro.infer.Trace_ELBO())
 
         if self.supervised:
-            self.automatic_optimization = False
+            #self.automatic_optimization = False
             self.l_loc = l_loc
             self.l_scale = l_scale
             self.train_acc = torchmetrics.Accuracy()
@@ -234,7 +235,8 @@ class SAGELightning(LightningModule):
         return loss
 
     def configure_optimizers(self):
-        pass
+        optimizer = th.optim.Adam(self.module.parameters(), lr=self.lr)
+        return optimizer
 
 
 class PyroOptWrap(pyro.infer.SVI):
@@ -457,7 +459,7 @@ class EncoderMolecule(nn.Module):
         hl = self.fc_l(x)
         l_loc = self.mu_l(hl)
         l_scale = th.exp(self.var_l(hl))
-        return z_loc, z_scale, l_loc, l_scale#, a_loc, a_scale
+        return z_loc, z_scale, l_loc, l_scale
 
 class Decoder(nn.Module):
     def __init__(
