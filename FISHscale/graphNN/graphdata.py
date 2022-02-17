@@ -183,6 +183,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
         self.model.to(self.device)
 
     def prepare_data(self):
+      
         # do-something
         pass
 
@@ -218,6 +219,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
         #self.guide = AutoGuideList(self.model)
         #self.guide.append(AutoNormal(poutine.block(self.model,expose_all=True, hide_all=False, hide=['test'],)
                    #,init_loc_fn=init_to_mean))
+      
         self.guide = self.model.guide
         self.elbo = Trace_ELBO()
         svi = SVI(self.model.model, self.guide, AdamPyro({'lr':1e-3}), self.elbo)
