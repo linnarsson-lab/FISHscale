@@ -195,7 +195,6 @@ class SAGELightning(LightningModule):
             zn_loc, _ = self.module.encoder(batch_inputs,mfgs)
             graph_loss = self.loss_fcn(zn_loc, pos, neg).mean()
 
-            
             if self.supervised:
                 zm_loc, _, zl_loc, _ = self.module.encoder_molecule(x)
 
@@ -206,7 +205,8 @@ class SAGELightning(LightningModule):
                 z = zn_loc*zm_loc
                 px_scale,px_r, px_dropout = self.module.decoder(z)
                 px_scale = px_scale @ self.reference.T
-                px_rate = zl_loc * px_scale 
+                px_rate = th.exp(zl_loc) * px_scale
+
                 alpha = 1/(th.exp(px_r).pow(2)) + 1e-6
                 rate = alpha/px_rate
                 NB = GammaPoisson(concentration=alpha,rate=rate)#.log_prob(local_nghs).mean(axis=-1).mean()
