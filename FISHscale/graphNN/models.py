@@ -99,7 +99,7 @@ class SAGELightning(LightningModule):
 
     def model(self, x):
         pyro.module("decoder", self.module.decoder)
-        _, pos,neg, mfgs = x
+        _, pos,_, mfgs = x
         pos_ids = pos.edges()[0]
         x = mfgs[1].dstdata['ngh']
         x= x[pos_ids,:]
