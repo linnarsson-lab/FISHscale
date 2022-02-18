@@ -114,6 +114,7 @@ class GraphData(pl.LightningDataModule):
         lr=1e-3,
         aggregator='pool',
         celltype_distribution='uniform',
+        inference_type='deterministic', 
         ):
         """
         GraphData prepared the FISHscale dataset to be analysed in a supervised
@@ -190,6 +191,7 @@ class GraphData(pl.LightningDataModule):
         self.subsample = subsample
         self.aggregator = aggregator
         self.celltype_distribution = celltype_distribution
+        self.inference_type = inference_type
 
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.prepare_reference()
@@ -238,6 +240,7 @@ class GraphData(pl.LightningDataModule):
                                         aggregator=self.aggregator,
                                         celltype_distribution=self.dist,
                                         ncells=self.ncells,
+                                        inference_type=self.inference_type
                                         n_obs=self.g.num_nodes(),
                                         l_loc=l_loc[0][0],
                                         l_scale= l_scale[0][0],
@@ -267,38 +270,6 @@ class GraphData(pl.LightningDataModule):
             mode='min',
             stopping_threshold=0.35,
             )
-
-    def pyro_train(self, n_epochs=100):
-        # Training loop.
-        # We train for 80 epochs, although this isn't enough to achieve full convergence.
-        # For optimal results it is necessary to tweak the optimization parameters.
-        # For our purposes, however, 80 epochs of training is sufficient.
-        # Training should take about 8 minutes on a GPU-equipped Colab instance.
-        
-        # Setup a variational objective for gradient-based learning.
-        # Note we use TraceEnum_ELBO in order to leverage Pyro's machinery
-        # for automatic enumeration of the discrete latent variable y.
-        #self.guide = AutoGuideList(self.model)
-        #self.guide.append(AutoNormal(poutine.block(self.model,expose_all=True, hide_all=False, hide=['test'],)
-                   #,init_loc_fn=init_to_mean))
-        self.guide = self.model.guide
-        self.elbo = Trace_ELBO()
-        svi = SVI(self.model.model, self.guide, AdamPyro({'lr':1e-3}), self.elbo)
-
-        print('Training')
-        for epoch in range(n_epochs):
-            losses = []
-
-            # Take a gradient step for each mini-batch in the dataset
-            for batch in self.train_dataloader():
-
-                loss = svi.step(batch)
-                losses.append(loss)
-
-            # Tell the scheduler we've done one epoch.
-            #scheduler.step()
-            print("[Epoch %02d]  Loss: %.5f" % (epoch, np.mean(losses)))
-        print("Finished training!")
 
     def make_train_test_validation(self):
         """
@@ -342,29 +313,6 @@ class GraphData(pl.LightningDataModule):
                         device=self.device,
                         #exclude='self',
                         #reverse_eids=th.arange(self.g.num_edges()) ^ 1,
-                        batch_size=self.batch_size,
-                        shuffle=True,
-                        drop_last=True,
-                        num_workers=self.num_workers,
-                        )
-        return unlab
-
-    def train_dataloader_pyro(self):
-        """
-        train_dataloader
-
-        Prepare dataloader
-
-        Returns:
-            dgl.dataloading.EdgeDataLoader: Deep Graph Library dataloader.
-        """        
-        
-        random_nodes = th.tensor(np.random.choice(self.g.num_nodes(),int(self.g.num_nodes()*self.train_p),replace=False))
-        unlab = dgl.dataloading.NodeDataLoader(
-                        self.g,
-                        random_nodes,
-                        self.sampler,
-                        device=self.device,
                         batch_size=self.batch_size,
                         shuffle=True,
                         drop_last=True,
@@ -683,7 +631,7 @@ class GraphData(pl.LightningDataModule):
 
         Args:
             labelled (bool, optional): [description]. Defaults to True.
-        """        
+        """       
         self.model.eval()
         latent_unlabelled = self.model.module.inference(self.g,self.g.ndata['gene'],'cpu',10*512,0)#.detach().numpy()
         

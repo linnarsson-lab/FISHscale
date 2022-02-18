@@ -139,7 +139,6 @@ class SAGELightning(nn.Module):
                 x_dist.to_event(1)
                 ,obs=x
             )
-
     
     def guide(self,x):
         pyro.module("graph_predict", self.module.encoder)
