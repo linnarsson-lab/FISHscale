@@ -126,12 +126,13 @@ class SAGELightning(LightningModule):
                 )
             
             z = zn*zm
-            mu, gate_logits = self.module.decoder(z)
-            mu = mu @ self.reference.T
-            mu = zl * mu 
+            px_scale, px_r, px_dropout = self.module.decoder(z)
 
-            alpha = 1/(th.exp(gate_logits).pow(2)) + 1e-6
-            rate = alpha/mu
+            px_scale = px_scale @ self.reference.T
+            px_rate = zl * px_scale
+
+            alpha = 1/(th.exp(px_r).pow(2)) + 1e-6
+            rate = alpha/px_rate
 
             x_dist =  dist.GammaPoisson(concentration=alpha, rate=rate).to_event(1)
             pyro.sample("obs", 
