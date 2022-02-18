@@ -189,7 +189,7 @@ class Regionalize(Iteration, Decomposition):
                     filter: np.ndarray = None, ax:Any=None, 
                     figsize=None, save:bool=False, savename:str='',
                     vmin:float=None, vmax:float=None, linewidth:float=0.1,
-                    colorbar=False):
+                    colorbar=False,title=None):
         """Plot hexbin results. 
         Args:
             c (np.ndarray, list): Eiter an Array with color values as a float
@@ -265,6 +265,9 @@ class Regionalize(Iteration, Decomposition):
         ax.set_ylim(plot_min[1] - d, plot_max[1] + d)
         ax.set_aspect('equal')
         
+        # Title
+        if type(title) != type(None):
+            plt.title(title)
         #Save
         if save:
             plt.savefig(f'{savename}_hexbin.pdf')

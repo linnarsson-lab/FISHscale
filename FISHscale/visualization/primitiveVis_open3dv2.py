@@ -130,7 +130,7 @@ class Window:
         self.collapse.addgene.clicked.connect(self.add_genes)
         self.vis.execute()
         #self.App.exec_()
-        sys.exit(self.App.exec_())
+        self.App.exec_()
         #self.App.quit()
     
     def add_genes(self):
@@ -386,10 +386,11 @@ class CollapsibleDialog(QDialog,QObject):
             #self.vis.visM.clear_geometries()
             self.vis.visM.destroy_window()
             self.vis.visM.close()
-            event.accept()
+            
             #QCoreApplication.processEvents()
-            QCoreApplication.quit()
+            QApplication.quit()
             QApplication.quitOnLastWindowClosed()
+            event.accept()
         else:
             event.ignore()
         
