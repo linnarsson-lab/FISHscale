@@ -286,9 +286,12 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
             indices_train += train_g
             indices_test += test_g
         self.indices_train, self.indices_test = th.stack(indices_train), th.stack(indices_test)
-        edges_train =  th.isin(self.g.edges()[0],indices_train) & th.isin(self.g.edges()[1],indices_train) 
-        edges_test =  th.isin(self.g.edges()[0],indices_test) & th.isin(self.g.edges()[1],indices_test)
-        
+        edges_bool_train =  th.isin(self.g.edges()[0],indices_train) & th.isin(self.g.edges()[1],indices_train) 
+        edges_bool_test =  th.isin(self.g.edges()[0],indices_test) & th.isin(self.g.edges()[1],indices_test)
+
+        self.edges_train  = np.random.choice(np.arange(edges_bool_train.shape[0])[edges_bool_train],int(edges_bool_train.sum()*(self.train_p/self.ngh_sizes[1])),replace=False)
+        self.edges_test  = np.random.choice(np.arange(edges_bool_test.shape[0])[edges_bool_test],int(edges_bool_test.sum()*(1-self.train_p)),replace=False)
+
         print('Training on {} edges.'.format(self.random_edges.shape[0]))
 
     def train_dataloader(self):
@@ -302,7 +305,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
         """        
         unlab = dgl.dataloading.EdgeDataLoader(
                         self.g,
-                        self.random_edges,
+                        self.edges_train,
                         self.sampler,
                         negative_sampler=dgl.dataloading.negative_sampler.Uniform(self.negative_samples), # NegativeSampler(self.g, self.negative_samples, False),
                         device=self.device,
@@ -315,7 +318,32 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
                         )
         return unlab
 
-    def validation_dataloader_pyro(self):
+    def test_dataloader(self):
+        """
+        train_dataloader
+
+        Prepare dataloader
+
+        Returns:
+            dgl.dataloading.EdgeDataLoader: Deep Graph Library dataloader.
+        """        
+        
+        unlab = dgl.dataloading.EdgeDataLoader(
+                        self.g,
+                        self.edges_test,
+                        self.sampler,
+                        negative_sampler=dgl.dataloading.negative_sampler.Uniform(self.negative_samples), # NegativeSampler(self.g, self.negative_samples, False),
+                        device=self.device,
+                        #exclude='self',
+                        #reverse_eids=th.arange(self.g.num_edges()) ^ 1,
+                        batch_size=self.batch_size,
+                        shuffle=True,
+                        drop_last=True,
+                        num_workers=self.num_workers,
+                        )
+        return unlab
+
+    def validation_dataloader(self):
         """
         train_dataloader
 
@@ -354,7 +382,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
                             log_every_n_steps=50,
                             callbacks=[self.checkpoint_callback], 
                             max_epochs=max_epochs)
-        trainer.fit(self.model, train_dataloaders=self.train_dataloader())
+        trainer.fit(self.model, train_dataloaders=self.train_dataloader(),val_dataloaders=self.test_dataloader())
 
     #### plotting and latent factors #####
 
