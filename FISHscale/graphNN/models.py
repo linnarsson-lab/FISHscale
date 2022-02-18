@@ -275,7 +275,7 @@ class SAGE(nn.Module):
         
         self.encoder_molecule = EncoderMolecule(in_feats=in_feats,
                                                     n_hidden=n_hidden,
-                                                    n_latent= n_latent
+                                                    n_latent= n_latent,
                                             )
 
         self.decoder = Decoder(in_feats=in_feats,
@@ -383,7 +383,6 @@ class Encoder(nn.Module):
                                             num_heads=4,
                                             feat_drop=x,
                                             activation=F.relu,
-                                            norm=self.norm,
                                             #allow_zero_in_degree=False
                                             ))
 
