@@ -168,17 +168,6 @@ class SAGELightning(LightningModule):
             #za = pyro.sample("za", dist.Normal(za_loc, th.sqrt(za_scale)).to_event(1))
             pyro.factor("graph_loss", self.alpha * graph_loss, has_rsample=False,)
 
-    def validation_step(self,batch):
-        _, pos, neg, mfgs = batch
-        pos_ids = pos.edges()[0]
-        x = mfgs[1].dstdata['ngh']
-        x= x[pos_ids,:]
-        mfgs = [mfg.int() for mfg in mfgs]
-        batch_inputs = mfgs[0].srcdata['gene']
-        zn_loc, zn_scale = self.module.encoder(batch_inputs,mfgs)
-        val_loss = self.loss_fcn(zn_loc, pos, neg).mean()
-        return val_loss
-
     def training_step(self, batch, batch_idx):
         if self. inference_type == 'VI':
             loss = self.svi.step(batch)
@@ -236,7 +225,57 @@ class SAGELightning(LightningModule):
 
     def configure_optimizers(self):
         optimizer = th.optim.Adam(self.module.parameters(), lr=self.lr)
-        return optimizer
+        scheduler = th.optim.lr_scheduler.ReduceLROnPlateau(optimizer,)     
+        return optimizer,scheduler
+
+    def validation_step(self,batch):
+        if self. inference_type == 'VI':
+                    loss = self.svi.step(batch)
+                    self.log('train_loss',loss, prog_bar=True)
+
+        else:
+            self.reference = self.reference.to(self.device)
+            _, pos, neg, mfgs = batch
+            pos_ids = pos.edges()[0]
+            x = mfgs[1].dstdata['ngh']
+            x= x[pos_ids,:]
+            mfgs = [mfg.int() for mfg in mfgs]
+            batch_inputs = mfgs[0].srcdata['gene']
+            zn_loc, _ = self.module.encoder(batch_inputs,mfgs)
+            graph_loss = self.loss_fcn(zn_loc, pos, neg).mean()
+
+            if self.supervised:
+                zm_loc, _, zl_loc, _ = self.module.encoder_molecule(x)
+
+                zn_loc = zn_loc[pos_ids,:]
+                zm_loc = zm_loc[pos_ids,:]
+                zl_loc =  zl_loc[pos_ids,:]
+
+                z = zn_loc*zm_loc
+                px_scale,px_r, px_dropout = self.module.decoder(z)
+                px_scale = px_scale @ self.reference.T
+                px_rate = th.exp(zl_loc) * px_scale
+
+                alpha = 1/(th.exp(px_r).pow(2)) + 1e-6
+                rate = alpha/px_rate
+                NB = GammaPoisson(concentration=alpha,rate=rate)#.log_prob(local_nghs).mean(axis=-1).mean()
+                nb_loss = -NB.log_prob(x).mean(axis=-1).mean()
+            
+                # Regularize by local nodes
+                # Add Predicted same class nodes together.
+                if type(self.dist) != type(None):
+                    #option 2
+                    p = th.ones(px_scale.shape[0]) @ px_scale
+                    p = th.log(p/p.sum())
+                    loss_dist = self.kl(p,self.dist.to(self.device)).sum()
+                else:
+                    loss_dist = 0
+
+                loss = graph_loss + nb_loss + loss_dist
+
+            else:
+                loss = graph_loss
+        return loss
 
 
 class PyroOptWrap(pyro.infer.SVI):

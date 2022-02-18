@@ -267,21 +267,28 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
         because at the moment the model performance cannot be checked against labelled
         data.
         """        
-        m =self.g.ndata['indices'].numpy()
-        np.save(self.folder +'/molecules.npy',self.g.ndata['indices'].numpy())
-        self.train_size = int((m.shape[0])*self.train_p)
-        self.test_size = m.shape[0]-int(m.shape[0]*self.train_p)  
-        random_state = np.random.RandomState(seed=0)
-        permutation = random_state.permutation(m.shape[0])
-        self.indices_test = th.tensor(permutation[:self.test_size])
-        self.indices_train = th.tensor(permutation[self.test_size : (self.test_size + self.train_size)])
-        self.indices_validation = th.tensor(np.arange(m.shape[0]))
+        indices_train = []
+        indices_test = []
+        import torch as th
 
-        edges = np.arange(self.g.num_edges())
-        self.random_edges = torch.tensor(np.random.choice(edges,
-                                                        int(edges.shape[0]*(self.train_p/(self.g.num_edges()/self.g.num_nodes()))),
-                                                        replace=False)
-                                                        )
+        random_state = np.random.RandomState(seed=0)
+        for gene in range(self.g.ndata['gene'].shape[1]):
+            molecules_g = self.g.ndata['gene'][:,gene] == 1
+
+            if molecules_g.sum() >= 20:
+                indices_g = self.g.ndata['indices'][molecules_g]
+                train_size = int(indices_g.shape[0]*self.train_p)
+                test_size = indices_g.shape[0]-train_size
+                permutation = random_state.permutation(indices_g)
+                test_g = th.tensor(permutation[:test_size])
+                train_g = th.tensor(permutation[test_size:(train_size+test_size)])   
+                
+            indices_train += train_g
+            indices_test += test_g
+        self.indices_train, self.indices_test = th.stack(indices_train), th.stack(indices_test)
+        edges_train =  th.isin(self.g.edges()[0],indices_train) & th.isin(self.g.edges()[1],indices_train) 
+        edges_test =  th.isin(self.g.edges()[0],indices_test) & th.isin(self.g.edges()[1],indices_test)
+        
         print('Training on {} edges.'.format(self.random_edges.shape[0]))
 
     def train_dataloader(self):
