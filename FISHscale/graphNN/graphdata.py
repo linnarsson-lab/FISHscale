@@ -285,14 +285,15 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
                 
             indices_train += train_g
             indices_test += test_g
-        self.indices_train, self.indices_test = th.stack(indices_train), th.stack(indices_test)
+        indices_train, indices_test = th.stack(indices_train), th.stack(indices_test)
         edges_bool_train =  th.isin(self.g.edges()[0],indices_train) & th.isin(self.g.edges()[1],indices_train) 
         edges_bool_test =  th.isin(self.g.edges()[0],indices_test) & th.isin(self.g.edges()[1],indices_test)
 
         self.edges_train  = np.random.choice(np.arange(edges_bool_train.shape[0])[edges_bool_train],int(edges_bool_train.sum()*(self.train_p/self.ngh_sizes[1])),replace=False)
         self.edges_test  = np.random.choice(np.arange(edges_bool_test.shape[0])[edges_bool_test],int(edges_bool_test.sum()*(1-self.train_p)),replace=False)
 
-        print('Training on {} edges.'.format(self.random_edges.shape[0]))
+        print('Training on {} edges.'.format(self.edges_train.shape[0]))
+        print('Testing on {} edges.'.format(self.edges_test.shape[0]))
 
     def train_dataloader(self):
         """
@@ -381,7 +382,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
         trainer = pl.Trainer(gpus=gpus,
                             log_every_n_steps=50,
                             callbacks=[self.checkpoint_callback], 
-                            max_epochs=max_epochs)
+                            max_epochs=max_epochs,)
         trainer.fit(self.model, train_dataloaders=self.train_dataloader(),val_dataloaders=self.test_dataloader())
 
     #### plotting and latent factors #####

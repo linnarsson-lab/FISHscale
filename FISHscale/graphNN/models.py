@@ -225,10 +225,16 @@ class SAGELightning(LightningModule):
 
     def configure_optimizers(self):
         optimizer = th.optim.Adam(self.module.parameters(), lr=self.lr)
-        scheduler = th.optim.lr_scheduler.ReduceLROnPlateau(optimizer,)     
-        return optimizer,scheduler
+        lr_scheduler = th.optim.lr_scheduler.ReduceLROnPlateau(optimizer,)
+        scheduler = {
+            'scheduler': lr_scheduler, 
+            'reduce_on_plateau': True,
+            # val_checkpoint_on is val_loss passed in as checkpoint_on
+            'monitor': 'train_loss'
+        }
+        return [optimizer],[scheduler]
 
-    def validation_step(self,batch):
+    def validation_step(self,batch, batch_idx):
         if self. inference_type == 'VI':
                     loss = self.svi.step(batch)
                     self.log('train_loss',loss, prog_bar=True)
