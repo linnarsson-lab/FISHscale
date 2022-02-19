@@ -42,7 +42,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
         ref_celltypes=None,
         exclude_clusters:dict={},
         smooth:bool=False,
-        negative_samples:int=1,
+        negative_samples:int=5,
         distance_factor:int=4,
         max_distance_nodes=None,
         device='cpu',

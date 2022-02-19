@@ -29,7 +29,7 @@ class CrossEntropyLoss(nn.Module):
             neg_score = neg_graph.edata['score']
         
         pos_loss, neg_loss=  -F.logsigmoid(pos_score.sum(-1)), - F.logsigmoid(-neg_score.sum(-1))#.mean()
-        loss = pos_loss + neg_loss
+        loss = pos_loss.mean() + neg_loss.mean()
         #score = th.cat([pos_score, neg_score])
         #label = th.cat([th.ones_like(pos_score), th.zeros_like(neg_score)]).long()
         #loss = F.binary_cross_entropy_with_logits(score, label.float())
@@ -167,7 +167,7 @@ class SAGELightning(LightningModule):
             zm = pyro.sample("zm", dist.Normal(zm_loc, th.sqrt(zm_scale)).to_event(1))
             zl = pyro.sample("zl", dist.LogNormal(zl_loc, th.sqrt(zl_scale)).to_event(1))
             #za = pyro.sample("za", dist.Normal(za_loc, th.sqrt(za_scale)).to_event(1))
-            pyro.factor("graph_loss", self.alpha * graph_loss, has_rsample=False,)
+        pyro.factor("graph_loss", self.alpha * graph_loss, has_rsample=False,)
 
     def training_step(self, batch, batch_idx):
         if self. inference_type == 'VI':
