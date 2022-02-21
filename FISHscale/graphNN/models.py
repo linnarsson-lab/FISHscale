@@ -28,8 +28,9 @@ class CrossEntropyLoss(nn.Module):
             neg_graph.apply_edges(fn.u_mul_v('h', 'h', 'score'))
             neg_score = neg_graph.edata['score']
         
-        pos_loss, neg_loss=  -F.logsigmoid(pos_score.sum(-1)), - F.logsigmoid(-neg_score.sum(-1))#.mean()
-        loss = pos_loss.mean() + neg_loss.mean()
+        pos_loss, neg_loss=  -F.logsigmoid(pos_score.sum(-1)), - F.logsigmoid(-neg_score.sum(-1))
+        neg_loss = neg_loss.reshape([pos_score.shape[0], int(neg_score.shape[0]/pos_score.shape[0])])#.mean(axis=1)
+        loss = pos_loss + neg_loss.mean(axis=1)
         #score = th.cat([pos_score, neg_score])
         #label = th.cat([th.ones_like(pos_score), th.zeros_like(neg_score)]).long()
         #loss = F.binary_cross_entropy_with_logits(score, label.float())
@@ -94,12 +95,12 @@ class SAGELightning(LightningModule):
             self.dist = celltype_distribution
             self.ncells = ncells
             self.scale_factor = scale_factor
-            self.alpha = 1
+            self.alpha = 50
 
 
     def model(self, x):
         pyro.module("decoder", self.module.decoder)
-        _, pos,_, mfgs = x
+        _, pos,neg, mfgs = x
         pos_ids = pos.edges()[0]
         x = mfgs[1].dstdata['ngh']
         x= x[pos_ids,:]
@@ -138,7 +139,7 @@ class SAGELightning(LightningModule):
             pyro.sample("obs", 
                 x_dist.to_event(1)
                 ,obs=x
-            )
+            )         
 
     def guide(self,x):
         pyro.module("graph", self.module.encoder)
@@ -167,12 +168,25 @@ class SAGELightning(LightningModule):
             zm = pyro.sample("zm", dist.Normal(zm_loc, th.sqrt(zm_scale)).to_event(1))
             zl = pyro.sample("zl", dist.LogNormal(zl_loc, th.sqrt(zl_scale)).to_event(1))
             #za = pyro.sample("za", dist.Normal(za_loc, th.sqrt(za_scale)).to_event(1))
-        pyro.factor("graph_loss", self.alpha * graph_loss, has_rsample=False,)
+            pyro.factor("graph_loss", self.alpha * graph_loss, has_rsample=False,)
+            self.log('Graph Loss', self.alpha*graph_loss.mean(), prog_bar=False, on_step=True, on_epoch=False)
 
     def training_step(self, batch, batch_idx):
         if self. inference_type == 'VI':
             loss = self.svi.step(batch)
-            self.log('train_loss',loss, prog_bar=True)
+            ''' _, pos, neg, mfgs = batch
+            pos_ids = pos.edges()[0]
+            x = mfgs[1].dstdata['ngh']
+            x= x[pos_ids,:]
+            mfgs = [mfg.int() for mfg in mfgs]
+            batch_inputs = mfgs[0].srcdata['gene']
+            zn_loc, _ = self.module.encoder(batch_inputs,mfgs)
+            graph_loss = self.loss_fcn(zn_loc, pos, neg).mean()
+            opt = self.optimizers()
+            opt.zero_grad()
+            self.manual_backward(graph_loss)
+            opt.step()
+            self.log('graph_loss2',graph_loss, prog_bar=True)'''
 
         else:
             self.reference = self.reference.to(self.device)
@@ -225,7 +239,7 @@ class SAGELightning(LightningModule):
         return loss
 
     def configure_optimizers(self):
-        optimizer = th.optim.Adam(self.module.parameters(), lr=self.lr)
+        optimizer = th.optim.Adam(self.module.encoder.parameters(), lr=self.lr)
         lr_scheduler = th.optim.lr_scheduler.ReduceLROnPlateau(optimizer,)
         scheduler = {
             'scheduler': lr_scheduler, 
@@ -237,8 +251,8 @@ class SAGELightning(LightningModule):
 
     def validation_step(self,batch, batch_idx):
         if self. inference_type == 'VI':
-                    loss = self.svi.step(batch)
-                    self.log('train_loss',loss, prog_bar=True)
+            loss = self.svi.step(batch)
+            self.log('train_loss',loss, prog_bar=True)
 
         else:
             self.reference = self.reference.to(self.device)
