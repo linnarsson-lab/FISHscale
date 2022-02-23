@@ -206,7 +206,11 @@ class SAGELightning(LightningModule):
                 zl_loc =  zl_loc[pos_ids,:]
 
                 z = zn_loc*zm_loc
+                print('zn',zn_loc)
+                print('zm',zm_loc)
                 px_scale,px_r, px_dropout = self.module.decoder(z)
+                print('px_scale',px_scale)
+                print('px_r',px_r)
                 px_scale = px_scale @ self.reference.T
                 px_rate = th.exp(zl_loc) * px_scale
 
