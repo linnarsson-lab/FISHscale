@@ -131,8 +131,7 @@ class Window:
         self.vis.execute()
         #self.App.exec_()
         self.App.exec_()
-        self.vis.visM.destroy_window()
-        self.vis.visM.close()
+
 
         #self.App.quit()
     
@@ -140,12 +139,7 @@ class Window:
         self.vis.search_genes = [g for g in self.collapse.lineedit.text().split(' ') if g in self.color_dic]
         self.widget_lists[0].selectionChanged()
 
-    def quit(self):
-        self.collapse.break_loop = True
-        self.vis.break_loop = True
-        self.vis.visM.destroy_window()
-        #QApplication.quit()
-    #
+
     def pass_multi_data(self):
         r = lambda: random.randint(0,255)
         ds = []
