@@ -131,6 +131,9 @@ class Window:
         self.vis.execute()
         #self.App.exec_()
         self.App.exec_()
+        self.vis.visM.destroy_window()
+        self.vis.visM.close()
+
         #self.App.quit()
     
     def add_genes(self):
