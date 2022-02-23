@@ -163,7 +163,12 @@ class Window:
         if self.c_alt != {}:
             for c in self.c_alt:
                 #unique_ca = np.unique(self.c_alt[c])
-                colors = {ca:(r()/255,r()/255,r()/255) for ca in np.unique(self.c_alt[c])}
+                colors = {}
+                for ca in np.unique(self.c_alt[c]):
+                    if int(ca) >= 0:
+                        colors[ca] = (r()/255,r()/255,r()/255)
+                    else:
+                        colors[ca]= (0,0,0) 
                 colors =np.array([colors[point] for point in self.c_alt[c]])
                 self.dic_pointclouds[c] = colors
                 self.c_alt[c] = colors
