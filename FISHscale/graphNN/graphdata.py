@@ -42,7 +42,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
         ref_celltypes=None,
         exclude_clusters:dict={},
         smooth:bool=False,
-        negative_samples:int=1,
+        negative_samples:int=5,
         distance_factor:int=4,
         max_distance_nodes=None,
         device='cpu',
@@ -290,7 +290,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
         edges_bool_test =  th.isin(self.g.edges()[0],indices_test) & th.isin(self.g.edges()[1],indices_test)
 
         self.edges_train  = np.random.choice(np.arange(edges_bool_train.shape[0])[edges_bool_train],int(edges_bool_train.sum()*(self.train_p/self.ngh_sizes[1])),replace=False)
-        self.edges_test  = np.random.choice(np.arange(edges_bool_test.shape[0])[edges_bool_test],int(edges_bool_test.sum()*(1-self.train_p)),replace=False)
+        self.edges_test  = np.random.choice(np.arange(edges_bool_test.shape[0])[edges_bool_test],int(edges_bool_test.sum()*(self.train_p/self.ngh_sizes[1])),replace=False)
 
         print('Training on {} edges.'.format(self.edges_train.shape[0]))
         print('Testing on {} edges.'.format(self.edges_test.shape[0]))
