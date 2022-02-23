@@ -95,7 +95,7 @@ class SAGELightning(LightningModule):
             self.dist = celltype_distribution
             self.ncells = ncells
             self.scale_factor = scale_factor
-            self.alpha = 50
+            self.alpha = 1
 
 
     def model(self, x):
@@ -131,7 +131,7 @@ class SAGELightning(LightningModule):
             px_scale = px_scale @ self.reference.T.to(self.device)
             px_rate = zl * px_scale
 
-            alpha = 1/(th.exp(px_r).pow(2)) + 1e-6
+            alpha = 1/(th.exp(px_r).sum(axis=0)) + 1e-4
             rate = alpha/px_rate
 
             x_dist =  dist.GammaPoisson(concentration=alpha, rate=rate).to_event(1)
@@ -206,19 +206,14 @@ class SAGELightning(LightningModule):
                 zl_loc =  zl_loc[pos_ids,:]
 
                 z = zn_loc*zm_loc
-                print('zn',zn_loc)
-                print('zm',zm_loc)
                 px_scale,px_r, px_dropout = self.module.decoder(z)
-                print('px_scale',px_scale)
-                print('px_r',px_r)
                 px_scale = px_scale @ self.reference.T
-                px_rate = th.exp(zl_loc) * px_scale
+                px_rate = th.exp(zl_loc) * px_scale + 1e-4
 
-                alpha = 1/(th.exp(px_r).sum(axis=0)) + 1e-6
+                alpha = 1/(th.exp(px_r).sum(axis=0)) + 1e-4
                 rate = alpha/px_rate
                 NB = GammaPoisson(concentration=alpha,rate=rate)#.log_prob(local_nghs).mean(axis=-1).mean()
                 nb_loss = -NB.log_prob(x).mean(axis=-1).mean()
-            
                 # Regularize by local nodes
                 # Add Predicted same class nodes together.
                 if type(self.dist) != type(None):
@@ -280,7 +275,7 @@ class SAGELightning(LightningModule):
                 px_scale = px_scale @ self.reference.T
                 px_rate = th.exp(zl_loc) * px_scale
 
-                alpha = 1/(th.exp(px_r).sum(axis=0)) + 1e-6
+                alpha = 1/(th.exp(px_r).sum(axis=0)) + 1e-4
                 rate = alpha/px_rate
                 NB = GammaPoisson(concentration=alpha,rate=rate)#.log_prob(local_nghs).mean(axis=-1).mean()
                 nb_loss = -NB.log_prob(x).mean(axis=-1).mean()
@@ -487,9 +482,8 @@ class Encoder(nn.Module):
                 h = layer(block, h,)
             else:
                 h = layer(block, h,).mean(1)
-
         z_loc = self.gs_mu(h)
-        z_scale = th.exp(self.gs_var(h))
+        z_scale = th.exp(self.gs_var(h)) + 1e-4
         return z_loc, z_scale
 
 class EncoderMolecule(nn.Module):
@@ -515,11 +509,11 @@ class EncoderMolecule(nn.Module):
         x = th.log(x+1)   
         h = self.fc(x)
         z_loc = self.mu(h)
-        z_scale = th.exp(self.var(h))
+        z_scale = th.exp(self.var(h)) + 1e-4
 
         hl = self.fc_l(x)
         l_loc = self.mu_l(hl)
-        l_scale = th.exp(self.var_l(hl))
+        l_scale = th.exp(self.var_l(hl)) + 1e-4
         return z_loc, z_scale, l_loc, l_scale
 
 class Decoder(nn.Module):
