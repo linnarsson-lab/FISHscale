@@ -366,7 +366,6 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
                         )
         return validation
 
-
     def train(self,max_epochs=5,gpus=0):
         """
         train
