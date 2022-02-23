@@ -163,13 +163,10 @@ class Window:
         if self.c_alt != {}:
             for c in self.c_alt:
                 #unique_ca = np.unique(self.c_alt[c])
-                self.dic_pointclouds[c]= self.c_alt[c]
-                '''for ca in unique_ca:
-                    if ca in self.color_dic:
-                        pass
-                    else:
-                        col = (r()/255,r()/255,r()/255)
-                        self.color_dic[str(ca)] = col'''
+                colors = {ca:(r()/255,r()/255,r()/255) for ca in np.unique(self.c_alt[c])}
+                colors =np.array([colors[point] for point in self.c_alt[c]])
+                self.dic_pointclouds[c] = colors
+                self.c_alt[c] = colors
 
         self.dataset = ds
 
@@ -388,7 +385,7 @@ class CollapsibleDialog(QDialog,QObject):
             self.vis.visM.close()
             
             #QCoreApplication.processEvents()
-            QApplication.quit()
+            #QApplication.quit()
             QApplication.quitOnLastWindowClosed()
             event.accept()
         else:
