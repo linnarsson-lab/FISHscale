@@ -211,7 +211,7 @@ class SAGELightning(LightningModule):
                 px_scale = px_scale @ self.reference.T
                 px_rate = th.exp(zl_loc) * px_scale
 
-                alpha = 1/(th.exp(px_r).pow(2)) + 1e-6
+                alpha = 1/(th.exp(px_r).sum(axis=0)) + 1e-6
                 rate = alpha/px_rate
                 NB = GammaPoisson(concentration=alpha,rate=rate)#.log_prob(local_nghs).mean(axis=-1).mean()
                 nb_loss = -NB.log_prob(x).mean(axis=-1).mean()
@@ -239,7 +239,7 @@ class SAGELightning(LightningModule):
         return loss
 
     def configure_optimizers(self):
-        optimizer = th.optim.Adam(self.module.encoder.parameters(), lr=self.lr)
+        optimizer = th.optim.Adam(self.module.parameters(), lr=self.lr)
         lr_scheduler = th.optim.lr_scheduler.ReduceLROnPlateau(optimizer,)
         scheduler = {
             'scheduler': lr_scheduler, 
