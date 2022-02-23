@@ -385,11 +385,10 @@ class CollapsibleDialog(QDialog,QObject):
         if reply == QMessageBox.Yes:
             self.break_loop = True
             self.vis.break_loop = True
-            #self.vis.visM.clear_geometries()
-            self.vis.visM.destroy_window()
-            self.vis.visM.close()
-            
-            #QCoreApplication.processEvents()
+            #self.vis.visM.destroy_window()
+            #self.vis.visM.close()
+
+            QCoreApplication.processEvents()
             #QApplication.quit()
             QApplication.quitOnLastWindowClosed()
             event.accept()

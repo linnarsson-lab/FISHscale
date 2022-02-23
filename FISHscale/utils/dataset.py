@@ -246,6 +246,11 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                         x_alt=x,
                         y_alt=y,
                         c_alt=c)
+        
+        #window.vis.visM.close()
+        #window.vis.visM.destroy_window()
+
+        
         del window
         
     def segment(self,
