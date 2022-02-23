@@ -230,6 +230,7 @@ class Visualizer:
 
     def execute(self):
         self.visM.poll_events()
+        #self.visM.poll_events()
         self.visM.update_renderer()
         if sys.platform == 'linux':
             QCoreApplication.processEvents()
