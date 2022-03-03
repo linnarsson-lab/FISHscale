@@ -426,7 +426,7 @@ class Encoder(nn.Module):
             self.norm = F.normalize#DiffGroupNorm(n_hidden,n_classes,None) 
             #n_hidden = n_classes
         else:
-            self.norm = F.normalize#DiffGroupNorm(n_hidden,20)
+            self.norm = PairNorm()#DiffGroupNorm(n_hidden,20)
 
         for i in range(0,n_layers-1):
             if i > 0:
