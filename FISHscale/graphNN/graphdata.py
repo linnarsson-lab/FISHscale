@@ -400,7 +400,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
         self.model.eval()
         self.latent_unlabelled, prediction_unlabelled = self.model.module.inference(self.g,
                         self.g.ndata['gene'], self.g.ndata['ngh'],
-                        self.device,
+                        self.model.device,
                         10*512,
                         0)#.detach().numpy()
 
