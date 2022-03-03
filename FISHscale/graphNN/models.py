@@ -183,7 +183,6 @@ class SAGELightning(LightningModule):
             mfgs = [mfg.int() for mfg in mfgs]
             batch_inputs = mfgs[0].srcdata['gene']
             zn_loc, _ = self.module.encoder(batch_inputs,mfgs)
-            zn_loc = th.exp(zn_loc)
             graph_loss = self.loss_fcn(zn_loc, pos, neg).mean()
 
             if self.supervised:
