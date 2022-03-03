@@ -275,7 +275,7 @@ class SAGELightning(LightningModule):
                 px_scale = px_scale @ self.reference.T
                 px_rate = th.exp(zl_loc) * px_scale + 1e-4
 
-                alpha = 1/(px_r) + 1e-4
+                alpha = 1/(th.exp(px_r)) + 1e-4
                 rate = alpha/px_rate
                 NB = GammaPoisson(concentration=alpha,rate=rate)#.log_prob(local_nghs).mean(axis=-1).mean()
                 nb_loss = -NB.log_prob(x).mean(axis=-1).mean()
