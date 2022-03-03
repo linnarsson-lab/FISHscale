@@ -173,19 +173,6 @@ class SAGELightning(LightningModule):
     def training_step(self, batch, batch_idx):
         if self. inference_type == 'VI':
             loss = self.svi.step(batch)
-            ''' _, pos, neg, mfgs = batch
-            pos_ids = pos.edges()[0]
-            x = mfgs[1].dstdata['ngh']
-            x= x[pos_ids,:]
-            mfgs = [mfg.int() for mfg in mfgs]
-            batch_inputs = mfgs[0].srcdata['gene']
-            zn_loc, _ = self.module.encoder(batch_inputs,mfgs)
-            graph_loss = self.loss_fcn(zn_loc, pos, neg).mean()
-            opt = self.optimizers()
-            opt.zero_grad()
-            self.manual_backward(graph_loss)
-            opt.step()
-            self.log('graph_loss2',graph_loss, prog_bar=True)'''
 
         else:
             self.reference = self.reference.to(self.device)
