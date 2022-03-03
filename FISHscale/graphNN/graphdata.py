@@ -129,7 +129,8 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
         self.inference_type = inference_type
 
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.prepare_reference()
+        if self.supervised:
+            self.prepare_reference()
 
         ### Prepare data
         self.folder = self.save_to+self.analysis_name+ '_' +datetime.now().strftime("%Y-%m-%d-%H%M%S")
