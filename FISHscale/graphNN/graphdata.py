@@ -383,7 +383,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
                             log_every_n_steps=50,
                             callbacks=[self.checkpoint_callback], 
                             max_epochs=max_epochs,)
-        trainer.fit(self.model, train_dataloaders=self.train_dataloader(),val_dataloaders=self.test_dataloader())
+        trainer.fit(self.model, train_dataloaders=self.train_dataloader())#,val_dataloaders=self.test_dataloader())
 
     #### plotting and latent factors #####
 

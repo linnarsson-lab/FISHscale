@@ -225,7 +225,7 @@ class SAGELightning(LightningModule):
                 else:
                     loss_dist = 0
 
-                loss = graph_loss + nb_loss + loss_dist
+                loss = nb_loss + loss_dist# +graph_loss 
                 self.log('train_loss', loss, prog_bar=True, on_step=True, on_epoch=True)
                 self.log('Loss Dist', loss_dist, prog_bar=True, on_step=True, on_epoch=True)
                 self.log('nb_loss', nb_loss, prog_bar=True, on_step=True, on_epoch=True)
@@ -292,7 +292,7 @@ class SAGELightning(LightningModule):
                 else:
                     loss_dist = 0
 
-                loss = graph_loss + nb_loss + loss_dist
+                loss = nb_loss + loss_dist #+ graph_loss
 
             else:
                 loss = graph_loss
