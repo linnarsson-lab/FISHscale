@@ -210,7 +210,7 @@ class SAGELightning(LightningModule):
                 px_scale = px_scale @ self.reference.T
                 px_rate = th.exp(zl_loc) * px_scale + 1e-4
 
-                alpha = 1/(th.exp(px_r).sum(axis=0)) + 1e-4
+                alpha = 1/(th.exp(px_r)) + 1e-4
                 rate = alpha/px_rate
                 NB = GammaPoisson(concentration=alpha,rate=rate)#.log_prob(local_nghs).mean(axis=-1).mean()
                 nb_loss = -NB.log_prob(x).mean(axis=-1).mean()
@@ -224,7 +224,7 @@ class SAGELightning(LightningModule):
                 else:
                     loss_dist = 0
 
-                loss = graph_loss + nb_loss + loss_dist
+                loss = nb_loss + loss_dist# +graph_loss 
                 self.log('train_loss', loss, prog_bar=True, on_step=True, on_epoch=True)
                 self.log('Loss Dist', loss_dist, prog_bar=True, on_step=True, on_epoch=True)
                 self.log('nb_loss', nb_loss, prog_bar=True, on_step=True, on_epoch=True)
@@ -290,7 +290,7 @@ class SAGELightning(LightningModule):
                 else:
                     loss_dist = 0
 
-                loss = graph_loss + nb_loss + loss_dist
+                loss = nb_loss + loss_dist #+ graph_loss
 
             else:
                 loss = graph_loss
