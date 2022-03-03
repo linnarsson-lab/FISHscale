@@ -129,9 +129,9 @@ class SAGELightning(LightningModule):
             z = zn*zm
             px_scale, px_r, px_dropout = self.module.decoder(z)
             px_scale = px_scale @ self.reference.T.to(self.device)
-            px_rate = zl * px_scale + 1e-4
+            px_rate = zl * px_scale +1e-6
 
-            alpha = 1/(th.exp(px_r).sum(axis=0)) + 1e-4
+            alpha = 1/(th.exp(px_r)) +1e-6
             rate = alpha/px_rate
 
             x_dist =  dist.GammaPoisson(concentration=alpha, rate=rate).to_event(1)
@@ -195,9 +195,9 @@ class SAGELightning(LightningModule):
                 z = zn_loc*zm_loc
                 px_scale,px_r, px_dropout = self.module.decoder(z)
                 px_scale = px_scale @ self.reference.T
-                px_rate = th.exp(zl_loc) * px_scale + 1e-4
+                px_rate = th.exp(zl_loc) * px_scale +1e-6
 
-                alpha = 1/(th.exp(px_r)) + 1e-4
+                alpha = 1/(th.exp(px_r)) +1e-6
                 rate = alpha/px_rate
                 NB = GammaPoisson(concentration=alpha,rate=rate)#.log_prob(local_nghs).mean(axis=-1).mean()
                 nb_loss = -NB.log_prob(x).mean(axis=-1).mean()
@@ -261,9 +261,9 @@ class SAGELightning(LightningModule):
                 z = zn_loc*zm_loc
                 px_scale,px_r, px_dropout = self.module.decoder(z)
                 px_scale = px_scale @ self.reference.T
-                px_rate = th.exp(zl_loc) * px_scale + 1e-4
+                px_rate = th.exp(zl_loc) * px_scale +1e-6
 
-                alpha = 1/(th.exp(px_r)) + 1e-4
+                alpha = 1/(th.exp(px_r)) +1e-6
                 rate = alpha/px_rate
                 NB = GammaPoisson(concentration=alpha,rate=rate)#.log_prob(local_nghs).mean(axis=-1).mean()
                 nb_loss = -NB.log_prob(x).mean(axis=-1).mean()
@@ -473,7 +473,7 @@ class Encoder(nn.Module):
             else:
                 h = layer(block, h,).mean(1)
         z_loc = self.gs_mu(h)
-        z_scale = th.exp(self.gs_var(h)) + 1e-4
+        z_scale = th.exp(self.gs_var(h)) +1e-6
         return z_loc, z_scale
 
 class EncoderMolecule(nn.Module):
@@ -499,11 +499,11 @@ class EncoderMolecule(nn.Module):
         x = th.log(x+1)   
         h = self.fc(x)
         z_loc = self.mu(h)
-        z_scale = th.exp(self.var(h)) + 1e-4
+        z_scale = th.exp(self.var(h)) +1e-6
 
         hl = self.fc_l(x)
         l_loc = self.mu_l(hl)
-        l_scale = th.exp(self.var_l(hl)) + 1e-4
+        l_scale = th.exp(self.var_l(hl)) +1e-6
         return z_loc, z_scale, l_loc, l_scale
 
 class Decoder(nn.Module):
