@@ -252,26 +252,28 @@ class GraphUtils(object):
                 ref = ref[:,region_filt]
                 self.ref_celltypes = ref
                 print('Reference dataset shape: {}'.format(self.ref_celltypes.shape))
+            
+            if self.celltype_distribution == 'uniform':
+                dist = th.ones(self.ncells.shape[0])
+                self.dist = dist/dist.sum()
+            elif self.celltype_distribution == 'ascending':
+                n = self.ncells.reshape(-1,1)
+                gm = GaussianMixture(n_components=int(n.shape[0]/2.5), random_state=42).fit(n)
+                dist = gm.predict(n)
+                self.dist = th.tensor(dist/dist.sum(),dtype=th.float32)
+            elif self.celltype_distribution == 'molecules':
+                dist = self.ncells*self.ref_celltypes.sum(axis=0)
+                self.dist = th.tensor(dist/dist.sum(),dtype=th.float32)
+            elif self.celltype_distribution == 'cells':
+                self.dist = th.tensor(self.ncells/self.ncells.sum(),dtype=th.float32)
+            else:
+                self.dist = None
+
         else:
             self.supervised = False
             self.ref_celltypes = np.array([[0],[0]])
             self.ncells = 0
-
-        if self.celltype_distribution == 'uniform':
-            dist = th.ones(self.ncells.shape[0])
-            self.dist = dist/dist.sum()
-        elif self.celltype_distribution == 'ascending':
-            n = self.ncells.reshape(-1,1)
-            gm = GaussianMixture(n_components=int(n.shape[0]/2.5), random_state=42).fit(n)
-            dist = gm.predict(n)
-            self.dist = th.tensor(dist/dist.sum(),dtype=th.float32)
-        elif self.celltype_distribution == 'molecules':
-            dist = self.ncells*self.ref_celltypes.sum(axis=0)
-            self.dist = th.tensor(dist/dist.sum(),dtype=th.float32)
-        elif self.celltype_distribution == 'cells':
-            self.dist = th.tensor(self.ncells/self.ncells.sum(),dtype=th.float32)
-        else:
-            self.dist = None
+            self.dist=None
 
 
 class GraphPlotting:
