@@ -386,7 +386,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
 
     #### plotting and latent factors #####
 
-    def get_latents_pyro(self,labelled=True):
+    def get_latents(self):
         """
         get_latents: get the new embedding for each molecule
         

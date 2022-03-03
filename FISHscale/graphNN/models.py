@@ -542,14 +542,10 @@ class Decoder(nn.Module):
         self.px_dropout_decoder = nn.Linear(n_hidden, in_feats)
 
     def forward(self, z):
-        # define the forward computation on the latent z
-        # first compute the hidden units
+
         px = self.fc(z)
-        # return the parameter for the output Bernoulli
-        # each is of size batch_size x 784
+
         px_scale = self.px_scale_decoder(px)
         px_dropout = self.px_dropout_decoder(px)
-        # Clamp to high value: exp(12) ~ 160000 to avoid nans (computational stability)
-        #   # torch.clamp( , max=12)
         px_r = self.px_r_decoder(px)
         return px_scale, px_r, px_dropout
