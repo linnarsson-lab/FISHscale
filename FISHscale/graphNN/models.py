@@ -129,7 +129,7 @@ class SAGELightning(LightningModule):
             z = zn*zm
             px_scale, px_r, px_dropout = self.module.decoder(z)
             px_scale = px_scale @ self.reference.T.to(self.device)
-            px_rate = zl * px_scale
+            px_rate = zl * px_scale + 1e-4
 
             alpha = 1/(th.exp(px_r).sum(axis=0)) + 1e-4
             rate = alpha/px_rate
