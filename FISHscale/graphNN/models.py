@@ -196,6 +196,7 @@ class SAGELightning(LightningModule):
             mfgs = [mfg.int() for mfg in mfgs]
             batch_inputs = mfgs[0].srcdata['gene']
             zn_loc, _ = self.module.encoder(batch_inputs,mfgs)
+            zn_loc = th.exp(zn_loc)
             graph_loss = self.loss_fcn(zn_loc, pos, neg).mean()
 
             if self.supervised:
@@ -210,7 +211,7 @@ class SAGELightning(LightningModule):
                 px_scale = px_scale @ self.reference.T
                 px_rate = th.exp(zl_loc) * px_scale + 1e-4
 
-                alpha = 1/(th.exp(px_r).sum(axis=0)) + 1e-4
+                alpha = 1/(th.exp(px_r)) + 1e-4
                 rate = alpha/px_rate
                 NB = GammaPoisson(concentration=alpha,rate=rate)#.log_prob(local_nghs).mean(axis=-1).mean()
                 nb_loss = -NB.log_prob(x).mean(axis=-1).mean()
@@ -261,6 +262,7 @@ class SAGELightning(LightningModule):
             mfgs = [mfg.int() for mfg in mfgs]
             batch_inputs = mfgs[0].srcdata['gene']
             zn_loc, _ = self.module.encoder(batch_inputs,mfgs)
+            zn_loc = th.exp(zn_loc)
             graph_loss = self.loss_fcn(zn_loc, pos, neg).mean()
 
             if self.supervised:
