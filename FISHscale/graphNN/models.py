@@ -394,13 +394,15 @@ class SAGE(nn.Module):
                     if l == self.n_layers -1:
                         n = blocks[-1].dstdata['ngh']
                         h = self.encoder.gs_mu(h)
-                        hm,_,_,_ = self.encoder_molecule(n)
-                        h = h*hm
+
+                        if self.supervised:
+                            hm,_,_,_ = self.encoder_molecule(n)
+                            h = h*hm
                         #h = self.encoder.softplus(h)
                         # then return a mean vector and a (positive) square root covariance
                         # each of size batch_size x z_dim
-                        px_scale, px_r, px_dropout = self.decoder(h)
-                        p_class[output_nodes] = px_scale.cpu().detach()
+                            px_scale, px_r, px_dropout = self.decoder(h)
+                            p_class[output_nodes] = px_scale.cpu().detach()
 
                     #    h = self.mean_encoder(h)#, th.exp(self.var_encoder(h))+1e-4 )
                     y[output_nodes] = h.cpu().detach()#.numpy()
@@ -426,7 +428,7 @@ class Encoder(nn.Module):
             self.norm = F.normalize#DiffGroupNorm(n_hidden,n_classes,None) 
             #n_hidden = n_classes
         else:
-            self.norm = F.normalize#DiffGroupNorm(n_hidden,20)
+            self.norm = PairNorm()#DiffGroupNorm(n_hidden,20)
 
         for i in range(0,n_layers-1):
             if i > 0:
