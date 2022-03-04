@@ -8,7 +8,7 @@ import dgl.function as fn
 import tqdm
 from pytorch_lightning import LightningModule
 from FISHscale.graphNN.submodules import Classifier, PairNorm, DiffGroupNorm
-from pyro.distributions import GammaPoisson
+from pyro.distributions import GammaPoisson, Poisson
 from torch.distributions import Gamma,Normal, Multinomial, kl_divergence as kl
 import pyro
 from pyro import distributions as dist
@@ -204,7 +204,8 @@ class SAGELightning(LightningModule):
                 alpha= th.ones_like(px_rate).T*alpha
                 alpha = alpha.T
                 rate = alpha/px_rate
-                NB = GammaPoisson(concentration=alpha,rate=rate)#.log_prob(local_nghs).mean(axis=-1).mean()
+                #NB = GammaPoisson(concentration=alpha,rate=rate)#.log_prob(local_nghs).mean(axis=-1).mean()
+                NB = Poisson(px_rate)#.log_prob(local_nghs).mean(axis=-1).mean()
                 nb_loss = -NB.log_prob(x).mean(axis=-1).mean()
                 # Regularize by local nodes
                 # Add Predicted same class nodes together.
