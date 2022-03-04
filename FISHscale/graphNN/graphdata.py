@@ -50,6 +50,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
         aggregator='pool',
         celltype_distribution='uniform',
         inference_type='deterministic',
+        n_epochs=5,
         ):
         """
         GraphData prepared the FISHscale dataset to be analysed in a supervised
@@ -127,9 +128,9 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
         self.aggregator = aggregator
         self.celltype_distribution = celltype_distribution
         self.inference_type = inference_type
+        self.n_epochs= n_epochs
 
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
         self.prepare_reference()
 
         ### Prepare data
@@ -162,8 +163,8 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
         print(self.g)
         self.make_train_test_validation()
         l_loc,l_scale= self.compute_library_size()
-
-                ### Prepare Model
+        
+        ### Prepare Model
         if type(self.model) == type(None):
             self.model = SAGELightning(in_feats=self.data.unique_genes.shape[0], 
                                         n_latent=24,
@@ -182,6 +183,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
                                         l_loc=l_loc[0][0],
                                         l_scale= l_scale[0][0],
                                         scale_factor=1/(batch_size*self.data.unique_genes.shape[0]),
+                                        warmup_factor=int(self.edges_train.shape[0]/self.batch_size)*self.n_epochs,
                                     )
         self.model.to(self.device)
 
@@ -242,7 +244,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
             print("[Epoch %02d]  Loss: %.5f" % (epoch, np.mean(losses)))
         print("Finished training!")
 
-    def train(self,max_epochs=15,gpus=0):
+    def train(self,gpus=0):
         """
         train
 
@@ -254,10 +256,12 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
         """        
         if self.device.type == 'cuda':
             gpus=1
+        
         trainer = pl.Trainer(gpus=gpus,
                             log_every_n_steps=50,
                             callbacks=[self.checkpoint_callback], 
-                            max_epochs=max_epochs)
+                            max_epochs=self.n_epochs)
+
         trainer.fit(self.model, train_dataloaders=self.train_dataloader())
 
     def make_train_test_validation(self):

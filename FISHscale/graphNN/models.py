@@ -44,7 +44,7 @@ class SAGELightning(LightningModule):
                  n_layers,
                  n_hidden=48,
                  dropout=0.1,
-                 lr=0.0001,
+                 lr=0.001,
                  supervised=False,
                  reference=0,
                  smooth=False,
@@ -56,6 +56,7 @@ class SAGELightning(LightningModule):
                  l_loc = None,
                  l_scale = None,
                  scale_factor = 1,
+                 warmup_factor = 1,
                  ):
         super().__init__()
 
@@ -96,6 +97,8 @@ class SAGELightning(LightningModule):
             self.ncells = ncells
             self.scale_factor = scale_factor
             self.alpha = 1
+            self.warmup_counter = 0
+            self.warmup_factor=warmup_factor
 
 
     def model(self, x):
@@ -192,12 +195,14 @@ class SAGELightning(LightningModule):
                 zm_loc = zm_loc[pos_ids,:]
                 zl_loc =  zl_loc[pos_ids,:]
 
-                z = zn_loc*zm_loc
+                z = zm_loc*zn_loc
                 px_scale,px_r, px_dropout = self.module.decoder(z)
                 px_scale = px_scale @ self.reference.T
                 px_rate = th.exp(zl_loc) * px_scale +1e-6
 
-                alpha = 1/(th.exp(px_r)) +1e-6
+                alpha = 1/(th.exp(px_r).sum(axis=1)) +1e-6
+                alpha= th.ones_like(px_rate).T*alpha
+                alpha = alpha.T
                 rate = alpha/px_rate
                 NB = GammaPoisson(concentration=alpha,rate=rate)#.log_prob(local_nghs).mean(axis=-1).mean()
                 nb_loss = -NB.log_prob(x).mean(axis=-1).mean()
@@ -211,7 +216,9 @@ class SAGELightning(LightningModule):
                 else:
                     loss_dist = 0
 
-                loss = nb_loss + loss_dist# +graph_loss 
+                uns_warmup = min(1,self.warmup_counter/self.warmup_factor)
+                self.warmup_counter += 1
+                loss = nb_loss * uns_warmup + loss_dist + graph_loss
                 self.log('train_loss', loss, prog_bar=True, on_step=True, on_epoch=True)
                 self.log('Loss Dist', loss_dist, prog_bar=True, on_step=True, on_epoch=True)
                 self.log('nb_loss', nb_loss, prog_bar=True, on_step=True, on_epoch=True)
@@ -283,7 +290,6 @@ class SAGELightning(LightningModule):
             else:
                 loss = graph_loss
         return loss
-
 
 class PyroOptWrap(pyro.infer.SVI):
     def __init__(self, *args, **kwargs):
@@ -386,9 +392,6 @@ class SAGE(nn.Module):
                         if self.supervised:
                             hm,_,_,_ = self.encoder_molecule(n)
                             h = h*hm
-                        #h = self.encoder.softplus(h)
-                        # then return a mean vector and a (positive) square root covariance
-                        # each of size batch_size x z_dim
                             px_scale, px_r, px_dropout = self.decoder(h)
                             p_class[output_nodes] = px_scale.cpu().detach()
 
