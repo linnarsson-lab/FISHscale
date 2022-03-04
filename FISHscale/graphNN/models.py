@@ -204,8 +204,8 @@ class SAGELightning(LightningModule):
                 alpha= th.ones_like(px_rate).T*alpha
                 alpha = alpha.T
                 rate = alpha/px_rate
-                #NB = GammaPoisson(concentration=alpha,rate=rate)#.log_prob(local_nghs).mean(axis=-1).mean()
-                NB = Poisson(px_rate)#.log_prob(local_nghs).mean(axis=-1).mean()
+                NB = GammaPoisson(concentration=alpha,rate=rate)#.log_prob(local_nghs).mean(axis=-1).mean()
+                #NB = Poisson(px_rate)#.log_prob(local_nghs).mean(axis=-1).mean()
                 nb_loss = -NB.log_prob(x).mean(axis=-1).mean()
                 # Regularize by local nodes
                 # Add Predicted same class nodes together.

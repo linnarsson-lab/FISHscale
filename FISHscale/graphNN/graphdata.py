@@ -244,26 +244,6 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
             print("[Epoch %02d]  Loss: %.5f" % (epoch, np.mean(losses)))
         print("Finished training!")
 
-    def train(self,gpus=0):
-        """
-        train
-
-        Pytorch-Lightning trainer
-
-        Args:
-            max_epochs (int, optional): Maximum epochs. Defaults to 5.
-            gpus (int, optional): Whether to use GPU. Defaults to 0.
-        """        
-        if self.device.type == 'cuda':
-            gpus=1
-        
-        trainer = pl.Trainer(gpus=gpus,
-                            log_every_n_steps=50,
-                            callbacks=[self.checkpoint_callback], 
-                            max_epochs=self.n_epochs)
-
-        trainer.fit(self.model, train_dataloaders=self.train_dataloader())
-
     def make_train_test_validation(self):
         """
         make_train_test_validation: only self.indices_validation is used.
@@ -371,7 +351,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
                         )
         return validation
 
-    def train(self,max_epochs=5,gpus=0):
+    def train(self,gpus=0):
         """
         train
 
@@ -386,7 +366,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
         trainer = pl.Trainer(gpus=gpus,
                             log_every_n_steps=50,
                             callbacks=[self.checkpoint_callback], 
-                            max_epochs=max_epochs,)
+                            max_epochs=self.n_epochs,)
         trainer.fit(self.model, train_dataloaders=self.train_dataloader())#,val_dataloaders=self.test_dataloader())
 
     #### plotting and latent factors #####
