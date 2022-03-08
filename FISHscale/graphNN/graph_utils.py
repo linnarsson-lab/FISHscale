@@ -399,15 +399,13 @@ class GraphPlotting:
                                                                                         s=1,
                                                                                         aspect='equal',
                                                                                         bgcolor='black',
-                                                                                        fig_inches=50,
-                                                                                        title=str(self.ClusterNames[n]))
+                                                                                        fig_inches=20,
+                                                                                        title=str(self.ClusterNames[n]),
+                                                                                        clim=(pred_labels.min(),ps.max()))
                 L.append(scatter)
-
-
                 hv.save(scatter,"{}/ClusterProbabilities/{}.png".format(self.folder,str(self.ClusterNames[n])))
-            layout = hv.Layout([x for x in L]).cols(5)
-            hv.save(layout,"{}/molecule_probabilities.png".format(self.folder))
-
+            
+            layout = hv.Layout([x for x in L]).cols(2)
             print('Plots saved.')
 
         else:

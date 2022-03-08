@@ -88,7 +88,7 @@ class SAGELightning(LightningModule):
                     loss=pyro.infer.Trace_ELBO())
 
         if self.supervised:
-            #self.automatic_optimization = False
+            self.automatic_optimization = False
             self.l_loc = l_loc
             self.l_scale = l_scale
             self.train_acc = torchmetrics.Accuracy()
@@ -189,29 +189,42 @@ class SAGELightning(LightningModule):
             graph_loss = self.loss_fcn(zn_loc, pos, neg).mean()
 
             if self.supervised:
-                zm_loc, _, zl_loc, _ = self.module.encoder_molecule(x)
+                opt_g, opt_nb= self.optimizers()
+                opt_g.zero_grad()
+                self.manual_backward(graph_loss)
+                opt_g.step()
 
+
+                zm_loc, _, zl_loc, _ = self.module.encoder_molecule(x)
                 zn_loc = zn_loc[pos_ids,:]
                 zm_loc = zm_loc[pos_ids,:]
                 zl_loc =  zl_loc[pos_ids,:]
 
-                z = zm_loc*zn_loc
-                px_scale,px_r, px_dropout = self.module.decoder(z)
-                px_scale = px_scale @ self.reference.T
-                px_rate = th.exp(zl_loc) * px_scale +1e-6
+                new_ref = th.distributions.Multinomial(
+                    total_count=int(x.sum(axis=1).mean()), 
+                    probs=self.reference,
+                    ).sample().to(self.device)
+                new_ref = new_ref.T/new_ref.sum(axis=1)
 
-                alpha = 1/(th.exp(px_r).sum(axis=1)) +1e-6
-                alpha= th.ones_like(px_rate).T*alpha
-                alpha = alpha.T
+                z = zn_loc#*zm_loc
+                #px_scale_c, px_r, px_dropout = self.module.decoder(z)
+                px_scale = zn_loc.detach() @ self.module.encoder_molecule.module2celltype
+                px_scale_c = px_scale.softmax(dim=-1)
+                px_r = self.module.encoder_molecule.dispersion
+                #px_scale = (th.exp(zn_loc)*px_scale_c) @ self.reference.T
+                px_scale = px_scale_c @ new_ref
+                px_rate = th.exp(zl_loc) * (px_scale) +1e-6
+
+                alpha = 1/(th.exp(px_r)) + 1e-6
                 rate = alpha/px_rate
                 NB = GammaPoisson(concentration=alpha,rate=rate)#.log_prob(local_nghs).mean(axis=-1).mean()
                 #NB = Poisson(px_rate)#.log_prob(local_nghs).mean(axis=-1).mean()
-                nb_loss = -NB.log_prob(x).mean(axis=-1).mean()
+                nb_loss = -NB.log_prob(x).sum(axis=-1).mean()
                 # Regularize by local nodes
                 # Add Predicted same class nodes together.
                 if type(self.dist) != type(None):
                     #option 2
-                    p = th.ones(px_scale.shape[0]) @ px_scale
+                    p = th.ones(px_scale_c.shape[0]) @ px_scale_c
                     p = th.log(p/p.sum())
                     loss_dist = self.kl(p,self.dist.to(self.device)).sum()
                 else:
@@ -219,7 +232,13 @@ class SAGELightning(LightningModule):
 
                 uns_warmup = min(1,self.warmup_counter/self.warmup_factor)
                 self.warmup_counter += 1
-                loss = nb_loss * uns_warmup + loss_dist + graph_loss
+                
+                loss = nb_loss + loss_dist
+                
+                opt_nb.zero_grad()
+                self.manual_backward(loss)
+                opt_nb.step()
+
                 self.log('train_loss', loss, prog_bar=True, on_step=True, on_epoch=True)
                 self.log('Loss Dist', loss_dist, prog_bar=True, on_step=True, on_epoch=True)
                 self.log('nb_loss', nb_loss, prog_bar=True, on_step=True, on_epoch=True)
@@ -232,18 +251,20 @@ class SAGELightning(LightningModule):
         return loss
 
     def configure_optimizers(self):
-        optimizer = th.optim.Adam(self.module.parameters(), lr=self.lr)
-        lr_scheduler = th.optim.lr_scheduler.ReduceLROnPlateau(optimizer,)
+        optimizer_graph = th.optim.Adam(self.module.encoder.parameters(), lr=self.lr)
+        optimizer_nb = th.optim.Adam(self.module.encoder_molecule.parameters(), lr=self.lr)
+        lr_scheduler = th.optim.lr_scheduler.ReduceLROnPlateau(optimizer_nb,)
         scheduler = {
             'scheduler': lr_scheduler, 
             'reduce_on_plateau': True,
             # val_checkpoint_on is val_loss passed in as checkpoint_on
             'monitor': 'train_loss'
         }
-        return [optimizer],[scheduler]
+        return [optimizer_graph, optimizer_nb],[scheduler]
 
     def validation_step(self,batch, batch_idx):
-        if self. inference_type == 'VI':
+        pass
+        '''if self. inference_type == 'VI':
             loss = self.svi.step(batch)
             self.log('train_loss',loss, prog_bar=True)
 
@@ -261,15 +282,14 @@ class SAGELightning(LightningModule):
 
             if self.supervised:
                 zm_loc, _, zl_loc, _ = self.module.encoder_molecule(x)
-
                 zn_loc = zn_loc[pos_ids,:]
                 zm_loc = zm_loc[pos_ids,:]
                 zl_loc =  zl_loc[pos_ids,:]
 
-                z = zn_loc*zm_loc
+                z = zm_loc#*zm_loc
                 px_scale,px_r, px_dropout = self.module.decoder(z)
                 px_scale = px_scale @ self.reference.T
-                px_rate = th.exp(zl_loc) * px_scale +1e-6
+                px_rate = th.exp(zl_loc) * (px_scale*zn_loc) * self.module.alpha_gene.softmax(dim=-1) +1e-6
 
                 alpha = 1/(th.exp(px_r)) +1e-6
                 rate = alpha/px_rate
@@ -290,7 +310,7 @@ class SAGELightning(LightningModule):
 
             else:
                 loss = graph_loss
-        return loss
+        return loss'''
 
 class PyroOptWrap(pyro.infer.SVI):
     def __init__(self, *args, **kwargs):
@@ -327,6 +347,7 @@ class SAGE(nn.Module):
                                 )
         
         self.encoder_molecule = EncoderMolecule(in_feats=in_feats,
+                                                    n_classes=n_classes,
                                                     n_hidden=n_hidden,
                                                     n_latent= n_latent,
                                             )
@@ -392,8 +413,12 @@ class SAGE(nn.Module):
 
                         if self.supervised:
                             hm,_,_,_ = self.encoder_molecule(n)
-                            h = h*hm
-                            px_scale, px_r, px_dropout = self.decoder(h)
+                            #h = h*hm
+                            #px_scale, px_r, px_dropout = self.decoder(hm)
+                            #px_scale = px_scale*th.exp(h)
+                            px_scale = h @ self.encoder_molecule.module2celltype
+                            px_scale = px_scale.softmax(dim=-1)
+                            h = h
                             p_class[output_nodes] = px_scale.cpu().detach()
 
                     #    h = self.mean_encoder(h)#, th.exp(self.var_encoder(h))+1e-4 )
@@ -417,7 +442,7 @@ class Encoder(nn.Module):
         self.aggregator = aggregator
         layers = nn.ModuleList()
         if supervised:
-            self.norm = F.normalize#DiffGroupNorm(n_hidden,n_classes,None) 
+            self.norm = PairNorm()#DiffGroupNorm(n_hidden,n_classes,None) 
             #n_hidden = n_classes
         else:
             self.norm = PairNorm()#DiffGroupNorm(n_hidden,20)
@@ -461,8 +486,8 @@ class Encoder(nn.Module):
                                             n_hidden, 
                                             aggregator_type=aggregator,
                                             feat_drop=dropout,
-                                            #activation=F.relu,
-                                            #norm=F.normalize
+                                            activation=F.relu,
+                                            norm=self.norm
                                             ))
 
         self.encoder_dict = nn.ModuleDict({'GS': layers})
@@ -484,6 +509,7 @@ class EncoderMolecule(nn.Module):
     def __init__(
         self,
         in_feats,
+        n_classes,
         n_hidden=64,
         n_latent=24,
 
@@ -498,7 +524,11 @@ class EncoderMolecule(nn.Module):
         self.fc_l =FCLayers(in_feats, n_hidden)   
         self.mu_l = nn.Linear(n_hidden, 1)
         self.var_l = nn.Linear(n_hidden, 1)
-    
+
+        self.alpha_gene = th.nn.Parameter(th.randn(in_feats))
+        self.module2celltype = th.nn.Parameter(th.randn([n_latent ,n_classes]))
+        self.dispersion = th.nn.Parameter(th.randn([in_feats]))
+
     def forward(self,x):
         x = th.log(x+1)   
         h = self.fc(x)
