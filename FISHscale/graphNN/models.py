@@ -87,8 +87,8 @@ class SAGELightning(LightningModule):
                     optim=pyro.optim.Adam({"lr": self.lr}),
                     loss=pyro.infer.Trace_ELBO())
 
+        self.automatic_optimization = False
         if self.supervised:
-            self.automatic_optimization = False
             self.l_loc = l_loc
             self.l_scale = l_scale
             self.train_acc = torchmetrics.Accuracy()
@@ -200,14 +200,13 @@ class SAGELightning(LightningModule):
             batch_inputs = mfgs[0].srcdata['gene']
             zn_loc, _ = self.module.encoder(batch_inputs,mfgs)
             graph_loss = self.loss_fcn(zn_loc, pos, neg).mean()
+            opt_g, opt_nb = self.optimizers() 
+            opt_g.zero_grad()
+            self.manual_backward(graph_loss)
+            opt_g.step()
+
 
             if self.supervised:
-                opt_g, opt_nb= self.optimizers()
-                opt_g.zero_grad()
-                self.manual_backward(graph_loss)
-                opt_g.step()
-
-
                 zm_loc, _, zl_loc, _ = self.module.encoder_molecule(x)
                 zn_loc = zn_loc[pos_ids,:]
                 zm_loc = zm_loc[pos_ids,:]
@@ -244,7 +243,7 @@ class SAGELightning(LightningModule):
 
                 if type(self.dist) != type(None):
                     #option 2
-                    p = th.ones(px_scale_c.shape[0]) @ px_scale_c
+                    p = th.ones(px_scale_c.shape[0],device=self.device) @ px_scale_c
                     p = th.log(p/p.sum())
                     loss_dist = self.kl(p,self.dist.to(self.device)).sum()
                 else:
