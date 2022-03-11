@@ -277,7 +277,7 @@ class GraphUtils(object):
 
 
 class GraphPlotting:
-    def get_umap(self,random_n=50000,n_clusters=50):
+    def get_umap(self,random_n=50000,n_clusters=250):
         import umap
         import matplotlib.pyplot as plt
 
@@ -411,13 +411,13 @@ class GraphPlotting:
         else:
             import scanpy as sc
             from sklearn.cluster import MiniBatchKMeans
-            print('Running leiden clustering from scanpy...')
-            adata = sc.AnnData(X=self.latent_unlabelled.detach().numpy())
-            sc.pp.neighbors(adata, n_neighbors=25)
-            sc.tl.leiden(adata, random_state=42)
-            self.clusters= adata.obs['leiden'].values
-            #kmeans = MiniBatchKMeans(n_clusters=n_clusters)
-            #self.clusters = kmeans.fit_predict(self.latent_unlabelled.detach().numpy())
+            print('Running MBKMeans clustering from scanpy...')
+            #adata = sc.AnnData(X=self.latent_unlabelled.detach().numpy())
+            #sc.pp.neighbors(adata, n_neighbors=25)
+            #sc.tl.leiden(adata, random_state=42)
+            #self.clusters= adata.obs['leiden'].values
+            kmeans = MiniBatchKMeans(n_clusters=n_clusters)
+            self.clusters = kmeans.fit_predict(self.latent_unlabelled.detach().numpy())
             
             np.save(self.folder+'/clusters',self.clusters)
             print('Clustering done.')

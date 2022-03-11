@@ -87,8 +87,9 @@ class SAGELightning(LightningModule):
                     optim=pyro.optim.Adam({"lr": self.lr}),
                     loss=pyro.infer.Trace_ELBO())
 
+
+        self.automatic_optimization = False
         if self.supervised:
-            self.automatic_optimization = False
             self.l_loc = l_loc
             self.l_scale = l_scale
             self.train_acc = torchmetrics.Accuracy()
@@ -187,28 +188,26 @@ class SAGELightning(LightningModule):
             batch_inputs = mfgs[0].srcdata['gene']
             zn_loc, _ = self.module.encoder(batch_inputs,mfgs)
             graph_loss = self.loss_fcn(zn_loc, pos, neg).mean()
+            opt_g, opt_nb= self.optimizers()
+            opt_g.zero_grad()
+            self.manual_backward(graph_loss)
+            opt_g.step()
 
             if self.supervised:
-                opt_g, opt_nb= self.optimizers()
-                opt_g.zero_grad()
-                self.manual_backward(graph_loss)
-                opt_g.step()
-
-
                 zm_loc, _, zl_loc, _ = self.module.encoder_molecule(x)
                 zn_loc = zn_loc[pos_ids,:]
                 zm_loc = zm_loc[pos_ids,:]
                 zl_loc =  zl_loc[pos_ids,:]
 
-                new_ref = th.distributions.Multinomial(
-                    total_count=int(x.sum(axis=1).mean()), 
-                    probs=self.reference,
-                    ).sample().to(self.device)
-                new_ref = new_ref.T/new_ref.sum(axis=1)
-
-                z = zn_loc#*zm_loc
+                new_ref = self.reference.T
+                #th.distributions.Multinomial(
+                #total_count=int(x.sum(axis=1).mean()), 
+                #probs=self.reference,
+                #).sample().to(self.device)
+                #new_ref = new_ref.T/new_ref.sum(axis=1)
+                z = zn_loc.detach()*zm_loc
                 #px_scale_c, px_r, px_dropout = self.module.decoder(z)
-                px_scale = zn_loc.detach() @ self.module.encoder_molecule.module2celltype
+                px_scale = z @ self.module.encoder_molecule.module2celltype
                 px_scale_c = px_scale.softmax(dim=-1)
                 px_r = self.module.encoder_molecule.dispersion
                 #px_scale = (th.exp(zn_loc)*px_scale_c) @ self.reference.T
@@ -219,7 +218,7 @@ class SAGELightning(LightningModule):
                 rate = alpha/px_rate
                 NB = GammaPoisson(concentration=alpha,rate=rate)#.log_prob(local_nghs).mean(axis=-1).mean()
                 #NB = Poisson(px_rate)#.log_prob(local_nghs).mean(axis=-1).mean()
-                nb_loss = -NB.log_prob(x).sum(axis=-1).mean()
+                nb_loss = -NB.log_prob(x).mean(axis=-1).mean()
                 # Regularize by local nodes
                 # Add Predicted same class nodes together.
                 if type(self.dist) != type(None):
