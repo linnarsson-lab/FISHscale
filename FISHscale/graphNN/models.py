@@ -211,15 +211,15 @@ class SAGELightning(LightningModule):
                 zm_loc = zm_loc[pos_ids,:]
                 zl_loc =  zl_loc[pos_ids,:]
 
-                new_ref = self.reference.T#th.distributions.Multinomial(
-                    #total_count=int(x.sum(axis=1).mean()), 
-                    #probs=self.reference,
-                    #).sample().to(self.device)
+                new_ref = self.reference.T
+                #th.distributions.Multinomial(
+                #total_count=int(x.sum(axis=1).mean()), 
+                #probs=self.reference,
+                #).sample().to(self.device)
                 #new_ref = new_ref.T/new_ref.sum(axis=1)
-
-                z = zn_loc#*zm_loc
+                z = zn_loc.detach()*zm_loc
                 #px_scale_c, px_r, px_dropout = self.module.decoder(z)
-                px_scale = zn_loc.detach() @ self.module.encoder_molecule.module2celltype
+                px_scale = z @ self.module.encoder_molecule.module2celltype
                 px_scale_c = px_scale.softmax(dim=-1)
                 px_r = self.module.encoder_molecule.dispersion
                 #px_scale = (th.exp(zn_loc)*px_scale_c) @ self.reference.T
@@ -229,7 +229,8 @@ class SAGELightning(LightningModule):
                 alpha = 1/(th.exp(px_r)) + 1e-6
                 rate = alpha/px_rate
                 NB = GammaPoisson(concentration=alpha,rate=rate)#.log_prob(local_nghs).mean(axis=-1).mean()
-                nb_loss = -NB.log_prob(x).sum(axis=-1).mean()
+                #NB = Poisson(px_rate)#.log_prob(local_nghs).mean(axis=-1).mean()
+                nb_loss = -NB.log_prob(x).mean(axis=-1).mean()
                 # Regularize by local nodes
                 # Add Predicted same class nodes together.
 
