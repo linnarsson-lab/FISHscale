@@ -167,7 +167,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
         ### Prepare Model
         if type(self.model) == type(None):
             self.model = SAGELightning(in_feats=self.data.unique_genes.shape[0], 
-                                        n_latent=24,
+                                        n_latent=256,
                                         n_layers=len(self.ngh_sizes),
                                         n_classes=self.ref_celltypes.shape[1],
                                         n_hidden=48,

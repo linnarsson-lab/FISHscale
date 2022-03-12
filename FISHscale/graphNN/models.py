@@ -205,7 +205,7 @@ class SAGELightning(LightningModule):
                 #probs=self.reference,
                 #).sample().to(self.device)
                 #new_ref = new_ref.T/new_ref.sum(axis=1)
-                z = zn_loc.detach()*zm_loc
+                z = zm_loc*zn_loc.detach()
                 #px_scale_c, px_r, px_dropout = self.module.decoder(z)
                 px_scale = z @ self.module.encoder_molecule.module2celltype
                 px_scale_c = px_scale.softmax(dim=-1)
@@ -223,7 +223,7 @@ class SAGELightning(LightningModule):
                 # Add Predicted same class nodes together.
                 if type(self.dist) != type(None):
                     #option 2
-                    p = th.ones(px_scale_c.shape[0]) @ px_scale_c
+                    p = th.ones(px_scale_c.shape[0],device=self.device) @ px_scale_c
                     p = th.log(p/p.sum())
                     loss_dist = self.kl(p,self.dist.to(self.device)).sum()
                 else:
@@ -246,7 +246,6 @@ class SAGELightning(LightningModule):
             else:
                 loss = graph_loss
                 self.log('train_loss', loss, prog_bar=True, on_step=True, on_epoch=True)
-        
         return loss
 
     def configure_optimizers(self):
@@ -390,7 +389,6 @@ class SAGE(nn.Module):
                     num_workers=num_workers)
 
                 for input_nodes, output_nodes, blocks in tqdm.tqdm(dataloader):
-                    
                     block = blocks[0]#.srcdata['gene']
                     block = block.int()
                     if l == 0:
@@ -409,10 +407,9 @@ class SAGE(nn.Module):
                     if l == self.n_layers -1:
                         n = blocks[-1].dstdata['ngh']
                         h = self.encoder.gs_mu(h)
-
                         if self.supervised:
                             hm,_,_,_ = self.encoder_molecule(n)
-                            #h = h*hm
+                            h = hm*h
                             #px_scale, px_r, px_dropout = self.decoder(hm)
                             #px_scale = px_scale*th.exp(h)
                             px_scale = h @ self.encoder_molecule.module2celltype
@@ -423,7 +420,6 @@ class SAGE(nn.Module):
                     #    h = self.mean_encoder(h)#, th.exp(self.var_encoder(h))+1e-4 )
                     y[output_nodes] = h.cpu().detach()#.numpy()
                 x = y
-        
             return y, p_class
 
 class Encoder(nn.Module):
