@@ -87,7 +87,6 @@ class SAGELightning(LightningModule):
                     optim=pyro.optim.Adam({"lr": self.lr}),
                     loss=pyro.infer.Trace_ELBO())
 
-
         self.automatic_optimization = False
         if self.supervised:
             self.l_loc = l_loc
@@ -174,6 +173,19 @@ class SAGELightning(LightningModule):
             pyro.factor("graph_loss", self.alpha * graph_loss, has_rsample=False,)
             self.log('Graph Loss', self.alpha*graph_loss.mean(), prog_bar=False, on_step=True, on_epoch=False)
 
+    def on_epoch_start(self):
+        pass
+        '''print('Epoch start')
+        self.losses = []'''
+    
+    def on_epoch_end(self) -> None:
+        pass
+        #print('On epoch end')
+        '''_, opt_nb = self.optimizers()
+        opt_nb.zero_grad()
+        self.manual_backward(th.stack(self.losses).mean())
+        opt_nb.step()'''
+
     def training_step(self, batch, batch_idx):
         if self. inference_type == 'VI':
             loss = self.svi.step(batch)
@@ -221,6 +233,13 @@ class SAGELightning(LightningModule):
                 nb_loss = -NB.log_prob(x).mean(axis=-1).mean()
                 # Regularize by local nodes
                 # Add Predicted same class nodes together.
+
+                #nb_loss = -F.cosine_similarity(px_scale, x,dim=1).mean()#/x.shape[0]
+                #nb_loss += -F.cosine_similarity(px_scale, x,dim=0).mean()#/x.shape[0]
+                #entropy_regularizer = (th.log(px_scale) * px_scale).sum()
+                #nb_loss += entropy_regularizer
+                #nb_loss = -self.lambda_r * (torch.log(M_probs) * M_probs).sum()
+
                 if type(self.dist) != type(None):
                     #option 2
                     p = th.ones(px_scale_c.shape[0],device=self.device) @ px_scale_c
@@ -233,7 +252,7 @@ class SAGELightning(LightningModule):
                 self.warmup_counter += 1
                 
                 loss = nb_loss + loss_dist
-                
+                #self.losses.append(loss)
                 opt_nb.zero_grad()
                 self.manual_backward(loss)
                 opt_nb.step()
@@ -250,7 +269,7 @@ class SAGELightning(LightningModule):
 
     def configure_optimizers(self):
         optimizer_graph = th.optim.Adam(self.module.encoder.parameters(), lr=self.lr)
-        optimizer_nb = th.optim.Adam(self.module.encoder_molecule.parameters(), lr=self.lr)
+        optimizer_nb = th.optim.Adam(self.module.encoder_molecule.parameters(), lr=0.01)
         lr_scheduler = th.optim.lr_scheduler.ReduceLROnPlateau(optimizer_nb,)
         scheduler = {
             'scheduler': lr_scheduler, 
