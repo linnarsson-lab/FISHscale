@@ -235,23 +235,36 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             width (int, optional): Frame width. Defaults to 2000.
             height (int, optional): Frame height. Defaults to 2000.
         """
-        if self.color_dict:
-            color_dic = self.color_dict
+        app = None
+        def main():
+            global app
+            from PyQt5 import QtWidgets
+            """ PyQt5 needs this for not crashing"""
+            QtWidgets.QApplication.setStyle('Fusion')
+            app = QtWidgets.QApplication.instance()
+            if app is None:
+                app = QtWidgets.QApplication(sys.argv)
+            else:
+                print('QApplication instance already exists: %s' % str(app))
 
-        window = Window(self,
-                        columns,
-                        width,
-                        height,
-                        color_dic,
-                        x_alt=x,
-                        y_alt=y,
-                        c_alt=c)
-        
-        #window.vis.visM.close()
-        #window.vis.visM.destroy_window()
+            if self.color_dict:
+                color_dic = self.color_dict
 
-        
-        del window
+            window = Window(self,
+                            columns,
+                            color_dic,
+                            x_alt=x,
+                            y_alt=y,
+                            c_alt=c)
+            window.collapse.show()
+            sys.exit(app.exec_())
+            window.collapse.deleteLater()
+            import gc
+            del window, app
+            gc.collect()
+        main()
+
+            
         
     def segment(self,
                     label_column,
@@ -351,6 +364,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         self.dask_attrs[label_column] = self.dask_attrs[label_column].merge(pd.DataFrame(result,index=idx,columns=['segment']))
         print('DBscan results added to dask attributes. Generating gene by cell matrix as loom file.')
         gene_by_cell_loom(self.dask_attrs[label_column])
+
 
 class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base, Normalization, RegionalizeMulti,
                    Decomposition, BoneFightMulti, Regionalization_Gradient_Multi, Boundaries_Multi):

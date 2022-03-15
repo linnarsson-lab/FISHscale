@@ -57,13 +57,7 @@ class Window:
         color_dic: pass dictionary of desired color in RGB for each unique gene in the parquet_file
         
         
-        """    
-        QtWidgets.QApplication.setStyle('Fusion')
-        self.App = QtWidgets.QApplication.instance()
-        if self.App is None:
-            self.App = QtWidgets.QApplication(sys.argv)
-        else:
-            print('QApplication instance already exists: %s' % str(self.App))
+        """
         
         r = lambda: random.randint(0,255)
         self.columns= columns
@@ -117,7 +111,7 @@ class Window:
                                             vis=self.vis)
 
         self.widget_lists = self.collapse.widget_lists
-        self.collapse.show()
+        #self.collapse.show()
         self.vis.collapse = self.collapse
     
         for l in self.widget_lists:
@@ -130,11 +124,7 @@ class Window:
         self.collapse.addgene.clicked.connect(self.add_genes)
         self.vis.execute()
         #self.App.exec_()
-        self.App.exec_()
 
-
-        #self.App.quit()
-    
     def add_genes(self):
         self.vis.search_genes = [g for g in self.collapse.lineedit.text().split(' ') if g in self.color_dic]
         self.widget_lists[0].selectionChanged()
@@ -342,6 +332,7 @@ class ListWidget(QWidget):
             self.vis.visM.update_geometry(self.vis.pcd)
             self.vis.loop_execute()
 
+
 class CollapsibleDialog(QDialog,QObject):
     """a dialog to which collapsible sections can be added;
     subclass and reimplement define_section() to define sections and
@@ -387,12 +378,14 @@ class CollapsibleDialog(QDialog,QObject):
             self.vis.visM.destroy_window()
             self.vis.visM.close()
             
-            #QCoreApplication.processEvents()
-            QApplication.quit()
+            self.deleteLater()
+            sys.exit()
+            #QApplication.quit()
             #QApplication.quitOnLastWindowClosed()
             event.accept()
         else:
             event.ignore()
+
         
     def possible(self):
         for x in self.widget_lists:
