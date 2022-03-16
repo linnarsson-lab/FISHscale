@@ -277,7 +277,7 @@ class GraphUtils(object):
 
 
 class GraphPlotting:
-    def get_umap(self,random_n=50000,n_clusters=250):
+    def get_umap(self,random_n=50000,n_clusters=50):
         import umap
         import matplotlib.pyplot as plt
 
@@ -363,7 +363,10 @@ class GraphPlotting:
 
             allm = 0
             print('Generating plots for cluster assigned to molecules...')
-            os.mkdir('{}/Clusters'.format(self.folder))
+            
+            if not os.path.isdir(os.path.join(self.folder,'Clusters')):
+                os.mkdir('{}/Clusters'.format(self.folder))
+            
             for cl in range(self.ClusterNames.shape[0]):
                     try:
                         x, y = molecules_x[clusters == cl], molecules_y[clusters == cl]
@@ -418,7 +421,36 @@ class GraphPlotting:
             #self.clusters= adata.obs['leiden'].values
             kmeans = MiniBatchKMeans(n_clusters=n_clusters)
             self.clusters = kmeans.fit_predict(self.latent_unlabelled.detach().numpy())
+
+            molecules_id = self.g.ndata['indices']
+            new_labels = np.zeros(self.data.shape[0]) -1
+            new_labels = new_labels.astype('str')
+            for i,l in zip(molecules_id, self.clusters):
+                new_labels[i] = str(l)
+
+            if not os.path.isdir(os.path.join(self.folder,'Clusters')):
+                os.mkdir('{}/Clusters'.format(self.folder))
             
+            self.data.add_dask_attribute('Clusters',new_labels.astype('str'),include_genes=True)
+            
+            from sklearn.cluster import DBSCAN
+            db = DBSCAN(eps=22,min_samples=12)
+            self.data.segment('Clusters',save_to=os.path.join(self.folder,'Clusters/'),func=db)
+
+            with loompy.connect(os.path.join(self.folder,'Clusters','cells.loom'),'r+') as ds:
+                enrich = enrich_(labels_attr = ds.ca.Clusters)
+                sparse_tmp = ds.sparse().tocsr()
+                clusters_ = ds.ca['Clusters'].astype(float)
+                r = enrich._fit(sparse_tmp,permute=False)
+                ds.ra['enrichment'] = r
+
+            enriched_genes = {}
+            enrichment = r.argsort(axis=0)[::-1]
+            for c in range(np.unique(clusters_).shape[0]):
+                en_genes = enrichment[:,c][:10]
+                enriched_genes[c] = self.data.unique_genes[en_genes]
+                #print(np.unique(clusters_)[c], self.data.unique_genes[en_genes])
+
             np.save(self.folder+'/clusters',self.clusters)
             print('Clustering done.')
             print('Generating umap embedding...')
@@ -451,11 +483,35 @@ class GraphPlotting:
             ax = fig.add_subplot(1, 1, 1)
             ax.set_facecolor("black")
             #plt.scatter(DS.df.x.values.compute()[GD.cells], DS.df.y.values.compute()[GD.cells], c=th.argmax(pred.softmax(dim=-1),dim=-1).numpy(), s=0.2,marker='.',linewidths=0, edgecolors=None,cmap='rainbow')
-            plt.scatter(self.data.df.x.values.compute()[self.g.ndata['indices'].numpy()], self.data.df.y.values.compute()[self.g.ndata['indices'].numpy()], c=clusters_colors, s=0.05,marker='.',linewidths=0, edgecolors=None)
+            plt.scatter(self.data.df.x.values.compute()[self.g.ndata['indices'].numpy()], self.data.df.y.values.compute()[self.g.ndata['indices'].numpy()], c=clusters_colors, s=0.005,marker='.',linewidths=0, edgecolors=None)
             plt.xticks(fontsize=2)
             plt.yticks(fontsize=2)
             plt.axis('scaled')
             plt.savefig("{}/spatial_umap_embedding.png".format(self.folder), bbox_inches='tight', dpi=5000)
+
+            import holoviews as hv
+            hv.extension('matplotlib')
+            molecules_y = self.data.df.y.values.compute()[self.g.ndata['indices'].numpy()]
+            molecules_x = self.data.df.x.values.compute()[self.g.ndata['indices'].numpy()]
+            nd_dic = {}
+            allm = 0
+            print('Generating plots for cluster assigned to molecules...')
+ 
+            for cl in np.unique(self.clusters):
+                x, y = molecules_x[self.clusters == cl], molecules_y[self.clusters == cl]
+                allm += x.shape[0]
+                scatter =  hv.Scatter(np.array([x,y]).T).opts(
+                    bgcolor='black',
+                    aspect='equal',
+                    fig_inches=50,
+                    s=1,
+                    title=str(cl),
+                    color=color_dic[cl])
+                nd_dic[cl] = scatter.opts(title=' - '.join(enriched_genes[float(cl)]) )
+                hv.save(scatter,"{}/Clusters/{}.png".format(self.folder,str(cl)), )      
+
+            layout = hv.Layout([nd_dic[x] for x in nd_dic]).cols(5)
+            hv.save(layout,"{}/molecule_prediction.png".format(self.folder))
 
 class NegativeSampler(object):
     def __init__(self, g, k, neg_share=False):
@@ -473,3 +529,90 @@ class NegativeSampler(object):
             dst = self.weights.multinomial(n*self.k, replacement=True)
         src = src.repeat_interleave(self.k)
         return src, dst
+
+class enrich_: #sparese
+   
+    def __init__(self, 
+                 labels_attr: np.array) -> None:
+        self.labels_attr = labels_attr
+        self.permute_labs = None
+        self.sizes = None
+        self.nnz = None
+        self.means = None
+        self.f_nnz = None
+        
+    def _shuffle(self):
+        
+        permute_labs = np.random.permutation(self.labels_attr)
+
+        self.permute_labs = permute_labs
+        
+    def _sort_col(self,arr,ordering):
+        from scipy import sparse
+        
+        arr_list =[]
+        # arr_ = sparse_tmp.copy()
+        chunksize = 100000000 // arr.shape[1]
+        start = 0
+        while start < arr.shape[0]:
+            submatrix = arr[start:start + chunksize, :]
+            arr_list.append(submatrix[:, ordering])
+            start = start + chunksize
+            
+        return sparse.vstack(arr_list)
+
+    def _fit(self, mtx,permute:bool=False):
+        
+            if permute:
+                enrich_._shuffle()
+                labels = self.permute_labs
+                print(f'permute{labels}')
+            
+            else: 
+                labels = self.labels_attr 
+            labels = labels.astype(float)
+            
+            # Need to sort out through labels first before doing the split 
+            idx = np.unique(labels[np.argsort(labels)], return_index=True)
+            idx_ = np.concatenate([idx[1],[mtx.shape[1]]])
+            
+            mtx_ = self._sort_col(mtx,np.argsort(labels))
+    
+            alist = []
+            for i in range(len(idx_)-1):
+
+                alist.append(mtx_[:,idx_[i]:idx_[i+1]])   
+
+            n_labels = max(labels) + 1
+
+            n_cells = mtx_.shape[1]
+
+            sizes = np.zeros(len(idx[0]))
+            nnz=np.zeros([mtx_.shape[0],len(idx[0])])
+            means=np.zeros([mtx_.shape[0],len(idx[0])])
+            for i in np.arange(len(alist)):
+
+                nnz[:,i] = alist[i].getnnz(axis=1)
+                means[:,i] = np.squeeze((alist[i].mean(axis=1).A))
+                sizes[i] = alist[i].shape[1]
+                
+            self.sizes, self.nnz, self.means = sizes, nnz, means
+
+            # Non-zeros and means over all cells
+            (nnz_overall, means_overall) = mtx_.getnnz(axis=1),np.squeeze((mtx_.mean(axis=1).A))
+
+            # Scale by number of cells
+            f_nnz = nnz / sizes
+            f_nnz_overall = nnz_overall / n_cells
+            
+            self.f_nnz = f_nnz
+
+
+            # Means and fraction non-zero values in other clusters (per cluster)
+            means_other  = ((means_overall * n_cells)[None].T - (means * sizes)) / (n_cells - sizes)
+            f_nnz_other = ((f_nnz_overall * n_cells)[None].T - (f_nnz * sizes)) / (n_cells - sizes)
+
+            # enrichment = (f_nnz + 0.1) / (f_nnz_overall[None].T + 0.1) * (means + 0.01) / (means_overall[None].T + 0.01)
+            enrichment = (f_nnz + 0.1) / (f_nnz_other + 0.1) * (means + 0.01) / (means_other + 0.01)
+
+            return enrichment
