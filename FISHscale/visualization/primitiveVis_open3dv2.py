@@ -36,6 +36,7 @@ import FISHscale
 import functools
 from datetime import datetime, timedelta
 from math import ceil
+import threading
 
 class Window: 
 
@@ -107,11 +108,9 @@ class Window:
                                 alt=self.c_alt,
                                 )
 
-        self.collapse = CollapsibleDialog(self.dic_pointclouds,
-                                            vis=self.vis)
+        self.collapse = CollapsibleDialog(self.dic_pointclouds, vis=self.vis)
 
         self.widget_lists = self.collapse.widget_lists
-        #self.collapse.show()
         self.vis.collapse = self.collapse
     
         for l in self.widget_lists:
@@ -128,7 +127,6 @@ class Window:
     def add_genes(self):
         self.vis.search_genes = [g for g in self.collapse.lineedit.text().split(' ') if g in self.color_dic]
         self.widget_lists[0].selectionChanged()
-
 
     def pass_multi_data(self):
         r = lambda: random.randint(0,255)
@@ -177,6 +175,7 @@ class Visualizer:
 
         self.data = data
         self.color_dic = color_dic
+
         self.visM = o3d.visualization.Visualizer()
         self.visM.create_window(height=height,width=width,top=0,left=500)
         self.dic_pointclouds= dic_pointclouds
@@ -248,7 +247,7 @@ class SectionExpandButton(QPushButton):
         else:
             self.section.setExpanded(True)    
             
-class ListWidget(QWidget):
+class ListWidget(QMainWindow):
     def __init__(self,subdic,section,vis):
         super().__init__()
         
@@ -325,11 +324,12 @@ class ListWidget(QWidget):
                         points.append(ps)
                         colors.append(cs)
                     
-            ps,cs = np.concatenate(points), np.concatenate(colors)
+            '''ps,cs = np.concatenate(points), np.concatenate(colors)
             pcd = o3d.geometry.PointCloud()
             self.vis.pcd.points = o3d.utility.Vector3dVector(ps)
             self.vis.pcd.colors = o3d.utility.Vector3dVector(cs)
             self.vis.visM.update_geometry(self.vis.pcd)
+            '''
             self.vis.loop_execute()
 
 
@@ -379,7 +379,6 @@ class CollapsibleDialog(QDialog,QObject):
             self.vis.visM.close()
             
             self.deleteLater()
-            sys.exit()
             #QApplication.quit()
             #QApplication.quitOnLastWindowClosed()
             event.accept()

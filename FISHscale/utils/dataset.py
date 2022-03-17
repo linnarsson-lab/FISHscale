@@ -235,17 +235,17 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             width (int, optional): Frame width. Defaults to 2000.
             height (int, optional): Frame height. Defaults to 2000.
         """
-        app = None
+        
         def main():
-            global app
+
             from PyQt5 import QtWidgets
             """ PyQt5 needs this for not crashing"""
-            QtWidgets.QApplication.setStyle('Fusion')
-            app = QtWidgets.QApplication.instance()
-            if app is None:
-                app = QtWidgets.QApplication(sys.argv)
-            else:
-                print('QApplication instance already exists: %s' % str(app))
+            #QtWidgets.QApplication.setStyle('Fusion')
+            #app = QtWidgets.QApplication.instance()
+            #if app is None:
+            app = QtWidgets.QApplication(sys.argv)
+            #else:
+            #    print('QApplication instance already exists: %s' % str(app))
 
             if self.color_dict:
                 color_dic = self.color_dict
@@ -257,11 +257,9 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                             y_alt=y,
                             c_alt=c)
             window.collapse.show()
-            sys.exit(app.exec_())
-            window.collapse.deleteLater()
-            import gc
-            del window, app
-            gc.collect()
+            app.exec_()
+            app.quit()
+            
         main()
 
             
