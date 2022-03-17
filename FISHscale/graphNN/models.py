@@ -223,7 +223,7 @@ class SAGELightning(LightningModule):
                 #px_scale_c = px_scale.softmax(dim=-1)
                 #px_r = self.module.encoder_molecule.dispersion
 
-                px_rate = th.exp(zn_loc) * (px_scale_c @ self.reference.T)
+                px_rate = th.exp(zl_loc) * (px_scale_c @ self.reference.T)
                 #px_scale = px_scale_c @ new_ref
                 #px_rate = th.exp(zl_loc) * (px_scale) +1e-6
 
