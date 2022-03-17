@@ -42,7 +42,7 @@ class SAGELightning(LightningModule):
                  n_latent,
                  n_classes,
                  n_layers,
-                 n_hidden=48,
+                 n_hidden=128,
                  dropout=0.1,
                  lr=0.001,
                  supervised=False,
@@ -218,13 +218,14 @@ class SAGELightning(LightningModule):
                 #).sample().to(self.device)
                 #new_ref = new_ref.T/new_ref.sum(axis=1)
                 z = zm_loc*zn_loc.detach()
-                #px_scale_c, px_r, px_dropout = self.module.decoder(z)
-                px_scale = z @ self.module.encoder_molecule.module2celltype
-                px_scale_c = px_scale.softmax(dim=-1)
-                px_r = self.module.encoder_molecule.dispersion
-                #px_scale = (th.exp(zn_loc)*px_scale_c) @ self.reference.T
-                px_scale = px_scale_c @ new_ref
-                px_rate = th.exp(zl_loc) * (px_scale) +1e-6
+                px_scale_c, px_r, _ = self.module.decoder(z)
+                #px_scale = z @ self.module.encoder_molecule.module2celltype
+                #px_scale_c = px_scale.softmax(dim=-1)
+                #px_r = self.module.encoder_molecule.dispersion
+
+                px_rate = th.exp(zn_loc) * (px_scale_c @ self.reference.T)
+                #px_scale = px_scale_c @ new_ref
+                #px_rate = th.exp(zl_loc) * (px_scale) +1e-6
 
                 alpha = 1/(th.exp(px_r)) + 1e-6
                 rate = alpha/px_rate
@@ -524,8 +525,8 @@ class EncoderMolecule(nn.Module):
         self,
         in_feats,
         n_classes,
-        n_hidden=64,
-        n_latent=24,
+        n_hidden,
+        n_latent,
 
         ):
         super().__init__()
