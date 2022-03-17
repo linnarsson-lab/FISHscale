@@ -217,7 +217,7 @@ class SAGELightning(LightningModule):
                 #probs=self.reference,
                 #).sample().to(self.device)
                 #new_ref = new_ref.T/new_ref.sum(axis=1)
-                z = zm_loc*zn_loc.detach()
+                z = zn_loc.detach()
                 px_scale_c, px_r, _ = self.module.decoder(z)
                 #px_scale = z @ self.module.encoder_molecule.module2celltype
                 #px_scale_c = px_scale.softmax(dim=-1)
