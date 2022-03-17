@@ -182,8 +182,8 @@ class Visualizer:
         self.x_alt, self.y_alt, self.alt = x_alt, y_alt, alt
 
         self.t = threading.Thread(name='vis',target=self.vis_init)
-        self.t.setDaemon(True)
-        self.t.run()
+        #self.t.setDaemon(True)
+        self.t.start()
     
     def vis_init(self):
         self.visM = o3d.visualization.Visualizer()
@@ -385,7 +385,7 @@ class CollapsibleDialog(QDialog,QObject):
             self.vis.break_loop = True
 
             self.vis.visM.clear_geometries()
-            #self.vis.visM.destroy_window()
+            self.vis.t.join()
             #self.vis.visM.close()
             
             event.accept()
