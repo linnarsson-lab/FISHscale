@@ -175,11 +175,20 @@ class Visualizer:
 
         self.data = data
         self.color_dic = color_dic
+        self.show_axis = show_axis
+        self.dic_pointclouds = dic_pointclouds
+        self.height = height
+        self.width = width
+        self.x_alt, self.y_alt, self.alt = x_alt, y_alt, alt
 
+        self.t = threading.Thread(name='vis',target=self.vis_init)
+        self.t.setDaemon(True)
+        self.t.run()
+    
+    def vis_init(self):
         self.visM = o3d.visualization.Visualizer()
-        self.visM.create_window(height=height,width=width,top=0,left=500)
-        self.dic_pointclouds= dic_pointclouds
-        self.x_alt, self.y_alt, self.alt = x_alt,y_alt,alt
+        self.visM.create_window(height=self.height,width=self.width,top=0,left=500)
+        self.dic_pointclouds= self.dic_pointclouds
         self.search_genes = []
 
         points,maxx,minx,maxy,miny= 0,0,0,0,0
@@ -212,7 +221,7 @@ class Visualizer:
         print('Data loaded')
         opt = self.visM.get_render_option()
 
-        if show_axis:
+        if self.show_axis:
             opt.show_coordinate_frame = True
         opt.background_color = np.asarray([0, 0, 0])
         self.break_loop = False
@@ -324,12 +333,13 @@ class ListWidget(QMainWindow):
                         points.append(ps)
                         colors.append(cs)
                     
-            '''ps,cs = np.concatenate(points), np.concatenate(colors)
+            ps,cs = np.concatenate(points), np.concatenate(colors)
+            self.vis.break_loop = True
+            self.vis.break_loop = False
             pcd = o3d.geometry.PointCloud()
             self.vis.pcd.points = o3d.utility.Vector3dVector(ps)
             self.vis.pcd.colors = o3d.utility.Vector3dVector(cs)
             self.vis.visM.update_geometry(self.vis.pcd)
-            '''
             self.vis.loop_execute()
 
 
@@ -375,12 +385,9 @@ class CollapsibleDialog(QDialog,QObject):
             self.vis.break_loop = True
 
             self.vis.visM.clear_geometries()
-            self.vis.visM.destroy_window()
-            self.vis.visM.close()
+            #self.vis.visM.destroy_window()
+            #self.vis.visM.close()
             
-            self.deleteLater()
-            #QApplication.quit()
-            #QApplication.quitOnLastWindowClosed()
             event.accept()
         else:
             event.ignore()

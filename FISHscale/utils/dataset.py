@@ -235,34 +235,30 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             width (int, optional): Frame width. Defaults to 2000.
             height (int, optional): Frame height. Defaults to 2000.
         """
+
+
+        from PyQt5 import QtWidgets
+        """ PyQt5 needs this for not crashing"""
+        #QtWidgets.QApplication.setStyle('Fusion')
+        #app = QtWidgets.QApplication.instance()
+        #if app is None:
+        app = QtWidgets.QApplication(sys.argv)
+        #else:
+        #    print('QApplication instance already exists: %s' % str(app))
+
+        if self.color_dict:
+            color_dic = self.color_dict
+
+        self.window = Window(self,
+                        columns,
+                        color_dic,
+                        x_alt=x,
+                        y_alt=y,
+                        c_alt=c)
+        self.window.collapse.show()
         
-        def main():
-
-            from PyQt5 import QtWidgets
-            """ PyQt5 needs this for not crashing"""
-            #QtWidgets.QApplication.setStyle('Fusion')
-            #app = QtWidgets.QApplication.instance()
-            #if app is None:
-            app = QtWidgets.QApplication(sys.argv)
-            #else:
-            #    print('QApplication instance already exists: %s' % str(app))
-
-            if self.color_dict:
-                color_dic = self.color_dict
-
-            window = Window(self,
-                            columns,
-                            color_dic,
-                            x_alt=x,
-                            y_alt=y,
-                            c_alt=c)
-            window.collapse.show()
-            app.exec_()
-            app.quit()
-            
-        main()
-
-            
+        app.exec_()
+        app.quit()
         
     def segment(self,
                     label_column,
