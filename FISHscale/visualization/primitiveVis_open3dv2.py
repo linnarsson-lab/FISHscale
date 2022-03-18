@@ -192,6 +192,20 @@ class Visualizer:
         self._scene = gui.SceneWidget()
         self._scene.scene = rendering.Open3DScene(self.visM.renderer)
         self._scene.scene.set_background([0, 0, 0, 1])
+
+        points,maxx,minx,maxy,miny= 0,0,0,0,0
+        for d in self.data:
+            points += d.shape[0]
+            Mx,mx = d.x_max, d.x_min
+            My,my = d.y_max, d.y_min
+            if Mx > maxx:
+                maxx = Mx
+            if mx < minx:
+                minx= mx
+            if My > maxy:
+                maxy = My
+            if my < miny:
+                miny= my
         
         self._scene.scene.scene.set_sun_light(
             [-1, -1, -1],  # direction
@@ -199,8 +213,8 @@ class Visualizer:
             100000)  # intensity
         self._scene.scene.scene.enable_sun_light(True)
 
-        bbox = o3d.geometry.AxisAlignedBoundingBox([-10, -10, -10],
-                                                   [10, 10, 10])
+        bbox = o3d.geometry.AxisAlignedBoundingBox([minx, miny, -100],
+                                                   [maxx, maxy, 100])
         self._scene.setup_camera(60, bbox, [0, 0, 0])
         self.visM.add_child(self._scene)        
 
@@ -307,20 +321,9 @@ class ListWidget(QMainWindow):
                     cs[1],
                     cs[2], 1.0
                 ]
-                print(g,mat.base_color)
+                
                 mat.shader = "defaultLit"
                 self.vis._scene.scene.add_geometry(g, pcd, mat)
-
-                    
-            '''ps,cs = np.concatenate(points), np.concatenate(colors)
-            self.vis.break_loop = True
-            self.vis.break_loop = False
-            pcd = o3d.geometry.PointCloud()
-            self.vis.pcd.points = o3d.utility.Vector3dVector(ps)
-            self.vis.pcd.colors = o3d.utility.Vector3dVector(cs)
-            self.vis.visM.update_geometry(self.vis.pcd)
-            self.vis.loop_execute()'''
-
 
 class CollapsibleDialog(QDialog,QObject):
     """a dialog to which collapsible sections can be added;
