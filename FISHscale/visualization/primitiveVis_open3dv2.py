@@ -26,6 +26,9 @@ import sys
 import os
 try:
     import open3d as o3d
+    from open3d.visualization import gui
+    import open3d.visualization.rendering as rendering
+    import threading
 except:
     print('Import Error: open3d')
 import pandas as pd
@@ -100,8 +103,8 @@ class Window:
         self.vis = Visualizer(self.dataset,
                                 self.dic_pointclouds, 
                                 color_dic=self.color_dic,
-                                width=2000, 
-                                height=2000, 
+                                width=1024, 
+                                height=768, 
                                 show_axis=self.show_axis,
                                 x_alt=self.x_alt,
                                 y_alt=self.y_alt,
@@ -121,8 +124,6 @@ class Window:
                 l.list_widget.itemSelectionChanged.connect(l.selectionChanged)
 
         self.collapse.addgene.clicked.connect(self.add_genes)
-        self.vis.execute()
-        #self.App.exec_()
 
     def add_genes(self):
         self.vis.search_genes = [g for g in self.collapse.lineedit.text().split(' ') if g in self.color_dic]
@@ -180,66 +181,26 @@ class Visualizer:
         self.height = height
         self.width = width
         self.x_alt, self.y_alt, self.alt = x_alt, y_alt, alt
-
-        #self.t = threading.Thread(name='vis',target=self.vis_init)
-        #self.t.setDaemon(True)
-        #self.t.start()
         self.vis_init()
     
     def vis_init(self):
-        self.visM = o3d.visualization.Visualizer()
-        self.visM.create_window(height=self.height,width=self.width,top=0,left=500)
-        self.dic_pointclouds= self.dic_pointclouds
-        self.search_genes = []
+        self.visM = gui.Application.instance.create_window(
+            "Open3D", self.width, self.height)
 
-        points,maxx,minx,maxy,miny= 0,0,0,0,0
-        for d in self.data:
-            points += d.shape[0]
-            Mx,mx = d.x_max, d.x_min
-            My,my = d.y_max, d.y_min
-            if Mx > maxx:
-                maxx = Mx
-            if mx < minx:
-                minx= mx
-            if My > maxy:
-                maxy = My
-            if my < miny:
-                miny= my
-                
-        if points > 10000000:
-            points = 10000000
-       
-        x = np.linspace(int(minx), ceil(maxx), 2, dtype='int32')
-        y = np.linspace(int(miny), ceil(maxy), 2, dtype='int32')
-        z = np.zeros_like(x)
-        self.allgenes = np.stack([x,y,z]).T
-        self.allcolors = np.ones([2, 3])*0#np.concatenate(colors)[:,0,:]
+        self._scene = gui.SceneWidget()
+        self._scene.scene = rendering.Open3DScene(self.visM.renderer)
+        self._scene.scene.set_background([0, 0, 0, 1])
         
-        self.pcd = o3d.geometry.PointCloud()
-        self.pcd.points = o3d.utility.Vector3dVector(self.allgenes)
-        self.pcd.colors = o3d.utility.Vector3dVector(self.allcolors)   
-        self.visM.add_geometry(self.pcd)
-        print('Data loaded')
-        opt = self.visM.get_render_option()
+        self._scene.scene.scene.set_sun_light(
+            [-1, -1, -1],  # direction
+            [1, 1, 1],  # color
+            100000)  # intensity
+        self._scene.scene.scene.enable_sun_light(True)
 
-        if self.show_axis:
-            opt.show_coordinate_frame = True
-        opt.background_color = np.asarray([0, 0, 0])
-        self.break_loop = False
-
-    def execute(self):
-        self.visM.poll_events()
-        #self.visM.poll_events()
-        self.visM.update_renderer()
-        if sys.platform == 'linux':
-            QCoreApplication.processEvents()
-
-    def loop_execute(self):
-        while True:
-            if self.break_loop:
-                break
-            self.execute()
-            time.sleep(0.05)
+        bbox = o3d.geometry.AxisAlignedBoundingBox([-10, -10, -10],
+                                                   [10, 10, 10])
+        self._scene.setup_camera(60, bbox, [0, 0, 0])
+        self.visM.add_child(self._scene)        
 
 class SectionExpandButton(QPushButton):
     """a QPushbutton that can expand or collapse its section
@@ -308,8 +269,7 @@ class ListWidget(QMainWindow):
                             g= str(g)
                             ps = d.get_gene_sample(g, include_z=True, frac=0.1, minimum=2000000)
                             points.append(ps)
-                            cs= np.array([[self.vis.color_dic[g]] *(ps.shape[0])])[0,:,:]
-                            colors.append(cs)
+                            cs= self.vis.color_dic[g]
                     
                     elif self.section == 'fov_num':
                         self.selected = [int(x) for x in self.selected]
@@ -333,15 +293,29 @@ class ListWidget(QMainWindow):
                         cs = np.array([x for x in selected[self.section].apply(lambda x: d.color_dict[str(x)])])
                         points.append(ps)
                         colors.append(cs)
+
+            self._scene.scene.clear_geometry()
+            for g,ps, cs in zip(self.selected, points, colors):
+                pcd = o3d.geometry.PointCloud()
+                pcd.points = o3d.utility.Vector3dVector(ps)
+                mat = rendering.MaterialRecord()
+                mat.base_color = [
+                    cs[0],
+                    cs[1],
+                    cs[2], 1.0
+                ]
+                mat.shader = "defaultLit"
+                self._scene.scene.add_geometry(g, pcd, mat)
+
                     
-            ps,cs = np.concatenate(points), np.concatenate(colors)
+            '''ps,cs = np.concatenate(points), np.concatenate(colors)
             self.vis.break_loop = True
             self.vis.break_loop = False
             pcd = o3d.geometry.PointCloud()
             self.vis.pcd.points = o3d.utility.Vector3dVector(ps)
             self.vis.pcd.colors = o3d.utility.Vector3dVector(cs)
             self.vis.visM.update_geometry(self.vis.pcd)
-            self.vis.loop_execute()
+            self.vis.loop_execute()'''
 
 
 class CollapsibleDialog(QDialog,QObject):
@@ -384,8 +358,6 @@ class CollapsibleDialog(QDialog,QObject):
         if reply == QMessageBox.Yes:
             self.break_loop = True
             self.vis.break_loop = True
-
-            self.vis.visM.clear_geometries()
             #self.vis.visM.destroy_window()
             #print(Crashonpurpose)
             #self.vis.t.join()

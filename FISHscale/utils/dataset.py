@@ -239,9 +239,9 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
 
         from PyQt5 import QtWidgets
         """ PyQt5 needs this for not crashing"""
-        #QtWidgets.QApplication.setStyle('Fusion')
-        #app = QtWidgets.QApplication.instance()
-        #if app is None:
+        from open3d.visualization import gui
+        
+        gui.Application.instance.initialize()
         app = QtWidgets.QApplication(sys.argv)
         #else:
         #    print('QApplication instance already exists: %s' % str(app))
@@ -259,6 +259,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         
         app.exec_()
         app.quit()
+        gui.Application.instance.initialize()
         
     def segment(self,
                     label_column,
