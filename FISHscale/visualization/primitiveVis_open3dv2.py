@@ -203,12 +203,20 @@ class Visualizer:
         ''' view_ctrls = gui.CollapsableVert("View controls", 0.25 * em,
                                          gui.Margins(em, 0, 0, 0))'''
 
-        self._point_size = gui.NumberEdit(gui.NumberEdit.Type(50))#gui.Slider(gui.Slider.INT)
+        self._point_size = gui.Slider(gui.Slider.INT)#gui.NumberEdit(gui.NumberEdit.Type(50))
         self._point_size.set_limits(1, 50)
+        self._point_size.set_on_value_changed(self._on_point_size)
+
 
         grid = gui.VGrid(2, 0.25 * em)
         grid.add_child(gui.Label("Point size"))
         grid.add_child(self._point_size)
+
+        self._show_axis = gui.Checkbox('Show Axes')
+        grid.add_child(gui.Label("Show Axes"))
+        grid.add_child(self._show_axis)
+
+        self._show_axis.set_on_checked(self._on_show_axes)
         self._settings_panel.add_child(grid)
 
         points,maxx,minx,maxy,miny= 0,0,0,0,0
@@ -224,12 +232,6 @@ class Visualizer:
                 maxy = My
             if my < miny:
                 miny= my
-        
-        self._scene.scene.scene.set_sun_light(
-            [-1, -1, -1],  # direction
-            [1, 1, 1],  # color
-            100000)  # intensity
-        self._scene.scene.scene.enable_sun_light(True)
 
         bbox = o3d.geometry.AxisAlignedBoundingBox([minx, miny, -100],
                                                    [maxx, maxy, 100])
@@ -238,6 +240,27 @@ class Visualizer:
         self.visM.set_on_layout(self._on_layout)
         self.visM.add_child(self._scene)  
         self.visM.add_child(self._settings_panel) 
+    
+    def _on_point_size(self, size):
+        self.point_size = size
+        self.resize()
+
+    def _on_show_axes(self, show):
+        self._scene.scene.show_axes(show)
+        
+    def resize(self):
+        self._scene.scene.clear_geometry()
+        
+        pcd = o3d.geometry.PointCloud()
+        mat = rendering.MaterialRecord()
+        mat.shader = "defaultLit"
+        
+        for g in self.previous_selection:
+            ps, cs= self.previous_selection[g][0], self.previous_selection[g][1]
+            pcd.points = o3d.utility.Vector3dVector(ps)
+            mat.point_size = int(self.point_size)
+            mat.base_color = [cs[0],cs[1],cs[2], 1.0]
+            self._scene.scene.add_geometry(g, pcd, mat)
 
     def _on_layout(self, layout_context):
         # The on_layout callback should set the frame (position + size) of every
@@ -290,21 +313,6 @@ class ListWidget(QMainWindow):
         self.list_widget.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
         self.list_widget.setFixedHeight(800)
         self.tissue_selected = [x for x in self.vis.dic_pointclouds['File']]
-        self.vis._point_size.set_on_value_changed(self._on_point_size)
-
-    def _on_point_size(self, size):
-        self.vis.point_size = size
-    '''    def thread_main():
-            gui.Application.instance.post_to_main_thread(
-                        self.vis, self.resize)
-        threading.Thread(target=thread_main).start()
-        
-    def resize(self):
-        self.vis._scene.scene.clear_geometry()
-        for g in self.previous_selection:
-            pcd, mat= self.previous_selection[g][0], self.previous_selection[g][1]
-            mat.point_size = int(self.vis.point_size)
-            self.vis._scene.scene.add_geometry(g, pcd, mat)'''
 
     def add_items(self):
         for e in self.subdic:
@@ -333,7 +341,7 @@ class ListWidget(QMainWindow):
                         for g in self.selected:
                             g= str(g)
                             ps = d.get_gene_sample(g, include_z=True, frac=0.1, minimum=2000000)
-                            points.append(ps)
+                            points.append(ps.values)
                             colors.append(self.vis.color_dic[g])
 
                     elif self.section in self.vis.alt:
@@ -352,20 +360,15 @@ class ListWidget(QMainWindow):
                         colors.append(cs)
 
             self.vis._scene.scene.clear_geometry()
-            self.previous_selection = {}
+            self.vis.previous_selection = {}
+            pcd = o3d.geometry.PointCloud()
+            mat = rendering.MaterialRecord()
+            mat.shader = "defaultLit"
             for g, ps, cs in zip(self.selected, points, colors):
-                pcd = o3d.geometry.PointCloud()
-
-                pcd.points = o3d.utility.Vector3dVector(ps.values)
-                mat = rendering.MaterialRecord()
-                mat.base_color = [
-                    cs[0],
-                    cs[1],
-                    cs[2], 1.0
-                ]
+                pcd.points = o3d.utility.Vector3dVector(ps)
+                mat.base_color = [cs[0],cs[1],cs[2], 1.0]
                 mat.point_size = int(self.vis.point_size)
-                mat.shader = "defaultLit"
-                #self.previous_selection[g] = [pcd, mat]
+                self.vis.previous_selection[g] = [ps, cs]
                 self.vis._scene.scene.add_geometry(g, pcd, mat)
 
 class CollapsibleDialog(QDialog,QObject):
