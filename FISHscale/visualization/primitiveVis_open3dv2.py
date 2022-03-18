@@ -181,6 +181,8 @@ class Visualizer:
         self.height = height
         self.width = width
         self.x_alt, self.y_alt, self.alt = x_alt, y_alt, alt
+        self.search_genes = []
+
         self.vis_init()
     
     def vis_init(self):
@@ -265,11 +267,10 @@ class ListWidget(QMainWindow):
                 if d.filename in self.tissue_selected:
                     if self.section == 'g':
                         for g in self.selected:
-                            #d = grpg[g]
                             g= str(g)
                             ps = d.get_gene_sample(g, include_z=True, frac=0.1, minimum=2000000)
                             points.append(ps)
-                            cs= self.vis.color_dic[g]
+                            colors.append(self.vis.color_dic[g])
                     
                     elif self.section == 'fov_num':
                         self.selected = [int(x) for x in self.selected]
@@ -294,18 +295,21 @@ class ListWidget(QMainWindow):
                         points.append(ps)
                         colors.append(cs)
 
-            self._scene.scene.clear_geometry()
-            for g,ps, cs in zip(self.selected, points, colors):
+            self.vis._scene.scene.clear_geometry()
+            print(self.selected, len(points),len(colors))
+            for g, ps, cs in zip(self.selected, points, colors):
                 pcd = o3d.geometry.PointCloud()
-                pcd.points = o3d.utility.Vector3dVector(ps)
+
+                pcd.points = o3d.utility.Vector3dVector(ps.values)
                 mat = rendering.MaterialRecord()
                 mat.base_color = [
                     cs[0],
                     cs[1],
                     cs[2], 1.0
                 ]
+                print(g,mat.base_color)
                 mat.shader = "defaultLit"
-                self._scene.scene.add_geometry(g, pcd, mat)
+                self.vis._scene.scene.add_geometry(g, pcd, mat)
 
                     
             '''ps,cs = np.concatenate(points), np.concatenate(colors)
