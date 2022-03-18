@@ -183,15 +183,33 @@ class Visualizer:
         self.x_alt, self.y_alt, self.alt = x_alt, y_alt, alt
         self.search_genes = []
 
+        self.material = rendering.MaterialRecord()
+        self.material.base_color = [0.9, 0.9, 0.9, 1.0]
         self.vis_init()
     
     def vis_init(self):
         self.visM = gui.Application.instance.create_window(
             "Open3D", self.width, self.height)
+        self.point_size = 2
 
         self._scene = gui.SceneWidget()
         self._scene.scene = rendering.Open3DScene(self.visM.renderer)
         self._scene.scene.set_background([0, 0, 0, 1])
+
+        em = self.visM.theme.font_size
+        self._settings_panel = gui.Vert(
+            0, gui.Margins(0.25 * em, 0.25 * em, 0.25 * em, 0.25 * em))
+
+        ''' view_ctrls = gui.CollapsableVert("View controls", 0.25 * em,
+                                         gui.Margins(em, 0, 0, 0))'''
+
+        self._point_size = gui.NumberEdit(gui.NumberEdit.Type(50))#gui.Slider(gui.Slider.INT)
+        self._point_size.set_limits(1, 50)
+
+        grid = gui.VGrid(2, 0.25 * em)
+        grid.add_child(gui.Label("Point size"))
+        grid.add_child(self._point_size)
+        self._settings_panel.add_child(grid)
 
         points,maxx,minx,maxy,miny= 0,0,0,0,0
         for d in self.data:
@@ -215,9 +233,26 @@ class Visualizer:
 
         bbox = o3d.geometry.AxisAlignedBoundingBox([minx, miny, -100],
                                                    [maxx, maxy, 100])
-        self._scene.setup_camera(60, bbox, [0, 0, 0])
-        self.visM.add_child(self._scene)        
+        self._scene.setup_camera(60, bbox, [0, 0, 0]) 
 
+        self.visM.set_on_layout(self._on_layout)
+        self.visM.add_child(self._scene)  
+        self.visM.add_child(self._settings_panel) 
+
+    def _on_layout(self, layout_context):
+        # The on_layout callback should set the frame (position + size) of every
+        # child correctly. After the callback is done the window will layout
+        # the grandchildren.
+        r = self.visM.content_rect
+        self._scene.frame = r
+        width = 17 * layout_context.theme.font_size
+        height = min(
+            r.height,
+            self._settings_panel.calc_preferred_size(
+                layout_context, gui.Widget.Constraints()).height)
+        self._settings_panel.frame = gui.Rect(r.get_right() - width, r.y, width,
+                                              height)
+    
 class SectionExpandButton(QPushButton):
     """a QPushbutton that can expand or collapse its section
     """
@@ -255,6 +290,21 @@ class ListWidget(QMainWindow):
         self.list_widget.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
         self.list_widget.setFixedHeight(800)
         self.tissue_selected = [x for x in self.vis.dic_pointclouds['File']]
+        self.vis._point_size.set_on_value_changed(self._on_point_size)
+
+    def _on_point_size(self, size):
+        self.vis.point_size = size
+    '''    def thread_main():
+            gui.Application.instance.post_to_main_thread(
+                        self.vis, self.resize)
+        threading.Thread(target=thread_main).start()
+        
+    def resize(self):
+        self.vis._scene.scene.clear_geometry()
+        for g in self.previous_selection:
+            pcd, mat= self.previous_selection[g][0], self.previous_selection[g][1]
+            mat.point_size = int(self.vis.point_size)
+            self.vis._scene.scene.add_geometry(g, pcd, mat)'''
 
     def add_items(self):
         for e in self.subdic:
@@ -285,14 +335,6 @@ class ListWidget(QMainWindow):
                             ps = d.get_gene_sample(g, include_z=True, frac=0.1, minimum=2000000)
                             points.append(ps)
                             colors.append(self.vis.color_dic[g])
-                    
-                    elif self.section == 'fov_num':
-                        self.selected = [int(x) for x in self.selected]
-                        selection =  d.df[d.df.fov_num.isin(self.selected)].compute() #.index.compute()
-                        ps = selection.loc[:,['x','y','z']].values
-                        cs = np.array([c for c in selection.loc[:,['fov_num']].fov_num.apply(lambda x: d.color_dict[str(x)])])
-                        points.append(ps)
-                        colors.append(cs)
 
                     elif self.section in self.vis.alt:
                         ps = np.array([self.vis.x_alt, self.vis.y_alt, np.zeros_like(self.vis.x_alt)]).T
@@ -310,7 +352,7 @@ class ListWidget(QMainWindow):
                         colors.append(cs)
 
             self.vis._scene.scene.clear_geometry()
-            print(self.selected, len(points),len(colors))
+            self.previous_selection = {}
             for g, ps, cs in zip(self.selected, points, colors):
                 pcd = o3d.geometry.PointCloud()
 
@@ -321,8 +363,9 @@ class ListWidget(QMainWindow):
                     cs[1],
                     cs[2], 1.0
                 ]
-                
+                mat.point_size = int(self.vis.point_size)
                 mat.shader = "defaultLit"
+                #self.previous_selection[g] = [pcd, mat]
                 self.vis._scene.scene.add_geometry(g, pcd, mat)
 
 class CollapsibleDialog(QDialog,QObject):
@@ -361,19 +404,9 @@ class CollapsibleDialog(QDialog,QObject):
         self.setWindowIcon(app_icon)
     
     def closeEvent(self, event):
-        reply = QMessageBox.question(self, 'Quit', 'Are You Sure to Quit?', QMessageBox.No | QMessageBox.Yes)
-        if reply == QMessageBox.Yes:
-            self.break_loop = True
-            self.vis.break_loop = True
-            #self.vis.visM.destroy_window()
-            #print(Crashonpurpose)
-            #self.vis.t.join()
-            #self.vis.visM.close()
-            
-            event.accept()
-        else:
-            event.ignore()
-
+        #reply = QMessageBox.question(self, 'Quit', 'Are You Sure to Quit?', QMessageBox.No | QMessageBox.Yes)
+        gui.Application.instance.quit()
+        event.accept()
         
     def possible(self):
         for x in self.widget_lists:
