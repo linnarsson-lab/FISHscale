@@ -255,11 +255,9 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                         x_alt=x,
                         y_alt=y,
                         c_alt=c)
-        self.window.collapse.show()
         
-        app.exec_()
-        app.quit()
-        gui.Application.instance.initialize()
+
+        gui.Application.instance.run()
         
     def segment(self,
                     label_column,

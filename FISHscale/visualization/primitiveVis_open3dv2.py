@@ -98,36 +98,15 @@ class Window:
                 self.dic_pointclouds['File'].append(str(x.filename))
             self.pass_multi_data()
 
-        self.show_axis= show_axis
-
         self.vis = Visualizer(self.dataset,
                                 self.dic_pointclouds, 
                                 color_dic=self.color_dic,
                                 width=1024, 
                                 height=768, 
-                                show_axis=self.show_axis,
                                 x_alt=self.x_alt,
                                 y_alt=self.y_alt,
                                 alt=self.c_alt,
                                 )
-
-        self.collapse = CollapsibleDialog(self.dic_pointclouds, vis=self.vis)
-
-        self.widget_lists = self.collapse.widget_lists
-        self.vis.collapse = self.collapse
-    
-        for l in self.widget_lists:
-            if l.section == 'File':
-                l.list_widget.itemSelectionChanged.connect(l.selectionChanged)
-                l.list_widget.itemSelectionChanged.connect(self.collapse.possible)
-            else:
-                l.list_widget.itemSelectionChanged.connect(l.selectionChanged)
-
-        self.collapse.addgene.clicked.connect(self.add_genes)
-
-    def add_genes(self):
-        self.vis.search_genes = [g for g in self.collapse.lineedit.text().split(' ') if g in self.color_dic]
-        self.widget_lists[0].selectionChanged()
 
     def pass_multi_data(self):
         r = lambda: random.randint(0,255)
@@ -176,7 +155,6 @@ class Visualizer:
 
         self.data = data
         self.color_dic = color_dic
-        self.show_axis = show_axis
         self.dic_pointclouds = dic_pointclouds
         self.height = height
         self.width = width
@@ -191,6 +169,8 @@ class Visualizer:
         self.visM = gui.Application.instance.create_window(
             "Open3D", self.width, self.height)
         self.point_size = 2
+        self.selected = []
+        self.tissue_selected = [x for x in self.dic_pointclouds['File']]
 
         self._scene = gui.SceneWidget()
         self._scene.scene = rendering.Open3DScene(self.visM.renderer)
@@ -207,14 +187,60 @@ class Visualizer:
         self._point_size.set_limits(1, 50)
         self._point_size.set_on_value_changed(self._on_point_size)
 
+        self._plot_all_button = gui.Button('Plot all')#gui.NumberEdit(gui.NumberEdit.Type(50))
+        self._plot_all_button.set_on_clicked(self._plot_all)
 
-        grid = gui.VGrid(2, 0.25 * em)
-        grid.add_child(gui.Label("Point size"))
+        self._clear_all_button = gui.Button('Clear all')#gui.NumberEdit(gui.NumberEdit.Type(50))
+        self._clear_all_button.set_on_clicked(self._clear_all)
+
+        grid = gui.VGrid(1, 0.5 * em)
+        ps = gui.Label("Point size")
+        grid.add_child(ps)
         grid.add_child(self._point_size)
+        grid.add_child(self._plot_all_button)
+        grid.add_child(self._clear_all_button)
+
+        self._text_edit_cell = gui.TextEdit()
+        self.search_collapse = gui.CollapsableVert("Search", 0,
+                                                gui.Margins(em, 0, 0, 0))
+        #fileedit_layout = gui.Horiz()
+        self.search_collapse.add_child(self._text_edit_cell)
+        grid.add_child(self.search_collapse)
+        #grid.add_child(self._text_edit_cell)
+        self._text_edit_cell.set_on_value_changed(self._text_changed)
 
         self._show_axis = gui.Checkbox('Show Axes')
         grid.add_child(gui.Label("Show Axes"))
         grid.add_child(self._show_axis)
+
+        self.g_collapse = gui.CollapsableVert("Genes", 0,
+                                                gui.Margins(em, 0, 0, 0))
+
+        self.gene_w = []
+        for e in self.dic_pointclouds['g']:
+            widget = gui.Button(str(e))
+            widget.vertical_padding_em = 0.15
+            widget.toggleable =  True
+            widget.is_on = False
+            c = self.color_dic[str(e)]
+            widget.background_color= gui.Color(c[0],c[1],c[2],0.1)
+            self.g_collapse.add_child(widget)
+            self.gene_w.append(widget)
+            widget.set_on_clicked(self._on_gene_pressed)
+
+        self.f_collapse = gui.CollapsableVert("Files", 0,
+                                        gui.Margins(em, 0, 0, 0))
+        
+        grid.add_child(self.g_collapse)
+        grid.add_child(self.f_collapse)
+ 
+        self.file_w = {}
+        for e in self.dic_pointclouds['File']:
+            widget = gui.Checkbox(str(e))
+            widget.checked = True
+            self.f_collapse.add_child(widget)
+            self.file_w[e] = widget
+            widget.set_on_checked(self._on_file_checked)
 
         self._show_axis.set_on_checked(self._on_show_axes)
         self._settings_panel.add_child(grid)
@@ -238,17 +264,76 @@ class Visualizer:
         self._scene.setup_camera(60, bbox, [0, 0, 0]) 
 
         self.visM.set_on_layout(self._on_layout)
+
         self.visM.add_child(self._scene)  
         self.visM.add_child(self._settings_panel) 
     
     def _on_point_size(self, size):
         self.point_size = size
-        self.resize()
+        self._resize()
 
+    def _on_file_checked(self, is_checked):
+        self.tissue_selected = []
+        for f in self.file_w:
+            if self.file_w[f].checked:
+                self.tissue_selected.append(f)
+    
+    def _on_gene_pressed(self):
+        self.selected = []
+        self.section = 'g'
+        for g in self.gene_w:
+            if g.is_on:
+                self.selected.append(g.text)
+                c = self.color_dic[g.text]
+                g.background_color = gui.Color(c[0],c[1],c[2],0.9)
+            elif not g.is_on:
+                c = self.color_dic[g.text]
+                g.background_color = gui.Color(c[0],c[1],c[2],0.1)
+
+        self._text_edit_cell.text_value = ' '.join(self.selected)
+        self._text_edit_cell.placeholder_text = ' '.join(self.selected)
+        self._selection_changed()
+
+    def _plot_all(self):
+        self.selected = []
+        self.section = 'g'
+        for g in self.gene_w:
+            g.is_on = True
+            self.selected.append(g.text)
+            c = self.color_dic[g.text]
+            g.background_color = gui.Color(c[0],c[1],c[2],0.9)
+            self.selected.append(g.text)
+        self._selection_changed()
+
+    def _clear_all(self):
+        self.selected = []
+        self.section = 'g'
+        for g in self.gene_w:
+            g.is_on = False
+            c = self.color_dic[g.text]
+            g.background_color = gui.Color(c[0],c[1],c[2],0.1)
+        
+        self._selection_changed()
+
+    def _text_changed(self, path):
+        t = path
+        t_list = sorted(t.split(' '))
+        t_list += self.selected
+        self.selected = np.unique(np.array(t_list)).tolist()
+        self._text_edit_cell.placeholder_text = ' '.join(self.selected)
+        self._text_edit_cell.text_value = ' '.join(self.selected)
+        self.section = 'g'
+        for g in self.gene_w:
+            if t.count(g.text) :
+                c = self.color_dic[g.text]
+                g.background_color = gui.Color(c[0],c[1],c[2],0.9)
+
+        self._selection_changed()
+    
     def _on_show_axes(self, show):
         self._scene.scene.show_axes(show)
         
-    def resize(self):
+    def _resize(self):
         self._scene.scene.clear_geometry()
         
         pcd = o3d.geometry.PointCloud()
@@ -275,191 +360,44 @@ class Visualizer:
                 layout_context, gui.Widget.Constraints()).height)
         self._settings_panel.frame = gui.Rect(r.get_right() - width, r.y, width,
                                               height)
+
+        '''self.g_collapse.frame = gui.Rect(r.get_right() - width, r.y, width,
+                                                height/2)'''
     
-class SectionExpandButton(QPushButton):
-    """a QPushbutton that can expand or collapse its section
-    """
-    def __init__(self, item, text = "", parent = None):
-        super().__init__(text, parent)
-        self.section = item
-        self.clicked.connect(self.on_clicked)
+    def _selection_changed(self,extra=None):
+        points,colors = [],[]  
+        for d in self.data:
+            if d.filename in self.tissue_selected:
+                if self.section == 'g':
+                    for g in self.selected:
+                        g= str(g)
+                        ps = d.get_gene_sample(g, include_z=True, frac=0.1, minimum=2000000)
+                        points.append(ps.values)
+                        colors.append(self.color_dic[g])
 
-    def on_clicked(self):
-        """toggle expand/collapse of section by clicking
-        """
-        if self.section.isExpanded():
-            self.section.setExpanded(False)
-        else:
-            self.section.setExpanded(True)    
-            
-class ListWidget(QMainWindow):
-    def __init__(self,subdic,section,vis):
-        super().__init__()
-        
-        # creating a QListWidget 
-        self.list_widget = QListWidget()
-        # scroll bar 
-        self.subdic = subdic
-        self.section = section
-        self.selected = False
-        self.vis = vis
-        scroll_bar = QScrollBar() 
-        # setting style sheet to the scroll bar 
-        scroll_bar.setStyleSheet("background : black;") 
-        # adding extra scroll bar to it 
-        self.list_widget.addScrollBarWidget(scroll_bar, Qt.AlignLeft)
-        self.add_items()
+                elif self.section in self.alt:
+                    ps = np.array([self.x_alt, self.y_alt, np.zeros_like(self.x_alt)]).T
+                    #cs = np.array([d.color_dict[str(x)] for x in selected_features])
+                    cs = self.alt[self.section]
+                    points.append(ps)
+                    colors.append(cs)
 
-        self.list_widget.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
-        self.list_widget.setFixedHeight(800)
-        self.tissue_selected = [x for x in self.vis.dic_pointclouds['File']]
+                else:
+                    da = d.dask_attrs[self.section]
+                    selected = da[da[self.section].isin(self.selected)].compute() #.index.compute(
+                    ps =  selected.loc[:,['x','y','z']].values
+                    cs = np.array([x for x in selected[self.section].apply(lambda x: d.color_dict[str(x)])])
+                    points.append(ps)
+                    colors.append(cs)
 
-    def add_items(self):
-        for e in self.subdic:
-            i = QListWidgetItem(str(e)) 
-            try:
-                c = self.vis.color_dic[str(e)]
-                i.setBackground(QColor(c[0]*255,c[1]*255,c[2]*255,120))
-            except:
-                pass
-            self.list_widget.addItem(i)
-        self.list_widget.sortItems()
-        # adding items to the list widget '''
-    
-    def selectionChanged(self,extra=None):
-        self.selected = [i.text() for i in self.list_widget.selectedItems()]
-        self.selected += self.vis.search_genes
-
-        if self.selected[0] in self.vis.dic_pointclouds['File'] and self.section == 'File':
-            self.tissue_selected = [x for x in self.selected if x in self.vis.dic_pointclouds['File']]
-        
-        if self.section != 'File':
-            points,colors = [],[]  
-            for d in self.vis.data:
-                if d.filename in self.tissue_selected:
-                    if self.section == 'g':
-                        for g in self.selected:
-                            g= str(g)
-                            ps = d.get_gene_sample(g, include_z=True, frac=0.1, minimum=2000000)
-                            points.append(ps.values)
-                            colors.append(self.vis.color_dic[g])
-
-                    elif self.section in self.vis.alt:
-                        ps = np.array([self.vis.x_alt, self.vis.y_alt, np.zeros_like(self.vis.x_alt)]).T
-                        #cs = np.array([d.color_dict[str(x)] for x in selected_features])
-                        cs = self.vis.alt[self.section]
-                        points.append(ps)
-                        colors.append(cs)
-
-                    else:
-                        da = d.dask_attrs[self.section]
-                        selected = da[da[self.section].isin(self.selected)].compute() #.index.compute(
-                        ps =  selected.loc[:,['x','y','z']].values
-                        cs = np.array([x for x in selected[self.section].apply(lambda x: d.color_dict[str(x)])])
-                        points.append(ps)
-                        colors.append(cs)
-
-            self.vis._scene.scene.clear_geometry()
-            self.vis.previous_selection = {}
-            pcd = o3d.geometry.PointCloud()
-            mat = rendering.MaterialRecord()
-            mat.shader = "defaultLit"
-            for g, ps, cs in zip(self.selected, points, colors):
-                pcd.points = o3d.utility.Vector3dVector(ps)
-                mat.base_color = [cs[0],cs[1],cs[2], 1.0]
-                mat.point_size = int(self.vis.point_size)
-                self.vis.previous_selection[g] = [ps, cs]
-                self.vis._scene.scene.add_geometry(g, pcd, mat)
-
-class CollapsibleDialog(QDialog,QObject):
-    """a dialog to which collapsible sections can be added;
-    subclass and reimplement define_section() to define sections and
-        add them as (title, widget) tuples to self.sections
-    """
-    def __init__(self,dic,vis):
-        super().__init__()
-        self.tree = QTreeWidget()
-        self.tree.setHeaderHidden(True)
-        self.vis = vis
-        layout = QVBoxLayout()
-        layout.addWidget(self.tree)
-        self.setLayout(layout)
-        self.setGeometry(100, 100, 200, 1000) 
-        self.tree.setIndentation(0)
-        self.dic = dic
-        self.widget_lists = []
-        self.sections = {}
-        self.break_loop = False
-
-        for x in self.dic:
-            self.define_section(x)  
-        self.add_sections()
-
-        completer = QCompleter(self.dic['g'])
-        self.lineedit = QLineEdit()
-        self.lineedit.setCompleter(completer)
-        layout.addWidget(self.lineedit)
-        self.addgene= QPushButton('Add genes')
-        layout.addWidget(self.addgene)
-
-        app_icon = QtGui.QIcon()
-        app_icon.addFile('Images/test16x16.png', QtCore.QSize(16,16))
-        self.setWindowIcon(app_icon)
-    
-    def closeEvent(self, event):
-        #reply = QMessageBox.question(self, 'Quit', 'Are You Sure to Quit?', QMessageBox.No | QMessageBox.Yes)
-        gui.Application.instance.quit()
-        event.accept()
-        
-    def possible(self):
-        for x in self.widget_lists:
-            if x.section == 'File':
-                ts = x.tissue_selected
-        for x in self.widget_lists:
-            if x.section != 'File':
-                x.tissue_selected = ts
-
-    def add_sections(self):
-        """adds a collapsible sections for every 
-        (title, widget) tuple in self.sections
-        """
-        for title in self.sections:
-            widget = self.sections[title]
-            button1 = self.add_button(title)
-            section1 = self.add_widget(button1, widget)
-            button1.addChild(section1)       
-
-    def define_section(self,title):
-        """reimplement this to define all your sections
-        and add them as (title, widget) tuples to self.sections
-        """
-        widget = QFrame(self.tree)
-        layout = QHBoxLayout(widget)
-
-        #layout.addWidget(QLabel("Bla"))
-        if title in self.vis.alt:
-            lw = ListWidget(['plot'],title,self.vis)
-        else:
-            lw = ListWidget(self.dic[title],title,self.vis)
-        list_widget = lw.list_widget
-        layout.addWidget(list_widget)
-        self.sections[title]= widget
-        self.widget_lists.append(lw)
-        
-    def add_button(self, title):
-        """creates a QTreeWidgetItem containing a button 
-        to expand or collapse its section
-        """
-        item = QTreeWidgetItem()
-        self.tree.addTopLevelItem(item)
-        self.tree.setItemWidget(item, 0, SectionExpandButton(item, text = title))
-        return item
-
-    def add_widget(self, button, widget):
-        """creates a QWidgetItem containing the widget,
-        as child of the button-QWidgetItem
-        """
-        section = QTreeWidgetItem(button)
-        section.setDisabled(True)
-        self.tree.setItemWidget(section, 0, widget)
-        return section
+        self._scene.scene.clear_geometry()
+        self.previous_selection = {}
+        pcd = o3d.geometry.PointCloud()
+        mat = rendering.MaterialRecord()
+        mat.shader = "defaultLit"
+        for g, ps, cs in zip(self.selected, points, colors):
+            pcd.points = o3d.utility.Vector3dVector(ps)
+            mat.base_color = [cs[0],cs[1],cs[2], 1.0]
+            mat.point_size = int(self.point_size)
+            self.previous_selection[g] = [ps, cs]
+            self._scene.scene.add_geometry(g, pcd, mat)
