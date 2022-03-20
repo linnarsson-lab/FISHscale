@@ -291,7 +291,7 @@ class Visualizer:
                 g.background_color = gui.Color(c[0],c[1],c[2],0.1)
 
         self._text_edit_cell.text_value = ' '.join(self.selected)
-        self._text_edit_cell.placeholder_text = ' '.join(self.selected)
+        self._text_edit_cell.placeholder_text =  ' '.join(self.selected)#' '.join(self.data[0].unique_genes.tolist())
         self._selection_changed()
 
     def _plot_all(self):
@@ -312,7 +312,6 @@ class Visualizer:
             g.is_on = False
             c = self.color_dic[g.text]
             g.background_color = gui.Color(c[0],c[1],c[2],0.1)
-        
         self._selection_changed()
 
     def _text_changed(self, path):
@@ -361,8 +360,8 @@ class Visualizer:
         self._settings_panel.frame = gui.Rect(r.get_right() - width, r.y, width,
                                               height)
 
-        '''self.g_collapse.frame = gui.Rect(r.get_right() - width, r.y, width,
-                                                height/2)'''
+        '''self._text_edit_cell.frame = gui.Rect(r.get_right() - width, r.y, width,
+                                                height/3)'''
     
     def _selection_changed(self,extra=None):
         points,colors = [],[]  
