@@ -4,10 +4,6 @@ from re import L
 environ['NUMEXPR_MAX_THREADS'] = str(cpu_count())
 from typing import Union, Optional
 import pandas as pd
-try:
-    from FISHscale.visualization.vis_macos import Window
-except ModuleNotFoundError as e:
-    print(f'Please install "PyQt5" for data visualization. {e}') 
 from FISHscale.utils.inside_polygon import close_polygon 
 from FISHscale.utils.hex_regionalization import Regionalize
 from FISHscale.utils.fast_iteration import Iteration, MultiIteration
@@ -238,26 +234,26 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
 
 
         from PyQt5 import QtWidgets
-        """ PyQt5 needs this for not crashing"""
-        from open3d.visualization import gui
-        
-        gui.Application.instance.initialize()
-        app = QtWidgets.QApplication(sys.argv)
-        #else:
-        #    print('QApplication instance already exists: %s' % str(app))
+        if sys.platform == 'linux':
+            QCoreApplication.processEvents()
+            from FISHscale.visualization.vis_linux import Window
+            
 
-        if self.color_dict:
-            color_dic = self.color_dict
+        else:
+            from FISHscale.visualization.vis_macos import Window
+            from open3d.visualization import gui
+            
+            gui.Application.instance.initialize()
+            if self.color_dict:
+                color_dic = self.color_dict
 
-        self.window = Window(self,
-                        columns,
-                        color_dic,
-                        x_alt=x,
-                        y_alt=y,
-                        c_alt=c)
-        
-
-        gui.Application.instance.run()
+            self.window = Window(self,
+                            columns,
+                            color_dic,
+                            x_alt=x,
+                            y_alt=y,
+                            c_alt=c)
+            gui.Application.instance.run()
         
     def segment(self,
                     label_column,
