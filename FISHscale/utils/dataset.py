@@ -5,7 +5,6 @@ environ['NUMEXPR_MAX_THREADS'] = str(cpu_count())
 from typing import Union, Optional
 import pandas as pd
 try:
-    if os.pl
     from FISHscale.visualization.vis_macos import Window
 except ModuleNotFoundError as e:
     print(f'Please install "PyQt5" for data visualization. {e}') 
