@@ -232,11 +232,15 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             height (int, optional): Frame height. Defaults to 2000.
         """
 
-
-        from PyQt5 import QtWidgets
         if sys.platform == 'linux':
-            QCoreApplication.processEvents()
+
             from FISHscale.visualization.vis_linux import Window
+            self.window = Window(self,
+                columns,
+                color_dic,
+                x_alt=x,
+                y_alt=y,
+                c_alt=c)
             
 
         else:
@@ -840,17 +844,30 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
             height (int, optional): Frame height. Defaults to 2000.
         """        
 
-        if self.color_dict:
-            color_dic = self.color_dict
+        if sys.platform == 'linux':
 
-        window = Window(self,
-                        columns,
-                        width,
-                        height,
-                        color_dic,
-                        x_alt=x,
-                        y_alt=y,
-                        c_alt=c) 
-        
+            from FISHscale.visualization.vis_linux import Window
+            self.window = Window(self,
+                columns,
+                color_dic,
+                x_alt=x,
+                y_alt=y,
+                c_alt=c)
+            
+        else:
+            from FISHscale.visualization.vis_macos import Window
+            from open3d.visualization import gui
+            
+            gui.Application.instance.initialize()
+            if self.color_dict:
+                color_dic = self.color_dict
+
+            self.window = Window(self,
+                            columns,
+                            color_dic,
+                            x_alt=x,
+                            y_alt=y,
+                            c_alt=c)
+            gui.Application.instance.run()
         
         
