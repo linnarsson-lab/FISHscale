@@ -180,9 +180,6 @@ class Visualizer:
         self._settings_panel = gui.Vert(
             0, gui.Margins(0.25 * em, 0.25 * em, 0.25 * em, 0.25 * em))
 
-        ''' view_ctrls = gui.CollapsableVert("View controls", 0.25 * em,
-                                         gui.Margins(em, 0, 0, 0))'''
-
         self._point_size = gui.Slider(gui.Slider.INT)#gui.NumberEdit(gui.NumberEdit.Type(50))
         self._point_size.set_limits(1, 50)
         self._point_size.set_on_value_changed(self._on_point_size)
@@ -206,7 +203,7 @@ class Visualizer:
         #fileedit_layout = gui.Horiz()
         self.search_collapse.add_child(self._text_edit_cell)
         grid.add_child(self.search_collapse)
-        #grid.add_child(self._text_edit_cell)
+        
         self._text_edit_cell.set_on_value_changed(self._text_changed)
 
         self._show_axis = gui.Checkbox('Show Axes')
@@ -262,12 +259,10 @@ class Visualizer:
         bbox = o3d.geometry.AxisAlignedBoundingBox([minx, miny, -100],
                                                    [maxx, maxy, 100])
         self._scene.setup_camera(60, bbox, [0, 0, 0]) 
-
         self.visM.set_on_layout(self._on_layout)
-
         self.visM.add_child(self._scene)  
         self.visM.add_child(self._settings_panel) 
-    
+
     def _on_point_size(self, size):
         self.point_size = size
         self._resize()
@@ -312,6 +307,9 @@ class Visualizer:
             g.is_on = False
             c = self.color_dic[g.text]
             g.background_color = gui.Color(c[0],c[1],c[2],0.1)
+        
+        self._text_edit_cell.placeholder_text = ' '.join(self.selected)
+        self._text_edit_cell.text_value = ' '.join(self.selected)
         self._selection_changed()
 
     def _text_changed(self, path):
@@ -359,10 +357,7 @@ class Visualizer:
                 layout_context, gui.Widget.Constraints()).height)
         self._settings_panel.frame = gui.Rect(r.get_right() - width, r.y, width,
                                               height)
-
-        '''self._text_edit_cell.frame = gui.Rect(r.get_right() - width, r.y, width,
-                                                height/3)'''
-    
+         
     def _selection_changed(self,extra=None):
         points,colors = [],[]  
         for d in self.data:
