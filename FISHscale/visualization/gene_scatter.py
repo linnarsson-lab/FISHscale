@@ -3,6 +3,7 @@ import numpy as np
 from pint import UnitRegistry
 from typing import Union, Any, List
 from time import strftime
+import gc
 
 class AxSize:
 
@@ -259,6 +260,8 @@ class GeneScatter(AxSize):
             if save_name == '':
                 save_name = f'Scatter_plot_{self.dataset_name}_{strftime("%Y-%m-%d_%H-%M-%S")}'
             plt.savefig(f'{save_name}{file_format}', dpi=dpi, bbox_inches='tight', pad_inches=0)
+        
+        gc.collect()
 
 
 class MultiGeneScatter(AxSize):
@@ -385,6 +388,8 @@ class MultiGeneScatter(AxSize):
             if save_name == '':
                 save_name = f'Scatter_plot_{self.dataset_name}_{strftime("%Y-%m-%d_%H-%M-%S")}'
             plt.savefig(f'{save_name}{file_format}', dpi=dpi, bbox_inches='tight', pad_inches=0)
+            
+        gc.collect()
 
 
 class AttributeScatter(AxSize):
@@ -514,3 +519,4 @@ class AttributeScatter(AxSize):
                 save_name = f'Scatter_plot_{self.dataset_name}_{strftime("%Y-%m-%d_%H-%M-%S")}'
             plt.savefig(f'{save_name}{file_format}', dpi=dpi, bbox_inches='tight', pad_inches=0)
 
+        gc.collect()

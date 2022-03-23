@@ -116,7 +116,6 @@ class ManyColors:
         
         file_name = path.join(self.FISHscale_data_folder, f'{self.dataset_name}_color_dictionary.pkl')
         with open(file_name, 'wb') as f:
-            print(f'len color dict save_color_dict: {len(self.color_dict)}')
             pickle.dump(self.color_dict, f)
         return file_name
 

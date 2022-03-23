@@ -4,10 +4,6 @@ from re import L
 environ['NUMEXPR_MAX_THREADS'] = str(cpu_count())
 from typing import Union, Optional
 import pandas as pd
-try:
-    from FISHscale.visualization.primitiveVis_open3dv2 import Window
-except ModuleNotFoundError as e:
-    print(f'Please install "PyQt5" for data visualization. {e}') 
 from FISHscale.utils.inside_polygon import close_polygon 
 from FISHscale.utils.hex_regionalization import Regionalize
 from FISHscale.utils.fast_iteration import Iteration, MultiIteration
@@ -60,7 +56,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         filename: str,
         x_label: str = 'r_px_microscope_stitched',
         y_label: str ='c_px_microscope_stitched',
-        gene_label: str = 'below3Hdistance_genes',
+        gene_label: str = 'decoded_genes',
         other_columns: Optional[list] = [],
         unique_genes: Optional[np.ndarray] = None,
         exclude_genes: list = None,
@@ -87,7 +83,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 'c_px_microscope_stitched'.
             gene_label (str, optional):  Name of the column of the Pandas 
                 dataframe that contains the gene labels of the points. 
-                Defaults to 'below3Hdistance_genes'.
+                Defaults to 'decoded_genes'.
             other_columns (list, optional): List with labels of other columns 
                 that need to be loaded. Data will stored under "self.other"
                 as Pandas Dataframe. Defaults to None.
@@ -235,36 +231,33 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             width (int, optional): Frame width. Defaults to 2000.
             height (int, optional): Frame height. Defaults to 2000.
         """
-        app = None
-        def main():
-            global app
-            from PyQt5 import QtWidgets
-            """ PyQt5 needs this for not crashing"""
-            QtWidgets.QApplication.setStyle('Fusion')
-            app = QtWidgets.QApplication.instance()
-            if app is None:
-                app = QtWidgets.QApplication(sys.argv)
-            else:
-                print('QApplication instance already exists: %s' % str(app))
 
+        if sys.platform == 'linux':
+
+            from FISHscale.visualization.vis_linux import Window
+            self.window = Window(self,
+                columns,
+                color_dic,
+                x_alt=x,
+                y_alt=y,
+                c_alt=c)
+            
+
+        else:
+            from FISHscale.visualization.vis_macos import Window
+            from open3d.visualization import gui
+            
+            gui.Application.instance.initialize()
             if self.color_dict:
                 color_dic = self.color_dict
 
-            window = Window(self,
+            self.window = Window(self,
                             columns,
                             color_dic,
                             x_alt=x,
                             y_alt=y,
                             c_alt=c)
-            window.collapse.show()
-            sys.exit(app.exec_())
-            window.collapse.deleteLater()
-            import gc
-            del window, app
-            gc.collect()
-        main()
-
-            
+            gui.Application.instance.run()
         
     def segment(self,
                     label_column,
@@ -388,7 +381,7 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
         #If loading from files define:
         x_label: str = 'r_px_microscope_stitched',
         y_label: str ='c_px_microscope_stitched',
-        gene_label: str = 'below3Hdistance_genes',
+        gene_label: str = 'decoded_genes',
         other_columns: Optional[list] = [],
         exclude_genes: list = None,
         z: float = 0,
@@ -441,7 +434,7 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
                 'c_px_microscope_stitched'.
             gene_label (str, optional):  Name of the column of the Pandas 
                 dataframe that contains the gene labels of the points. 
-                Defaults to 'below3Hdistance_genes'.
+                Defaults to 'decoded_genes'.
             other_columns (list, optional): List with labels of other columns 
                 that need to be loaded. Data will stored under "self.other"
                 as Pandas Dataframe. Defaults to None.
@@ -535,7 +528,7 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
         filepath: str, 
         x_label: str = 'r_px_microscope_stitched',
         y_label: str ='c_px_microscope_stitched',
-        gene_label: str = 'below3Hdistance_genes',
+        gene_label: str = 'decoded_genes',
         other_columns: Optional[list] = None,
         unique_genes: Optional[np.ndarray] = None,
         exclude_genes: list = None,
@@ -564,7 +557,7 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
                 'c_px_microscope_stitched'.
             gene_label (str, optional):  Name of the column of the Pandas 
                 dataframe that contains the gene labels of the points. 
-                Defaults to 'below3Hdistance_genes'.
+                Defaults to 'decoded_genes'.
             other_columns (list, optional): List with labels of other columns 
                 that need to be loaded. Data will stored under "self.other"
                 as Pandas Dataframe. Defaults to None.
@@ -804,7 +797,7 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
             sorted = np.argsort([d.y_extent for d in self.datasets])
         else:
             raise Exception(f'"Orderby" key not understood: {orderby}')
-
+        
         for i, s in enumerate(sorted):
             offset_x = x[i]
             offset_y = y[i]
@@ -812,6 +805,7 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
             offset_x = offset_x - dataset_center[0]
             offset_y = offset_y - dataset_center[1]
             self.datasets[s].offset_data_temp(offset_x, offset_y, 0)
+        
 
     def reset_offset(self, z: bool=False) -> None: 
         """Reset the offset so that the center is at (0,0) or (0,0,0).
@@ -850,17 +844,30 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
             height (int, optional): Frame height. Defaults to 2000.
         """        
 
-        if self.color_dict:
-            color_dic = self.color_dict
+        if sys.platform == 'linux':
 
-        window = Window(self,
-                        columns,
-                        width,
-                        height,
-                        color_dic,
-                        x_alt=x,
-                        y_alt=y,
-                        c_alt=c) 
-        
+            from FISHscale.visualization.vis_linux import Window
+            self.window = Window(self,
+                columns,
+                color_dic,
+                x_alt=x,
+                y_alt=y,
+                c_alt=c)
+            
+        else:
+            from FISHscale.visualization.vis_macos import Window
+            from open3d.visualization import gui
+            
+            gui.Application.instance.initialize()
+            if self.color_dict:
+                color_dic = self.color_dict
+
+            self.window = Window(self,
+                            columns,
+                            color_dic,
+                            x_alt=x,
+                            y_alt=y,
+                            c_alt=c)
+            gui.Application.instance.run()
         
         

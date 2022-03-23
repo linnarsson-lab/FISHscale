@@ -57,7 +57,13 @@ class Window:
         color_dic: pass dictionary of desired color in RGB for each unique gene in the parquet_file
         
         
-        """
+        """    
+        QtWidgets.QApplication.setStyle('Fusion')
+        self.App = QtWidgets.QApplication.instance()
+        if self.App is None:
+            self.App = QtWidgets.QApplication(sys.argv)
+        else:
+            print('QApplication instance already exists: %s' % str(self.App))
         
         r = lambda: random.randint(0,255)
         self.columns= columns
@@ -111,7 +117,7 @@ class Window:
                                             vis=self.vis)
 
         self.widget_lists = self.collapse.widget_lists
-        #self.collapse.show()
+        self.collapse.show()
         self.vis.collapse = self.collapse
     
         for l in self.widget_lists:
@@ -124,7 +130,11 @@ class Window:
         self.collapse.addgene.clicked.connect(self.add_genes)
         self.vis.execute()
         #self.App.exec_()
+        self.App.exec_()
 
+
+        #self.App.quit()
+    
     def add_genes(self):
         self.vis.search_genes = [g for g in self.collapse.lineedit.text().split(' ') if g in self.color_dic]
         self.widget_lists[0].selectionChanged()
@@ -152,7 +162,7 @@ class Window:
                 #unique_ca = np.unique(self.c_alt[c])
                 colors = {}
                 for ca in np.unique(self.c_alt[c]):
-                    if int(ca) < 0:
+                    if int(ca) > 0:
                         colors[ca] = (r()/255,r()/255,r()/255)
                     else:
                         colors[ca]=(0,0,0) 
@@ -326,12 +336,12 @@ class ListWidget(QWidget):
                         colors.append(cs)
                     
             ps,cs = np.concatenate(points), np.concatenate(colors)
+            self.vis.visM.clear_geometries()
             pcd = o3d.geometry.PointCloud()
-            self.vis.pcd.points = o3d.utility.Vector3dVector(ps)
-            self.vis.pcd.colors = o3d.utility.Vector3dVector(cs)
-            self.vis.visM.update_geometry(self.vis.pcd)
+            pcd.points = o3d.utility.Vector3dVector(ps)
+            pcd.colors = o3d.utility.Vector3dVector(cs)
+            self.vis.visM.add_geometry(pcd)
             self.vis.loop_execute()
-
 
 class CollapsibleDialog(QDialog,QObject):
     """a dialog to which collapsible sections can be added;
@@ -378,14 +388,12 @@ class CollapsibleDialog(QDialog,QObject):
             self.vis.visM.destroy_window()
             self.vis.visM.close()
             
-            self.deleteLater()
-            sys.exit()
-            #QApplication.quit()
+            #QCoreApplication.processEvents()
+            QApplication.quit()
             #QApplication.quitOnLastWindowClosed()
             event.accept()
         else:
             event.ignore()
-
         
     def possible(self):
         for x in self.widget_lists:
