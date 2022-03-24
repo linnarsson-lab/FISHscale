@@ -217,27 +217,27 @@ class SAGELightning(LightningModule):
                 #probs=self.reference,
                 #).sample().to(self.device)
                 #new_ref = new_ref.T/new_ref.sum(axis=1)
-                z = zm_loc*zn_loc.detach()
-                px_scale_c, px_r, _ = self.module.decoder(z)
-                #px_scale = z @ self.module.encoder_molecule.module2celltype
-                #px_scale_c = px_scale.softmax(dim=-1)
+                z = zn_loc.detach()*zm_loc
+                #px_scale_c, px_r, px_l = self.module.decoder(z)
+                px_scale = z @ self.module.encoder_molecule.module2celltype
+                px_scale_c = px_scale.softmax(dim=-1)
                 #px_r = self.module.encoder_molecule.dispersion
 
-                px_rate = th.exp(zn_loc) * (px_scale_c @ self.reference.T)
-                #px_scale = px_scale_c @ new_ref
+                #px_rate = th.exp(zl_loc) * (px_scale_c @ self.reference.T)
+                px_scale = px_scale_c @ new_ref
                 #px_rate = th.exp(zl_loc) * (px_scale) +1e-6
 
-                alpha = 1/(th.exp(px_r)) + 1e-6
-                rate = alpha/px_rate
-                NB = GammaPoisson(concentration=alpha,rate=rate)#.log_prob(local_nghs).mean(axis=-1).mean()
+                #alpha = 1/(th.exp(px_r)) + 1e-6
+                #rate = alpha/px_rate
+                #NB = GammaPoisson(concentration=alpha,rate=rate)#.log_prob(local_nghs).mean(axis=-1).mean()
                 #NB = Poisson(px_rate)#.log_prob(local_nghs).mean(axis=-1).mean()
-                nb_loss = -NB.log_prob(x).mean(axis=-1).mean()
+                #nb_loss = -NB.log_prob(x).sum(axis=-1).mean()
                 # Regularize by local nodes
                 # Add Predicted same class nodes together.
 
-                #nb_loss = -F.cosine_similarity(px_scale, x,dim=1).mean()#/x.shape[0]
-                #nb_loss += -F.cosine_similarity(px_scale, x,dim=0).mean()#/x.shape[0]
-                #entropy_regularizer = (th.log(px_scale) * px_scale).sum()
+                nb_loss = -F.cosine_similarity(px_scale, x,dim=1).mean()#/x.shape[0]
+                nb_loss += -F.cosine_similarity(px_scale, x,dim=0).mean()#/x.shape[0]
+                #entropy_regularizer = (th.log(px_scale_c) * px_scale_c).sum()
                 #nb_loss += entropy_regularizer
                 #nb_loss = -self.lambda_r * (torch.log(M_probs) * M_probs).sum()
 
@@ -430,11 +430,10 @@ class SAGE(nn.Module):
                         if self.supervised:
                             hm,_,_,_ = self.encoder_molecule(n)
                             h = hm*h
-                            #px_scale, px_r, px_dropout = self.decoder(hm)
+                            px_scale, px_r, px_l= self.decoder(h)
                             #px_scale = px_scale*th.exp(h)
-                            px_scale = h @ self.encoder_molecule.module2celltype
+                            #px_scale = h @ self.encoder_molecule.module2celltype
                             px_scale = px_scale.softmax(dim=-1)
-                            h = h
                             p_class[output_nodes] = px_scale.cpu().detach()
 
                     #    h = self.mean_encoder(h)#, th.exp(self.var_encoder(h))+1e-4 )
@@ -566,7 +565,7 @@ class Decoder(nn.Module):
         ):
         super().__init__()
 
-        self.fc = FCLayers(n_latent,n_hidden)
+        self.fc = FCLayers(n_latent,n_hidden,n_layers=2)
 
         self.px_scale_decoder = nn.Sequential(
             nn.Linear(n_hidden, n_classes),
@@ -576,13 +575,13 @@ class Decoder(nn.Module):
         # dispersion: here we only deal with gene-cell dispersion case
         self.px_r_decoder = nn.Linear(n_hidden, in_feats)
         # dropout
-        self.px_dropout_decoder = nn.Linear(n_hidden, in_feats)
+        self.px_dropout_decoder = nn.Linear(n_hidden, 1)
 
     def forward(self, z):
 
         px = self.fc(z)
 
         px_scale = self.px_scale_decoder(px)
-        px_dropout = self.px_dropout_decoder(px)
+        px_l = self.px_dropout_decoder(px)
         px_r = self.px_r_decoder(px)
-        return px_scale, px_r, px_dropout
+        return px_scale, px_r, px_l
