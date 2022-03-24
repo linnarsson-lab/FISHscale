@@ -221,22 +221,22 @@ class SAGELightning(LightningModule):
                 #px_scale_c, px_r, px_l = self.module.decoder(z)
                 px_scale = z @ self.module.encoder_molecule.module2celltype
                 px_scale_c = px_scale.softmax(dim=-1)
-                px_r = self.module.encoder_molecule.dispersion
+                #px_r = self.module.encoder_molecule.dispersion
 
-                px_rate = th.exp(zl_loc) * (px_scale_c @ self.reference.T)
-                #px_scale = px_scale_c @ new_ref
+                #px_rate = th.exp(zl_loc) * (px_scale_c @ self.reference.T)
+                px_scale = px_scale_c @ new_ref
                 #px_rate = th.exp(zl_loc) * (px_scale) +1e-6
 
-                alpha = 1/(th.exp(px_r)) + 1e-6
-                rate = alpha/px_rate
-                NB = GammaPoisson(concentration=alpha,rate=rate)#.log_prob(local_nghs).mean(axis=-1).mean()
+                #alpha = 1/(th.exp(px_r)) + 1e-6
+                #rate = alpha/px_rate
+                #NB = GammaPoisson(concentration=alpha,rate=rate)#.log_prob(local_nghs).mean(axis=-1).mean()
                 #NB = Poisson(px_rate)#.log_prob(local_nghs).mean(axis=-1).mean()
-                nb_loss = -NB.log_prob(x).sum(axis=-1).mean()
+                #nb_loss = -NB.log_prob(x).sum(axis=-1).mean()
                 # Regularize by local nodes
                 # Add Predicted same class nodes together.
 
-                #nb_loss = -F.cosine_similarity(px_scale, x,dim=1).mean()#/x.shape[0]
-                #nb_loss += -F.cosine_similarity(px_scale, x,dim=0).mean()#/x.shape[0]
+                nb_loss = -F.cosine_similarity(px_scale, x,dim=1).mean()#/x.shape[0]
+                nb_loss += -F.cosine_similarity(px_scale, x,dim=0).mean()#/x.shape[0]
                 #entropy_regularizer = (th.log(px_scale_c) * px_scale_c).sum()
                 #nb_loss += entropy_regularizer
                 #nb_loss = -self.lambda_r * (torch.log(M_probs) * M_probs).sum()
