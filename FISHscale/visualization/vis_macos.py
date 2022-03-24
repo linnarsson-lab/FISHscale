@@ -324,6 +324,7 @@ class Visualizer:
             if t.count(g.text) :
                 c = self.color_dic[g.text]
                 g.background_color = gui.Color(c[0],c[1],c[2],0.9)
+        self.selected = [e for e in self.selected if e!= '']
 
         self._selection_changed()
     
@@ -359,10 +360,11 @@ class Visualizer:
                                               height)
          
     def _selection_changed(self,extra=None):
-        points,colors = [],[]  
+        points,colors = [],[]
         for d in self.data:
             if d.filename in self.tissue_selected:
                 if self.section == 'g':
+
                     for g in self.selected:
                         g= str(g)
                         ps = d.get_gene_sample(g, include_z=True, frac=0.1, minimum=2000000)
@@ -389,7 +391,13 @@ class Visualizer:
         pcd = o3d.geometry.PointCloud()
         mat = rendering.MaterialRecord()
         mat.shader = "defaultLit"
-        for g, ps, cs in zip(self.selected, points, colors):
+
+        sel = self.selected * len(self.tissue_selected)
+        added = []
+        for g, ps, cs in zip(sel, points, colors):
+            added.append(g)
+            f = added.count(g)
+            g = g+'_'+str(f)
             pcd.points = o3d.utility.Vector3dVector(ps)
             mat.base_color = [cs[0],cs[1],cs[2], 1.0]
             mat.point_size = int(self.point_size)
