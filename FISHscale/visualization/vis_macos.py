@@ -210,11 +210,15 @@ class Visualizer:
         grid.add_child(gui.Label("Show Axes"))
         grid.add_child(self._show_axis)
 
+        self._scene.set_on_key(self.kevent)
+
         self.g_collapse = gui.CollapsableVert("Genes", 0,
                                                 gui.Margins(em, 0, 0, 0))
 
         self.gene_w = []
+        self.gene_list = []
         for e in self.dic_pointclouds['g']:
+            self.gene_list.append(str(e))
             widget = gui.Button(str(e))
             widget.vertical_padding_em = 0.15
             widget.toggleable =  True
@@ -272,18 +276,36 @@ class Visualizer:
         for f in self.file_w:
             if self.file_w[f].checked:
                 self.tissue_selected.append(f)
+
+    def kevent(self,e):
+        if e.key == gui.KeyName.UP and e.type == gui.KeyEvent.UP:
+            idx = self.gene_list.index(self.button_selection)
+            self.gene_w[idx -1].is_on = True
+            self.gene_w[idx].is_on = False
+            self._on_gene_pressed()
+        elif e.key == gui.KeyName.DOWN and e.type == gui.KeyEvent.DOWN:
+            idx = self.gene_list.index(self.button_selection)
+            self.gene_w[idx + 1].is_on = True
+            self.gene_w[idx].is_on = False
+            self._on_gene_pressed()
+
+        return gui.Widget.EventCallbackResult.IGNORED
     
     def _on_gene_pressed(self):
+        self.previous_selection = self.selected
         self.selected = []
         self.section = 'g'
         for g in self.gene_w:
             if g.is_on:
+                if g.text not in self.previous_selection:
+                    self.button_selection = g.text
                 self.selected.append(g.text)
                 c = self.color_dic[g.text]
                 g.background_color = gui.Color(c[0],c[1],c[2],0.9)
             elif not g.is_on:
                 c = self.color_dic[g.text]
                 g.background_color = gui.Color(c[0],c[1],c[2],0.1)
+
 
         self._text_edit_cell.text_value = ' '.join(self.selected)
         self._text_edit_cell.placeholder_text =  ' '.join(self.selected)#' '.join(self.data[0].unique_genes.tolist())
@@ -325,7 +347,6 @@ class Visualizer:
                 c = self.color_dic[g.text]
                 g.background_color = gui.Color(c[0],c[1],c[2],0.9)
         self.selected = [e for e in self.selected if e!= '']
-
         self._selection_changed()
     
     def _on_show_axes(self, show):
