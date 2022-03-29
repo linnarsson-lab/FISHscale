@@ -170,7 +170,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
                                         n_latent=256,
                                         n_layers=len(self.ngh_sizes),
                                         n_classes=self.ref_celltypes.shape[1],
-                                        n_hidden=48,
+                                        n_hidden=128,
                                         lr=self.lr,
                                         supervised=self.supervised,
                                         reference=self.ref_celltypes,
