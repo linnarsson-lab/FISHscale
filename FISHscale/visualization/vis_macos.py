@@ -180,6 +180,13 @@ class Visualizer:
         self._settings_panel = gui.Vert(
             0, gui.Margins(0.25 * em, 0.25 * em, 0.25 * em, 0.25 * em))
 
+        
+        self._voxel_down = gui.Slider(gui.Slider.INT)#gui.NumberEdit(gui.NumberEdit.Type(50))
+        self._voxel_down.set_limits(1, 100)
+        self._voxel_down.int_value = 100
+        self.voxel_down = 1
+        self._voxel_down.set_on_value_changed(self._on_voxel_down)
+
         self._point_size = gui.Slider(gui.Slider.INT)#gui.NumberEdit(gui.NumberEdit.Type(50))
         self._point_size.set_limits(1, 50)
         self._point_size.set_on_value_changed(self._on_point_size)
@@ -194,6 +201,10 @@ class Visualizer:
         ps = gui.Label("Point size")
         grid.add_child(ps)
         grid.add_child(self._point_size)
+
+        vd = gui.Label("Voxel Downsample (%)")
+        grid.add_child(vd)
+        grid.add_child(self._voxel_down)
         grid.add_child(self._plot_all_button)
         grid.add_child(self._clear_all_button)
 
@@ -270,6 +281,10 @@ class Visualizer:
     def _on_point_size(self, size):
         self.point_size = size
         self._resize()
+
+    def _on_voxel_down(self, down):
+        self.voxel_down = down/100
+        #print(self.voxel_down)
 
     def _on_file_checked(self, is_checked):
         self.tissue_selected = []
@@ -390,7 +405,7 @@ class Visualizer:
 
                     for g in self.selected:
                         g= str(g)
-                        ps = d.get_gene_sample(g, include_z=True, frac=0.1, minimum=2000000)
+                        ps = d.get_gene_sample(g, include_z=True, frac=self.voxel_down)
                         points.append(ps.values)
                         colors.append(self.color_dic[g])
 
@@ -422,6 +437,7 @@ class Visualizer:
             f = added.count(g)
             g = g+'_'+str(f)
             pcd.points = o3d.utility.Vector3dVector(ps)
+            pcd.voxel_down_sample(voxel_size=self.voxel_down)
             mat.base_color = [cs[0],cs[1],cs[2], 1.0]
             mat.point_size = int(self.point_size)
             #self.previous_selection[g] = [ps, cs]
