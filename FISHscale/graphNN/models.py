@@ -252,7 +252,7 @@ class SAGELightning(LightningModule):
                 uns_warmup = min(1,self.warmup_counter/self.warmup_factor)
                 self.warmup_counter += 1
                 
-                loss = nb_loss + loss_dist
+                loss = nb_loss + loss_dist #+ graph_loss
                 #self.losses.append(loss)
                 opt_nb.zero_grad()
                 self.manual_backward(loss)
@@ -429,11 +429,11 @@ class SAGE(nn.Module):
                         h = self.encoder.gs_mu(h)
                         if self.supervised:
                             hm,_,_,_ = self.encoder_molecule(n)
-                            h = hm*h
+                            h = h*hm
                             px_scale, px_r, px_l= self.decoder(h)
                             #px_scale = px_scale*th.exp(h)
-                            #px_scale = h @ self.encoder_molecule.module2celltype
-                            px_scale = px_scale.softmax(dim=-1)
+                            px_scale = h @ self.encoder_molecule.module2celltype
+                            #px_scale = px_scale.softmax(dim=-1)
                             p_class[output_nodes] = px_scale.cpu().detach()
 
                     #    h = self.mean_encoder(h)#, th.exp(self.var_encoder(h))+1e-4 )
