@@ -339,32 +339,34 @@ class Visualizer:
         t_list = sorted(t.split(' '))
         t_list += self.selected
         self.selected = np.unique(np.array(t_list)).tolist()
-        self._text_edit_cell.placeholder_text = ' '.join(self.selected)
-        self._text_edit_cell.text_value = ' '.join(self.selected)
         self.section = 'g'
         for g in self.gene_w:
             if t.count(g.text) :
                 c = self.color_dic[g.text]
                 g.background_color = gui.Color(c[0],c[1],c[2],0.9)
-        self.selected = [e for e in self.selected if e!= '']
+        self.selected = [e for e in self.selected if e!= '' and e in self.gene_list]
+        self._text_edit_cell.placeholder_text = ' '.join(self.selected)
+        self._text_edit_cell.text_value = ' '.join(self.selected)
         self._selection_changed()
     
     def _on_show_axes(self, show):
         self._scene.scene.show_axes(show)
         
     def _resize(self):
+        a= self._scene.scene.camera.get_field_of_view()
         self._scene.scene.clear_geometry()
         
-        pcd = o3d.geometry.PointCloud()
+        '''pcd = o3d.geometry.PointCloud()
         mat = rendering.MaterialRecord()
-        mat.shader = "defaultLit"
+        mat.shader = "defaultLit"'''
+        self._selection_changed()
         
-        for g in self.previous_selection:
+        '''for g in self.previous_selection:
             ps, cs= self.previous_selection[g][0], self.previous_selection[g][1]
             pcd.points = o3d.utility.Vector3dVector(ps)
             mat.point_size = int(self.point_size)
             mat.base_color = [cs[0],cs[1],cs[2], 1.0]
-            self._scene.scene.add_geometry(g, pcd, mat)
+            self._scene.scene.add_geometry(g, pcd, mat)'''
 
     def _on_layout(self, layout_context):
         # The on_layout callback should set the frame (position + size) of every
@@ -422,5 +424,5 @@ class Visualizer:
             pcd.points = o3d.utility.Vector3dVector(ps)
             mat.base_color = [cs[0],cs[1],cs[2], 1.0]
             mat.point_size = int(self.point_size)
-            self.previous_selection[g] = [ps, cs]
+            #self.previous_selection[g] = [ps, cs]
             self._scene.scene.add_geometry(g, pcd, mat)
