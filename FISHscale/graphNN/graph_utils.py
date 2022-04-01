@@ -277,7 +277,7 @@ class GraphUtils(object):
 
 
 class GraphPlotting:
-    def get_umap(self,random_n=50000,n_clusters=50):
+    def get_umap(self,random_n=50000,n_clusters=100):
         import umap
         import matplotlib.pyplot as plt
 
@@ -434,7 +434,7 @@ class GraphPlotting:
             self.data.add_dask_attribute('Clusters',new_labels.astype('str'),include_genes=True)
             
             from sklearn.cluster import DBSCAN
-            db = DBSCAN(eps=22,min_samples=12)
+            db = DBSCAN(eps=22,min_samples=20)
             self.data.segment('Clusters',save_to=os.path.join(self.folder,'Clusters/'),func=db)
 
             with loompy.connect(os.path.join(self.folder,'Clusters','cells.loom'),'r+') as ds:
