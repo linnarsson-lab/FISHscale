@@ -258,14 +258,19 @@ class SAGELightning(LightningModule):
                 self.manual_backward(loss)
                 opt_nb.step()
 
-                self.log('train_loss', loss, prog_bar=True, on_step=True, on_epoch=True)
-                self.log('Loss Dist', loss_dist, prog_bar=True, on_step=True, on_epoch=True)
-                self.log('nb_loss', nb_loss, prog_bar=True, on_step=True, on_epoch=True)
-                self.log('Graph Loss', graph_loss, prog_bar=False, on_step=True, on_epoch=False)
+                self.log('train_loss', 
+                    loss, prog_bar=True, on_step=True, on_epoch=True, batch_size=zn_loc.shape[0])
+                self.log('Loss Dist',
+                    loss_dist, prog_bar=True, on_step=True, on_epoch=True, batch_size=zn_loc.shape[0])
+                self.log('nb_loss', 
+                    nb_loss, prog_bar=True, on_step=True, on_epoch=True, batch_size=zn_loc.shape[0])
+                self.log('Graph Loss', 
+                    graph_loss, prog_bar=False, on_step=True, on_epoch=False,batch_size= zn_loc.shape[0])
 
             else:
                 loss = graph_loss
-                self.log('train_loss', loss, prog_bar=True, on_step=True, on_epoch=True)
+                self.log('train_loss', 
+                    loss, prog_bar=True, on_step=True, on_epoch=True,batch_size=zn_loc.shape[0])
         return loss
 
     def configure_optimizers(self):
@@ -421,7 +426,10 @@ class SAGE(nn.Module):
                     if self.aggregator != 'attentional':
                         h = layer(block, h,)
                     else:
-                        h = layer(block, h,).mean(1)
+                        if l != self.n_layers-1:
+                            h = layer(block, h,).flatten(1)
+                        else:
+                            h = layer(block, h,).mean(1)
                         #h = self.encoder.encoder_dict['FC'][l](h)
 
                     if l == self.n_layers -1:
@@ -456,11 +464,11 @@ class Encoder(nn.Module):
         self.aggregator = aggregator
         layers = nn.ModuleList()
         if supervised:
-            self.norm = PairNorm()#DiffGroupNorm(n_hidden,n_classes,None) 
-            #n_hidden = n_classes
+            self.norm = PairNorm()#DiffGroupNorm(n_hidden,n_classes,None)
         else:
             self.norm = PairNorm()#DiffGroupNorm(n_hidden,20)
-
+        self.num_heads = 4
+        self.n_layers = n_layers
         for i in range(0,n_layers-1):
             if i > 0:
                 in_feats = n_hidden
@@ -469,11 +477,10 @@ class Encoder(nn.Module):
                 x = 0
 
             if aggregator == 'attentional':
-                layers.append(dglnn.GATConv(in_feats, 
+                layers.append(dglnn.GATv2Conv(in_feats, 
                                             n_hidden, 
-                                            num_heads=4,
+                                            num_heads=self.num_heads,
                                             feat_drop=x,
-                                            activation=F.relu,
                                             #allow_zero_in_degree=False
                                             ))
 
@@ -487,11 +494,10 @@ class Encoder(nn.Module):
                                             ))
 
         if aggregator == 'attentional':
-            layers.append(dglnn.GATConv(n_hidden, 
+            layers.append(dglnn.GATv2Conv(n_hidden*self.num_heads, 
                                         n_hidden, 
-                                        num_heads=4, 
+                                        num_heads=self.num_heads, 
                                         feat_drop=dropout,
-                                        activation=F.relu,
                                         #allow_zero_in_degree=False
                                         ))
 
@@ -514,7 +520,11 @@ class Encoder(nn.Module):
             if self.aggregator != 'attentional':
                 h = layer(block, h,)
             else:
-                h = layer(block, h,).mean(1)
+                if l != self.n_layers-1:
+                    h = layer(block, h,).flatten(1)
+                else:
+                    h = layer(block, h,).mean(1)
+
         z_loc = self.gs_mu(h)
         z_scale = th.exp(self.gs_var(h)) +1e-6
         return z_loc, z_scale

@@ -167,10 +167,10 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
         ### Prepare Model
         if type(self.model) == type(None):
             self.model = SAGELightning(in_feats=self.data.unique_genes.shape[0], 
-                                        n_latent=256,
+                                        n_latent=48,
                                         n_layers=len(self.ngh_sizes),
                                         n_classes=self.ref_celltypes.shape[1],
-                                        n_hidden=128,
+                                        n_hidden=64,
                                         lr=self.lr,
                                         supervised=self.supervised,
                                         reference=self.ref_celltypes,
@@ -289,14 +289,18 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
         Returns:
             dgl.dataloading.EdgeDataLoader: Deep Graph Library dataloader.
         """        
-        unlab = dgl.dataloading.EdgeDataLoader(
+        negative_sampler = dgl.dataloading.negative_sampler.Uniform(self.negative_samples)
+        edge_sampler = dgl.dataloading.as_edge_prediction_sampler(
+            dgl.dataloading.NeighborSampler([int(_) for _ in self.ngh_sizes]),
+            negative_sampler=negative_sampler,
+            )
+
+        unlab = dgl.dataloading.DataLoader(
                         self.g,
                         self.edges_train,
-                        self.sampler,
-                        negative_sampler=dgl.dataloading.negative_sampler.Uniform(self.negative_samples), # NegativeSampler(self.g, self.negative_samples, False),
+                        edge_sampler,
+                        #negative_sampler=negative_sampler,
                         device=self.device,
-                        #exclude='self',
-                        #reverse_eids=th.arange(self.g.num_edges()) ^ 1,
                         batch_size=self.batch_size,
                         shuffle=True,
                         drop_last=True,
