@@ -399,7 +399,10 @@ class SAGE(nn.Module):
                 if l == self.n_layers - 1:
                     y = th.zeros(g.num_nodes(), self.n_latent) #if not self.supervised else th.zeros(g.num_nodes(), self.n_classes)
                 else:
-                    y = th.zeros(g.num_nodes(), self.n_hidden)
+                    if self.aggregator == 'attentional':
+                        y = th.zeros(g.num_nodes(), self.n_hidden*4)
+                    else:
+                        y = th.zeros(g.num_nodes(), self.n_hidden)
                 p_class = th.zeros(g.num_nodes(), self.n_classes)
 
                 sampler = dgl.dataloading.MultiLayerFullNeighborSampler(1)
