@@ -268,6 +268,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                     
         from tqdm import trange
         from shapely import geometry
+        from scipy import sparse
         """
         Run DBscan segmentation on self.data, this will reassign a column on self.data with column_name
 
@@ -344,7 +345,10 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 file = path.join(save_to+'cells.loom')
             row_attrs = {'Gene':matrices.index.values}
             col_attrs = {'Segmentation_label':matrices.columns.values, 'Centroid':centroids, 'Polygon':polygons,label_column:clusters}
-            loompy.create(file,matrices.values,row_attrs,col_attrs)
+            print('sending matrix to sparse')
+            matrices = sparse.csr_matrix(matrices.values,dtype=np.int16)
+            loompy.create(file,matrices,row_attrs,col_attrs)
+            print('loompy written')
 
         print('Running segmentation by: {}'.format(label_column))
         #r = self.dask_attrs[label_column].groupby(label_column).apply(segmentation, meta=object).compute()
