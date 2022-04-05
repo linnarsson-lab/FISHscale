@@ -172,7 +172,7 @@ class GraphUtils(object):
         #d = self.molecules_df(molecules)
         g= dgl.graph((edges[0,:],edges[1,:]),)
         #g = dgl.to_bidirected(g)]
-        g.ndata['gene'] = th.tensor(d.toarray(), dtype=th.float32)#[self.g.ndata['indices'].numpy(),:]
+        g.ndata['gene'] = th.tensor(d.toarray(), dtype=th.uint8)#[self.g.ndata['indices'].numpy(),:]
         nghs = []
         for n in tqdm(ngh_):
             nghs.append(th.tensor(g.ndata['gene'][n,:].sum(axis=0)))
