@@ -33,7 +33,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
         molecules=None, # Array with molecules_ids of shape (molecules)
         ngh_size = 150,
         ngh_sizes = [20, 10],
-        minimum_nodes_connected = 10,
+        minimum_nodes_connected = 5,
         train_p = 0.5,
         batch_size= 512,
         num_workers=0,
@@ -186,7 +186,6 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
         self.model.to(self.device)
 
     def prepare_data(self):
-      
         # do-something
         pass
 
