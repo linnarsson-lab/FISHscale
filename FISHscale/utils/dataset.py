@@ -321,13 +321,11 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             except:
                 return None, [], [], [],-1
 
-        def gene_by_cell_loom(dask_attrs):
-            import multiprocessing
-            from joblib import Parallel, delayed
+        def gene_by_cell_loom():
     
             '''result = Parallel(n_jobs=multiprocessing.cpu_count())(delayed(get_cells)(dask_attrs.partitions[p].compute()) 
                     for p in trange(self.dask_attrs[label_column].npartitions))'''
-            delayed_result = [dask.delayed(get_cells)(dask_attrs.partitions[p].compute()) for p in trange(self.dask_attrs[label_column].npartitions)]
+            delayed_result = [dask.delayed(get_cells)(p) for p in self.dask_attrs[label_column].to_delayed()]
             result = dask.compute(*delayed_result)
 
             matrices, labels, centroids, polygons, clusters = [], [], [], [], []
@@ -341,6 +339,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                     clusters += len(l)*[cl]
 
             matrices = pd.concat(matrices,axis=1)
+            print(matrices.shape)
             if type(save_to) == type(None):
                 file = path.join(self.dataset_folder,self.filename.split('.')[0]+'_cells.loom')
             else:
@@ -368,7 +367,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         #self.dask_attrs[label_column] = self.dask_attrs[label_column].merge(pd.DataFrame(np.concatenate(result),index=self.dask_attrs[label_column].index,columns=['DBscan']))
         self.dask_attrs[label_column] = self.dask_attrs[label_column].merge(pd.DataFrame(result,index=idx,columns=['segment']))
         print('DBscan results added to dask attributes. Generating gene by cell matrix as loom file.')
-        gene_by_cell_loom(self.dask_attrs[label_column])
+        gene_by_cell_loom()
 
 
 class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base, Normalization, RegionalizeMulti,
