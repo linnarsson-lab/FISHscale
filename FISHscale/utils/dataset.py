@@ -322,21 +322,23 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 return None, [], [], []
 
         def gene_by_cell_loom(dask_attrs):
-            matrices, labels, centroids, clusters, polygons = [],[],[],[],[]
+            delayed_matrices, delayed_labels, delayed_centroids, delayed_clusters, delayed_polygons = [],[],[],[],[]
             for p in trange(self.dask_attrs[label_column].npartitions):
-                matrix, label, centroid, pol = get_cells(dask_attrs.partitions[p].compute())
+                matrix, label, centroid, pol = dask.delayed(get_cells(dask_attrs.partitions[p].compute()))
 
                 if type(matrix) != type(None):
-                    matrices.append(matrix)
+                    delayed_matrices.append(matrix)
 
                 try:
-                    clusters += [self.dask_attrs[label_column].partitions[p][label_column].values.compute()[0]]*len(label)
+                    delayed_clusters += [self.dask_attrs[label_column].partitions[p][label_column].values.compute()[0]]*len(label)
                 except:
                     pass
 
-                labels += label
-                centroids += centroid
-                polygons += pol
+                delayed_labels += label
+                delayed_centroids += centroid
+                delayed_polygons += pol
+            matrices = dask..compute(*delayed_matrices, scheduler="processes")
+            print(matrices)
 
             matrices = pd.concat(matrices,axis=1)
             if type(save_to) == type(None):
