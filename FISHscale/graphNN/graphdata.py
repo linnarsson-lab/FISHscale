@@ -45,7 +45,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
         negative_samples:int=5,
         distance_factor:int=1,
         lr=1e-3,
-        aggregator='pool',
+        aggregator='attentional',
         celltype_distribution='uniform',
         inference_type='deterministic',
         n_epochs=5,
