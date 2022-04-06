@@ -317,34 +317,28 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                     except:
                         pass
                 data = pd.concat(data,axis=1)
-                return data, dblabel, centroids, polygons
+                return data, dblabel, centroids, polygons, cl
             except:
-                return None, [], [], []
+                return None, [], [], [],-1
 
         def gene_by_cell_loom(dask_attrs):
             import multiprocessing
             from joblib import Parallel, delayed
     
-            results = Parallel(n_jobs=multiprocessing.cpu_count())(delayed(process)(i) for i in range(10))
-            print(results)  # prints [0, 1, 4, 9, 16, 25, 36, 49, 64, 81]
+            '''result = Parallel(n_jobs=multiprocessing.cpu_count())(delayed(get_cells)(dask_attrs.partitions[p].compute()) 
+                    for p in trange(self.dask_attrs[label_column].npartitions))'''
+            delayed_result = [dask.delayed(get_cells)(dask_attrs.partitions[p].compute()) for p in trange(self.dask_attrs[label_column].npartitions)]
+            result = dask.compute(*delayed_result)
 
-            result = Parallel(n_jobs=multiprocessing.cpu_count())(delayed(get_cells)(dask_attrs.partitions[p].compute()) for p in trange(self.dask_attrs[label_column].npartitions))
-
+            matrices, labels, centroids, polygons, clusters = [], [], [], [], []
             for r in result:
-                matrix, label, centroids, polygons = r
-                if type(matrix) != type(None):
-                    delayed_matrices.append(matrix)
-
-                try:
-                    delayed_clusters += [self.dask_attrs[label_column].partitions[p][label_column].values.compute()[0]]*len(label)
-                except:
-                    pass
-
-                delayed_labels += label
-                delayed_centroids += centroid
-                delayed_polygons += pol
-            matrices = dask..compute(*delayed_matrices, scheduler="processes")
-            print(matrices)
+                m, l, c, pol, cl = r
+                if type(matrices) != type(None):
+                    matrices.append(m)
+                    labels += l
+                    centroids += c
+                    polygons += pol
+                    clusters += len(l)*[cl]
 
             matrices = pd.concat(matrices,axis=1)
             if type(save_to) == type(None):
