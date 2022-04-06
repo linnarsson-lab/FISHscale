@@ -31,9 +31,9 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
         model=None, # GraphSAGE model
         analysis_name:str='',
         molecules=None, # Array with molecules_ids of shape (molecules)
-        ngh_size = 200,
+        ngh_size = 150,
         ngh_sizes = [20, 10],
-        minimum_nodes_connected = 5,
+        minimum_nodes_connected = 10,
         train_p = 0.5,
         batch_size= 512,
         num_workers=0,
@@ -43,9 +43,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
         exclude_clusters:dict={},
         smooth:bool=False,
         negative_samples:int=5,
-        distance_factor:int=4,
-        max_distance_nodes=None,
-        device='cpu',
+        distance_factor:int=1,
         lr=1e-3,
         aggregator='pool',
         celltype_distribution='uniform',
