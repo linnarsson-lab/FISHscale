@@ -352,13 +352,20 @@ class Visualizer:
     def _text_changed(self, path):
         t = path
         t_list = sorted(t.split(' '))
-        t_list += self.selected
+
+        #t_list += self.selected
         self.selected = np.unique(np.array(t_list)).tolist()
         self.section = 'g'
         for g in self.gene_w:
-            if t.count(g.text) :
+            if t.count(g.text):
+                g.is_on = True
                 c = self.color_dic[g.text]
                 g.background_color = gui.Color(c[0],c[1],c[2],0.9)
+
+            else:
+                g.is_on = False
+                c = self.color_dic[g.text]
+                g.background_color = gui.Color(c[0],c[1],c[2],0.1)
         self.selected = [e for e in self.selected if e!= '' and e in self.gene_list]
         self._text_edit_cell.placeholder_text = ' '.join(self.selected)
         self._text_edit_cell.text_value = ' '.join(self.selected)

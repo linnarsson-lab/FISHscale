@@ -340,7 +340,7 @@ class ListWidget(QWidget):
             pcd = o3d.geometry.PointCloud()
             pcd.points = o3d.utility.Vector3dVector(ps)
             pcd.colors = o3d.utility.Vector3dVector(cs)
-            self.vis.visM.add_geometry(pcd)
+            self.vis.visM.update_geometry(pcd)
             self.vis.loop_execute()
 
 class CollapsibleDialog(QDialog,QObject):
