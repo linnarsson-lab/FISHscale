@@ -277,7 +277,7 @@ class GraphUtils(object):
 
 
 class GraphPlotting:
-    def get_umap(self,random_n=50000,n_clusters=100):
+    def analyze(self,random_n=50000,n_clusters=100):
         import umap
         import matplotlib.pyplot as plt
 

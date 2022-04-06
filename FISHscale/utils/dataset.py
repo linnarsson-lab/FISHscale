@@ -290,7 +290,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
 
         def get_counts(cell_i):
             cell_i,dblabel, centroid = cell_i[1], cell_i[0],(cell_i[1].x.mean(),cell_i[1].y.mean())
-            if dblabel != -1:
+            if dblabel >= 0:
                 cell_i_g = cell_i['g']
                 centroid = (cell_i.x.mean(),cell_i.y.mean())
                 M = geometry.MultiPoint(np.array([cell_i.x, cell_i.y]).T)
@@ -310,6 +310,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 for cell in clr:
                     try:
                         d, label, centroid, p = get_counts(cell)
+                        #print(label, cl)
                         dblabel.append(label)
                         centroids.append(centroid)
                         data.append(d)
@@ -339,13 +340,13 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                     clusters += len(l)*[cl]
 
             matrices = pd.concat(matrices,axis=1)
-            print(matrices.shape)
+            #print(matrices.shape)
             if type(save_to) == type(None):
                 file = path.join(self.dataset_folder,self.filename.split('.')[0]+'_cells.loom')
             else:
                 file = path.join(save_to+'cells.loom')
             row_attrs = {'Gene':matrices.index.values}
-            col_attrs = {'Segmentation_label':matrices.columns.values, 'Centroid':centroids, 'Polygon':polygons,label_column:clusters}
+            col_attrs = {'Segmentation_label':labels, 'Centroid':centroids, 'Polygon':polygons,label_column:clusters}
             print('sending matrix to sparse')
             matrices = sparse.csr_matrix(matrices.values,dtype=np.int16)
             loompy.create(file,matrices,row_attrs,col_attrs)
@@ -355,18 +356,20 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         #r = self.dask_attrs[label_column].groupby(label_column).apply(segmentation, meta=object).compute()
         #print(r)
         idx, result = [], []
-        count = -1
+        count = 0
         for x in trange(self.dask_attrs[label_column].npartitions):
             partition = self.dask_attrs[label_column].partitions[x]
             s = segmentation(partition)
-            result.append(s+count)
+            result.append(np.array([x+count if x >= 0 else x for x in s]))
             idx.append(partition.index.values.compute())
-            count += s.max()
+            count += s.max() +1
+            #print(s.max()+count)
         result,idx = np.concatenate(result, axis=0), np.concatenate(idx)
         print('Number of cells founds: {}'.format(count))
         #self.dask_attrs[label_column] = self.dask_attrs[label_column].merge(pd.DataFrame(np.concatenate(result),index=self.dask_attrs[label_column].index,columns=['DBscan']))
         self.dask_attrs[label_column] = self.dask_attrs[label_column].merge(pd.DataFrame(result,index=idx,columns=['segment']))
         print('DBscan results added to dask attributes. Generating gene by cell matrix as loom file.')
+        
         gene_by_cell_loom()
 
 
