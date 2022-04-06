@@ -322,10 +322,16 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 return None, [], [], []
 
         def gene_by_cell_loom(dask_attrs):
-            delayed_matrices, delayed_labels, delayed_centroids, delayed_clusters, delayed_polygons = [],[],[],[],[]
-            for p in trange(self.dask_attrs[label_column].npartitions):
-                matrix, label, centroid, pol = dask.delayed(get_cells(dask_attrs.partitions[p].compute()))
+            import multiprocessing
+            from joblib import Parallel, delayed
+    
+            results = Parallel(n_jobs=multiprocessing.cpu_count())(delayed(process)(i) for i in range(10))
+            print(results)  # prints [0, 1, 4, 9, 16, 25, 36, 49, 64, 81]
 
+            result = Parallel(n_jobs=multiprocessing.cpu_count())(delayed(get_cells)(dask_attrs.partitions[p].compute()) for p in trange(self.dask_attrs[label_column].npartitions))
+
+            for r in result:
+                matrix, label, centroids, polygons = r
                 if type(matrix) != type(None):
                     delayed_matrices.append(matrix)
 
