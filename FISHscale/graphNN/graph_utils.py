@@ -496,21 +496,25 @@ class GraphPlotting:
             nd_dic = {}
             allm = 0
             print('Generating plots for cluster assigned to molecules...')
- 
+            lay = []
             for cl in np.unique(self.clusters):
-                x, y = molecules_x[self.clusters == cl], molecules_y[self.clusters == cl]
-                allm += x.shape[0]
-                scatter =  hv.Scatter(np.array([x,y]).T).opts(
-                    bgcolor='black',
-                    aspect='equal',
-                    fig_inches=50,
-                    s=1,
-                    title=str(cl),
-                    color=color_dic[cl])
-                nd_dic[cl] = scatter.opts(title=' - '.join(enriched_genes[float(cl)]) )
-                hv.save(scatter,"{}/Clusters/{}.png".format(self.folder,str(cl)), )      
+                try:
+                    x, y = molecules_x[self.clusters == cl], molecules_y[self.clusters == cl]
+                    allm += x.shape[0]
+                    scatter =  hv.Scatter(np.array([x,y]).T).opts(
+                        bgcolor='black',
+                        aspect='equal',
+                        fig_inches=50,
+                        s=0.01,
+                        title=str(cl),
+                        color=color_dic[cl])
+                    nd_dic[cl] = scatter.opts(title=' - '.join(enriched_genes[float(cl)]) )
+                    lay.append(nd_dic[cl])
+                    hv.save(scatter,"{}/Clusters/{}.png".format(self.folder,str(cl)), )   
+                except:
+                    print('Could not get cluster {}'.format(cl))   
 
-            layout = hv.Layout([nd_dic[x] for x in nd_dic]).cols(5)
+            layout = hv.Layout(lay).cols(5)
             hv.save(layout,"{}/molecule_prediction.png".format(self.folder))
 
 class NegativeSampler(object):
