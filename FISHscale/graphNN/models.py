@@ -194,8 +194,8 @@ class SAGELightning(LightningModule):
             self.reference = self.reference.to(self.device)
             _, pos, neg, mfgs = batch
             pos_ids = pos.edges()[0]
-            x = mfgs[1].dstdata['ngh']
-            x= x[pos_ids,:]
+            #x = mfgs[1].dstdata['ngh']
+            #x= x[pos_ids,:]
             mfgs = [mfg.int() for mfg in mfgs]
             batch_inputs = mfgs[0].srcdata['gene']
             zn_loc, _ = self.module.encoder(batch_inputs,mfgs)
@@ -206,6 +206,8 @@ class SAGELightning(LightningModule):
             opt_g.step()
 
             if self.supervised:
+                x = mfgs[-1].dstdata['ngh']
+                x= x[pos_ids,:]
                 zm_loc, _, zl_loc, _ = self.module.encoder_molecule(x)
                 zn_loc = zn_loc[pos_ids,:]
                 zm_loc = zm_loc[pos_ids,:]
@@ -436,9 +438,9 @@ class SAGE(nn.Module):
                         #h = self.encoder.encoder_dict['FC'][l](h)
 
                     if l == self.n_layers -1:
-                        n = blocks[-1].dstdata['ngh']
                         h = self.encoder.gs_mu(h)
                         if self.supervised:
+                            n = blocks[-1].dstdata['ngh']
                             hm,_,_,_ = self.encoder_molecule(n)
                             h = h*hm
                             px_scale, px_r, px_l= self.decoder(h)

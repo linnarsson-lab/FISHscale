@@ -175,8 +175,8 @@ class GraphUtils(object):
         g.ndata['gene'] = th.tensor(d.toarray(), dtype=th.uint8)#[self.g.ndata['indices'].numpy(),:]
         nghs = []
         for n in tqdm(ngh_):
-            nghs.append(th.tensor(g.ndata['gene'][n,:].sum(axis=0)))
-        nghs = th.stack(nghs,dtype=th.uint8)
+            nghs.append(th.tensor(g.ndata['gene'][n,:].sum(axis=0),dtype=th.uint8))
+        nghs = th.stack(nghs)
         g.ndata['ngh'] = nghs
 
         if self.smooth:
