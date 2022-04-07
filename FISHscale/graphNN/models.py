@@ -42,7 +42,7 @@ class SAGELightning(LightningModule):
                  n_latent,
                  n_classes,
                  n_layers,
-                 n_hidden=128,
+                 n_hidden=64,
                  dropout=0.1,
                  lr=0.001,
                  supervised=False,

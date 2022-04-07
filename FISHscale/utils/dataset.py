@@ -364,8 +364,9 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             idx.append(partition.index.values.compute())
             count += s.max() +1
             #print(s.max()+count)
+        print('Concatenate')
         result,idx = np.concatenate(result, axis=0), np.concatenate(idx)
-        print('Number of cells founds: {}'.format(count))
+        print('Number of cells found: {}'.format(count))
         #self.dask_attrs[label_column] = self.dask_attrs[label_column].merge(pd.DataFrame(np.concatenate(result),index=self.dask_attrs[label_column].index,columns=['DBscan']))
         self.dask_attrs[label_column] = self.dask_attrs[label_column].merge(pd.DataFrame(result,index=idx,columns=['segment']))
         print('DBscan results added to dask attributes. Generating gene by cell matrix as loom file.')

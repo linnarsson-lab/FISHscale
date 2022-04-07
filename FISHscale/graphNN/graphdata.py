@@ -395,8 +395,8 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
                         10*512,
                         0)#.detach().numpy()
 
-        np.save(self.save_to+'latent',self.latent_unlabelled)
+        np.save(self.folder+'latent',self.latent_unlabelled)
         if self.supervised:
             self.prediction_unlabelled = prediction_unlabelled.softmax(dim=-1).detach().numpy()
-            np.save(self.save_to+'labels',self.prediction_unlabelled)
-            np.save(self.save_to+'probabilities',prediction_unlabelled)
+            np.save(self.folder+'labels',self.prediction_unlabelled)
+            np.save(self.folder+'probabilities',prediction_unlabelled)
