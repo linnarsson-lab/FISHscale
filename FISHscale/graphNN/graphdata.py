@@ -158,9 +158,6 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
         if self.aggregator == 'attentional':
             self.g = dgl.add_self_loop(self.g)
 
-        if self.model.supervised:
-            del self.g.ndata['ngh']
-
 
         print(self.g)
         self.make_train_test_validation()
