@@ -322,7 +322,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             except:
                 return None, [], [], [],-1
 
-        def gene_by_cell_loom(self):
+        def gene_by_cell_loom():
     
             '''result = Parallel(n_jobs=multiprocessing.cpu_count())(delayed(get_cells)(dask_attrs.partitions[p].compute()) 
                     for p in trange(self.dask_attrs[label_column].npartitions))'''
