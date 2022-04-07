@@ -158,10 +158,6 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
         if self.aggregator == 'attentional':
             self.g = dgl.add_self_loop(self.g)
 
-        if self.model.supervised:
-            del self.g.ndata['ngh']
-
-
         print(self.g)
         self.make_train_test_validation()
         l_loc,l_scale= self.compute_library_size()
@@ -187,6 +183,11 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
                                         scale_factor=1/(batch_size*self.data.unique_genes.shape[0]),
                                         warmup_factor=int(self.edges_train.shape[0]/self.batch_size)*self.n_epochs,
                                     )
+
+        if self.model.supervised == False:
+            del self.g.ndata['ngh']
+
+
         self.model.to(self.device)
 
     def prepare_data(self):
