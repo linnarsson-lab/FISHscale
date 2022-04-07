@@ -302,11 +302,13 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 return data, dblabel, centroid, polygon
 
         def get_cells(partition):
+
             cl_molecules_xy = partition.loc[:,['x','y','g','segment',label_column]]
             clr= cl_molecules_xy.groupby('segment')#.applymap(get_counts)
             dblabel, centroids, data, polygons = [],[],[], []
             try:
                 cl = cl_molecules_xy[label_column].values[0]
+                #print(cl)
                 for cell in clr:
                     try:
                         d, label, centroid, p = get_counts(cell)
@@ -323,17 +325,13 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 return None, [], [], [],-1
 
         def gene_by_cell_loom():
-    
-            '''result = Parallel(n_jobs=multiprocessing.cpu_count())(delayed(get_cells)(dask_attrs.partitions[p].compute()) 
-                    for p in trange(self.dask_attrs[label_column].npartitions))'''
+            
             #delayed_result = [dask.delayed(get_cells)(p) for p in self.dask_attrs[label_column].to_delayed()]
             #result = dask.compute(*delayed_result)
-            result = self.dask_attrs[label_column].map_partitions(get_cells).compute()
-            print(result)
-
             matrices, labels, centroids, polygons, clusters = [], [], [], [], []
-            for r in tqdm(result):
-                m, l, c, pol, cl = r
+
+            for p in tqdm(self.dask_attrs[label_column].partitions):
+                m, l, c, pol, cl = get_cells(p.compute())
                 if type(matrices) != type(None):
                     matrices.append(m)
                     labels += l
@@ -369,7 +367,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         print('Concatenate')
         result,idx = np.concatenate(result, axis=0), np.concatenate(idx)
         print('Number of cells found: {}'.format(count))
-        #self.dask_attrs[label_column] = self.dask_attrs[label_column].merge(pd.DataFrame(np.concatenate(result),index=self.dask_attrs[label_column].index,columns=['DBscan']))
+        
         self.dask_attrs[label_column] = self.dask_attrs[label_column].merge(pd.DataFrame(result,index=idx,columns=['segment']))
         print('DBscan results added to dask attributes. Generating gene by cell matrix as loom file.')
         
