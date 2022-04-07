@@ -438,9 +438,9 @@ class SAGE(nn.Module):
                         #h = self.encoder.encoder_dict['FC'][l](h)
 
                     if l == self.n_layers -1:
-                        n = blocks[-1].dstdata['ngh']
                         h = self.encoder.gs_mu(h)
                         if self.supervised:
+                            n = blocks[-1].dstdata['ngh']
                             hm,_,_,_ = self.encoder_molecule(n)
                             h = h*hm
                             px_scale, px_r, px_l= self.decoder(h)
