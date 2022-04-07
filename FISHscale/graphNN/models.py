@@ -381,7 +381,7 @@ class SAGE(nn.Module):
                                 n_classes= n_classes,
                         )
 
-    def inference(self, g, x, ngh,device, batch_size, num_workers):
+    def inference(self, g, x,device, batch_size, num_workers):
             """
             Inference with the GraphSAGE model on full neighbors (i.e. without neighbor sampling).
             g : the entire graph.

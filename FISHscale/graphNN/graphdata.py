@@ -31,7 +31,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
         model=None, # GraphSAGE model
         analysis_name:str='',
         molecules=None, # Array with molecules_ids of shape (molecules)
-        ngh_size = 150,
+        ngh_size = 100,
         ngh_sizes = [20, 10],
         minimum_nodes_connected = 5,
         train_p = 0.5,
@@ -157,6 +157,10 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
         
         if self.aggregator == 'attentional':
             self.g = dgl.add_self_loop(self.g)
+
+        if self.model.supervised:
+            del self.g.ndata['ngh']
+
 
         print(self.g)
         self.make_train_test_validation()
@@ -385,7 +389,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
         """        
         self.model.eval()
         self.latent_unlabelled, prediction_unlabelled = self.model.module.inference(self.g,
-                        self.g.ndata['gene'], self.g.ndata['ngh'],
+                        self.g.ndata['gene'],
                         self.model.device,
                         10*512,
                         0)#.detach().numpy()

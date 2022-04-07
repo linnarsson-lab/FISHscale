@@ -176,7 +176,7 @@ class GraphUtils(object):
         nghs = []
         for n in tqdm(ngh_):
             nghs.append(th.tensor(g.ndata['gene'][n,:].sum(axis=0)))
-        nghs = th.stack(nghs)
+        nghs = th.stack(nghs,dtype=th.uint8)
         g.ndata['ngh'] = nghs
 
         if self.smooth:
