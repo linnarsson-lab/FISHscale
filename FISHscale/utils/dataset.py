@@ -288,67 +288,51 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             segmentation = func.fit_predict(cl_molecules_xy)
             return segmentation
 
+        #from shapely import geometry
         def get_counts(cell_i):
-            cell_i,dblabel, centroid = cell_i[1], cell_i[0],(cell_i[1].x.mean(),cell_i[1].y.mean())
+
+            cluster,dblabel, centroid = cell_i.Clusters.values[0], cell_i.segment.values[0],(cell_i.x.values.mean(),cell_i.y.values.mean())
             if dblabel >= 0:
                 cell_i_g = cell_i['g']
-                centroid = (cell_i.x.mean(),cell_i.y.mean())
-                M = geometry.MultiPoint(np.array([cell_i.x, cell_i.y]).T)
-                polygon = list(M.convex_hull.exterior.coords)
+                ps = np.array([cell_i.x, cell_i.y]).T
+                #M = geometry.MultiPoint(np.array([cell_i.x, cell_i.y]).T)
+                #polygon = list(M.convex_hull.exterior.coords)
                 gene, cell =  np.unique(cell_i_g,return_counts=True)
                 d = pd.DataFrame({dblabel:cell},index=gene)
                 g= pd.DataFrame(index=self.unique_genes)
                 data = pd.concat([g,d],join='outer',axis=1).fillna(0)
-                return data, dblabel, centroid, polygon
-
-        def get_cells(partition):
-
-            cl_molecules_xy = partition.loc[:,['x','y','g','segment',label_column]]
-            clr= cl_molecules_xy.groupby('segment')#.applymap(get_counts)
-            dblabel, centroids, data, polygons = [],[],[], []
-            try:
-                cl = cl_molecules_xy[label_column].values[0]
-                #print(cl)
-                for cell in clr:
-                    try:
-                        d, label, centroid, p = get_counts(cell)
-                        #print(label, cl)
-                        dblabel.append(label)
-                        centroids.append(centroid)
-                        data.append(d)
-                        polygons.append(p)
-                    except:
-                        pass
-                data = pd.concat(data,axis=1)
-                return data, dblabel, centroids, polygons, cl
-            except:
-                return None, [], [], [],-1
+                return data.values,dblabel,centroid,ps,cluster
 
         def gene_by_cell_loom():
             
             #delayed_result = [dask.delayed(get_cells)(p) for p in self.dask_attrs[label_column].to_delayed()]
             #result = dask.compute(*delayed_result)
+            from dask.diagnostics import ProgressBar
+            with ProgressBar():
+                results = self.dask_attrs[label_column].groupby('segment').apply(get_counts).compute()
             matrices, labels, centroids, polygons, clusters = [], [], [], [], []
 
-            for p in tqdm(self.dask_attrs[label_column].partitions):
-                m, l, c, pol, cl = get_cells(p.compute())
-                if type(matrices) != type(None):
-                    matrices.append(m)
-                    labels += l
-                    centroids += c
-                    polygons += pol
-                    clusters += len(l)*[cl]
+            for p in tqdm(results):
+                if type(p) != type(None):
+                    m, l, c, pol, cl = p
+                    if type(matrices) != type(None):
+                        matrices.append(m)
+                        labels.append(l)
+                        centroids.append(c)
+                        polygons.append(pol)
+                        clusters.append(cl)
+            #print(matrices)
 
-            matrices = pd.concat(matrices,axis=1)
+            matrices = np.concatenate(matrices,axis=1)
             #print(matrices.shape)
             if type(save_to) == type(None):
                 file = path.join(self.dataset_folder,self.filename.split('.')[0]+'_cells.loom')
             else:
                 file = path.join(save_to+'cells.loom')
-            row_attrs = {'Gene':matrices.index.values}
+            row_attrs = {'Gene':self.unique_genes}
             col_attrs = {'Segmentation_label':labels, 'Centroid':centroids, 'Polygon':polygons,label_column:clusters}
             print('sending matrix to sparse')
-            matrices = sparse.csr_matrix(matrices.values,dtype=np.int16)
+            matrices = sparse.csr_matrix(matrices,dtype=np.int16)
             loompy.create(file,matrices,row_attrs,col_attrs)
             print('loompy written')
 
