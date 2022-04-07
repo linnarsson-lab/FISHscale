@@ -328,11 +328,10 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                     for p in trange(self.dask_attrs[label_column].npartitions))'''
             #delayed_result = [dask.delayed(get_cells)(p) for p in self.dask_attrs[label_column].to_delayed()]
             #result = dask.compute(*delayed_result)
-            result = self.dask_attrs[label_column].map_partitions(get_cells)
-            print(result)
-
+            result = self.dask_attrs[label_column].map_partitions(get_cells).compute()
+        
             matrices, labels, centroids, polygons, clusters = [], [], [], [], []
-            for r in result:
+            for r in tqdm(result):
                 m, l, c, pol, cl = r
                 if type(matrices) != type(None):
                     matrices.append(m)
