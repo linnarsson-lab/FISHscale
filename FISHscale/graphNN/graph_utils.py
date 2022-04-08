@@ -501,6 +501,7 @@ class GraphPlotting:
                 try:
                     x, y = molecules_x[self.clusters == cl], molecules_y[self.clusters == cl]
                     allm += x.shape[0]
+                    print(x.shape)
                     scatter =  hv.Scatter(np.array([x,y]).T).opts(
                         bgcolor='black',
                         aspect='equal',
@@ -509,7 +510,7 @@ class GraphPlotting:
                         title=str(cl),
                         color=color_dic[cl])
                     nd_dic[cl] = scatter.opts(title=' - '.join(enriched_genes[float(cl)]) )
-                    lay.append(nd_dic[cl].opts(s=0.01))
+                    lay.append(nd_dic[cl].opts(s=1))
                     hv.save(scatter,"{}/Clusters/{}.png".format(self.folder,str(cl)), )   
                 except:
                     print('Could not get cluster {}'.format(cl))   
