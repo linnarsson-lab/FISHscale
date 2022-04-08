@@ -510,14 +510,25 @@ class GraphPlotting:
                         s=1,
                         title=str(cl),
                         color=color_dic[cl])
-                    nd_dic[cl] = scatter.opts(title=' - '.join(enriched_genes[float(cl)]) )
+                    nd_dic[cl] = scatter.opts(title=' - '.join(enriched_genes[float(cl)]), fontsize={'title':24})
                     lay.append(nd_dic[cl])
                     hv.save(scatter,"{}/Clusters/{}.png".format(self.folder,str(cl)), )   
                 except:
                     print('Could not get cluster {}'.format(cl))   
 
-            layout = hv.Layout(lay).cols(2).opts(opts.Scatter(s=0.1))
+            layout = hv.Layout(lay).cols(5).opts(opts.Scatter(s=0.1,fontsize={'title':8}))
             hv.save(layout,"{}/molecule_prediction.png".format(self.folder))
+            try:
+                hmap = hv.HoloMap(kdims=['Enrichment - Cluster'])
+                for k in nd_dic:
+                    hmap[str(k) + ' {}'.format(enriched_genes[float(cl)])] = nd_dic[k]
+                    hmap = hmap.opts(opts.Scatter(bgcolor='black',height=1000,width=1000,aspect='equal',s=1))
+
+
+                hv.save(hmap, "{}/Clusters/{}.png".format(self.folder,str(cl)),fmt='html')
+            except:
+                print('Could not generate html file')
+
 
 class NegativeSampler(object):
     def __init__(self, g, k, neg_share=False):
