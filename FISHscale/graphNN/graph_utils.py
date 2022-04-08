@@ -523,7 +523,8 @@ class GraphPlotting:
             hmap = hv.HoloMap(kdims=['Enrichment - Cluster'])
             for k in nd_dic:
                 hmap[str(k) + ' {}'.format(enriched_genes[float(k)])] = nd_dic[k]
-                hmap = hmap.opts(opts.Scatter(bgcolor='black',width=1000,data_aspect=1,size=1))
+                print(color_dic[k])
+                hmap = hmap.opts(opts.Scatter(bgcolor='black',width=1000,data_aspect=1,size=1,color=color_dic[k]))
 
 
             hv.save(hmap, "{}/Clusters.html".format(self.folder),fmt='html')

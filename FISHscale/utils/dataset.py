@@ -304,12 +304,24 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 return data.values,dblabel,centroid,ps,cluster
 
         def gene_by_cell_loom():
-            
-            #delayed_result = [dask.delayed(get_cells)(p) for p in self.dask_attrs[label_column].to_delayed()]
-            #result = dask.compute(*delayed_result)
+            '''from dask.diagnostics import ProgressBar
+            matrices, labels, centroids, polygons, clusters = [], [], [], [], []
+            for part in range(self.dask_attrs[label_column].npartitions):
+                with ProgressBar():
+                    #results = self.dask_attrs[label_column].groupby('segment').apply(get_counts).compute()
+                    results = self.dask_attrs[label_column].partitions[part].groupby('segment').apply(get_counts, meta=pd.Series()).compute()
+                    for p in results:
+                        if type(p) != type(None):
+                            m, l, c, pol, cl = p
+                            if type(matrices) != type(None):
+                                matrices.append(m)
+                                labels.append(l)
+                                centroids.append(c)
+                                polygons.append(pol)
+                                clusters.append(cl)'''
             from dask.diagnostics import ProgressBar
             with ProgressBar():
-                results = self.dask_attrs[label_column].groupby('segment').apply(get_counts).compute()
+                results = self.dask_attrs[label_column].groupby('segment').apply(get_counts,meta=pd.Series()).compute()
             matrices, labels, centroids, polygons, clusters = [], [], [], [], []
 
             for p in tqdm(results):
