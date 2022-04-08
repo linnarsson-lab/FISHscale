@@ -308,6 +308,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         def gene_by_cell_loom():
             from dask.diagnostics import ProgressBar
             matrices, labels, centroids, polygons, clusters = [], [], [], [], []
+            self.dask_attrs[label_column] = self.df[label_column].repartition(25)
             for part in trange(self.dask_attrs[label_column].npartitions):
                 #results = self.dask_attrs[label_column].groupby('segment').apply(get_counts).compute()
                 results = self.dask_attrs[label_column].partitions[part].groupby('segment').apply(get_counts, meta=pd.Series()).compute()
