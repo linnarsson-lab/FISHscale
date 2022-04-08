@@ -290,18 +290,20 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
 
         #from shapely import geometry
         def get_counts(cell_i):
-
             cluster,dblabel, centroid = cell_i.Clusters.values[0], cell_i.segment.values[0],(cell_i.x.values.mean(),cell_i.y.values.mean())
             if dblabel >= 0:
                 cell_i_g = cell_i['g']
                 ps = np.array([cell_i.x, cell_i.y]).T
-                #M = geometry.MultiPoint(np.array([cell_i.x, cell_i.y]).T)
-                #polygon = list(M.convex_hull.exterior.coords)
+                M = geometry.MultiPoint(np.array([cell_i.x, cell_i.y]).T)
+                try:
+                    polygon = np.array(list(M.convex_hull.coords))
+                except:
+                    polygon = ps
                 gene, cell =  np.unique(cell_i_g,return_counts=True)
                 d = pd.DataFrame({dblabel:cell},index=gene)
                 g= pd.DataFrame(index=self.unique_genes)
                 data = pd.concat([g,d],join='outer',axis=1).fillna(0)
-                return data.values,dblabel,centroid,ps,cluster
+                return data.values,dblabel,centroid,polygon,cluster
 
         def gene_by_cell_loom():
             '''from dask.diagnostics import ProgressBar
