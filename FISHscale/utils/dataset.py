@@ -306,6 +306,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 return data.values,dblabel,centroid,0,cluster
 
         def gene_by_cell_loom():
+            '''
             from dask.diagnostics import ProgressBar
             matrices, labels, centroids, polygons, clusters = [], [], [], [], []
             for part in trange(self.dask_attrs[label_column].npartitions):
@@ -323,8 +324,9 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                             clusters.append(cl)
             '''
             from dask.diagnostics import ProgressBar
+            
             with ProgressBar():
-                results = self.dask_attrs[label_column].groupby('segment').apply(get_counts,meta=pd.Series()).compute()
+                results = self.dask_attrs[label_column].groupby('segment').apply(get_counts,meta=pd.Series()).persist()
             matrices, labels, centroids, polygons, clusters = [], [], [], [], []
 
             for p in tqdm(results):
@@ -337,7 +339,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                         polygons.append(pol)
                         clusters.append(cl)
             #print(matrices)
-            '''
+            
             matrices = np.concatenate(matrices,axis=1)
             #print(matrices.shape)
             if type(save_to) == type(None):
