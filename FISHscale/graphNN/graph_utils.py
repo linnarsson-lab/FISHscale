@@ -490,6 +490,7 @@ class GraphPlotting:
             plt.savefig("{}/spatial_umap_embedding.png".format(self.folder), bbox_inches='tight', dpi=5000)
 
             import holoviews as hv
+            from holoviews import opts
             hv.extension('matplotlib')
             molecules_y = self.data.df.y.values.compute()[self.g.ndata['indices'].numpy()]
             molecules_x = self.data.df.x.values.compute()[self.g.ndata['indices'].numpy()]
@@ -501,7 +502,7 @@ class GraphPlotting:
                 try:
                     x, y = molecules_x[self.clusters == cl], molecules_y[self.clusters == cl]
                     allm += x.shape[0]
-                    print(x.shape)
+
                     scatter =  hv.Scatter(np.array([x,y]).T).opts(
                         bgcolor='black',
                         aspect='equal',
@@ -510,12 +511,12 @@ class GraphPlotting:
                         title=str(cl),
                         color=color_dic[cl])
                     nd_dic[cl] = scatter.opts(title=' - '.join(enriched_genes[float(cl)]) )
-                    lay.append(nd_dic[cl].opts(s=1))
+                    lay.append(nd_dic[cl])
                     hv.save(scatter,"{}/Clusters/{}.png".format(self.folder,str(cl)), )   
                 except:
                     print('Could not get cluster {}'.format(cl))   
 
-            layout = hv.Layout(lay).cols(5)
+            layout = hv.Layout(lay).cols(2).opts(opts.Scatter(s=0.1))
             hv.save(layout,"{}/molecule_prediction.png".format(self.folder))
 
 class NegativeSampler(object):
