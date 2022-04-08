@@ -303,9 +303,10 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 d = pd.DataFrame({dblabel:cell},index=gene)
                 g= pd.DataFrame(index=self.unique_genes)
                 data = pd.concat([g,d],join='outer',axis=1).fillna(0)
-                return data.values,dblabel,centroid,0,cluster
+                return data.values.astype('int64'),dblabel,centroid,0,cluster
 
         def gene_by_cell_loom():
+            '''
             from dask.diagnostics import ProgressBar
             matrices, labels, centroids, polygons, clusters = [], [], [], [], []
             self.dask_attrs[label_column] = self.df[label_column].repartition(25)
@@ -324,7 +325,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             '''
             from dask.diagnostics import ProgressBar
             with ProgressBar():
-                results = self.dask_attrs[label_column].groupby('segment').apply(get_counts,meta=pd.Series()).compute()
+                results = self.dask_attrs[label_column].groupby('segment').apply(get_counts,meta=pd.Series()).persist()
             matrices, labels, centroids, polygons, clusters = [], [], [], [], []
 
             for p in tqdm(results):
@@ -337,7 +338,8 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                         polygons.append(pol)
                         clusters.append(cl)
             #print(matrices)
-            '''
+            
+            
             matrices = np.concatenate(matrices,axis=1)
             #print(matrices.shape)
             if type(save_to) == type(None):
