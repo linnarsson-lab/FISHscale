@@ -308,20 +308,20 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         def gene_by_cell_loom():
             from dask.diagnostics import ProgressBar
             matrices, labels, centroids, polygons, clusters = [], [], [], [], []
-            for part in range(self.dask_attrs[label_column].npartitions):
-                with ProgressBar():
-                    #results = self.dask_attrs[label_column].groupby('segment').apply(get_counts).compute()
-                    results = self.dask_attrs[label_column].partitions[part].groupby('segment').apply(get_counts, meta=pd.Series()).compute()
-                    for p in results:
-                        if type(p) != type(None):
-                            m, l, c, pol, cl = p
-                            if type(matrices) != type(None):
-                                matrices.append(m)
-                                labels.append(l)
-                                centroids.append(c)
-                                polygons.append(pol)
-                                clusters.append(cl)
-            '''from dask.diagnostics import ProgressBar
+            for part in trange(self.dask_attrs[label_column].npartitions):
+                #results = self.dask_attrs[label_column].groupby('segment').apply(get_counts).compute()
+                results = self.dask_attrs[label_column].partitions[part].groupby('segment').apply(get_counts, meta=pd.Series()).compute()
+                for p in results:
+                    if type(p) != type(None):
+                        m, l, c, pol, cl = p
+                        if type(matrices) != type(None):
+                            matrices.append(m)
+                            labels.append(l)
+                            centroids.append(c)
+                            #polygons.append(pol)
+                            clusters.append(cl)
+            '''
+            from dask.diagnostics import ProgressBar
             with ProgressBar():
                 results = self.dask_attrs[label_column].groupby('segment').apply(get_counts,meta=pd.Series()).compute()
             matrices, labels, centroids, polygons, clusters = [], [], [], [], []
@@ -344,7 +344,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             else:
                 file = path.join(save_to+'cells.loom')
             row_attrs = {'Gene':self.unique_genes}
-            col_attrs = {'Segmentation_label':labels, 'Centroid':centroids, 'Polygon':polygons,label_column:clusters}
+            col_attrs = {'Segmentation_label':labels, 'Centroid':centroids,label_column:clusters}# 'Polygon':polygons
             print('sending matrix to sparse')
             matrices = sparse.csr_matrix(matrices,dtype=np.int16)
             loompy.create(file,matrices,row_attrs,col_attrs)

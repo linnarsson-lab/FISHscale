@@ -405,7 +405,11 @@ class SAGE(nn.Module):
                         y = th.zeros(g.num_nodes(), self.n_hidden*4)
                     else:
                         y = th.zeros(g.num_nodes(), self.n_hidden)
-                p_class = th.zeros(g.num_nodes(), self.n_classes)
+                
+                if self.supervised:
+                    p_class = th.zeros(g.num_nodes(), self.n_classes)
+                else:
+                    p_class = None
 
                 sampler = dgl.dataloading.MultiLayerFullNeighborSampler(1)
                 dataloader = dgl.dataloading.NodeDataLoader(
