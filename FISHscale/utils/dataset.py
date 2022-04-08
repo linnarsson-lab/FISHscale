@@ -310,7 +310,8 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             matrices, labels, centroids, polygons, clusters = [], [], [], [], []
             for part in trange(self.dask_attrs[label_column].npartitions):
                 #results = self.dask_attrs[label_column].groupby('segment').apply(get_counts).compute()
-                results = self.dask_attrs[label_column].partitions[part].groupby('segment').apply(get_counts, meta=pd.Series()).compute()
+                g = self.dask_attrs[label_column].partitions[part].compute()
+                results= [get_counts(i[1]) for i in g.groupby('segment')]
                 for p in results:
                     if type(p) != type(None):
                         m, l, c, pol, cl = p
