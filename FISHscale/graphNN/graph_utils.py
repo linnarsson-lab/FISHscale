@@ -523,8 +523,6 @@ class GraphPlotting:
                 for k in nd_dic:
                     hmap[str(k) + ' {}'.format(enriched_genes[float(cl)])] = nd_dic[k]
                     hmap = hmap.opts(opts.Scatter(bgcolor='black',height=1000,width=1000,aspect='equal',s=1))
-
-
                 hv.save(hmap, "{}/Clusters/{}.png".format(self.folder,str(cl)),fmt='html')
             except:
                 print('Could not generate html file')
