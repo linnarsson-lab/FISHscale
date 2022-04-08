@@ -293,20 +293,20 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             cluster,dblabel, centroid = cell_i.Clusters.values[0], cell_i.segment.values[0],(cell_i.x.values.mean(),cell_i.y.values.mean())
             if dblabel >= 0:
                 cell_i_g = cell_i['g']
-                ps = np.array([cell_i.x, cell_i.y]).T
+                '''ps = np.array([cell_i.x, cell_i.y]).T
                 M = geometry.MultiPoint(np.array([cell_i.x, cell_i.y]).T)
                 try:
                     polygon = np.array(list(M.convex_hull.coords))
                 except:
-                    polygon = ps
+                    polygon = ps'''
                 gene, cell =  np.unique(cell_i_g,return_counts=True)
                 d = pd.DataFrame({dblabel:cell},index=gene)
                 g= pd.DataFrame(index=self.unique_genes)
                 data = pd.concat([g,d],join='outer',axis=1).fillna(0)
-                return data.values,dblabel,centroid,polygon,cluster
+                return data.values,dblabel,centroid,0,cluster
 
         def gene_by_cell_loom():
-            '''from dask.diagnostics import ProgressBar
+            from dask.diagnostics import ProgressBar
             matrices, labels, centroids, polygons, clusters = [], [], [], [], []
             for part in range(self.dask_attrs[label_column].npartitions):
                 with ProgressBar():
@@ -320,8 +320,8 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                                 labels.append(l)
                                 centroids.append(c)
                                 polygons.append(pol)
-                                clusters.append(cl)'''
-            from dask.diagnostics import ProgressBar
+                                clusters.append(cl)
+            '''from dask.diagnostics import ProgressBar
             with ProgressBar():
                 results = self.dask_attrs[label_column].groupby('segment').apply(get_counts,meta=pd.Series()).compute()
             matrices, labels, centroids, polygons, clusters = [], [], [], [], []
@@ -336,7 +336,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                         polygons.append(pol)
                         clusters.append(cl)
             #print(matrices)
-
+            '''
             matrices = np.concatenate(matrices,axis=1)
             #print(matrices.shape)
             if type(save_to) == type(None):
