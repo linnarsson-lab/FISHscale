@@ -290,26 +290,28 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
 
         #from shapely import geometry
         def get_counts(cell_i):
-
             cluster,dblabel, centroid = cell_i.Clusters.values[0], cell_i.segment.values[0],(cell_i.x.values.mean(),cell_i.y.values.mean())
             if dblabel >= 0:
                 cell_i_g = cell_i['g']
                 ps = np.array([cell_i.x, cell_i.y]).T
-                #M = geometry.MultiPoint(np.array([cell_i.x, cell_i.y]).T)
-                #polygon = list(M.convex_hull.exterior.coords)
+                M = geometry.MultiPoint(np.array([cell_i.x, cell_i.y]).T)
+                try:
+                    polygon = np.array(list(M.convex_hull.coords))
+                except:
+                    polygon = ps
                 gene, cell =  np.unique(cell_i_g,return_counts=True)
                 d = pd.DataFrame({dblabel:cell},index=gene)
                 g= pd.DataFrame(index=self.unique_genes)
                 data = pd.concat([g,d],join='outer',axis=1).fillna(0)
-                return data.values,dblabel,centroid,ps,cluster
+                return data.values,dblabel,centroid,polygon,cluster
 
         def gene_by_cell_loom():
             
             #delayed_result = [dask.delayed(get_cells)(p) for p in self.dask_attrs[label_column].to_delayed()]
             #result = dask.compute(*delayed_result)
-            from dask.diagnostics import ProgressBar
+            '''from dask.diagnostics import ProgressBar
             with ProgressBar():
-                results = self.dask_attrs[label_column].groupby('segment').apply(get_counts).compute()
+                results = self.dask_attrs[label_column].groupby('segment').apply(get_counts,meta=pd.Series()).compute()
             matrices, labels, centroids, polygons, clusters = [], [], [], [], []
 
             for p in tqdm(results):
@@ -322,6 +324,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                         polygons.append(pol)
                         clusters.append(cl)
             #print(matrices)
+            '''
 
             matrices = np.concatenate(matrices,axis=1)
             #print(matrices.shape)
