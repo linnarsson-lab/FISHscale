@@ -172,7 +172,7 @@ class GraphUtils(object):
         #d = self.molecules_df(molecules)
         g= dgl.graph((edges[0,:],edges[1,:]),)
         #g = dgl.to_bidirected(g)]
-        g.ndata['gene'] = th.tensor(d.toarray(), dtype=th.uint8)#[self.g.ndata['indices'].numpy(),:]
+        g.ndata['gene'] = th.tensor(d.toarray(), dtype=th.uint8)#[molecules_id.numpy(),:]
         nghs = []
         for n in tqdm(ngh_):
             nghs.append(th.tensor(g.ndata['gene'][n,:].sum(axis=0),dtype=th.uint8))
@@ -319,7 +319,7 @@ class GraphPlotting:
             ax.set_facecolor("black")
             width_cutoff = 1640 # um
             #plt.scatter(DS.df.x.values.compute()[GD.cells], DS.df.y.values.compute()[GD.cells], c=th.argmax(pred.softmax(dim=-1),dim=-1).numpy(), s=0.2,marker='.',linewidths=0, edgecolors=None,cmap='rainbow')
-            plt.scatter(self.data.df.x.values.compute()[self.g.ndata['indices'].numpy()][some], self.data.df.y.values.compute()[self.g.ndata['indices'].numpy()][some], c=Y_umap, s=0.05,marker='.',linewidths=0, edgecolors=None)
+            plt.scatter(self.data.df.x.values.compute()[molecules_id.numpy()][some], self.data.df.y.values.compute()[self.g.ndata['indices'].numpy()][some], c=Y_umap, s=0.05,marker='.',linewidths=0, edgecolors=None)
             plt.xticks(fontsize=2)
             plt.yticks(fontsize=2)
             plt.axis('scaled')
@@ -423,6 +423,8 @@ class GraphPlotting:
             self.clusters = kmeans.fit_predict(self.latent_unlabelled.detach().numpy())
 
             molecules_id = self.g.ndata['indices']
+            # Clean Memory
+            del self.g
             new_labels = np.zeros(self.data.shape[0]) -1
             new_labels = new_labels.astype('str')
             for i,l in zip(molecules_id, self.clusters):
@@ -483,7 +485,7 @@ class GraphPlotting:
             ax = fig.add_subplot(1, 1, 1)
             ax.set_facecolor("black")
             #plt.scatter(DS.df.x.values.compute()[GD.cells], DS.df.y.values.compute()[GD.cells], c=th.argmax(pred.softmax(dim=-1),dim=-1).numpy(), s=0.2,marker='.',linewidths=0, edgecolors=None,cmap='rainbow')
-            plt.scatter(self.data.df.x.values.compute()[self.g.ndata['indices'].numpy()], self.data.df.y.values.compute()[self.g.ndata['indices'].numpy()], c=clusters_colors, s=0.005,marker='.',linewidths=0, edgecolors=None)
+            plt.scatter(self.data.df.x.values.compute()[molecules_id.numpy()], self.data.df.y.values.compute()[molecules_id.numpy()], c=clusters_colors, s=0.005,marker='.',linewidths=0, edgecolors=None)
             plt.xticks(fontsize=2)
             plt.yticks(fontsize=2)
             plt.axis('scaled')
@@ -492,8 +494,8 @@ class GraphPlotting:
             import holoviews as hv
             from holoviews import opts
             hv.extension('matplotlib')
-            molecules_y = self.data.df.y.values.compute()[self.g.ndata['indices'].numpy()]
-            molecules_x = self.data.df.x.values.compute()[self.g.ndata['indices'].numpy()]
+            molecules_y = self.data.df.y.values.compute()[molecules_id.numpy()]
+            molecules_x = self.data.df.x.values.compute()[molecules_id.numpy()]
             nd_dic = {}
             allm = 0
             print('Generating plots for cluster assigned to molecules...')

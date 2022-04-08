@@ -303,7 +303,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 d = pd.DataFrame({dblabel:cell},index=gene)
                 g= pd.DataFrame(index=self.unique_genes)
                 data = pd.concat([g,d],join='outer',axis=1).fillna(0)
-                return data.values,dblabel,centroid,0,cluster
+                return data.values.astype('int64'),dblabel,centroid,0,cluster
 
         def gene_by_cell_loom():
             '''
