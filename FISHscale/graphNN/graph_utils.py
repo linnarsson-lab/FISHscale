@@ -505,11 +505,11 @@ class GraphPlotting:
                         bgcolor='black',
                         aspect='equal',
                         fig_inches=50,
-                        s=0.01,
+                        s=1,
                         title=str(cl),
                         color=color_dic[cl])
                     nd_dic[cl] = scatter.opts(title=' - '.join(enriched_genes[float(cl)]) )
-                    lay.append(nd_dic[cl])
+                    lay.append(nd_dic[cl].opts(s=0.01))
                     hv.save(scatter,"{}/Clusters/{}.png".format(self.folder,str(cl)), )   
                 except:
                     print('Could not get cluster {}'.format(cl))   

@@ -31,7 +31,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
         model=None, # GraphSAGE model
         analysis_name:str='',
         molecules=None, # Array with molecules_ids of shape (molecules)
-        ngh_size = 100,
+        ngh_size = 250,
         ngh_sizes = [20, 10],
         minimum_nodes_connected = 5,
         train_p = 0.5,
