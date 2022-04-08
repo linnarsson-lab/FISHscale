@@ -522,7 +522,7 @@ class GraphPlotting:
             hv.notebook_extension('bokeh')
             hmap = hv.HoloMap(kdims=['Enrichment - Cluster'])
             for k in nd_dic:
-                hmap[str(k) + ' {}'.format(enriched_genes[float(cl)])] = nd_dic[k]
+                hmap[str(k) + ' {}'.format(enriched_genes[float(k)])] = nd_dic[k]
                 hmap = hmap.opts(opts.Scatter(bgcolor='black',width=1000,data_aspect=1,size=1))
 
 
