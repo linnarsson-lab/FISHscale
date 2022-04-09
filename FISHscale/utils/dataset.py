@@ -322,10 +322,11 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             matrices, labels, centroids, polygons, clusters = [], [], [], [], []
             from dask.diagnostics import ProgressBar
             with ProgressBar():
-                result = self.dask_attrs[label_column].groupby('segment').apply(lambda s: np.array([s.x.values.mean(),
-                    s.y.values.mean(),
-                    s.Clusters.values[0],
-                    s.segment.values[0],
+                result = self.dask_attrs[label_column].groupby('segment').apply(lambda s: np.array([
+                    s.x.values.mean().astype('float32'),
+                    s.y.values.mean().astype('float32'),
+                    s.Clusters.values[0].astype('int8'),
+                    s.segment.values[0].astype('int64'),
                     s.g.values])).persist()
 
             for r in tqdm(result):
