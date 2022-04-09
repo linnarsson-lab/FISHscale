@@ -289,21 +289,12 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             return segmentation
 
         #from shapely import geometry
-        def get_counts(cell_i):
-            cluster,dblabel, centroid = cell_i.Clusters.values[0], cell_i.segment.values[0],(cell_i.x.values.mean(),cell_i.y.values.mean())
-            if dblabel >= 0:
-                cell_i_g = cell_i['g']
-                '''ps = np.array([cell_i.x, cell_i.y]).T
-                M = geometry.MultiPoint(np.array([cell_i.x, cell_i.y]).T)
-                try:
-                    polygon = np.array(list(M.convex_hull.coords))
-                except:
-                    polygon = ps'''
-                gene, cell =  np.unique(cell_i_g,return_counts=True)
-                d = pd.DataFrame({dblabel:cell},index=gene)
-                g= pd.DataFrame(index=self.unique_genes)
-                data = pd.concat([g,d],join='outer',axis=1).fillna(0)
-                return data.values.astype('int64'),dblabel,centroid,0,cluster
+        def get_counts(cell_i_g,dblabel):
+            gene, cell =  np.unique(cell_i_g,return_counts=True)
+            d = pd.DataFrame({dblabel:cell},index=gene)
+            g= pd.DataFrame(index=self.unique_genes)
+            data = pd.concat([g,d],join='outer',axis=1).fillna(0)
+            return data.values.astype('int64')
 
         def gene_by_cell_loom():
             print('fast activated')
@@ -340,7 +331,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 #print(process_memory())
 
             matrices = np.concatenate(matrices,axis=1)
-            #print(matrices.shape)
+            print('concatenated')
             if type(save_to) == type(None):
                 file = path.join(self.dataset_folder,self.filename.split('.')[0]+'_cells.loom')
             else:
@@ -369,7 +360,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         print('Concatenate')
         result,idx = np.concatenate(result, axis=0), np.concatenate(idx)
         print('Number of cells found: {}'.format(count))
-        
+        from dask import delayed
         self.dask_attrs[label_column] = self.dask_attrs[label_column].merge(pd.DataFrame(result,index=idx,columns=['segment']))
         #makedirs(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes',label_column),exist_ok=True)
         #self.dask_attrs[label_column] = self.dask_attrs[label_column].compute()
