@@ -177,7 +177,7 @@ class DataLoader_base():
                     warnings.warn(f'Object already has an attribute: "{k}". Overwriting "{k}" with stored data from metadata file.')
                 setattr(obj, k, v)
         
-    def _dump_to_parquet(self, data, name, folder_name:str):
+    def _dump_to_parquet(self, data, name, folder_name:str,engine=None):
         """Save groupby results as .parquet files.
 
         Args:
@@ -188,7 +188,10 @@ class DataLoader_base():
         """
         fn_out = path.join(folder_name, f'{name}_{data.name}.parquet')
         #write data
-        data.to_parquet(fn_out)
+        if type(engine)== type(None):
+            data.to_parquet(fn_out, engine=engine)
+        else:
+            data.to_parquet(fn_out, engine=engine)
         
     def _check_parsed(self, folder: str) -> bool:
         """Check if data has already been parsed.
@@ -258,8 +261,8 @@ class DataLoader_base():
             shutil.rmtree(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes',attribute_name))
 
         makedirs(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes',attribute_name),exist_ok=True)
-        da.groupby(attribute_name).apply(lambda x: self._dump_to_parquet(x, self.dataset_name, self.FISHscale_data_folder+'/attributes/{}'.format(attribute_name)))#, meta=('float64')).compute()
-        self.dask_attrs[attribute_name] = dd.read_parquet(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes/{}'.format(attribute_name), '*.parquet'))   
+        da.groupby(attribute_name).apply(lambda x: self._dump_to_parquet(x, self.dataset_name, self.FISHscale_data_folder+'/attributes/{}'.format(attribute_name),engine='fastparquet'))#, meta=('float64')).compute()
+        self.dask_attrs[attribute_name] = dd.read_parquet(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes/{}'.format(attribute_name), '*.parquet'), engine='fastparquet')   
         #self.dask_attrs.to_parquet(path.join(self.dataset_folder,self.FISHscale_data_folder,'attributes'))    
 
 class DataLoader(DataLoader_base):

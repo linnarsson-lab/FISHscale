@@ -321,6 +321,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
 
             matrices, labels, centroids, polygons, clusters = [], [], [], [], []
             from dask.diagnostics import ProgressBar
+            
             with ProgressBar():
                 result = self.dask_attrs[label_column].groupby('segment').apply(lambda s: np.array([s.x.values.mean(),
                     s.y.values.mean(),
@@ -351,9 +352,11 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             loompy.create(file,matrices,row_attrs,col_attrs)
             print('loompy written')
 
+
+        from dask.distributed import Client
+        client = Client(processes=True,memory_limit='50GB',n_workers=1)
+        print(client)
         print('Running segmentation by: {}'.format(label_column))
-        #r = self.dask_attrs[label_column].groupby(label_column).apply(segmentation, meta=object).compute()
-        #print(r)
         idx, result = [], []
         count = 0
         for x in trange(self.dask_attrs[label_column].npartitions):
