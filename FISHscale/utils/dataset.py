@@ -309,8 +309,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
 
             import psutil
             import os
-            import time
-        
+            import gc
             # inner psutil function
             def process_memory():
                 process = psutil.Process(os.getpid())
@@ -322,9 +321,8 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             for part in trange(self.dask_attrs[label_column].npartitions):
                 #results = self.dask_attrs[label_column].groupby('segment').apply(get_counts).compute()
                 #results = self.dask_attrs[label_column].partitions[part].groupby('segment').apply(get_counts, meta=pd.Series()).compute()
-                start_time = time.time()
-                results = self.dask_attrs[label_column].partitions[part].groupby('segment').apply(get_counts).compute()
-                print("get_partition_time" , (time.time() - start_time))
+                results = self.dask_attrs[label_column].partitions[part]#.compute()
+                results = results.groupby('segment').apply(get_counts).persist()
                 for p in results:
                     if type(p) != type(None):
                         m, l, c, pol, cl = p
@@ -335,6 +333,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                             #polygons.append(pol)
                             clusters.append(cl)
                 print(process_memory())
+                gc.collect()
 
             matrices = np.concatenate(matrices,axis=1)
             #print(matrices.shape)
@@ -364,8 +363,10 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         print('Concatenate')
         result,idx = np.concatenate(result, axis=0), np.concatenate(idx)
         print('Number of cells found: {}'.format(count))
+        
         self.dask_attrs[label_column] = self.dask_attrs[label_column].merge(pd.DataFrame(result,index=idx,columns=['segment']))
         print('DBscan results added to dask attributes. Generating gene by cell matrix as loom file.')
+        
         gene_by_cell_loom()
 
 
