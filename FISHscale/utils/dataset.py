@@ -307,15 +307,6 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
 
         def gene_by_cell_loom():
 
-            import psutil
-            import os
-            import gc
-            # inner psutil function
-            def process_memory():
-                process = psutil.Process(os.getpid())
-                mem_info = process.memory_info()
-                return mem_info.rss/1000000000
-
             matrices, labels, centroids, polygons, clusters = [], [], [], [], []
 
             for part in trange(self.dask_attrs[label_column].npartitions):
