@@ -189,7 +189,7 @@ class DataLoader_base():
         fn_out = path.join(folder_name, f'{name}_{data.name}.parquet')
         #write data
         if type(engine)== type(None):
-            data.to_parquet(fn_out, engine=engine)
+            data.to_parquet(fn_out)
         else:
             data.to_parquet(fn_out, engine=engine)
         
