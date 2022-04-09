@@ -306,13 +306,10 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 return data.values.astype('int64'),dblabel,centroid,0,cluster
 
         def gene_by_cell_loom():
-            print('fast activated')
+
             import psutil
             import os
             import gc
-            '''rom dask.distributed import Client
-            client = Client(processes=True,memory_limit='50GB',n_workers=10)
-            print(client)'''
             # inner psutil function
             def process_memory():
                 process = psutil.Process(os.getpid())
@@ -320,24 +317,22 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 return mem_info.rss/1000000000
 
             matrices, labels, centroids, polygons, clusters = [], [], [], [], []
-            from dask.diagnostics import ProgressBar
-            
-            with ProgressBar():
-                result = self.dask_attrs[label_column].groupby('segment').apply(lambda s: np.array([s.x.values.mean(),
-                    s.y.values.mean(),
-                    s.Clusters.values[0],
-                    s.segment.values[0],
-                    s.g.values])).persist()
 
-            for r in tqdm(result):
-                xm, ym, cl, dblabel,molecules = r
-    
-                if dblabel != type(None):
-                    matrices.append(get_counts(molecules,dblabel))
-                    labels.append(dblabel)
-                    centroids.append(np.array([xm,ym]))
-                    clusters.append(cl)
-                #print(process_memory())
+            for part in trange(self.dask_attrs[label_column].npartitions):
+                #results = self.dask_attrs[label_column].groupby('segment').apply(get_counts).compute()
+                #results = self.dask_attrs[label_column].partitions[part].groupby('segment').apply(get_counts, meta=pd.Series()).compute()
+                results = self.dask_attrs[label_column].partitions[part]#.compute()
+                results = results.groupby('segment').apply(get_counts).persist()
+                for p in results:
+                    if type(p) != type(None):
+                        m, l, c, pol, cl = p
+                        if type(matrices) != type(None):
+                            matrices.append(m)
+                            labels.append(l)
+                            centroids.append(c)
+                            #polygons.append(pol)
+                            clusters.append(cl)
+
 
             matrices = np.concatenate(matrices,axis=1)
             #print(matrices.shape)
@@ -352,11 +347,9 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             loompy.create(file,matrices,row_attrs,col_attrs)
             print('loompy written')
 
-
-        #from dask.distributed import Client
-        #client = Client(processes=True,memory_limit='50GB',n_workers=1)
-        #print(client)
         print('Running segmentation by: {}'.format(label_column))
+        #r = self.dask_attrs[label_column].groupby(label_column).apply(segmentation, meta=object).compute()
+        #print(r)
         idx, result = [], []
         count = 0
         for x in trange(self.dask_attrs[label_column].npartitions):
@@ -371,11 +364,8 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         print('Number of cells found: {}'.format(count))
         
         self.dask_attrs[label_column] = self.dask_attrs[label_column].merge(pd.DataFrame(result,index=idx,columns=['segment']))
-        #makedirs(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes',label_column),exist_ok=True)
-        #self.dask_attrs[label_column] = self.dask_attrs[label_column].compute()
-        #self.dask_attrs[label_column].groupby(label_column).apply(lambda x: self._dump_to_parquet(x, self.dataset_name, self.FISHscale_data_folder+'/attributes/{}'.format(label_column),engine='fastparquet'))#, meta=('float64')).compute()
-        #self.dask_attrs[label_column] = dd.read_parquet(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes/{}'.format(label_column), '*.parquet'), engine='fastparquet')   
         print('DBscan results added to dask attributes. Generating gene by cell matrix as loom file.')
+        
         gene_by_cell_loom()
 
 
