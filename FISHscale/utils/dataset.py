@@ -306,13 +306,23 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 return data.values.astype('int64'),dblabel,centroid,0,cluster
 
         def gene_by_cell_loom():
-            '''
-            from dask.diagnostics import ProgressBar
+
+            import psutil
+            import os
+            # inner psutil function
+            def process_memory():
+                process = psutil.Process(os.getpid())
+                mem_info = process.memory_info()
+                return mem_info.rss/1000000000
+
             matrices, labels, centroids, polygons, clusters = [], [], [], [], []
-            self.dask_attrs[label_column] = self.df[label_column].repartition(25)
+
             for part in trange(self.dask_attrs[label_column].npartitions):
                 #results = self.dask_attrs[label_column].groupby('segment').apply(get_counts).compute()
-                results = self.dask_attrs[label_column].partitions[part].groupby('segment').apply(get_counts, meta=pd.Series()).compute()
+                #results = self.dask_attrs[label_column].partitions[part].groupby('segment').apply(get_counts, meta=pd.Series()).compute()
+                results = self.dask_attrs[label_column].partitions[part].compute()
+                results = results.groupby('segment').apply(get_counts)
+
                 for p in results:
                     if type(p) != type(None):
                         m, l, c, pol, cl = p
@@ -322,24 +332,8 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                             centroids.append(c)
                             #polygons.append(pol)
                             clusters.append(cl)
-            '''
-            from dask.diagnostics import ProgressBar
-            with ProgressBar():
-                results = self.dask_attrs[label_column].groupby('segment').apply(get_counts,meta=pd.Series()).persist()
-            matrices, labels, centroids, polygons, clusters = [], [], [], [], []
+                print(process_memory())
 
-            for p in tqdm(results):
-                if type(p) != type(None):
-                    m, l, c, pol, cl = p
-                    if type(matrices) != type(None):
-                        matrices.append(m)
-                        labels.append(l)
-                        centroids.append(c)
-                        polygons.append(pol)
-                        clusters.append(cl)
-            #print(matrices)
-            
-            
             matrices = np.concatenate(matrices,axis=1)
             #print(matrices.shape)
             if type(save_to) == type(None):
