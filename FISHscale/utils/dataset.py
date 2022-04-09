@@ -309,6 +309,8 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
 
             import psutil
             import os
+            import time
+        
             # inner psutil function
             def process_memory():
                 process = psutil.Process(os.getpid())
@@ -320,8 +322,10 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             for part in trange(self.dask_attrs[label_column].npartitions):
                 #results = self.dask_attrs[label_column].groupby('segment').apply(get_counts).compute()
                 #results = self.dask_attrs[label_column].partitions[part].groupby('segment').apply(get_counts, meta=pd.Series()).compute()
-                results = self.dask_attrs[label_column].partitions[part].compute()
-                results = results.groupby('segment').apply(get_counts)
+                start_time = time.time()
+                results = self.dask_attrs[label_column].partitions[part].groupby('segment').apply(get_counts).compute()
+                print("get_partition_time" , (time.time() - start_time))
+
 
                 for p in results:
                     if type(p) != type(None):
