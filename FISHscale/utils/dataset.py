@@ -332,8 +332,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                             centroids.append(c)
                             #polygons.append(pol)
                             clusters.append(cl)
-                print(process_memory())
-                gc.collect()
+
 
             matrices = np.concatenate(matrices,axis=1)
             #print(matrices.shape)
