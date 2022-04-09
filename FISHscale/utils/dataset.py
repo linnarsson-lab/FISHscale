@@ -325,8 +325,6 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 start_time = time.time()
                 results = self.dask_attrs[label_column].partitions[part].groupby('segment').apply(get_counts).compute()
                 print("get_partition_time" , (time.time() - start_time))
-
-
                 for p in results:
                     if type(p) != type(None):
                         m, l, c, pol, cl = p
