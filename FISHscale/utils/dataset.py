@@ -325,8 +325,8 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 result = self.dask_attrs[label_column].groupby('segment').apply(lambda s: np.array([
                     s.x.values.mean().astype('float32'),
                     s.y.values.mean().astype('float32'),
-                    s.Clusters.values[0].astype('int8'),
-                    s.segment.values[0].astype('int64'),
+                    s.Clusters.values[0],
+                    s.segment.values[0],
                     s.g.values])).persist()
 
             for r in tqdm(result):
