@@ -424,7 +424,7 @@ class GraphPlotting:
 
             molecules_id = self.g.ndata['indices']
             # Clean Memory
-            #del self.g
+            del self.g.ndata['gene']
             new_labels = np.zeros(self.data.shape[0]) -1
             new_labels = new_labels.astype('str')
             for i,l in zip(molecules_id, self.clusters):
