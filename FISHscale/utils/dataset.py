@@ -314,11 +314,11 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             from dask.diagnostics import ProgressBar
             
             with ProgressBar():
-                result = self.dask_attrs[label_column].groupby('segment').apply(lambda s: np.array([s.x.values.mean(),
+                result = self.dask_attrs[label_column].groupby('segment').apply(lambda s: [s.x.values.mean(),
                     s.y.values.mean(),
                     s.Clusters.values[0],
                     s.segment.values[0],
-                    s.g.values])).persist()
+                    s.g.values]).compute()
 
             for r in tqdm(result):
                 xm, ym, cl, dblabel,molecules = r
