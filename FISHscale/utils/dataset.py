@@ -294,31 +294,38 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             d = pd.DataFrame({dblabel:cell},index=gene)
             g= pd.DataFrame(index=self.unique_genes)
             data = pd.concat([g,d],join='outer',axis=1).fillna(0)
-            return data.values.astype('int64')
+            return data.values.astype('int16')
 
         def gene_by_cell_loom():
             print('fast activated')
+
             matrices, labels, centroids, polygons, clusters = [], [], [], [], []
             from dask.diagnostics import ProgressBar
             
-            with ProgressBar():
-                result = self.dask_attrs[label_column].groupby('segment').apply(lambda s: [s.x.values.mean(),
-                    s.y.values.mean(),
-                    s.Clusters.values[0],
-                    s.segment.values[0],
-                    s.g.values]).compute()
+            mps = [x for x in range(self.dask_attrs['Clusters'].npartitions)]
+            for m in trange(0,len(mps),15):
+                print('Exctracting partitions: {}'.format(m))
+                m = mps[m:m+15]
+                d= self.dask_attrs['Clusters'].partitions[m]
 
-            for r in tqdm(result):
-                xm, ym, cl, dblabel,molecules = r
-                if dblabel != type(None) and dblabel > -1:
-                    matrices.append(get_counts(molecules,dblabel))
-                    labels.append(dblabel)
-                    centroids.append(np.array([xm,ym]))
-                    clusters.append(cl)
-                #print(process_memory())
+                with ProgressBar():
+                    result = d.groupby('segment').apply(lambda s: [s.x.values.mean(),
+                        s.y.values.mean(),
+                        s.Clusters.values[0],
+                        s.segment.values[0],
+                        s.g.values]).compute()
+
+                for r in tqdm(result):
+                    xm, ym, cl, dblabel,molecules = r
+                    if dblabel != type(None) and dblabel > -1:
+                        matrices.append(get_counts(molecules,dblabel))
+                        labels.append(dblabel)
+                        centroids.append(np.array([xm,ym]))
+                        clusters.append(cl)
+                    #print(process_memory())
 
             matrices = np.concatenate(matrices,axis=1)
-            print('concatenated')
+            #print(matrices.shape)
             if type(save_to) == type(None):
                 file = path.join(self.dataset_folder,self.filename.split('.')[0]+'_cells.loom')
             else:
@@ -330,9 +337,6 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             loompy.create(file,matrices,row_attrs,col_attrs)
             print('loompy written')
 
-        #from dask.distributed import Client
-        #client = Client(processes=True,memory_limit='50GB',n_workers=1)
-        #print(client)
         print('Running segmentation by: {}'.format(label_column))
         idx, result = [], []
         count = 0
@@ -346,7 +350,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         print('Concatenate')
         result,idx = np.concatenate(result, axis=0), np.concatenate(idx)
         print('Number of cells found: {}'.format(count))
-        from dask import delayed
+        
         self.dask_attrs[label_column] = self.dask_attrs[label_column].merge(pd.DataFrame(result,index=idx,columns=['segment']))
         #makedirs(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes',label_column),exist_ok=True)
         #self.dask_attrs[label_column] = self.dask_attrs[label_column].compute()

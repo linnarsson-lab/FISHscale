@@ -291,7 +291,7 @@ class GraphPlotting:
                 spread=1,
                 random_state=1,
                 verbose=True,
-                n_jobs=-1
+                n_jobs= 4
             )
 
         if self.model.supervised:
@@ -412,8 +412,8 @@ class GraphPlotting:
             print('Plots saved.')
 
         else:
-            import scanpy as sc
             from sklearn.cluster import MiniBatchKMeans
+            import gc
             print('Running MBKMeans clustering from scanpy...')
             #adata = sc.AnnData(X=self.latent_unlabelled.detach().numpy())
             #sc.pp.neighbors(adata, n_neighbors=25)
@@ -438,6 +438,7 @@ class GraphPlotting:
             from sklearn.cluster import DBSCAN
             db = DBSCAN(eps=eps,min_samples=min_samples)
             self.data.segment('Clusters',save_to=os.path.join(self.folder,'Clusters/'),func=db)
+            gc.collect()
 
             with loompy.connect(os.path.join(self.folder,'Clusters','cells.loom'),'r+') as ds:
                 enrich = enrich_(labels_attr = ds.ca.Clusters)
@@ -524,9 +525,8 @@ class GraphPlotting:
             hv.notebook_extension('bokeh')
             hmap = hv.HoloMap(kdims=['Enrichment - Cluster'])
             for k in nd_dic:
-                hmap[str(k) + ' {}'.format(enriched_genes[float(k)])] = nd_dic[k]
-                print(color_dic[k])
-                hmap = hmap.opts(opts.Scatter(bgcolor='black',width=1000,data_aspect=1,size=1,color=color_dic[k]))
+                hmap[str(k) + ' {}'.format(enriched_genes[float(k)])] = nd_dic[k].opts(bgcolor='black',width=1000,data_aspect=1,size=1,color=color_dic[k])
+                #hmap = hmap.opts(opts.Scatter(bgcolor='black',width=1000,data_aspect=1,size=1))
 
 
             hv.save(hmap, "{}/Clusters.html".format(self.folder),fmt='html')
