@@ -298,18 +298,6 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
 
         def gene_by_cell_loom():
             print('fast activated')
-            import psutil
-            import os
-            import gc
-            '''rom dask.distributed import Client
-            client = Client(processes=True,memory_limit='50GB',n_workers=10)
-            print(client)'''
-            # inner psutil function
-            def process_memory():
-                process = psutil.Process(os.getpid())
-                mem_info = process.memory_info()
-                return mem_info.rss/1000000000
-
             matrices, labels, centroids, polygons, clusters = [], [], [], [], []
             from dask.diagnostics import ProgressBar
             
@@ -322,8 +310,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
 
             for r in tqdm(result):
                 xm, ym, cl, dblabel,molecules = r
-    
-                if dblabel != type(None):
+                if dblabel != type(None) and dblabel > -1:
                     matrices.append(get_counts(molecules,dblabel))
                     labels.append(dblabel)
                     centroids.append(np.array([xm,ym]))
