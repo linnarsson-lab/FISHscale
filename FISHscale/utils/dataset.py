@@ -343,7 +343,6 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             loompy.create(file,matrices,row_attrs,col_attrs)
             print('loompy written')
 
-
         #from dask.distributed import Client
         #client = Client(processes=True,memory_limit='50GB',n_workers=1)
         #print(client)
