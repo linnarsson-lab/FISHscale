@@ -300,40 +300,34 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             g= pd.DataFrame(index=self.unique_genes)
             data = pd.concat([g,d],join='outer',axis=1).fillna(0)
             return data.values.astype('int16')
+        def dump(s,folder):
+            s.to_parquet(path.join(self.dataset_name, 
+                                    self.FISHscale_data_folder,
+                                    'attributes',
+                                    folder,
+                                    '{}.parquet'.format(s.Clusters.values[0])),engine='fastparquet')
 
         def gene_by_cell_loom():
             print('fast activated')
             matrices, labels, centroids, polygons, clusters = [], [], [], [], []
-            from dask.diagnostics import ProgressBar
-            
-            '''mps = [x for x in range(self.dask_attrs['Clusters'].npartitions)]
-            for m in trange(0,len(mps),10):
-                print('Exctracting partitions: {}'.format(m))
-                m = mps[m:m+10]
-                d= self.dask_attrs['Clusters'].partitions[m]'''
 
-            def dump(s):
-                '''new = pd.DataFrame({
-                            'x':s.x.values.mean().astype('float32'),
-                            'y':s.y.values.mean().astype('float32'),
-                            'Clusters':s.Clusters.values[0],
-                            'segment':s.segment.values[0],
-                            'g':[s.g.values]})
-                '''
+            def dump(s,folder):
                 s.to_parquet(path.join(self.dataset_name, 
                                         self.FISHscale_data_folder,
                                         'attributes',
-                                        'segment',
+                                        folder,
                                         '{}.parquet'.format(s.name)),engine='fastparquet')
+            from dask.diagnostics import ProgressBar
+            from dask import dataframe as dd
 
-
+            d = dd.read_parquet(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','Clusters','*.parquet'))
             with ProgressBar():
                 makedirs(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','segment'),exist_ok=True)
                 #da.groupby(attribute_name).apply(lambda x: self._dump_to_parquet(x, self.dataset_name, self.FISHscale_data_folder+'/attributes/{}'.format(attribute_name),engine='fastparquet'))#, meta=('float64')).compute()
-                self.dask_attrs[label_column].groupby('segment').apply(lambda s: 
-                        dump(s)
+                d.groupby('segment').apply(lambda s: 
+                        dump(s,'segment')
                     ).compute()
-
+            
             result = dd.read_parquet(path.join(self.dataset_name, self.FISHscale_data_folder+'/attributes/{}'.format('segment'), '*.parquet'))
             result = result.map_partitions(lambda s: [s.x.mean(),s.y.mean(), s.Clusters.values[0], s.segment.values[0], s.g.values]).persist()
             for r in tqdm(result):
@@ -364,10 +358,15 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         for x in trange(self.dask_attrs[label_column].npartitions):
             partition = self.dask_attrs[label_column].partitions[x]
             s = segmentation(partition)
-            result.append(np.array([x+count if x >= 0 else x for x in s]))
-            idx.append(partition.index.values.compute())
+            #result.append(np.array([x+count if x >= 0 else x for x in s]))
+            #idx.append(partition.index.values.compute())
+            dump(partition.merge(pd.DataFrame(np.array([x+count if x >= 0 else x for x in s]),
+                index=partition.index.values.compute(),
+                columns=['segment'])
+                ).compute())
             count += s.max() +1
             #print(s.max()+count)
+
         print('Concatenate')
         result,idx = np.concatenate(result, axis=0), np.concatenate(idx)
         print('Number of cells found: {}'.format(count))
