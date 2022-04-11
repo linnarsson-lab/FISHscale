@@ -355,8 +355,10 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
 
         print('Running segmentation by: {}'.format(label_column))
         import os
-
-        makedirs(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','Clusters2'),exist_ok=True)
+        try:
+            os.rmdir(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','Clusters2'))
+        except:
+            makedirs(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','Clusters2'),exist_ok=True)
         count = 0
         for x in trange(self.dask_attrs[label_column].npartitions):
             partition = self.dask_attrs[label_column].partitions[x]
