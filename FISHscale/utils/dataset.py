@@ -320,7 +320,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             from dask.diagnostics import ProgressBar
             from dask import dataframe as dd
 
-            d = dd.read_parquet(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','Clusters','*.parquet'))
+            d = dd.read_parquet(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','Clusters2','*.parquet'))
             with ProgressBar():
                 makedirs(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','segment'),exist_ok=True)
                 #da.groupby(attribute_name).apply(lambda x: self._dump_to_parquet(x, self.dataset_name, self.FISHscale_data_folder+'/attributes/{}'.format(attribute_name),engine='fastparquet'))#, meta=('float64')).compute()
@@ -353,7 +353,9 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             print('loompy written')
 
         print('Running segmentation by: {}'.format(label_column))
-        idx, result = [], []
+        import os
+
+        makedirs(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','Clusters2'),exist_ok=True)
         count = 0
         for x in trange(self.dask_attrs[label_column].npartitions):
             partition = self.dask_attrs[label_column].partitions[x]
@@ -363,15 +365,11 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             dump(partition.merge(pd.DataFrame(np.array([x+count if x >= 0 else x for x in s]),
                 index=partition.index.values.compute(),
                 columns=['segment'])
-                ).compute())
+                ).compute(),'Clusters2')
             count += s.max() +1
-            #print(s.max()+count)
 
-        print('Concatenate')
-        result,idx = np.concatenate(result, axis=0), np.concatenate(idx)
         print('Number of cells found: {}'.format(count))
-        
-        self.dask_attrs[label_column] = self.dask_attrs[label_column].merge(pd.DataFrame(result,index=idx,columns=['segment']))
+        #self.dask_attrs[label_column] = self.dask_attrs[label_column].merge(pd.DataFrame(result,index=idx,columns=['segment']))
         print('DBscan results added to dask attributes. Generating gene by cell matrix as loom file.')
         gene_by_cell_loom()
 
