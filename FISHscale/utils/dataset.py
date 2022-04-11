@@ -312,13 +312,19 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 d= self.dask_attrs['Clusters'].partitions[m]'''
 
             with ProgressBar():
-                result = self.dask_attrs[label_column].groupby('segment').apply(lambda s: [
+                makedirs(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','segment'),exist_ok=True)
+                #da.groupby(attribute_name).apply(lambda x: self._dump_to_parquet(x, self.dataset_name, self.FISHscale_data_folder+'/attributes/{}'.format(attribute_name),engine='fastparquet'))#, meta=('float64')).compute()
+                result = self.dask_attrs[label_column].groupby('segment').apply(lambda s: self._dump_to_parquet([
                     s.x.values.mean(),
                     s.y.values.mean(),
                     s.Clusters.values[0],
                     s.segment.values[0],
-                    s.g.values]).compute()
+                    s.g.values], 
+                    self.dataset_name, self.FISHscale_data_folder+'/attributes/{}'.format('segment'),engine='fastparquet'
+                    )
+                    ).compute()
 
+            result = dd.read_parquet(path.join(self.dataset_name, self.FISHscale_data_folder+'/attributes/{}'.format('segment'), '*.parquet'))
             for r in tqdm(result):
                 xm, ym, cl, dblabel,molecules = r
                 if dblabel != type(None) and dblabel > -1:
