@@ -7,7 +7,7 @@ import dgl.nn.pytorch as dglnn
 import dgl.function as fn
 import tqdm
 from pytorch_lightning import LightningModule
-from FISHscale.graphNN.submodules import Classifier, PairNorm, DiffGroupNorm
+from FISHscale.graphNN.submodules import Classifier
 from pyro.distributions import GammaPoisson, Poisson
 from torch.distributions import Gamma,Normal, Multinomial, kl_divergence as kl
 import pyro
@@ -473,9 +473,9 @@ class Encoder(nn.Module):
         self.aggregator = aggregator
         layers = nn.ModuleList()
         if supervised:
-            self.norm = PairNorm()#DiffGroupNorm(n_hidden,n_classes,None)
+            self.norm = F.normalize#PairNorm()#DiffGroupNorm(n_hidden,n_classes,None)
         else:
-            self.norm = PairNorm()#DiffGroupNorm(n_hidden,20)
+            self.norm = F.normalize#PairNorm()#DiffGroupNorm(n_hidden,20)
         self.num_heads = 4
         self.n_layers = n_layers
         for i in range(0,n_layers-1):
