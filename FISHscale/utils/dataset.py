@@ -293,40 +293,41 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             return segmentation
 
         #from shapely import geometry
-        def get_counts(cell_i_g,dblabel):
-            gene, cell =  np.unique(cell_i_g,return_counts=True)
-            d = pd.DataFrame({dblabel:cell},index=gene)
-            g= pd.DataFrame(index=self.unique_genes)
-            data = pd.concat([g,d],join='outer',axis=1).fillna(0)
-            return data.values.astype('int16')
+        def get_counts(cell_i):
+            cluster,dblabel, centroid = cell_i.Clusters.values[0], cell_i.segment.values[0],(cell_i.x.values.mean(),cell_i.y.values.mean())
+            if dblabel >= 0:
+                cell_i_g = cell_i['g']
+                '''ps = np.array([cell_i.x, cell_i.y]).T
+                M = geometry.MultiPoint(np.array([cell_i.x, cell_i.y]).T)
+                try:
+                    polygon = np.array(list(M.convex_hull.coords))
+                except:
+                    polygon = ps'''
+                gene, cell =  np.unique(cell_i_g,return_counts=True)
+                d = pd.DataFrame({dblabel:cell},index=gene)
+                g= pd.DataFrame(index=self.unique_genes)
+                data = pd.concat([g,d],join='outer',axis=1).fillna(0)
+                return data.values.astype('int64'),dblabel,centroid,0,cluster
 
         def gene_by_cell_loom():
-            print('fast activated')
 
             matrices, labels, centroids, polygons, clusters = [], [], [], [], []
-            from dask.diagnostics import ProgressBar
-            
-            mps = [x for x in range(self.dask_attrs['Clusters'].npartitions)]
-            for m in trange(0,len(mps),10):
-                print('Exctracting partitions: {}'.format(m))
-                m = mps[m:m+10]
-                d= self.dask_attrs['Clusters'].partitions[m]
 
-                with ProgressBar():
-                    result = d.groupby('segment').apply(lambda s: [s.x.values.mean(),
-                        s.y.values.mean(),
-                        s.Clusters.values[0],
-                        s.segment.values[0],
-                        s.g.values]).compute()
+            for part in trange(self.dask_attrs[label_column].npartitions):
+                #results = self.dask_attrs[label_column].groupby('segment').apply(get_counts).compute()
+                #results = self.dask_attrs[label_column].partitions[part].groupby('segment').apply(get_counts, meta=pd.Series()).compute()
+                results = self.dask_attrs[label_column].partitions[part]#.compute()
+                results = results.groupby('segment').apply(get_counts).persist()
+                for p in results:
+                    if type(p) != type(None):
+                        m, l, c, pol, cl = p
+                        if type(matrices) != type(None):
+                            matrices.append(m)
+                            labels.append(l)
+                            centroids.append(c)
+                            #polygons.append(pol)
+                            clusters.append(cl)
 
-                for r in tqdm(result):
-                    xm, ym, cl, dblabel,molecules = r
-                    if dblabel != type(None) and dblabel > -1:
-                        matrices.append(get_counts(molecules,dblabel))
-                        labels.append(dblabel)
-                        centroids.append(np.array([xm,ym]))
-                        clusters.append(cl)
-                    #print(process_memory())
 
             matrices = np.concatenate(matrices,axis=1)
             #print(matrices.shape)

@@ -277,7 +277,7 @@ class GraphUtils(object):
 
 
 class GraphPlotting:
-    def analyze(self,random_n=50000,n_clusters=100, eps=25, min_samples=18):
+    def analyze(self,random_n=50000,n_clusters=50, eps=25, min_samples=18):
         import umap
         import matplotlib.pyplot as plt
 
@@ -421,10 +421,13 @@ class GraphPlotting:
             #self.clusters= adata.obs['leiden'].values
             kmeans = MiniBatchKMeans(n_clusters=n_clusters)
             self.clusters = kmeans.fit_predict(self.latent_unlabelled.detach().numpy())
-
             molecules_id = self.g.ndata['indices']
-            # Clean Memory
-            del self.g.ndata['gene']
+            import gc
+            gc.collect()
+            try:
+                del self.g.ndata['gene']
+            except:
+                pass
             new_labels = np.zeros(self.data.shape[0]) -1
             new_labels = new_labels.astype('str')
             for i,l in zip(molecules_id, self.clusters):
@@ -457,6 +460,7 @@ class GraphPlotting:
             np.save(self.folder+'/clusters',self.clusters)
             print('Clustering done.')
             print('Generating umap embedding...')
+            gc.collect()
             
             import random
             r = lambda: random.randint(0,255)
