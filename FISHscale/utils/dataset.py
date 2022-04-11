@@ -269,6 +269,10 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         from tqdm import trange
         from shapely import geometry
         from scipy import sparse
+
+        #from dask.distributed import Client
+        #client = Client(n_workers=4,threads_per_worker=1)
+        #print(client)
         """
         Run DBscan segmentation on self.data, this will reassign a column on self.data with column_name
 
@@ -303,9 +307,9 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             from dask.diagnostics import ProgressBar
             
             mps = [x for x in range(self.dask_attrs['Clusters'].npartitions)]
-            for m in trange(0,len(mps),15):
+            for m in trange(0,len(mps),10):
                 print('Exctracting partitions: {}'.format(m))
-                m = mps[m:m+15]
+                m = mps[m:m+10]
                 d= self.dask_attrs['Clusters'].partitions[m]
 
                 with ProgressBar():
