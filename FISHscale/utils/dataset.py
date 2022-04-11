@@ -1,6 +1,7 @@
 from multiprocessing import cpu_count
 from os import path, makedirs, environ
 from re import L
+from unicodedata import name
 environ['NUMEXPR_MAX_THREADS'] = str(cpu_count())
 from typing import Union, Optional
 import pandas as pd
@@ -311,20 +312,30 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 m = mps[m:m+10]
                 d= self.dask_attrs['Clusters'].partitions[m]'''
 
+            def dump(s):
+                '''new = pd.DataFrame({
+                            'x':s.x.values.mean().astype('float32'),
+                            'y':s.y.values.mean().astype('float32'),
+                            'Clusters':s.Clusters.values[0],
+                            'segment':s.segment.values[0],
+                            'g':[s.g.values]})
+                '''
+                s.to_parquet(path.join(self.dataset_name, 
+                                        self.FISHscale_data_folder,
+                                        'attributes',
+                                        'segment',
+                                        '{}.parquet'.format(s.name)),engine='fastparquet')
+
+
             with ProgressBar():
                 makedirs(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','segment'),exist_ok=True)
                 #da.groupby(attribute_name).apply(lambda x: self._dump_to_parquet(x, self.dataset_name, self.FISHscale_data_folder+'/attributes/{}'.format(attribute_name),engine='fastparquet'))#, meta=('float64')).compute()
-                result = self.dask_attrs[label_column].groupby('segment').apply(lambda s: self._dump_to_parquet([
-                    s.x.values.mean(),
-                    s.y.values.mean(),
-                    s.Clusters.values[0],
-                    s.segment.values[0],
-                    s.g.values], 
-                    self.dataset_name, self.FISHscale_data_folder+'/attributes/{}'.format('segment'),engine='fastparquet'
-                    )
+                self.dask_attrs[label_column].groupby('segment').apply(lambda s: 
+                        dump(s)
                     ).compute()
 
             result = dd.read_parquet(path.join(self.dataset_name, self.FISHscale_data_folder+'/attributes/{}'.format('segment'), '*.parquet'))
+            result = result.map_partitions(lambda s: [s.x.mean(),s.y.mean(), s.Clusters.values[0], s.segment.values[0], s.g.values]).persist()
             for r in tqdm(result):
                 xm, ym, cl, dblabel,molecules = r
                 if dblabel != type(None) and dblabel > -1:
