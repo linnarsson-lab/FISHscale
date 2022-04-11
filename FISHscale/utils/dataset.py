@@ -345,7 +345,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                     clusters.append(cl)
                 #print(process_memory())
 
-            matrices = np.concatenate(matrices,axis=1)
+            matrices = np.concatenate(matrices,axis=1,dtype=np.int16)
             print('Shape of gene X cell matrix: {}'.format(matrices.shape))
             if type(save_to) == type(None):
                 file = path.join(self.dataset_folder,self.filename.split('.')[0]+'_cells.loom')
