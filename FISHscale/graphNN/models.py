@@ -288,53 +288,6 @@ class SAGELightning(LightningModule):
 
     def validation_step(self,batch, batch_idx):
         pass
-        '''if self. inference_type == 'VI':
-            loss = self.svi.step(batch)
-            self.log('train_loss',loss, prog_bar=True)
-
-        else:
-            self.reference = self.reference.to(self.device)
-            _, pos, neg, mfgs = batch
-            pos_ids = pos.edges()[0]
-            x = mfgs[1].dstdata['ngh']
-            x= x[pos_ids,:]
-            mfgs = [mfg.int() for mfg in mfgs]
-            batch_inputs = mfgs[0].srcdata['gene']
-            zn_loc, _ = self.module.encoder(batch_inputs,mfgs)
-            zn_loc = th.exp(zn_loc)
-            graph_loss = self.loss_fcn(zn_loc, pos, neg).mean()
-
-            if self.supervised:
-                zm_loc, _, zl_loc, _ = self.module.encoder_molecule(x)
-                zn_loc = zn_loc[pos_ids,:]
-                zm_loc = zm_loc[pos_ids,:]
-                zl_loc =  zl_loc[pos_ids,:]
-
-                z = zm_loc#*zm_loc
-                px_scale,px_r, px_dropout = self.module.decoder(z)
-                px_scale = px_scale @ self.reference.T
-                px_rate = th.exp(zl_loc) * (px_scale*zn_loc) * self.module.alpha_gene.softmax(dim=-1) +1e-6
-
-                alpha = 1/(th.exp(px_r)) +1e-6
-                rate = alpha/px_rate
-                NB = GammaPoisson(concentration=alpha,rate=rate)#.log_prob(local_nghs).mean(axis=-1).mean()
-                nb_loss = -NB.log_prob(x).mean(axis=-1).mean()
-            
-                # Regularize by local nodes
-                # Add Predicted same class nodes together.
-                if type(self.dist) != type(None):
-                    #option 2
-                    p = th.ones(px_scale.shape[0]) @ px_scale
-                    p = th.log(p/p.sum())
-                    loss_dist = self.kl(p,self.dist.to(self.device)).sum()
-                else:
-                    loss_dist = 0
-
-                loss = nb_loss + loss_dist #+ graph_loss
-
-            else:
-                loss = graph_loss
-        return loss'''
 
 class PyroOptWrap(pyro.infer.SVI):
     def __init__(self, *args, **kwargs):
