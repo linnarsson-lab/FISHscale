@@ -452,18 +452,22 @@ class SAGE(nn.Module):
             buffer_device = device
         for l, layer in enumerate(self.encoder.encoder_dict['GS']):
             if l == self.n_layers - 1:
-                    y = th.zeros(g.num_nodes(), self.n_latent) #if not self.supervised else th.zeros(g.num_nodes(), self.n_classes)
+                    y = th.zeros(g.num_nodes(), self.n_latent)
+                    att1_list = [] #if not self.supervised else th.zeros(g.num_nodes(), self.n_classes)
             else:
                     y = th.zeros(g.num_nodes(), self.n_hidden*4)
+                    att2_list = []
                 
             for input_nodes, output_nodes, blocks in tqdm.tqdm(dataloader):
                 x = blocks[0].srcdata['h']
                 if l != self.n_layers-1:
                     h,att1 = layer(blocks[0], x,get_attention=True)
                     h= h.flatten(1)
+                    att1_list.append(att1)
                 else:
                     h = layer(blocks[0], x,get_attention=True)
                     h, att2 = h.mean(1)
+                    att2_list.append(att2)
                     
                 y[output_nodes] = h.cpu().detach()#.to(buffer_device)
             g.ndata['h'] = y

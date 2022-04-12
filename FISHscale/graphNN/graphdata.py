@@ -400,5 +400,25 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
             np.save(self.folder+'/labels',self.prediction_unlabelled)
             np.save(self.folder+'/probabilities',prediction_unlabelled)
 
-    def get_attention(self):
-        pass
+    def get_latents_and_attention(self):
+        """
+        get_latents: get the new embedding for each molecule
+        
+        Passes the validation data through the model to generatehe neighborhood 
+        embedding. If the model is in supervised version, the model will also
+        output the predicted cell type.
+
+        Args:
+            labelled (bool, optional): [description]. Defaults to True.
+        """        
+        self.model.eval()
+        self.latent_unlabelled, self.attention_ngh1, self.attention_ngh2 = self.model.module.inference(self.g,
+                        self.model.device,
+                        10*512,
+                        0)#.detach().numpy()
+
+        np.save(self.folder+'/latent',self.latent_unlabelled)
+        np.save(self.folder+'/attention_ngh1', self.attention_ngh1)
+        np.save(self.folder+'/attention_ngh1',self.attention_ngh2)
+
+
