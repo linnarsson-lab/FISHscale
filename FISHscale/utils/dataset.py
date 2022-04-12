@@ -304,7 +304,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             print('fast activated')
             matrices, labels, centroids, polygons, clusters = [], [], [], [], []
 
-            d = dd.read_parquet(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','Clusters','*.parquet'))
+            d = dd.read_parquet(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','Clusters2','*.parquet'))
             try:
                 shutil.rmtree(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','segment'))
             except:
@@ -359,11 +359,11 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         name_function = lambda x: f"{x}.parquet"
         
         try:
-            shutil.rmtree(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','Clusters'))
+            shutil.rmtree(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','Clusters2'))
         except:
-            makedirs(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','Clusters'),exist_ok=True)
+            makedirs(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','Clusters2'),exist_ok=True)
         self.dask_attrs[label_column].to_parquet(path.join(self.dataset_folder, 
-            self.FISHscale_data_folder, 'attributes','Clusters'),
+            self.FISHscale_data_folder, 'attributes','Clusters2'),
             name_function=name_function,
             engine='fastparquet')
         print('DBscan results added to dask attributes. Generating gene by cell matrix as loom file.')
