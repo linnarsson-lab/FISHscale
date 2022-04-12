@@ -412,7 +412,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
             labelled (bool, optional): [description]. Defaults to True.
         """        
         self.model.eval()
-        self.latent_unlabelled, self.attention_ngh1, self.attention_ngh2 = self.model.module.inference(self.g,
+        self.latent_unlabelled, self.attention_ngh1, self.attention_ngh2 = self.model.module.inference_attention(self.g,
                         self.model.device,
                         10*512,
                         0)#.detach().numpy()

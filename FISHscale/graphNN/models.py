@@ -386,7 +386,6 @@ class SAGE(nn.Module):
             """
             Inference with the GraphSAGE model on full neighbors (i.e. without neighbor sampling).
             g : the entire graph.
-            x : the input of entire node set.
             The inference code is written in a fashion that it could handle any number of nodes and
             layers.
             """
@@ -453,10 +452,10 @@ class SAGE(nn.Module):
         for l, layer in enumerate(self.encoder.encoder_dict['GS']):
             if l == self.n_layers - 1:
                     y = th.zeros(g.num_nodes(), self.n_latent)
-                    att1_list = [] #if not self.supervised else th.zeros(g.num_nodes(), self.n_classes)
+                    att2_list = [] #if not self.supervised else th.zeros(g.num_nodes(), self.n_classes)
             else:
                     y = th.zeros(g.num_nodes(), self.n_hidden*4)
-                    att2_list = []
+                    att1_list = []
                 
             for input_nodes, output_nodes, blocks in tqdm.tqdm(dataloader):
                 x = blocks[0].srcdata['h']
@@ -465,10 +464,10 @@ class SAGE(nn.Module):
                     h= h.flatten(1)
                     att1_list.append(att1)
                 else:
-                    h = layer(blocks[0], x,get_attention=True)
-                    h, att2 = h.mean(1)
-                    att2_list.append(att2)
-                    
+                    h, att2 = layer(blocks[0], x,get_attention=True)
+                    h = h.mean(1)
+                    h = self.encoder.gs_mu(h)
+                    att2_list.append(att2)    
                 y[output_nodes] = h.cpu().detach()#.to(buffer_device)
             g.ndata['h'] = y
         return y
