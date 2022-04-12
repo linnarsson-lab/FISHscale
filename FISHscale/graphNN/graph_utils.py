@@ -537,6 +537,19 @@ class GraphPlotting:
             '''except:
                 print('Could not generate html file')'''
 
+    def plot_networkx(self):
+        e = self.g.edges()
+        e0 = e[0].numpy()
+        e1 = e[1].numpy()
+
+        gene_ = self.g.ndata['gene'].numpy()
+        result = np.where(gene_==1)
+        dic_ = dict(zip(result[0],result[1]))
+
+        e0_ = np.array([dic_[e] for e in e0])
+        e1_ = np.array([dic_[e] for e in e1])
+        edges = np.array([e0_,e1_]) 
+
 
 class NegativeSampler(object):
     def __init__(self, g, k, neg_share=False):

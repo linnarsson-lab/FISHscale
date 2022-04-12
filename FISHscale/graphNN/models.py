@@ -470,8 +470,7 @@ class SAGE(nn.Module):
                     att2_list.append(att2)    
                 y[output_nodes] = h.cpu().detach()#.to(buffer_device)
             g.ndata['h'] = y
-        return y, th.concat(att1_list),th.concat(att2_list)
-
+        return y, th.concat(att1_list).cpu().detach(),th.concat(att2_list).cpu().detach()
 
 class Encoder(nn.Module):
     def __init__(
