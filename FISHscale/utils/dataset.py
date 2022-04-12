@@ -268,12 +268,11 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                     ):
                     
         from tqdm import trange
-        from shapely import geometry
         from scipy import sparse
-
-        #from dask.distributed import Client
-        #client = Client(n_workers=4,threads_per_worker=1)
-        #print(client)
+        import os
+        from dask.diagnostics import ProgressBar
+        from dask import dataframe as dd
+        import shutil
         """
         Run DBscan segmentation on self.data, this will reassign a column on self.data with column_name
 
@@ -305,13 +304,9 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             print('fast activated')
             matrices, labels, centroids, polygons, clusters = [], [], [], [], []
 
-
-            from dask.diagnostics import ProgressBar
-            from dask import dataframe as dd
-
-            d = dd.read_parquet(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','Clusters2','*.parquet'))
+            d = dd.read_parquet(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','Clusters','*.parquet'))
             try:
-                os.rmdir(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','segment'))
+                shutil.rmtree(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','segment'))
             except:
                 makedirs(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','segment'),exist_ok=True)
             with ProgressBar():
@@ -362,13 +357,13 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         print('Number of cells found: {}'.format(count))
         self.dask_attrs[label_column] = self.dask_attrs[label_column].merge(pd.DataFrame(result,index=idx,columns=['segment']))
         name_function = lambda x: f"{x}.parquet"
-        import os
+        
         try:
-            os.rmdir(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','Clusters2'))
+            shutil.rmtree(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','Clusters'))
         except:
-            makedirs(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','Clusters2'),exist_ok=True)
+            makedirs(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','Clusters'),exist_ok=True)
         self.dask_attrs[label_column].to_parquet(path.join(self.dataset_folder, 
-            self.FISHscale_data_folder, 'attributes','Clusters2'),
+            self.FISHscale_data_folder, 'attributes','Clusters'),
             name_function=name_function,
             engine='fastparquet')
         print('DBscan results added to dask attributes. Generating gene by cell matrix as loom file.')
