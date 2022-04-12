@@ -302,21 +302,13 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             print('fast activated')
             matrices, labels, centroids, polygons, clusters = [], [], [], [], []
 
-            d = dd.read_parquet(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','Clusters2'))
-            try:
-                shutil.rmtree(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','segment'))
-            except:
-                makedirs(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','segment'),exist_ok=True)
-            
-            with ProgressBar():
-                d.to_parquet(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','segment'),engine='fastparquet')
-
-            result = dd.read_parquet(path.join(self.dataset_name, self.FISHscale_data_folder+'/attributes/{}'.format('segment'), '*.parquet'))
-            result = result.groupby('segment').apply(lambda s: [
+            result = dd.read_parquet(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','Segmentation'))
+            #result = dd.read_parquet(path.join(self.dataset_name, self.FISHscale_data_folder+'/attributes/{}'.format('segment'), '*.parquet'))
+            result = result.groupby('Segmentation').apply(lambda s: [
                 s.x.values.mean().astype('float32'),
                 s.y.values.mean().astype('float32'),
                 s.Clusters.values[0],
-                s.segment.values[0],
+                s.Segmentation.values[0],
                 [s.g.values]
                 ]).persist() #maybe change to persist if memory issues arise
 
@@ -335,7 +327,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             else:
                 file = path.join(save_to+'cells.loom')
             row_attrs = {'Gene':self.unique_genes}
-            col_attrs = {'Segmentation_label':labels, 'Centroid':centroids,label_column:clusters}# 'Polygon':polygons
+            col_attrs = {'Segmentation':labels, 'Centroid':centroids,label_column:clusters}# 'Polygon':polygons
             print('sending matrix to sparse')
             matrices = sparse.csr_matrix(matrices,dtype=np.int16)
             loompy.create(file,matrices,row_attrs,col_attrs)
@@ -343,27 +335,24 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
 
         print('Running segmentation by: {}'.format(label_column))
         try:
-            shutil.rmtree(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','Clusters2'))
+            shutil.rmtree(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','Segmentation'))
         except:
-            makedirs(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','Clusters2'),exist_ok=True)
+            makedirs(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','Segmentation'),exist_ok=True)
 
         count = 0
         for x in trange(self.dask_attrs[label_column].npartitions):
             partition = self.dask_attrs[label_column].get_partition(x)
             s = segmentation(partition)
             labels,idx = np.array([x+count if x >= 0 else x for x in s]) ,partition.index.values.compute()
-            partition = partition.merge(pd.DataFrame(labels,index=idx, columns=['segment']))
+            partition = partition.merge(pd.DataFrame(labels,index=idx, columns=['Segmentation']))
             partition.to_parquet(path.join(self.dataset_folder, 
                                                 self.FISHscale_data_folder, 
                                                 'attributes',
-                                                'Clusters2',
+                                                'Segmentation',
                                                 '{}.parquet'.format(x)),
                                                     engine='fastparquet')
 
             count += s.max() +1
-            #print(s.max()+count)
-
-
         print('Number of cells found: {}'.format(count))
         print('DBscan results added to dask attributes. Generating gene by cell matrix as loom file.')
         gene_by_cell_loom()
