@@ -307,6 +307,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 shutil.rmtree(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','segment'))
             except:
                 makedirs(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','segment'),exist_ok=True)
+            
             with ProgressBar():
                 d.to_parquet(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','segment'),engine='fastparquet')
 
