@@ -353,9 +353,6 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                                                     engine='fastparquet')
 
             count += s.max() +1
-            #print(s.max()+count)
-
-
         print('Number of cells found: {}'.format(count))
         print('DBscan results added to dask attributes. Generating gene by cell matrix as loom file.')
         gene_by_cell_loom()
