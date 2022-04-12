@@ -302,7 +302,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             print('fast activated')
             matrices, labels, centroids, polygons, clusters = [], [], [], [], []
 
-            d = dd.read_parquet(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','Clusters2','*.parquet'))
+            d = dd.read_parquet(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','Clusters2'))
             try:
                 shutil.rmtree(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','segment'))
             except:
@@ -341,29 +341,29 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             print('loompy written')
 
         print('Running segmentation by: {}'.format(label_column))
-        idx, result = [], []
-        count = 0
-        for x in trange(self.dask_attrs[label_column].npartitions):
-            partition = self.dask_attrs[label_column].partitions[x]
-            s = segmentation(partition)
-            result.append(np.array([x+count if x >= 0 else x for x in s]))
-            idx.append(partition.index.values.compute())
-            count += s.max() +1
-            #print(s.max()+count)
-        print('Concatenate')
-        result,idx = np.concatenate(result, axis=0), np.concatenate(idx)
-        print('Number of cells found: {}'.format(count))
-        self.dask_attrs[label_column] = self.dask_attrs[label_column].merge(pd.DataFrame(result,index=idx,columns=['segment']))
-        name_function = lambda x: f"{x}.parquet"
-        
         try:
             shutil.rmtree(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','Clusters2'))
         except:
             makedirs(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','Clusters2'),exist_ok=True)
-        self.dask_attrs[label_column].to_parquet(path.join(self.dataset_folder, 
-            self.FISHscale_data_folder, 'attributes','Clusters2'),
-            name_function=name_function,
-            engine='fastparquet')
+
+        count = 0
+        for x in trange(self.dask_attrs[label_column].npartitions):
+            partition = self.dask_attrs[label_column].get_partition(x)
+            s = segmentation(partition)
+            labels,idx = np.array([x+count if x >= 0 else x for x in s]) ,partition.index.values.compute()
+            partition = partition.merge(pd.DataFrame(labels,index=idx, columns=['segment']))
+            partition.to_parquet(path.join(self.dataset_folder, 
+                                                self.FISHscale_data_folder, 
+                                                'attributes',
+                                                'Clusters2',
+                                                '{}.parquet'.format(x)),
+                                                    engine='fastparquet')
+
+            count += s.max() +1
+            #print(s.max()+count)
+
+
+        print('Number of cells found: {}'.format(count))
         print('DBscan results added to dask attributes. Generating gene by cell matrix as loom file.')
         gene_by_cell_loom()
 
