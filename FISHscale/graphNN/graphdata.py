@@ -187,7 +187,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
         if self.model.supervised == False:
             del self.g.ndata['ngh']
 
-
+        #self.g.ndata['gene'] = th.log(1+self.g.ndata['gene'])
         self.model.to(self.device)
 
     def prepare_data(self):
@@ -390,7 +390,6 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
         """        
         self.model.eval()
         self.latent_unlabelled, prediction_unlabelled = self.model.module.inference(self.g,
-                        self.g.ndata['gene'],
                         self.model.device,
                         10*512,
                         0)#.detach().numpy()
@@ -400,3 +399,6 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
             self.prediction_unlabelled = prediction_unlabelled.softmax(dim=-1).detach().numpy()
             np.save(self.folder+'/labels',self.prediction_unlabelled)
             np.save(self.folder+'/probabilities',prediction_unlabelled)
+
+    def get_attention(self):
+        pass

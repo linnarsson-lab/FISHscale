@@ -1,3 +1,4 @@
+from matplotlib.pyplot import get
 import torchmetrics
 import dgl
 import torch as th
@@ -194,8 +195,6 @@ class SAGELightning(LightningModule):
             self.reference = self.reference.to(self.device)
             _, pos, neg, mfgs = batch
             pos_ids = pos.edges()[0]
-            #x = mfgs[1].dstdata['ngh']
-            #x= x[pos_ids,:]
             mfgs = [mfg.int() for mfg in mfgs]
             batch_inputs = mfgs[0].srcdata['gene']
             zn_loc, _ = self.module.encoder(batch_inputs,mfgs)
@@ -383,7 +382,7 @@ class SAGE(nn.Module):
                                 n_classes= n_classes,
                         )
 
-    def inference(self, g, x,device, batch_size, num_workers):
+    def inference(self, g,device, batch_size, num_workers):
             """
             Inference with the GraphSAGE model on full neighbors (i.e. without neighbor sampling).
             g : the entire graph.
@@ -391,12 +390,15 @@ class SAGE(nn.Module):
             The inference code is written in a fashion that it could handle any number of nodes and
             layers.
             """
-            # During inference with sampling, multi-layer blocks are very inefficient because
-            # lots of computations in the first few layers are repeated.
-            # Therefore, we compute the representation of all nodes layer by layer.  The nodes
-            # on each layer are of course splitted in batches.
-            # TODO: can we standardize this?
             self.eval()
+
+            g.ndata['h'] = th.log(g.ndata['gene']+1)
+            sampler = dgl.dataloading.MultiLayerFullNeighborSampler(1, prefetch_node_feats=['h'])
+            dataloader = dgl.dataloading.NodeDataLoader(
+                    g, th.arange(g.num_nodes()).to(g.device), sampler, device=device,
+                    batch_size=batch_size, shuffle=False, drop_last=False, num_workers=num_workers,
+                    persistent_workers=(num_workers > 0))
+            
             for l, layer in enumerate(self.encoder.encoder_dict['GS']):
                 if l == self.n_layers - 1:
                     y = th.zeros(g.num_nodes(), self.n_latent) #if not self.supervised else th.zeros(g.num_nodes(), self.n_classes)
@@ -411,37 +413,16 @@ class SAGE(nn.Module):
                 else:
                     p_class = None
 
-                sampler = dgl.dataloading.MultiLayerFullNeighborSampler(1)
-                dataloader = dgl.dataloading.NodeDataLoader(
-                    g,
-                    th.arange(g.num_nodes()),#.to(g.device),
-                    sampler,
-                    batch_size=batch_size,
-                    shuffle=False,
-                    drop_last=False,
-                    device=device,
-                    num_workers=num_workers)
-
                 for input_nodes, output_nodes, blocks in tqdm.tqdm(dataloader):
-                    block = blocks[0]#.srcdata['gene']
-                    block = block.int()
-                    if l == 0:
-                        h = th.log(x[input_nodes]+1).to(device)
-                        #print('h',h.device)
-                        #print(block.device)
+                    x = blocks[0].srcdata['h']
+                    if l != self.n_layers-1:
+                        h = layer(blocks[0], x)
+                        if self.aggregator == 'attentional':
+                            h= h.flatten(1)
                     else:
-                        h = x[input_nodes].to(device)
-
-                    if self.aggregator != 'attentional':
-                        h = layer(block, h,)
-                    else:
-                        if l != self.n_layers-1:
-                            h = layer(block, h,).flatten(1)
-                        else:
-                            h = layer(block, h,).mean(1)
-                        #h = self.encoder.encoder_dict['FC'][l](h)
-
-                    if l == self.n_layers -1:
+                        h = layer(blocks[0], x)
+                        if self.aggregator == 'attentional':
+                            h = h.mean(1)
                         h = self.encoder.gs_mu(h)
                         if self.supervised:
                             n = blocks[-1].dstdata['ngh']
@@ -453,10 +434,41 @@ class SAGE(nn.Module):
                             #px_scale = px_scale.softmax(dim=-1)
                             p_class[output_nodes] = px_scale.cpu().detach()
 
-                    #    h = self.mean_encoder(h)#, th.exp(self.var_encoder(h))+1e-4 )
                     y[output_nodes] = h.cpu().detach()#.numpy()
-                x = y
+                g.ndata['h'] = y
             return y, p_class
+
+    def inference_attention(self, g, device, batch_size, num_workers, buffer_device=None):
+        # The difference between this inference function and the one in the official
+        # example is that the intermediate results can also benefit from prefetching.
+        g.ndata['h'] = th.log(g.ndata['gene']+1)
+        sampler = dgl.dataloading.MultiLayerFullNeighborSampler(1, prefetch_node_feats=['h'])
+        dataloader = dgl.dataloading.NodeDataLoader(
+                g, th.arange(g.num_nodes()).to(g.device), sampler, device=device,
+                batch_size=batch_size, shuffle=False, drop_last=False, num_workers=num_workers,
+                persistent_workers=(num_workers > 0))
+        
+        if buffer_device is None:
+            buffer_device = device
+        for l, layer in enumerate(self.encoder.encoder_dict['GS']):
+            if l == self.n_layers - 1:
+                    y = th.zeros(g.num_nodes(), self.n_latent) #if not self.supervised else th.zeros(g.num_nodes(), self.n_classes)
+            else:
+                    y = th.zeros(g.num_nodes(), self.n_hidden*4)
+                
+            for input_nodes, output_nodes, blocks in tqdm.tqdm(dataloader):
+                x = blocks[0].srcdata['h']
+                if l != self.n_layers-1:
+                    h,att1 = layer(blocks[0], x,get_attention=True)
+                    h= h.flatten(1)
+                else:
+                    h = layer(blocks[0], x,get_attention=True)
+                    h, att2 = h.mean(1)
+                    
+                y[output_nodes] = h.cpu().detach()#.to(buffer_device)
+            g.ndata['h'] = y
+        return y
+
 
 class Encoder(nn.Module):
     def __init__(
@@ -523,8 +535,8 @@ class Encoder(nn.Module):
         self.gs_mu = nn.Linear(n_hidden, n_latent)
         self.gs_var = nn.Linear(n_hidden, n_latent)
     
-    def forward(self,x, blocks=None):
-        h = th.log(x+1)   
+    def forward(self, x, blocks=None): 
+        h = th.log(x+1)
         for l, (layer, block) in enumerate(zip(self.encoder_dict['GS'], blocks)):
             if self.aggregator != 'attentional':
                 h = layer(block, h,)
