@@ -317,7 +317,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 s.Clusters.values[0],
                 s.segment.values[0],
                 [s.g.values]
-                ]).compute() #maybe change to persist if memory issues arise
+                ]).persist() #maybe change to persist if memory issues arise
 
             for r in tqdm(result):
                 xm, ym, cl, dblabel,molecules = r
