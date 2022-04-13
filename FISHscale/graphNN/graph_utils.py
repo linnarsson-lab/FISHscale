@@ -12,6 +12,7 @@ import dgl
 from tqdm import tqdm
 from sklearn.mixture import GaussianMixture
 import loompy
+from os import path
 
 class GraphUtils(object):
 
@@ -318,7 +319,7 @@ class GraphPlotting:
             ax = fig.add_subplot(1, 1, 1)
             ax.set_facecolor("black")
             width_cutoff = 1640 # um
-            #plt.scatter(DS.df.x.values.compute()[GD.cells], DS.df.y.values.compute()[GD.cells], c=th.argmax(pred.softmax(dim=-1),dim=-1).numpy(), s=0.2,marker='.',linewidths=0, edgecolors=None,cmap='rainbow')
+            #plt.scatter(DS.df.x.values.compute()[self.cells], DS.df.y.values.compute()[self.cells], c=th.argmax(pred.softmax(dim=-1),dim=-1).numpy(), s=0.2,marker='.',linewidths=0, edgecolors=None,cmap='rainbow')
             plt.scatter(self.data.df.x.values.compute()[molecules_id.numpy()][some], self.data.df.y.values.compute()[self.g.ndata['indices'].numpy()][some], c=Y_umap, s=0.05,marker='.',linewidths=0, edgecolors=None)
             plt.xticks(fontsize=2)
             plt.yticks(fontsize=2)
@@ -424,10 +425,10 @@ class GraphPlotting:
             molecules_id = self.g.ndata['indices']
             import gc
             gc.collect()
-            try:
+            '''try:
                 del self.g.ndata['gene']
             except:
-                pass
+                pass'''
             new_labels = np.zeros(self.data.shape[0]) -1
             new_labels = new_labels.astype('str')
             for i,l in zip(molecules_id, self.clusters):
@@ -489,7 +490,7 @@ class GraphPlotting:
             fig=plt.figure(figsize=(2,2),dpi=1000,)
             ax = fig.add_subplot(1, 1, 1)
             ax.set_facecolor("black")
-            #plt.scatter(DS.df.x.values.compute()[GD.cells], DS.df.y.values.compute()[GD.cells], c=th.argmax(pred.softmax(dim=-1),dim=-1).numpy(), s=0.2,marker='.',linewidths=0, edgecolors=None,cmap='rainbow')
+            #plt.scatter(DS.df.x.values.compute()[self.cells], DS.df.y.values.compute()[self.cells], c=th.argmax(pred.softmax(dim=-1),dim=-1).numpy(), s=0.2,marker='.',linewidths=0, edgecolors=None,cmap='rainbow')
             plt.scatter(self.data.df.x.values.compute()[molecules_id.numpy()], self.data.df.y.values.compute()[molecules_id.numpy()], c=clusters_colors, s=0.005,marker='.',linewidths=0, edgecolors=None)
             plt.xticks(fontsize=2)
             plt.yticks(fontsize=2)
@@ -538,17 +539,78 @@ class GraphPlotting:
                 print('Could not generate html file')'''
 
     def plot_networkx(self):
+        import shutil
+    
         e = self.g.edges()
         e0 = e[0].numpy()
         e1 = e[1].numpy()
 
         gene_ = self.g.ndata['gene'].numpy()
         result = np.where(gene_==1)
-        dic_ = dict(zip(result[0],result[1]))
+        rg = [self.data.unique_genes[r] for r in result[1]]
+        dic_ = dict(zip(result[0],rg))
 
-        e0_ = np.array([dic_[e] for e in e0])
-        e1_ = np.array([dic_[e] for e in e1])
-        edges = np.array([e0_,e1_]) 
+        if os.path.exists(path.join(self.folder,'attention')):
+            shutil.rmtree(path.join(self.folder,'attention'))
+            os.mkdir(path.join(self.folder,'attention'))
+        else:
+             os.mkdir(path.join(self.folder,'attention'))
+
+        for c in tqdm(np.unique(self.clusters)):
+            self.plot_cluster(c,e0,e1,dic_,self.attention_ngh1,'NGH1')
+            self.plot_cluster(c,e0,e1,dic_,self.attention_ngh2, 'NGH2')
+
+
+    def plot_cluster(self,cluster, e0,e1,dic_,attention,name):
+        import networkx as nx
+        import matplotlib.pyplot as plt
+        from matplotlib import cm
+        nodes_cluster_i = self.g.nodes()[self.clusters == cluster]
+        weights_adges_ngh1 = attention[np.isin(e0,nodes_cluster_i) & np.isin(e1,nodes_cluster_i)]
+        e0_cluster = e0[np.isin(e0,nodes_cluster_i) & np.isin(e1,nodes_cluster_i)]
+        e1_cluster = e1[np.isin(e0,nodes_cluster_i) & np.isin(e1,nodes_cluster_i)]
+
+        e0_cluster_genes = np.array([dic_[e] for e in e0_cluster])
+        e1_cluster_genes = np.array([dic_[e] for e in e1_cluster])
+        edges = np.array([e0_cluster_genes,e1_cluster_genes])
+
+        G_cluster_att1 = nx.Graph()
+        dic= {}
+        for e, weight in zip(edges.T, weights_adges_ngh1[:,:,0].mean(axis=1)):
+            e = tuple(sorted(e))
+            if e not in dic:
+                dic[e] = weight
+            else:
+                dic[e] += weight
+        for e in dic: 
+            l =  tuple([x for x in e]+[dic[e]])
+            G_cluster_att1.add_weighted_edges_from([l])
+            
+        # function to rescale list of values to range [newmin,newmax]
+        def rescale(l,newmin,newmax):
+            arr = list(l)
+            return [(x-min(arr))/(max(arr)-min(arr))*(newmax-newmin)+newmin for x in arr]
+        # use the matplotlib plasma colormap
+        graph_colormap = cm.get_cmap('plasma', 12)
+        # node color varies with Degree
+        c = rescale([G_cluster_att1.degree(v) for v in G_cluster_att1],0.0,0.9) 
+        c = [graph_colormap(i) for i in c]
+        # node size varies with betweeness centrality - map to range [10,100] 
+        bc = nx.betweenness_centrality(G_cluster_att1) # betweeness centrality
+        s =  rescale([v for v in bc.values()],1500,7000)
+
+        # edge width shows 1-weight to convert cost back to strength of interaction 
+        ew = rescale([float(G_cluster_att1[u][v]['weight']) for u,v in G_cluster_att1.edges],0.1,4)
+        # edge color also shows weight
+        ec = rescale([float(G_cluster_att1[u][v]['weight']) for u,v in G_cluster_att1.edges],0.1,1)
+        ec = [graph_colormap(i) for i in ec]
+
+        T = nx.minimum_spanning_tree(G_cluster_att1,)
+        pos = nx.spring_layout(T)
+        plt.figure(figsize=(19,9),facecolor=[0.7,0.7,0.7,0.4])
+        nx.draw_networkx(T, pos=pos, with_labels=True,node_color=c, node_size=s,edge_color= ec,width=ew,
+                        font_color='white',font_weight='bold',font_size='9')
+        plt.savefig('{}/attention/Attention_{}_{}'.format(self.folder,name,cluster))
 
 
 class NegativeSampler(object):

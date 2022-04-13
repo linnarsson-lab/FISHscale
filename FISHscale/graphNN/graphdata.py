@@ -418,7 +418,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
                         0)#.detach().numpy()
 
         np.save(self.folder+'/latent',self.latent_unlabelled)
-        np.save(self.folder+'/attention_ngh1', self.attention_ngh1)
-        np.save(self.folder+'/attention_ngh1',self.attention_ngh2)
+        #np.save(self.folder+'/attention_ngh1', self.attention_ngh1)
+        #np.save(self.folder+'/attention_ngh1',self.attention_ngh2)
 
 

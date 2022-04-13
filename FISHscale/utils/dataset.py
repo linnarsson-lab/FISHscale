@@ -339,6 +339,12 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         except:
             makedirs(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','Segmentation'),exist_ok=True)
 
+        if path.exists(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','Segmentation')):
+            shutil.rmtree(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','Segmentation'))
+            makedirs(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','Segmentation'))
+        else:
+            makedirs(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','Segmentation'))
+
         count = 0
         for x in trange(self.dask_attrs[label_column].npartitions):
             partition = self.dask_attrs[label_column].get_partition(x)
