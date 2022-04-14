@@ -301,7 +301,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             print('fast activated')
             matrices, labels, centroids, polygons, clusters = [], [], [], [], []
 
-            result = dd.read_parquet(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','Segmentation'))
+            result = dd.read_parquet(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','Segmentation','*.parquet'))
             #result = dd.read_parquet(path.join(self.dataset_name, self.FISHscale_data_folder+'/attributes/{}'.format('segment'), '*.parquet'))
             result = result.groupby('Segmentation').apply(lambda s: [
                 s.x.values.mean().astype('float32'),
@@ -348,7 +348,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                                                     index=idx, 
                                                     columns=['Segmentation'])
                                                     )
-            partition.to_parquet(path.join(self.dataset_folder, 
+            partition.compute().to_parquet(path.join(self.dataset_folder, 
                                                 self.FISHscale_data_folder, 
                                                 'attributes',
                                                 'Segmentation',
