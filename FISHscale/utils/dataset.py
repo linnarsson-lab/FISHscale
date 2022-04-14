@@ -334,11 +334,6 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             print('loompy written')
 
         print('Running segmentation by: {}'.format(label_column))
-        try:
-            shutil.rmtree(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','Segmentation'))
-        except:
-            makedirs(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','Segmentation'),exist_ok=True)
-
         if path.exists(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','Segmentation')):
             shutil.rmtree(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','Segmentation'))
             makedirs(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','Segmentation'))
@@ -350,13 +345,18 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             partition = self.dask_attrs[label_column].get_partition(x)
             s = segmentation(partition)
             labels,idx = np.array([x+count if x >= 0 else x for x in s]) ,partition.index.values.compute()
-            partition = partition.merge(pd.DataFrame(labels,index=idx, columns=['Segmentation']))
+            partition = partition.merge(pd.DataFrame(labels,
+                                                    index=idx, 
+                                                    columns=['Segmentation'])
+                                                    )
             partition.to_parquet(path.join(self.dataset_folder, 
                                                 self.FISHscale_data_folder, 
                                                 'attributes',
                                                 'Segmentation',
-                                                '{}.parquet'.format(x)),
-                                                    engine='fastparquet')
+                                                '{}.parquet'.format(x)
+                                                ),
+                                            engine='fastparquet'
+                                            )
 
             count += s.max() +1
         print('Number of cells found: {}'.format(count))
