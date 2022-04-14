@@ -23,7 +23,6 @@ from FISHscale.segmentation.cellpose import Cellpose
 from FISHscale.utils.regionalization_gradient import Regionalization_Gradient, Regionalization_Gradient_Multi
 import sys
 from datetime import datetime
-from sklearn.cluster import DBSCAN
 import pandas as pd
 from tqdm import tqdm
 from collections import Counter
