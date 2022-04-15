@@ -341,15 +341,9 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             file = path.join(save_to+'cells.loom')
         row_attrs = {'Gene':self.unique_genes}
         col_attrs = {'Segmentation':labels_list, 'Centroid':centroids,label_column:clusters, 'Polygons':polygons}# 'Polygon':polygons
-        print('sending matrix to sparse')
         matrices = sparse.csr_matrix(matrices,dtype=np.int16)
         loompy.create(file,matrices,row_attrs,col_attrs)
-        print('loompy written')
-
-
-        print('Number of cells found: {}'.format(count))
-        print('DBscan results added to dask attributes. Generating gene by cell matrix as loom file.')
-
+        print('Number of cells found: {}. Loompy written.'.format(count))
 
 
 class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base, Normalization, RegionalizeMulti,
