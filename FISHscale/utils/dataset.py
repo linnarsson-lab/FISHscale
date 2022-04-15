@@ -297,41 +297,6 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             data = pd.concat([g,d],join='outer',axis=1).fillna(0)
             return data.values.astype('int16')
 
-        def gene_by_cell_loom():
-            print('fast activated')
-            matrices, labels, centroids, polygons, clusters = [], [], [], [], []
-
-            result = dd.read_parquet(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','Segmentation','*.parquet'))
-            #result = dd.read_parquet(path.join(self.dataset_name, self.FISHscale_data_folder+'/attributes/{}'.format('segment'), '*.parquet'))
-            result = result.groupby('Segmentation').apply(lambda s: [
-                s.x.values.mean().astype('float32'),
-                s.y.values.mean().astype('float32'),
-                s.Clusters.values[0],
-                s.Segmentation.values[0],
-                [s.g.values]
-                ]).compute() #maybe change to persist if memory issues arise
-
-            for r in tqdm(result):
-                xm, ym, cl, dblabel,molecules = r
-                if dblabel != type(None) and dblabel > -1:
-                    matrices.append(get_counts(molecules,dblabel))
-                    labels.append(dblabel)
-                    centroids.append(np.array([xm,ym]))
-                    clusters.append(cl)
-
-            matrices = np.concatenate(matrices,axis=1)
-            print('Shape of gene X cell matrix: {}'.format(matrices.shape))
-            if type(save_to) == type(None):
-                file = path.join(self.dataset_folder,self.filename.split('.')[0]+'_cells.loom')
-            else:
-                file = path.join(save_to+'cells.loom')
-            row_attrs = {'Gene':self.unique_genes}
-            col_attrs = {'Segmentation':labels, 'Centroid':centroids,label_column:clusters}# 'Polygon':polygons
-            print('sending matrix to sparse')
-            matrices = sparse.csr_matrix(matrices,dtype=np.int16)
-            loompy.create(file,matrices,row_attrs,col_attrs)
-            print('loompy written')
-
         print('Running segmentation by: {}'.format(label_column))
         if path.exists(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','Segmentation')):
             shutil.rmtree(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','Segmentation'))
@@ -340,6 +305,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             makedirs(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','Segmentation'))
 
         count = 0
+        matrices, labels, centroids, polygons, clusters = [], [], [], [], []
         for x in trange(self.dask_attrs[label_column].npartitions - 1):
             partition = self.dask_attrs[label_column].get_partition(x)
             s = segmentation(partition)
@@ -348,19 +314,39 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                                                     index=idx, 
                                                     columns=['Segmentation'])
                                                     ).compute()
-            partition.to_parquet(path.join(self.dataset_folder, 
-                                                self.FISHscale_data_folder, 
-                                                'attributes',
-                                                'Segmentation',
-                                                '{}.parquet'.format(x)
-                                                ),
-                                            engine='fastparquet'
-                                            )
-
             count += s.max() +1
+
+            partition = partition.groupby('Segmentation')
+            for part in tqdm(partition):
+                if s[0] != type(None) and s[0] > -1:
+                    s = part[1]
+                    centroid = s.x.values.mean().astype('float32'),s.y.values.mean().astype('float32'),
+                    cl= s.Clusters.values[0],
+                    dblabel = s.Segmentation.values[0],
+                    mat = get_counts(s.g.values,dblabel)
+
+                    matrices.append(mat)
+                    labels.append(dblabel)
+                    centroids.append(np.array(centroid))
+                    clusters.append(cl)
+        
+        matrices = np.concatenate(matrices,axis=1)
+        print('Shape of gene X cell matrix: {}'.format(matrices.shape))
+        if type(save_to) == type(None):
+            file = path.join(self.dataset_folder,self.filename.split('.')[0]+'_cells.loom')
+        else:
+            file = path.join(save_to+'cells.loom')
+        row_attrs = {'Gene':self.unique_genes}
+        col_attrs = {'Segmentation':labels, 'Centroid':centroids,label_column:clusters}# 'Polygon':polygons
+        print('sending matrix to sparse')
+        matrices = sparse.csr_matrix(matrices,dtype=np.int16)
+        loompy.create(file,matrices,row_attrs,col_attrs)
+        print('loompy written')
+
+
         print('Number of cells found: {}'.format(count))
         print('DBscan results added to dask attributes. Generating gene by cell matrix as loom file.')
-        gene_by_cell_loom()
+
 
 
 class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base, Normalization, RegionalizeMulti,
