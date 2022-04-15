@@ -340,7 +340,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             makedirs(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','Segmentation'))
 
         count = 0
-        for x in trange(self.dask_attrs[label_column].npartitions):
+        for x in trange(self.dask_attrs[label_column].npartitions - 1):
             partition = self.dask_attrs[label_column].get_partition(x)
             s = segmentation(partition)
             labels,idx = np.array([x+count if x >= 0 else x for x in s]) ,partition.index.values.compute()
