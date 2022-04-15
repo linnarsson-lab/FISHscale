@@ -270,6 +270,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         from dask.diagnostics import ProgressBar
         from dask import dataframe as dd
         import shutil
+        from shapely import geometry
         """
         Run DBscan segmentation on self.data, this will reassign a column on self.data with column_name
 
@@ -324,12 +325,14 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                     cl= cell.Clusters.values[0],
                     dblabel = cell.Segmentation.values[0],
                     mat = get_counts(cell.g.values,dblabel)
-
+                    pol = np.array(list(geometry.Polygon(geometry.MultiPoint(np.array([cell.x.values,cell.y.values]).T).convex_hull).exterior.coords))
+                    polygons.append(pol)
                     matrices.append(mat)
                     labels_list.append(dblabel)
                     centroids.append(np.array(centroid))
                     clusters.append(cl)
-        
+
+        print(clusters)
         matrices = np.concatenate(matrices,axis=1)
         print('Shape of gene X cell matrix: {}'.format(matrices.shape))
         if type(save_to) == type(None):
@@ -337,7 +340,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         else:
             file = path.join(save_to+'cells.loom')
         row_attrs = {'Gene':self.unique_genes}
-        col_attrs = {'Segmentation':labels_list, 'Centroid':centroids,label_column:clusters}# 'Polygon':polygons
+        col_attrs = {'Segmentation':labels_list, 'Centroid':centroids,label_column:clusters, 'Polygons':polygons}# 'Polygon':polygons
         print('sending matrix to sparse')
         matrices = sparse.csr_matrix(matrices,dtype=np.int16)
         loompy.create(file,matrices,row_attrs,col_attrs)
