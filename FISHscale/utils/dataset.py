@@ -309,7 +309,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 s.Clusters.values[0],
                 s.Segmentation.values[0],
                 [s.g.values]
-                ]).persist() #maybe change to persist if memory issues arise
+                ]).compute() #maybe change to persist if memory issues arise
 
             for r in tqdm(result):
                 xm, ym, cl, dblabel,molecules = r
@@ -347,8 +347,8 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             partition = partition.merge(pd.DataFrame(labels,
                                                     index=idx, 
                                                     columns=['Segmentation'])
-                                                    )
-            partition.compute().to_parquet(path.join(self.dataset_folder, 
+                                                    ).compute()
+            partition.to_parquet(path.join(self.dataset_folder, 
                                                 self.FISHscale_data_folder, 
                                                 'attributes',
                                                 'Segmentation',
