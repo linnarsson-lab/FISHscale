@@ -322,8 +322,8 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 if part[0] != type(None) and part[0] > -1:
                     cell = part[1]
                     centroid = cell.x.values.mean().astype('float32'),cell.y.values.mean().astype('float32'),
-                    cl= cell.Clusters.values[0],
-                    dblabel = cell.Segmentation.values[0],
+                    cl= cell.Clusters.values[0]
+                    dblabel = cell.Segmentation.values[0]
                     mat = get_counts(cell.g.values,dblabel)
                     pol = np.array(list(geometry.Polygon(geometry.MultiPoint(np.array([cell.x.values,cell.y.values]).T).convex_hull).exterior.coords))
                     polygons.append(pol)
