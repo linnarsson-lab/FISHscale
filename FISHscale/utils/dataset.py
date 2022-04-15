@@ -305,7 +305,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             makedirs(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','Segmentation'))
 
         count = 0
-        matrices, labels, centroids, polygons, clusters = [], [], [], [], []
+        matrices, labels_list, centroids, polygons, clusters = [], [], [], [], []
         for x in trange(self.dask_attrs[label_column].npartitions - 1):
             partition = self.dask_attrs[label_column].get_partition(x)
             s = segmentation(partition)
@@ -317,16 +317,16 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             count += s.max() +1
 
             partition = partition.groupby('Segmentation')
-            for part in tqdm(partition):
-                if s[0] != type(None) and s[0] > -1:
-                    s = part[1]
-                    centroid = s.x.values.mean().astype('float32'),s.y.values.mean().astype('float32'),
-                    cl= s.Clusters.values[0],
-                    dblabel = s.Segmentation.values[0],
-                    mat = get_counts(s.g.values,dblabel)
+            for part in partition:
+                if part[0] != type(None) and part[0] > -1:
+                    cell = part[1]
+                    centroid = cell.x.values.mean().astype('float32'),cell.y.values.mean().astype('float32'),
+                    cl= cell.Clusters.values[0],
+                    dblabel = cell.Segmentation.values[0],
+                    mat = get_counts(cell.g.values,dblabel)
 
                     matrices.append(mat)
-                    labels.append(dblabel)
+                    labels_list.append(dblabel)
                     centroids.append(np.array(centroid))
                     clusters.append(cl)
         
@@ -337,7 +337,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         else:
             file = path.join(save_to+'cells.loom')
         row_attrs = {'Gene':self.unique_genes}
-        col_attrs = {'Segmentation':labels, 'Centroid':centroids,label_column:clusters}# 'Polygon':polygons
+        col_attrs = {'Segmentation':labels_list, 'Centroid':centroids,label_column:clusters}# 'Polygon':polygons
         print('sending matrix to sparse')
         matrices = sparse.csr_matrix(matrices,dtype=np.int16)
         loompy.create(file,matrices,row_attrs,col_attrs)
