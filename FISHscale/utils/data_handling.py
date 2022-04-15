@@ -472,7 +472,7 @@ class DataLoader(DataLoader_base):
             unique_genes_metadata = self._metadatafile_get('unique_genes')
             #Attributes
             p = path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes')
-            self.dask_attrs = {x :dd.read_parquet(path.join(p,x,'*.parquet'), )  for x in listdir(p)}
+            self.dask_attrs = {x :dd.read_parquet(dd.read_parquet([path.join(p,x) for x in listdir(path.join(p,x)) if x.endswith('.parquet')]))  for x in listdir(p)}
             
             #Check if unique_genes are given by user
             if isinstance(unique_genes, (np.ndarray, list)):
