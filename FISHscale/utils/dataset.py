@@ -320,20 +320,21 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             partition = partition.groupby('Segmentation')
             for part in partition:
                 if part[0] != type(None) and part[0] > -1:
-                    cell = part[1]
-                    centroid = cell.x.values.mean().astype('float32'),cell.y.values.mean().astype('float32'),
-                    cl= cell.Clusters.values[0]
-                    dblabel = cell.Segmentation.values[0]
                     mat = get_counts(cell.g.values,dblabel)
-                    try:
-                        pol = np.array(list(geometry.Polygon(geometry.MultiPoint(np.array([cell.x.values,cell.y.values]).T).convex_hull).exterior.coords))
-                    except:
-                        pol = np.array([cell.x.values,cell.y.values])
-                    polygons.append(pol)
-                    matrices.append(mat)
-                    labels_list.append(dblabel)
-                    centroids.append(np.array(centroid))
-                    clusters.append(cl)
+                    if mat.sum() > 10 and mat.sum() < 500 and (mat > 0).sum() > 2:
+                        cell = part[1]
+                        centroid = cell.x.values.mean().astype('float32'),cell.y.values.mean().astype('float32'),
+                        cl= cell.Clusters.values[0]
+                        dblabel = cell.Segmentation.values[0]
+                        try:
+                            pol = np.array(list(geometry.Polygon(geometry.MultiPoint(np.array([cell.x.values,cell.y.values]).T).convex_hull).exterior.coords))
+                        except:
+                            pol = np.array([cell.x.values,cell.y.values])
+                        polygons.append(pol)
+                        matrices.append(mat)
+                        labels_list.append(dblabel)
+                        centroids.append(np.array(centroid))
+                        clusters.append(cl)
 
         matrices = np.concatenate(matrices,axis=1)
         print('Shape of gene X cell matrix: {}'.format(matrices.shape))
