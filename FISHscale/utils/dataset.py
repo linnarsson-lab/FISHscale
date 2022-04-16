@@ -325,7 +325,10 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                     cl= cell.Clusters.values[0]
                     dblabel = cell.Segmentation.values[0]
                     mat = get_counts(cell.g.values,dblabel)
-                    pol = np.array(list(geometry.Polygon(geometry.MultiPoint(np.array([cell.x.values,cell.y.values]).T).convex_hull).exterior.coords))
+                    try:
+                        pol = np.array(list(geometry.Polygon(geometry.MultiPoint(np.array([cell.x.values,cell.y.values]).T).convex_hull).exterior.coords))
+                    except:
+                        pol = np.array([cell.x.values,cell.y.values])
                     polygons.append(pol)
                     matrices.append(mat)
                     labels_list.append(dblabel)
