@@ -572,7 +572,7 @@ class GraphPlotting:
 
         G_cluster_att1 = nx.Graph()
         dic= {}
-        for e, weight in zip(edges.T, weights_adges_ngh1[:,:,0].mean(axis=1)):
+        for e, weight in zip(edges.T, weights_adges_ngh1):
             e = tuple(sorted(e))
             if e not in dic:
                 dic[e] = weight
@@ -593,7 +593,7 @@ class GraphPlotting:
         c = [graph_colormap(i) for i in c]
         # node size varies with betweeness centrality - map to range [10,100] 
         bc = nx.betweenness_centrality(G_cluster_att1) # betweeness centrality
-        s =  rescale([v for v in bc.values()],1500,7000)
+        s =  rescale([v for v in bc.values()],100,1000)
 
         # edge width shows 1-weight to convert cost back to strength of interaction 
         ew = rescale([float(G_cluster_att1[u][v]['weight']) for u,v in G_cluster_att1.edges],0.1,4)
@@ -605,8 +605,8 @@ class GraphPlotting:
         pos = nx.spring_layout(T)
         plt.figure(figsize=(19,9),facecolor=[0.7,0.7,0.7,0.4])
         nx.draw_networkx(T, pos=pos, with_labels=True,node_color=c, node_size=s,edge_color= ec,width=ew,
-                        font_color='white',font_weight='bold',font_size='9')
-        plt.savefig('{}/attention/Attention_{}_{}'.format(self.folder,name,cluster))
+                        font_color='black',font_weight='bold',font_size='5')
+        plt.savefig('{}/attention/Attention_{}_{}'.format(self.folder,name,cluster),dpi=250)
 
 
 class NegativeSampler(object):

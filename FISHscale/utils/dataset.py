@@ -335,7 +335,6 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                     centroids.append(np.array(centroid))
                     clusters.append(cl)
 
-        print(clusters)
         matrices = np.concatenate(matrices,axis=1)
         print('Shape of gene X cell matrix: {}'.format(matrices.shape))
         if type(save_to) == type(None):
