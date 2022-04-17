@@ -278,7 +278,7 @@ class GraphUtils(object):
 
 
 class GraphPlotting:
-    def analyze(self,random_n=50000,n_clusters=100, eps=25, min_samples=18):
+    def analyze(self,random_n=250000,n_clusters=100, eps=25, min_samples=18):
         import umap
         import matplotlib.pyplot as plt
 

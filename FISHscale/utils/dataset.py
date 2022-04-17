@@ -326,7 +326,6 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                     if mat.sum() > 10 and mat.sum() < 500 and (mat > 0).sum() > 2: 
                         centroid = cell.x.values.mean().astype('float32'),cell.y.values.mean().astype('float32'),
                         cl= cell.Clusters.values[0]
-                    
                         try:
                             pol = np.array(list(geometry.Polygon(geometry.MultiPoint(np.array([cell.x.values,cell.y.values]).T).convex_hull).exterior.coords))
                         except:
