@@ -440,7 +440,7 @@ class GraphPlotting:
             self.data.segment('Clusters',save_to=os.path.join(self.folder),func=db)
             gc.collect()
 
-            with loompy.connect(os.path.join(self.folder,'cells.loom'),'r+') as ds:
+            with loompy.connect(os.path.join(self.folder,self.data.filename.split('.')[0]+'cells.loom'),'r+') as ds:
                 enrich = enrich_(labels_attr = ds.ca.Clusters)
                 sparse_tmp = ds.sparse().tocsr()
                 clusters_ = ds.ca['Clusters'].astype(float)
@@ -593,7 +593,7 @@ class GraphPlotting:
         c = [graph_colormap(i) for i in c]
         # node size varies with betweeness centrality - map to range [10,100] 
         bc = nx.betweenness_centrality(G_cluster_att1) # betweeness centrality
-        s =  rescale([v for v in bc.values()],100,1000)
+        s =  rescale([v for v in bc.values()],50,700)
 
         # edge width shows 1-weight to convert cost back to strength of interaction 
         ew = rescale([float(G_cluster_att1[u][v]['weight']) for u,v in G_cluster_att1.edges],0.1,4)
@@ -602,10 +602,10 @@ class GraphPlotting:
         ec = [graph_colormap(i) for i in ec]
 
         T = nx.minimum_spanning_tree(G_cluster_att1,)
-        pos = nx.spring_layout(T)
+        pos = nx.spring_layout(T, k=0.3*1/np.sqrt(len(T.nodes())), iterations=20)
         plt.figure(figsize=(19,9),facecolor=[0.7,0.7,0.7,0.4])
         nx.draw_networkx(T, pos=pos, with_labels=True,node_color=c, node_size=s,edge_color= ec,width=ew,
-                        font_color='black',font_weight='bold',font_size='5')
+                        font_color='black',font_weight='bold',font_size='4')
         plt.savefig('{}/attention/Attention_{}_{}'.format(self.folder,name,cluster),dpi=250)
 
 
