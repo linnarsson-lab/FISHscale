@@ -412,7 +412,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
             labelled (bool, optional): [description]. Defaults to True.
         """        
         self.model.eval()
-        _, self.attention_ngh1, self.attention_ngh2 = self.model.module.inference_attention(self.g,
+        self.attention_ngh1, self.attention_ngh2 = self.model.module.inference_attention(self.g,
                         self.model.device,
                         5*512,
                         0,

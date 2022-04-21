@@ -440,7 +440,7 @@ class GraphPlotting:
             self.data.segment('Clusters',save_to=os.path.join(self.folder),func=db)
             gc.collect()
 
-            with loompy.connect(os.path.join(self.folder,self.data.filename.split('.')[0]+'cells.loom'),'r+') as ds:
+            with loompy.connect(os.path.join(self.folder,self.data.filename.split('.')[0]+'_cells.loom'),'r+') as ds:
                 enrich = enrich_(labels_attr = ds.ca.Clusters)
                 sparse_tmp = ds.sparse().tocsr()
                 clusters_ = ds.ca['Clusters'].astype(float)

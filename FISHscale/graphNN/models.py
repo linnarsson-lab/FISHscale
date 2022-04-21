@@ -425,7 +425,7 @@ class SAGE(nn.Module):
                     h = self.encoder.gs_mu(h)   
                 y[output_nodes] = h.cpu().detach().to(buffer_device)
             g.ndata['h'] = y
-        return _, th.concat(att1_list), th.concat(att2_list)
+        return th.concat(att1_list), th.concat(att2_list)
 
 class Encoder(nn.Module):
     def __init__(
