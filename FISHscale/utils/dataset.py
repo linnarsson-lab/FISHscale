@@ -341,7 +341,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         if type(save_to) == type(None):
             file = path.join(self.dataset_folder,self.filename.split('.')[0]+'_cells.loom')
         else:
-            file = path.join(save_to+'cells.loom')
+            file = path.join(save_to,self.filename.split('.')[0]+'_cells.loom')
         row_attrs = {'Gene':self.unique_genes}
         col_attrs = {'Segmentation':labels_list, 'Centroid':centroids,label_column:clusters, 'Polygons':polygons}# 'Polygon':polygons
         matrices = sparse.csr_matrix(matrices,dtype=np.int16)

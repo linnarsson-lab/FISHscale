@@ -400,7 +400,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
             np.save(self.folder+'/labels',self.prediction_unlabelled)
             np.save(self.folder+'/probabilities',prediction_unlabelled)
 
-    def get_latents_and_attention(self):
+    def get_attention(self):
         """
         get_latents: get the new embedding for each molecule
         
@@ -412,13 +412,12 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
             labelled (bool, optional): [description]. Defaults to True.
         """        
         self.model.eval()
-        self.latent_unlabelled, self.attention_ngh1, self.attention_ngh2 = self.model.module.inference_attention(self.g,
+        _, self.attention_ngh1, self.attention_ngh2 = self.model.module.inference_attention(self.g,
                         self.model.device,
-                        10*512,
-                        0)#.detach().numpy()
+                        5*512,
+                        0,
+                        buffer_device=self.g.device)#.detach().numpy()
 
-        np.save(self.folder+'/latent',self.latent_unlabelled)
-        #np.save(self.folder+'/attention_ngh1', self.attention_ngh1)
-        #np.save(self.folder+'/attention_ngh1',self.attention_ngh2)
+
 
 

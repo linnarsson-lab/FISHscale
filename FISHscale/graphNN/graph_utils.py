@@ -437,10 +437,10 @@ class GraphPlotting:
             
             from sklearn.cluster import DBSCAN
             db = DBSCAN(eps=eps,min_samples=min_samples)
-            self.data.segment('Clusters',save_to=os.path.join(self.folder,'Clusters/'),func=db)
+            self.data.segment('Clusters',save_to=os.path.join(self.folder),func=db)
             gc.collect()
 
-            with loompy.connect(os.path.join(self.folder,'Clusters','cells.loom'),'r+') as ds:
+            with loompy.connect(os.path.join(self.folder,'cells.loom'),'r+') as ds:
                 enrich = enrich_(labels_attr = ds.ca.Clusters)
                 sparse_tmp = ds.sparse().tocsr()
                 clusters_ = ds.ca['Clusters'].astype(float)

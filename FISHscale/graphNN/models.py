@@ -399,32 +399,33 @@ class SAGE(nn.Module):
                 g, th.arange(g.num_nodes()).to(g.device), sampler, device=device,
                 batch_size=batch_size, shuffle=False, drop_last=False, num_workers=num_workers,
                 persistent_workers=(num_workers > 0))
-        
+
         if buffer_device is None:
             buffer_device = device
+        
         for l, layer in enumerate(self.encoder.encoder_dict['GS']):
             if l == self.n_layers - 1:
-                    y = th.zeros(g.num_nodes(), self.n_latent)
+                    y = th.zeros(g.num_nodes(), self.n_latent,device=buffer_device)
                     att2_list = [] #if not self.supervised else th.zeros(g.num_nodes(), self.n_classes)
             else:
-                    y = th.zeros(g.num_nodes(), self.n_hidden*4)
+                    y = th.zeros(g.num_nodes(), self.n_hidden*4, device=buffer_device)
                     att1_list = []
                 
             for input_nodes, output_nodes, blocks in tqdm.tqdm(dataloader):
                 x = blocks[0].srcdata['h']
                 if l != self.n_layers-1:
                     h,att1 = layer(blocks[0], x,get_attention=True)
-                    att1_list.append(att1.mean(1))
+                    att1_list.append(att1.mean(1).cpu().detach())
                     h= h.flatten(1)
                     
                 else:
                     h, att2 = layer(blocks[0], x,get_attention=True)
-                    att2_list.append(att2.mean(1))
+                    att2_list.append(att2.mean(1).cpu().detach())
                     h = h.mean(1)
                     h = self.encoder.gs_mu(h)   
-                y[output_nodes] = h.cpu().detach()#.to(buffer_device)
+                y[output_nodes] = h.cpu().detach().to(buffer_device)
             g.ndata['h'] = y
-        return y, th.concat(att1_list).cpu().detach(),th.concat(att2_list).cpu().detach()
+        return _, th.concat(att1_list), th.concat(att2_list)
 
 class Encoder(nn.Module):
     def __init__(
