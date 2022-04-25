@@ -34,6 +34,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
         ngh_size = 100,
         ngh_sizes = [20, 10],
         minimum_nodes_connected = 5,
+        fraction_edges = 10,
         train_p = 0.5,
         batch_size= 512,
         num_workers=0,
@@ -69,6 +70,8 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
                 Defaults to [20, 10].
             minimum_nodes_connected (int, optional): Minimum molecules connected
                 in the network. Defaults to 5.
+            fraction_edges (int, optional): Number to divide the number of edges
+                for training. Defaults to 10.
             train_p (float, optional): train_size is generally small if number 
                 of molecules is large enough that information would be redundant. 
                 Defaults to 0.25.
@@ -111,6 +114,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
         self.data = data
         self.molecules = molecules
         self.minimum_nodes_connected = minimum_nodes_connected
+        self.fraction_edges = fraction_edges
         self.train_p = train_p
         self.batch_size = batch_size
         self.num_workers = num_workers
@@ -276,8 +280,8 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
         edges_bool_train =  th.isin(self.g.edges()[0],indices_train) & th.isin(self.g.edges()[1],indices_train) 
         edges_bool_test =  th.isin(self.g.edges()[0],indices_test) & th.isin(self.g.edges()[1],indices_test)
 
-        self.edges_train  = np.random.choice(np.arange(edges_bool_train.shape[0])[edges_bool_train],int(edges_bool_train.sum()*(self.train_p/self.ngh_sizes[1])),replace=False)
-        self.edges_test  = np.random.choice(np.arange(edges_bool_test.shape[0])[edges_bool_test],int(edges_bool_test.sum()*(self.train_p/self.ngh_sizes[1])),replace=False)
+        self.edges_train  = np.random.choice(np.arange(edges_bool_train.shape[0])[edges_bool_train],int(edges_bool_train.sum()*(self.train_p/self.fraction_edges)),replace=False)
+        self.edges_test  = np.random.choice(np.arange(edges_bool_test.shape[0])[edges_bool_test],int(edges_bool_test.sum()*(self.train_p/self.fraction_edges)),replace=False)
 
         print('Training on {} edges.'.format(self.edges_train.shape[0]))
         print('Testing on {} edges.'.format(self.edges_test.shape[0]))
