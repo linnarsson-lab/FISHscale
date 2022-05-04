@@ -19,7 +19,7 @@ setup(
 		'umap-learn',  # imported as "umap"
 		'torch',
 		'torchvision',
-        'pytorch-lightning==1.4.7',
+        'pytorch-lightning',
 		'dgl',
 		'open3d',
 		'pandas',
@@ -34,6 +34,7 @@ setup(
 		'h5py',
 		'ripleyk',
 		'scikit-image',
+		'torch-scatter',
 		'dask[distributed]',
 	],
 
