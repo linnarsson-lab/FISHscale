@@ -533,6 +533,42 @@ class GraphPlotting:
             hv.save(hmap, "{}/Clusters.html".format(self.folder),fmt='html')
             '''except:
                 print('Could not generate html file')'''
+    
+    def export_to_shoji(self,ws):
+        import shoji
+        import cytograph as cg
+        with loompy.connect(os.path.join(self.folder,self.data.filename.split('.')[0]+'_cells.loom'),'r') as ds:
+
+            ws.cells = shoji.Dimension(ds.shape[1])
+            ws.genes = shoji.Dimension(ds.shape[0])
+            data = ds[:, :].T  # Note the matrix is transposed
+            ws.Expression = shoji.Tensor("uint16", ("cells", "genes"), inits=data.astype('uint16'))  
+            ws.Gene = shoji.Tensor("string", ("genes",), inits=ds.ra.Gene)  
+            
+            ws.SelectedFeatures = shoji.Tensor("bool", ("genes",), inits=np.ones(ws.genes.length, dtype="bool"))
+            ws.TotalUMIs = shoji.Tensor("uint32", ("cells",), inits=data.sum(axis=1).astype("uint32"))
+            
+            ws.GeneTotalUMIs = shoji.Tensor("uint32", ("genes",), inits=data.sum(axis=0).astype("uint32"))
+            ws.OverallTotalUMIs = shoji.Tensor("uint64", (), inits=data.sum().astype("uint64"))
+            ws.X = shoji.Tensor("float32", ("cells",), inits=ds.ca.Centroid[:,0]) # Load the spatial X and Y coordinates 
+            ws.Y = shoji.Tensor("float32", ("cells",), inits=ds.ca.Centroid[:,1])
+            ws.GraphClusters = shoji.Tensor("uint8", ("cells",), inits=ds.ca.Clusters[:].astype('uint8'))
+            ws.Sample = shoji.Tensor("string", ("cells",), inits=np.array([self.data.filename.split('.')[0]]*data.shape[0]).astype('object'))
+
+        # Run the cytograph shoji pipeline
+        factors, loadings = cg.ResidualsPCA(n_factors=250).fit(ws, save=True)
+        cg.RnnManifold(k=25, metric="euclidean").fit(ws, save=True)
+        xy = cg.ArtOfTsne().fit(ws, save=True)
+        labels, _, _, _ = cg.MorePolishedLeiden().fit(ws, save=True)
+
+        # Compute some aggregate values
+        cg.Aggregate("Clusters", using="first", into="ClusterID").fit(ws, save=True)
+        cg.Aggregate("Expression", using="mean", into="MeanExpression").fit(ws, save=True)
+        cg.Aggregate("Clusters", using="count", into="NCells").fit(ws, save=True)
+        cg.Aggregate("Clusters", using="count", into="NCells").fit(ws, save=True)
+
+        exp =np.array(ws.MeanExpression)
+        ws.Nonzeros = shoji.Tensor('uint64',('clusters','genes'), inits= np.array(exp[:,0,:] > 0, dtype=np.uint64))
 
     def plot_networkx(self):
         import shutil
