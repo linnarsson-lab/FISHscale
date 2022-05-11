@@ -330,6 +330,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                         try:
                             pol = np.array(list(geometry.Polygon(geometry.MultiPoint(np.array([cell.x.values,cell.y.values]).T).convex_hull).exterior.coords))
                         except:
+                            print('exception')
                             pol = np.array([cell.x.values,cell.y.values])
                         polygons.append(pol)
                         matrices.append(mat)
