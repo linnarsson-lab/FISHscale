@@ -290,8 +290,9 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 elif hasattr(func,'n_components'):
                     func.n_components = int(cl_molecules_xy.shape[0]/adjust_n_clusters)+1
             #segmentation = func.fit_predict(cl_molecules_xy)
-            segmentation = QTClustering(max_radius=20, metric='euclidean', min_cluster_size=10).fit_predict(cl_molecules_xy)
-            return segmentation
+            segmenter = QTClustering(max_radius=20, metric='euclidean', min_cluster_size=10)
+            return segmenter.fit_predict(cl_molecules_xy)
+            
 
         #from shapely import geometry
         def get_counts(cell_i_g,dblabel):
