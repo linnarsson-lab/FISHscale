@@ -290,7 +290,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 elif hasattr(func,'n_components'):
                     func.n_components = int(cl_molecules_xy.shape[0]/adjust_n_clusters)+1
             #segmentation = func.fit_predict(cl_molecules_xy)
-            segmenter = QTClustering(max_radius=20, metric='euclidean', min_cluster_size=10)
+            segmenter = QTClustering(max_radius=20, metric='euclidean', min_cluster_size=10, verbose=False)
             return segmenter.fit_predict(cl_molecules_xy)
             
 
