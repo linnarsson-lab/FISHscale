@@ -437,6 +437,7 @@ class GraphPlotting:
             
             from sklearn.cluster import DBSCAN
             db = DBSCAN(eps=eps,min_samples=min_samples)
+            print('Assigning clusters to molecules using QTClustering...')
             self.data.segment('Clusters',save_to=os.path.join(self.folder),func=db)
             gc.collect()
 
