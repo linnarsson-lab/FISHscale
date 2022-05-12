@@ -259,7 +259,7 @@ class GeneScatter(AxSize):
         if save:
             if save_name == '':
                 save_name = f'Scatter_plot_{self.dataset_name}_{strftime("%Y-%m-%d_%H-%M-%S")}'
-            plt.savefig(f'{save_name}{file_format}', dpi=dpi, bbox_inches='tight', pad_inches=0)
+            plt.savefig(f'{save_name}', dpi=dpi, bbox_inches='tight', pad_inches=0)
         
         gc.collect()
 
@@ -387,7 +387,7 @@ class MultiGeneScatter(AxSize):
         if save:
             if save_name == '':
                 save_name = f'Scatter_plot_{self.dataset_name}_{strftime("%Y-%m-%d_%H-%M-%S")}'
-            plt.savefig(f'{save_name}{file_format}', dpi=dpi, bbox_inches='tight', pad_inches=0)
+            plt.savefig(f'{save_name}', dpi=dpi, bbox_inches='tight', pad_inches=0)
             
         gc.collect()
 
@@ -517,6 +517,6 @@ class AttributeScatter(AxSize):
         if save:
             if save_name == '':
                 save_name = f'Scatter_plot_{self.dataset_name}_{strftime("%Y-%m-%d_%H-%M-%S")}'
-            plt.savefig(f'{save_name}{file_format}', dpi=dpi, bbox_inches='tight', pad_inches=0)
+            plt.savefig(f'{save_name}', dpi=dpi, bbox_inches='tight', pad_inches=0)
 
         gc.collect()
