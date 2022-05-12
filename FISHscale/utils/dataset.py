@@ -351,6 +351,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         row_attrs = {'Gene':self.unique_genes}
         col_attrs = {'Segmentation':labels_list, 'Centroid':centroids,label_column:clusters, 'Polygons':polygons}# 'Polygon':polygons
         matrices = sparse.csr_matrix(matrices,dtype=np.int16)
+        print('Saving polygons')
         np.save(path.join(save_to,self.filename.split('.')[0]+'_polygons'),polygons)
         loompy.create(file,matrices,row_attrs,col_attrs)
         print('Number of cells found: {}. Loompy written.'.format(count))
