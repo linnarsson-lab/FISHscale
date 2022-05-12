@@ -311,10 +311,12 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
 
         count = 0
         matrices, labels_list, centroids, polygons, clusters = [], [], [], [], []
+        segmentation_results = []
         print('Segmentation V2')
         for x in trange(self.dask_attrs[label_column].npartitions - 1):
             partition = self.dask_attrs[label_column].get_partition(x).compute()
             s = segmentation(partition)
+            segmentation_results += s
             labels = np.array([x+count if x >= 0 else x for x in s]) #,partition.index.values.compute()
             '''partition = partition.merge(pd.DataFrame(labels,
                                                     index=idx, 
@@ -353,6 +355,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         matrices = sparse.csr_matrix(matrices,dtype=np.int16)
         print('Saving polygons')
         np.save(path.join(save_to,self.filename.split('.')[0]+'_polygons'),polygons)
+        np.save(path.join(save_to,self.filename.split('.')[0]+'_molecule_labels'),segmentation_results)
         loompy.create(file,matrices,row_attrs,col_attrs)
         print('Number of cells found: {}. Loompy written.'.format(count))
 
