@@ -303,11 +303,17 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             return data.values.astype('int16')
 
         print('Running segmentation by: {}'.format(label_column))
-        if path.exists(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','Segmentation')):
+        '''if path.exists(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','Segmentation')):
             shutil.rmtree(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','Segmentation'))
             makedirs(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','Segmentation'))
         else:
-            makedirs(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','Segmentation'))
+            makedirs(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','Segmentation'))'''
+
+        if path.exists(path.join(save_to,'Segmentation')):
+            shutil.rmtree(path.join(save_to,'Segmentation'))
+            makedirs(path.join(save_to,'Segmentation'))
+        else:
+            makedirs(path.join(save_to,'Segmentation'))
 
         count = 0
         matrices, labels_list, centroids, polygons, clusters = [], [], [], [], []
@@ -322,7 +328,8 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                                                     columns=['Segmentation'])
                                                     ).compute()'''
             partition['Segmentation'] = labels
-            partition.to_parquet(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes','Segmentation','{}.parquet'.format(x)))
+            partition.to_parquet(path.join(save_to,'Segmentation','{}.parquet'.format(x)))
+            
             count += s.max() +1
 
             partition = partition.groupby('Segmentation')
