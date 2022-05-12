@@ -311,15 +311,17 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
 
         count = 0
         matrices, labels_list, centroids, polygons, clusters = [], [], [], [], []
+        print('Segmentation V2')
         for x in trange(self.dask_attrs[label_column].npartitions - 1):
-            partition = self.dask_attrs[label_column].get_partition(x)#.compute()
+            partition = self.dask_attrs[label_column].get_partition(x).compute()
             s = segmentation(partition)
-            labels,idx = np.array([x+count if x >= 0 else x for x in s]) ,partition.index.values.compute()
-            partition = partition.merge(pd.DataFrame(labels,
+            labels = np.array([x+count if x >= 0 else x for x in s]) #,partition.index.values.compute()
+            
+            '''partition = partition.merge(pd.DataFrame(labels,
                                                     index=idx, 
                                                     columns=['Segmentation'])
-                                                    ).compute()
-            #partition['Segmentation'] = labels
+                                                    ).compute()'''
+            partition['Segmentation'] = labels
             count += s.max() +1
 
             partition = partition.groupby('Segmentation')
