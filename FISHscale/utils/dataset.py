@@ -316,7 +316,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         for x in trange(self.dask_attrs[label_column].npartitions - 1):
             partition = self.dask_attrs[label_column].get_partition(x).compute()
             s = segmentation(partition)
-            segmentation_results += s
+            segmentation_results += s.tolist()
             labels = np.array([x+count if x >= 0 else x for x in s]) #,partition.index.values.compute()
             '''partition = partition.merge(pd.DataFrame(labels,
                                                     index=idx, 
