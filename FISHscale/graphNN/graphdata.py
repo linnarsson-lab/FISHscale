@@ -9,7 +9,7 @@ from datetime import datetime
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 import pytorch_lightning as pl
-
+import pandas as pd
 import dgl
 from FISHscale.graphNN.models import SAGELightning
 from FISHscale.graphNN.graph_utils import GraphUtils, GraphPlotting
@@ -396,8 +396,15 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
         self.latent_unlabelled, prediction_unlabelled = self.model.module.inference(self.g,
                         self.model.device,
                         10*512,
-                        0)#.detach().numpy()
+                        0)
 
+        pd.Dataframe({
+            'x':self.data.df.x.values.compute()[molecules_id.numpy()], 
+            'y':self.data.df.y.values.compute()[molecules_id.numpy()],
+            'g':self.data.df.g.values.compute()[molecules_id.numpy()],
+            }
+        ).to_parquet(self.folder+'/molecules_latent.parquet')
+        
         np.save(self.folder+'/latent',self.latent_unlabelled)
         if self.supervised:
             self.prediction_unlabelled = prediction_unlabelled.softmax(dim=-1).detach().numpy()
