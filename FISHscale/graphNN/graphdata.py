@@ -397,8 +397,8 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
                         self.model.device,
                         10*512,
                         0)
-
-        pd.Dataframe({
+        molecules_id = self.g.ndata['indices']
+        pd.DataFrame({
             'x':self.data.df.x.values.compute()[molecules_id.numpy()], 
             'y':self.data.df.y.values.compute()[molecules_id.numpy()],
             'g':self.data.df.g.values.compute()[molecules_id.numpy()],
