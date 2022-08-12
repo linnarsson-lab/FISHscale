@@ -594,8 +594,8 @@ class GraphPlotting:
              os.mkdir(path.join(self.folder,'attention'))
 
 
-        bible1 = np.zeros([self.data.unique_genes, self.data.unique_genes])
-        bible2 = np.zeros([self.data.unique_genes, self.data.unique_genes])
+        bible1 = np.zeros([self.data.unique_genes.shape[0], self.data.unique_genes.shape[0]])
+        bible2 = np.zeros([self.data.unique_genes.shape[0], self.data.unique_genes.shape[0]])
 
         for c in tqdm(np.unique(self.clusters)):
             g1,bg1 = self.plot_cluster(c,e0,e1,dic_,self.attention_ngh1,'NGH1')
@@ -606,7 +606,9 @@ class GraphPlotting:
             hv.save(g, '{}/attention/Attention_{}.html'.format(self.folder, c))
 
         bible1 = pd.DataFrame(index=self.data.unique_genes, columns=self.data.unique_genes, data=bible1)
+        bible1.to_parquet('{}/attention/BibleNGH1.parquet'.format(self.folder))
         bible2 = pd.DataFrame(index=self.data.unique_genes, columns=self.data.unique_genes, data=bible2)
+        bible2.to_parquet('{}/attention/BibleNGH2.parquet'.format(self.folder))
 
     def bible_grammar(self, e0, e1, att):
         import torch as th
