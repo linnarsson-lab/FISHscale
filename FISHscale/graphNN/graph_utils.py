@@ -593,19 +593,27 @@ class GraphPlotting:
         else:
              os.mkdir(path.join(self.folder,'attention'))
 
+
+        bible1 = np.zeros([self.data.unique_genes, self.data.unique_genes])
+        bible2 = np.zeros([self.data.unique_genes, self.data.unique_genes])
+
         for c in tqdm(np.unique(self.clusters)):
             g1,bg1 = self.plot_cluster(c,e0,e1,dic_,self.attention_ngh1,'NGH1')
             g2,bg2 = self.plot_cluster(c,e0,e1,dic_,self.attention_ngh2, 'NGH2')
-            g = g1 + g2
+            bible1 += bg1.values
+            bible2 += bg2.values
+            g = hv.Layout([g1, g2]).cols(1)
             hv.save(g, '{}/attention/Attention_{}.html'.format(self.folder, c))
 
+        bible1 = pd.DataFrame(index=self.data.unique_genes, columns=self.data.unique_genes, data=bible1)
+        bible2 = pd.DataFrame(index=self.data.unique_genes, columns=self.data.unique_genes, data=bible2)
 
     def bible_grammar(self, e0, e1, att):
         import torch as th
         from tqdm import tqdm
         network_grammar = []
         
-        for g in tqdm(self.data.unique_genes,):
+        for g in self.data.unique_genes:
             filter1 = e0 == g
             probs_gene = []
             for g2 in self.data.unique_genes:
@@ -634,7 +642,7 @@ class GraphPlotting:
         edges = np.array([e0_cluster_genes,e1_cluster_genes])
 
         bg = self.bible_grammar(e0_cluster_genes, e1_cluster_genes, weights_adges_ngh1)
-        bg.to_parquet('{}/attention/Grammar{}_{}.parquet'.format(self.folder,self.name, cluster))
+        bg.to_parquet('{}/attention/Grammar_{}.parquet'.format(self.folder,self.name, cluster))
 
         #node_frequency = np.array([(edges_genes == g).sum() for g in GD.data.unique_genes])
         weights = weights_adges_ngh1[:,0]
@@ -652,7 +660,11 @@ class GraphPlotting:
         df = graph.nodes.data
         df['Frequency'] = node_frequency
         graph = hv.Graph(((edges[0,:],edges[1,:], weights),df),vdims='Attention').opts(
-            opts.Graph(edge_cmap='viridis', edge_color='Attention',node_color='Frequency',cmap='plasma', edge_line_width=hv.dim('Attention')*100))
+            opts.Graph(
+                edge_cmap='viridis', edge_color='Attention',node_color='Frequency',
+                cmap='plasma', edge_line_width=hv.dim('Attention')*100,
+                edge_nonselection_alpha=0, width=1000,height=1000)
+                )
         labels = hv.Labels(graph.nodes, ['x', 'y'],'index')
         graph = graph * labels.opts(text_font_size='8pt', text_color='white', bgcolor='grey')
         return graph, bg
