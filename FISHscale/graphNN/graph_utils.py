@@ -593,7 +593,6 @@ class GraphPlotting:
         else:
              os.mkdir(path.join(self.folder,'attention'))
 
-
         bible1 = np.zeros([self.data.unique_genes.shape[0], self.data.unique_genes.shape[0]])
         bible2 = np.zeros([self.data.unique_genes.shape[0], self.data.unique_genes.shape[0]])
 
