@@ -598,8 +598,8 @@ class GraphPlotting:
         bible2 = np.zeros([self.data.unique_genes.shape[0], self.data.unique_genes.shape[0]])
 
         for c in tqdm(np.unique(self.clusters)):
-            g1,bg1 = self.plot_cluster(c,e0,e1,dic_,self.attention_ngh1,'NGH1')
-            g2,bg2 = self.plot_cluster(c,e0,e1,dic_,self.attention_ngh2, 'NGH2')
+            g1,bg1 = self.plot_cluster(c,e0,e1,dic_,self.attention_ngh1)
+            g2,bg2 = self.plot_cluster(c,e0,e1,dic_,self.attention_ngh2)
             bible1 += bg1.values
             bible2 += bg2.values
             g = hv.Layout([g1, g2]).cols(1)
@@ -630,7 +630,7 @@ class GraphPlotting:
         bible_network_ngh = pd.DataFrame(index=self.data.unique_genes, columns= self.data.unique_genes ,data=network_grammar)
         return bible_network_ngh
 
-    def plot_cluster(self,cluster, e0,e1,dic_,attention,name):
+    def plot_cluster(self,cluster, e0,e1,dic_,attention):
         import networkx as nx
         import matplotlib.pyplot as plt
         from matplotlib import cm
@@ -644,7 +644,7 @@ class GraphPlotting:
         edges = np.array([e0_cluster_genes,e1_cluster_genes])
 
         bg = self.bible_grammar(e0_cluster_genes, e1_cluster_genes, weights_adges_ngh1)
-        bg.to_parquet('{}/attention/Grammar_{}.parquet'.format(self.folder,self.name, cluster))
+        bg.to_parquet('{}/attention/Grammar_{}.parquet'.format(self.folder, cluster))
 
         #node_frequency = np.array([(edges_genes == g).sum() for g in GD.data.unique_genes])
         weights = weights_adges_ngh1[:,0]
