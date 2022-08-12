@@ -14,9 +14,6 @@ from sklearn.mixture import GaussianMixture
 import loompy
 from os import path
 import pandas as pd
-import holoviews as hv
-from holoviews import opts
-hv.extension('bokeh')
 
 class GraphUtils(object):
 
@@ -592,13 +589,12 @@ class GraphPlotting:
             os.mkdir(path.join(self.folder,'attention'))
         else:
              os.mkdir(path.join(self.folder,'attention'))
+    
 
         for c in tqdm(np.unique(self.clusters)):
-            g1,bg1 = self.plot_cluster(c,e0,e1,dic_,self.attention_ngh1,'NGH1')
-            g2,bg2 = self.plot_cluster(c,e0,e1,dic_,self.attention_ngh2, 'NGH2')
-            g = g1 + g2
-            hv.save(g, '{}/attention/Attention_{}.html'.format(self.folder, c))
-
+            self.plot_cluster(c,e0,e1,dic_, self.attention_ngh1,'NGH1')
+            self.plot_cluster(c,e0,e1,dic_, self.attention_ngh2, 'NGH2')
+            
 
     def bible_grammar(self, e0, e1, att):
         import torch as th
@@ -620,6 +616,7 @@ class GraphPlotting:
         bible_network_ngh = pd.DataFrame(index=self.data.unique_genes, columns= self.data.unique_genes ,data=network_grammar)
         return bible_network_ngh
 
+
     def plot_cluster(self,cluster, e0,e1,dic_,attention,name):
         import networkx as nx
         import matplotlib.pyplot as plt
@@ -633,29 +630,51 @@ class GraphPlotting:
         e1_cluster_genes = np.array([dic_[e] for e in e1_cluster])
         edges = np.array([e0_cluster_genes,e1_cluster_genes])
 
-        bg = self.bible_grammar(e0_cluster_genes, e1_cluster_genes, weights_adges_ngh1)
-        bg.to_parquet('{}/attention/Grammar{}_{}.parquet'.format(self.folder,self.name, cluster))
+        bible_df1 = self.bible_grammar(e0_cluster_genes,
+                                      e1_cluster_genes, 
+                                      weights_adges_ngh1)
 
-        #node_frequency = np.array([(edges_genes == g).sum() for g in GD.data.unique_genes])
-        weights = weights_adges_ngh1[:,0]
-        q10 = np.quantile(weights,0.1)
-        edges = edges[:,weights <= q10]
-        weights = weights[weights <= q10]
+        bible_df1.to_parquet('{}/attention/Grammar_{}_{}.parquet'.format(self.folder,name,cluster))
 
-        node_frequency = np.unique(edges,return_counts=True)[1]
-        node_frequency = node_frequency#/node_frequency.sum()
 
-        graph = hv.Graph(((edges[0,:],edges[1,:], weights),),vdims='Attention').opts(
-            opts.Graph(edge_cmap='viridis', edge_color='Attention'),
-            )#, edge_cmap='viridis', edge_color='Attention')
 
-        df = graph.nodes.data
-        df['Frequency'] = node_frequency
-        graph = hv.Graph(((edges[0,:],edges[1,:], weights),df),vdims='Attention').opts(
-            opts.Graph(edge_cmap='viridis', edge_color='Attention',node_color='Frequency',cmap='plasma', edge_line_width=hv.dim('Attention')*100))
-        labels = hv.Labels(graph.nodes, ['x', 'y'],'index')
-        graph = graph * labels.opts(text_font_size='8pt', text_color='white', bgcolor='grey')
-        return graph, bg
+        G_cluster_att1 = nx.Graph()
+        dic= {}
+        for e, weight in zip(edges.T, weights_adges_ngh1):
+            e = tuple(sorted(e))
+            if e not in dic:
+                dic[e] = weight
+            else:
+                dic[e] += weight
+        for e in dic: 
+            l =  tuple([x for x in e]+[dic[e]])
+            G_cluster_att1.add_weighted_edges_from([l])
+            
+        # function to rescale list of values to range [newmin,newmax]
+        def rescale(l,newmin,newmax):
+            arr = list(l)
+            return [(x-min(arr))/(max(arr)-min(arr))*(newmax-newmin)+newmin for x in arr]
+        # use the matplotlib plasma colormap
+        graph_colormap = cm.get_cmap('plasma', 12)
+        # node color varies with Degree
+        c = rescale([G_cluster_att1.degree(v) for v in G_cluster_att1],0.0,0.9) 
+        c = [graph_colormap(i) for i in c]
+        # node size varies with betweeness centrality - map to range [10,100] 
+        bc = nx.betweenness_centrality(G_cluster_att1) # betweeness centrality
+        s =  rescale([v for v in bc.values()],50,700)
+
+        # edge width shows 1-weight to convert cost back to strength of interaction 
+        ew = rescale([float(G_cluster_att1[u][v]['weight']) for u,v in G_cluster_att1.edges],0.1,4)
+        # edge color also shows weight
+        ec = rescale([float(G_cluster_att1[u][v]['weight']) for u,v in G_cluster_att1.edges],0.1,1)
+        ec = [graph_colormap(i) for i in ec]
+
+        T = nx.minimum_spanning_tree(G_cluster_att1,)
+        pos = nx.spring_layout(T, k=0.3*1/np.sqrt(len(T.nodes())), iterations=20)
+        plt.figure(figsize=(19,9),facecolor=[0.7,0.7,0.7,0.4])
+        nx.draw_networkx(T, pos=pos, with_labels=True,node_color=c, node_size=s,edge_color= ec,width=ew,
+                        font_color='black',font_weight='bold',font_size='4')
+        plt.savefig('{}/attention/Attention_{}_{}'.format(self.folder,name,cluster),dpi=250)
 
 class NegativeSampler(object):
     def __init__(self, g, k, neg_share=False):
