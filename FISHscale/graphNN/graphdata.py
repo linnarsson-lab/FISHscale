@@ -415,7 +415,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
         """
         get_latents: get the new embedding for each molecule
         
-        Passes the validation data through the model to generatehe neighborhood 
+        Passes the validation data through the model to generate the neighborhood 
         embedding. If the model is in supervised version, the model will also
         output the predicted cell type.
 
