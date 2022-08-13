@@ -83,10 +83,10 @@ class GraphUtils(object):
             d,i = kdT.query(np.array([x,y]).T,k=2)
             d_th = np.percentile(d[:,1],97)*omega
             self.distance_threshold = d_th
-            print('Chosen dist: {}'.format(d_th))
+            print('Chosen dist to connect molecules into a graph: {}'.format(d_th))
         else:
             self.distance_threshold = tau
-            print('Chosen dist: {}'.format(tau))
+            print('Chosen dist to connect molecules into a graph: {}'.format(tau))
 
     def compute_library_size(self):
         data= self.g.ndata['ngh'].T
@@ -141,7 +141,7 @@ class GraphUtils(object):
         
         def find_nn_distance(coords,tree,distance):
             print('Find neighbors below distance: {}'.format(d_th))
-            res,nodes,ngh_ = [],[],[]
+            res,nodes,ngh_, ncoords = [],[],[], []
             for i in trange(coords.shape[0]):
                 # 100 sets the number of neighbors to find for each node
                 #  it is set to 100 since we usually will compute neighbors
@@ -169,6 +169,7 @@ class GraphUtils(object):
 
             res= th.tensor(np.array(res)).T
             nodes = th.tensor(np.array(nodes))
+            
             return res,nodes,ngh_
 
         d = self.molecules_df()
@@ -220,6 +221,7 @@ class GraphUtils(object):
         remove = molecules[sum_nodes_connected.numpy() < self.minimum_nodes_connected]
         g.remove_nodes(th.tensor(remove))
         g.ndata['indices'] = th.tensor(molecules_connected)
+        g.ndata['coords'] = th.tensor(coords[molecules_connected])
         return g
 
     def prepare_reference(self):

@@ -7,11 +7,39 @@
     # 3.1 Expand expression spatially following the multinomial probabilities by the 
     #    restricted neighbor attention.
 # 4 Check the new HEXBIN distributions
+from scipy.spatial import KDTree
+import torch as th
+from pyro import distributions as dist
 
-from FISHscale.utils.dataset import Dataset
+class GraphDecoder:
+    def __init__(
+        self,
+        lose_identity_percentage = 0.5
+        ):
+        self.lose_identity_percentage = lose_identity_percentage
 
-class DecoderNetwork:
-    def __init__(self, 
-        DS:Dataset,
+    def _multinomial_hexbin(self,spacing=500,
+        min_count=10,
         ) -> None:
-        self.DS.hex_bin()
+
+        df_hex,centroids = self.data.hexbin_make(spacing=spacing, min_count=min_count)
+        tree = KDTree(centroids)
+        dist, hex_region = tree.query(self.g.ndata['coords'].numpy(), distance_upper_bound=spacing, workers=-1)
+        self.g.ndata['hex_region'] = th.tensor(hex_region)
+
+        self.multinomial_region = []
+        for h in np.unique(hex_region):
+            freq = self.g.ndata['gene'][hex_region == h].sum(axis=0)
+            m = dist.Multinomial(total_count=1,probs=freq/freq.sum()).sample()
+            self.multinomial_region.append(m)
+
+    def _lose_identity(self):
+        return 'lose'
+
+    def random_sampler(self):
+        return 'a'
+
+    def random_decoder(self):
+        return 'b'
+
+        

@@ -13,6 +13,7 @@ import pandas as pd
 import dgl
 from FISHscale.graphNN.models import SAGELightning
 from FISHscale.graphNN.graph_utils import GraphUtils, GraphPlotting
+from FISHscale.graphNN.graph_decoder import GraphDecoder
 
 from pyro.distributions.util import broadcast_shape
 from torch.optim import Adam
@@ -21,7 +22,7 @@ from pyro.infer.autoguide import init_to_mean
 from pyro.infer import SVI, config_enumerate, Trace_ELBO
 from pyro.infer.autoguide import AutoDiagonalNormal, AutoGuideList, AutoNormal, AutoDelta
 
-class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
+class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting, GraphDecoder):
     """
     Class to prepare the data for GraphSAGE
 
