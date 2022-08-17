@@ -598,7 +598,7 @@ class GraphPlotting:
         bible1 = np.zeros([self.data.unique_genes.shape[0], self.data.unique_genes.shape[0]])
         bible2 = np.zeros([self.data.unique_genes.shape[0], self.data.unique_genes.shape[0]])
 
-        for c in tqdm(np.unique(self.clusters)):
+        for c in tqdm(np.unique(self.clusters)[:5]):
             g1,bg1 = self.plot_cluster(c,e0,e1,dic_,self.attention_ngh1)
             bg1.to_parquet('{}/attention/VersicleNGH1_Cluster{}.parquet'.format(self.folder,c))
             g2,bg2 = self.plot_cluster(c,e0,e1,dic_,self.attention_ngh2)
@@ -646,7 +646,7 @@ class GraphPlotting:
         e1_cluster_genes = np.array([dic_[e] for e in e1_cluster])
         edges = np.array([e0_cluster_genes,e1_cluster_genes])
 
-        bg = self.bible_grammar(e0_cluster_genes, e1_cluster_genes, weights_adges_ngh1)
+        bg = self.bible_grammar(e0_cluster_genes, e1_cluster_genes, weights_adges_ngh1).fillna(0)
         #node_frequency = np.array([(edges_genes == g).sum() for g in GD.data.unique_genes])
         weights = weights_adges_ngh1[:,0]
         q10 = np.quantile(weights,0.1)

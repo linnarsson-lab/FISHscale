@@ -36,14 +36,23 @@ class GraphDecoder:
 
         df_hex,centroids = self.data.hexbin_make(spacing=spacing, min_count=min_count)
         tree = KDTree(centroids)
-        dist, hex_region = tree.query(self.g.ndata['coords'].numpy(), distance_upper_bound=spacing, workers=-1)
+        dst, hex_region = tree.query(self.g.ndata['coords'].numpy(), distance_upper_bound=spacing, workers=-1)
         self.g.ndata['hex_region'] = th.tensor(hex_region)
 
         self.multinomial_region = []
         for h in np.unique(hex_region):
             freq = self.g.ndata['gene'][hex_region == h].sum(axis=0)
-            m = dist.Multinomial(total_count=1,probs=freq/freq.sum()).sample()
-            self.multinomial_region.append(m)
+            self.multinomial_region.append(freq/freq.sum())
+
+    def simulate_expression(self, ntimes=100):
+        self._multinomial_hexbin()
+        simulation = []
+        for _ in ntimes:
+            self._lose_identity()
+            self.random_sampler()
+            simulated_expression= self.random_decoder()
+            simulation.append(simulated_expression)
+        return np.stack(simulation)
 
     def _lose_identity(self):
         self.lost_nodes = th.tensor(np.random.choice(np.arange(self.g.num_nodes()) ,size=int(0.2*self.g.num_nodes())))
@@ -57,19 +66,45 @@ class GraphDecoder:
                 )
 
     def random_decoder(self):
+        resampled_nodes = []
+        resampled_genes = []
+
         for nghs, nodes, blocks in self.decoder_dataloader:
             ngh2 = blocks[0]
             ngh1 = blocks[1]
             for n in range(nodes.shape[0]):
-
+                
+                multinomial_region = self.multinomial_region[self.g.ndata['hex_region'][nodes[n]]]
+                multinomial_region_probs = multinomial_region/(multinomial_region.sum()+1e-6)
+                center_gene = self.data.unique_genes[np.where(self.g.ndata['gene'][nodes[n].numpy(),:] == 1)][0]
+                
                 nodes_ngh1 = ngh1.edges()[0][ngh1.edges()[1] == n]
-                genes_ngh1 = self.data.unique_genes[np.where(self.g.ndata['gene'][nghs[nodes_ngh1].numpy(),:] == 1)[1]]
-                # Generate Probabilities for ngh1
+                nodes_ngh1F = nghs[nodes_ngh1][th.isin(nghs[nodes_ngh1], self.lost_nodes,invert=True)]
+                genes_ngh1 = self.data.unique_genes[np.where(self.g.ndata['gene'][nodes_ngh1F.numpy(),:] == 1)[1]]
+                probs1 = np.array([ self.attentionNN1_scores[center_gene][g]*(genes_ngh1 == g).sum() for g in self.data.unique_genes])
+                probs1 = probs1/ (probs1.sum() + 1e-6)
                 
                 nodes_ngh2 = ngh2.edges()[0][th.isin(ngh2.edges()[1],nodes_ngh1)]
-                genes_ngh2 = self.data.unique_genes[np.where(self.g.ndata['gene'][nghs[nodes_ngh2].numpy(),:] == 1)[1]]
-                # Generate Probabilities for ngh1
+                nodes_ngh2F = nghs[nodes_ngh2][th.isin(nghs[nodes_ngh2], self.lost_nodes,invert=True)]
+                genes_ngh2 = self.data.unique_genes[np.where(self.g.ndata['gene'][nodes_ngh2F.numpy(),:] == 1)[1]]
+                probs2 = np.array([ self.attentionNN2_scores[center_gene][g]*(genes_ngh2 == g).sum() for g in self.data.unique_genes])
+                probs2 = probs2/(probs2.sum() +1e-6)
+                                
+                if probs1.sum() == 0:
+                    probs1 = 1
+                if probs2.sum() == 0:
+                    probs2 = 1
+                probabilities_genes = multinomial_region_probs*probs1*probs2
+                #print(probabilities_genes)
+                M = dist.Multinomial(total_count=1, probs=probabilities_genes/probabilities_genes.sum()).sample()
+                sampled_gene = self.data.unique_genes[np.where(M.numpy() == 1)][0]
+                resampled_nodes.append(nghs[n].numpy().tolist())
+                resampled_genes.append(sampled_gene)
+                
+            self.lost_nodes = self.lost_nodes[th.isin(self.lost_nodes, nghs, invert=True)]
 
-            break
+        simulated_expression = self.data.unique_genes[(np.where(self.g.ndata['gene'])[1])]
+        simulated_expression[resampled_nodes] = resampled_genes
+        return simulated_expression
+                
 
-        
