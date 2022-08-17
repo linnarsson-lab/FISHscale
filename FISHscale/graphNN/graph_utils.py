@@ -605,7 +605,7 @@ class GraphPlotting:
             bg2.to_parquet('{}/attention/VersicleNGH2_Cluster{}.parquet'.format(self.folder,c))
             bible1 += bg1.values
             bible2 += bg2.values
-            g = hv.Layout([g1.opts(title='Attention 1'), g2.opts(title='Attention 1')]).cols(1)
+            g = hv.Layout([g1.opts(title='Attention 1'), g2.opts(title='Attention 2')]).cols(1)
             hv.save(g, '{}/attention/Attention_{}.html'.format(self.folder, c))
 
         bible1 = pd.DataFrame(index=self.data.unique_genes, columns=self.data.unique_genes, data=bible1)
