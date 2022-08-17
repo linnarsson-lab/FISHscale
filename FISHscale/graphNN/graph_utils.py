@@ -600,16 +600,18 @@ class GraphPlotting:
 
         for c in tqdm(np.unique(self.clusters)):
             g1,bg1 = self.plot_cluster(c,e0,e1,dic_,self.attention_ngh1)
+            bg1.to_parquet('{}/attention/VersicleNGH1_Cluster{}.parquet'.format(self.folder,c))
             g2,bg2 = self.plot_cluster(c,e0,e1,dic_,self.attention_ngh2)
+            bg2.to_parquet('{}/attention/VersicleNGH2_Cluster{}.parquet'.format(self.folder,c))
             bible1 += bg1.values
             bible2 += bg2.values
-            g = hv.Layout([g1, g2]).cols(1)
+            g = hv.Layout([g1.opts(title='Attention 1'), g2.opts(title='Attention 1')]).cols(1)
             hv.save(g, '{}/attention/Attention_{}.html'.format(self.folder, c))
 
         bible1 = pd.DataFrame(index=self.data.unique_genes, columns=self.data.unique_genes, data=bible1)
-        bible1.to_parquet('{}/attention/BibleNGH1.parquet'.format(self.folder))
+        bible1.to_parquet('{}/attention/ChapterNGH1.parquet'.format(self.folder))
         bible2 = pd.DataFrame(index=self.data.unique_genes, columns=self.data.unique_genes, data=bible2)
-        bible2.to_parquet('{}/attention/BibleNGH2.parquet'.format(self.folder))
+        bible2.to_parquet('{}/attention/ChapterNGH2.parquet'.format(self.folder))
 
     def bible_grammar(self, e0, e1, att):
         import torch as th
@@ -645,8 +647,6 @@ class GraphPlotting:
         edges = np.array([e0_cluster_genes,e1_cluster_genes])
 
         bg = self.bible_grammar(e0_cluster_genes, e1_cluster_genes, weights_adges_ngh1)
-        bg.to_parquet('{}/attention/Grammar_{}.parquet'.format(self.folder, cluster))
-
         #node_frequency = np.array([(edges_genes == g).sum() for g in GD.data.unique_genes])
         weights = weights_adges_ngh1[:,0]
         q10 = np.quantile(weights,0.1)

@@ -7,16 +7,28 @@
     # 3.1 Expand expression spatially following the multinomial probabilities by the 
     #    restricted neighbor attention.
 # 4 Check the new HEXBIN distributions
+import numpy as np
+import pandas as pd
 from scipy.spatial import KDTree
 import torch as th
 from pyro import distributions as dist
+import dgl
 
 class GraphDecoder:
     def __init__(
         self,
-        lose_identity_percentage = 0.5
+        lose_identity_percentage = 0.5,
         ):
         self.lose_identity_percentage = lose_identity_percentage
+
+       
+    def load_attention(
+        self, 
+        attentionNN1_file:str,
+        attentionNN2_file:str,
+        ):
+        self.attentionNN1_scores = pd.read_parquet(attentionNN1_file)
+        self.attentionNN2_scores = pd.read_parquet(attentionNN2_file)
 
     def _multinomial_hexbin(self,spacing=500,
         min_count=10,
@@ -34,12 +46,30 @@ class GraphDecoder:
             self.multinomial_region.append(m)
 
     def _lose_identity(self):
-        return 'lose'
+        self.lost_nodes = th.tensor(np.random.choice(np.arange(self.g.num_nodes()) ,size=int(0.2*self.g.num_nodes())))
 
     def random_sampler(self):
-        return 'a'
+        sampler = dgl.dataloading.MultiLayerFullNeighborSampler(2)
+        self.decoder_dataloader = dgl.dataloading.DataLoader(
+                self.g, th.tensor(self.lost_nodes).to(self.g.device), sampler,
+                batch_size=512, shuffle=True, drop_last=False, num_workers=1,
+                #persistent_workers=(num_workers > 0)
+                )
 
     def random_decoder(self):
-        return 'b'
+        for nghs, nodes, blocks in self.decoder_dataloader:
+            ngh2 = blocks[0]
+            ngh1 = blocks[1]
+            for n in range(nodes.shape[0]):
+
+                nodes_ngh1 = ngh1.edges()[0][ngh1.edges()[1] == n]
+                genes_ngh1 = self.data.unique_genes[np.where(self.g.ndata['gene'][nghs[nodes_ngh1].numpy(),:] == 1)[1]]
+                # Generate Probabilities for ngh1
+                
+                nodes_ngh2 = ngh2.edges()[0][th.isin(ngh2.edges()[1],nodes_ngh1)]
+                genes_ngh2 = self.data.unique_genes[np.where(self.g.ndata['gene'][nghs[nodes_ngh2].numpy(),:] == 1)[1]]
+                # Generate Probabilities for ngh1
+
+            break
 
         
