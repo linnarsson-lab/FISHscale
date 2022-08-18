@@ -47,7 +47,7 @@ class GraphDecoder:
     def simulate_expression(self, ntimes=100):
         self._multinomial_hexbin()
         simulation = []
-        for _ in ntimes:
+        for _ in range(ntimes):
             self._lose_identity()
             self.random_sampler()
             simulated_expression= self.random_decoder()
