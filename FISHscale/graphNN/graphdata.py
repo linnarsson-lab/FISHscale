@@ -207,7 +207,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting, GraphDecoder)
             monitor='train_loss',
             dirpath=self.folder,
             filename=self.analysis_name+'-{epoch:02d}-{train_loss:.2f}',
-            save_top_k=5,
+            save_top_k=1,
             mode='min',
             )
         self.early_stop_callback = EarlyStopping(

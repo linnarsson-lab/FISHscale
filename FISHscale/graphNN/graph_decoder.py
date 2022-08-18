@@ -17,7 +17,7 @@ import dgl
 class GraphDecoder:
     def __init__(
         self,
-        lose_identity_percentage = 0.5,
+        lose_identity_percentage = 0.25,
         ):
         self.lose_identity_percentage = lose_identity_percentage
 
@@ -52,7 +52,25 @@ class GraphDecoder:
             self.random_sampler()
             simulated_expression= self.random_decoder()
             simulation.append(simulated_expression)
-        return np.stack(simulation)
+
+        simulation =  np.stack(simulation).T
+        expression_by_region_by_simulation = []
+
+        for reg in th.unique(self.g.ndata['hex_region']):
+            region_expression = simulation[self.g.ndata['hex_region'] == reg,:]
+            expression_simulation = []
+            for s in range(region_expression.shape[1]):
+                
+                sim_exp = [(region_expression[:,s] == g ).sum() for g in self.data.unique_genes]
+                expression_simulation.append(sim_exp)
+            expression_by_region_by_simulation.append(expression_simulation)
+            
+        expression_by_simulation_by_region = np.array(expression_by_region_by_simulation)
+        self.g.ndata['simulation'] = simulation
+        return expression_by_simulation_by_region
+
+    def plot_distribution(self):
+        'a'
 
     def _lose_identity(self):
         self.lost_nodes = th.tensor(np.random.choice(np.arange(self.g.num_nodes()) ,size=int(0.2*self.g.num_nodes())))
