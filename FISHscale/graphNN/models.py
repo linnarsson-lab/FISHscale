@@ -174,18 +174,7 @@ class SAGELightning(LightningModule):
             pyro.factor("graph_loss", self.alpha * graph_loss, has_rsample=False,)
             self.log('Graph Loss', self.alpha*graph_loss.mean(), prog_bar=False, on_step=True, on_epoch=False)
 
-    def on_epoch_start(self):
-        pass
-        '''print('Epoch start')
-        self.losses = []'''
     
-    def on_epoch_end(self) -> None:
-        pass
-        #print('On epoch end')
-        '''_, opt_nb = self.optimizers()
-        opt_nb.zero_grad()
-        self.manual_backward(th.stack(self.losses).mean())
-        opt_nb.step()'''
 
     def training_step(self, batch, batch_idx):
         if self. inference_type == 'VI':

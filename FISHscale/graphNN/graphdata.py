@@ -13,6 +13,7 @@ import pandas as pd
 import dgl
 from FISHscale.graphNN.models import SAGELightning
 from FISHscale.graphNN.graph_utils import GraphUtils, GraphPlotting
+from FISHscale.graphNN.graph_decoder import GraphDecoder
 
 from pyro.distributions.util import broadcast_shape
 from torch.optim import Adam
@@ -21,7 +22,7 @@ from pyro.infer.autoguide import init_to_mean
 from pyro.infer import SVI, config_enumerate, Trace_ELBO
 from pyro.infer.autoguide import AutoDiagonalNormal, AutoGuideList, AutoNormal, AutoDelta
 
-class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
+class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting, GraphDecoder):
     """
     Class to prepare the data for GraphSAGE
 
@@ -206,7 +207,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
             monitor='train_loss',
             dirpath=self.folder,
             filename=self.analysis_name+'-{epoch:02d}-{train_loss:.2f}',
-            save_top_k=5,
+            save_top_k=1,
             mode='min',
             )
         self.early_stop_callback = EarlyStopping(
