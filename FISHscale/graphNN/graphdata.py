@@ -35,7 +35,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
         ngh_sizes = [20, 10],
         minimum_nodes_connected = 5,
         fraction_edges = 10,
-        train_p = 0.5,
+        train_p = 0.75,
         batch_size= 512,
         num_workers=0,
         save_to = '',
