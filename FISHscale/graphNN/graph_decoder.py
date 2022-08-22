@@ -79,7 +79,7 @@ class GraphDecoder:
         sampler = dgl.dataloading.MultiLayerFullNeighborSampler(2)
         self.decoder_dataloader = dgl.dataloading.DataLoader(
                 self.g, th.tensor(self.lost_nodes).to(self.g.device), sampler,
-                batch_size=512, shuffle=True, drop_last=False, num_workers=1,
+                batch_size=512, shuffle=True, drop_last=False, num_workers=0,
                 #persistent_workers=(num_workers > 0)
                 )
 
@@ -94,26 +94,38 @@ class GraphDecoder:
                 
                 multinomial_region = self.multinomial_region[self.g.ndata['hex_region'][nodes[n]]]
                 multinomial_region_probs = multinomial_region/(multinomial_region.sum()+1e-6)
-                center_gene = self.data.unique_genes[np.where(self.g.ndata['gene'][nodes[n].numpy(),:] == 1)][0]
+                #center_gene = self.data.unique_genes[np.where(self.g.ndata['gene'][nodes[n].numpy(),:] == 1)][0]
                 
                 nodes_ngh1 = ngh1.edges()[0][ngh1.edges()[1] == n]
                 nodes_ngh1F = nghs[nodes_ngh1][th.isin(nghs[nodes_ngh1], self.lost_nodes,invert=True)]
                 genes_ngh1 = self.data.unique_genes[np.where(self.g.ndata['gene'][nodes_ngh1F.numpy(),:] == 1)[1]]
-                probs1 = np.array([ self.attentionNN1_scores[center_gene][g]*(genes_ngh1 == g).sum() for g in self.data.unique_genes])
-                probs1 = probs1/ (probs1.sum() + 1e-6)
+                #probs1 = np.array([ self.attentionNN1_scores[center_gene][g]*(genes_ngh1 == g).sum() for g in self.data.unique_genes])
+                if genes_ngh1.shape[0] > 0:
+                    probs1 = np.stack([self.attentionNN1_scores[:][g].values for g in genes_ngh1])
+                    probs1 = np.prod(probs1,axis=0)#probs1/ (probs1.sum() + 1e-6)
+                else:
+                    probs1 = 1
+                
                 
                 nodes_ngh2 = ngh2.edges()[0][th.isin(ngh2.edges()[1],nodes_ngh1)]
                 nodes_ngh2F = nghs[nodes_ngh2][th.isin(nghs[nodes_ngh2], self.lost_nodes,invert=True)]
                 genes_ngh2 = self.data.unique_genes[np.where(self.g.ndata['gene'][nodes_ngh2F.numpy(),:] == 1)[1]]
-                probs2 = np.array([ self.attentionNN2_scores[center_gene][g]*(genes_ngh2 == g).sum() for g in self.data.unique_genes])
-                probs2 = probs2/(probs2.sum() +1e-6)
-                                
+                
+                if genes_ngh2.shape[0] > 0:
+                    probs2 = np.stack([self.attentionNN2_scores[:][g].values for g in genes_ngh2])
+                    probs2 = np.prod(probs2,axis=0)#probs1/ (probs1.sum() + 1e-6)
+                else:
+                    probs2 = 1        
+                #probs2 = np.array([ self.attentionNN2_scores[center_gene][g]*(genes_ngh2 == g).sum() for g in self.data.unique_genes])
+                #probs2 = probs2/(probs2.sum() +1e-6)
+                print(probs1, probs2)                          
                 if probs1.sum() == 0:
                     probs1 = 1
                 if probs2.sum() == 0:
                     probs2 = 1
                 probabilities_genes = multinomial_region_probs*probs1*probs2
                 #print(probabilities_genes)
+                
                 M = dist.Multinomial(total_count=1, probs=probabilities_genes/probabilities_genes.sum()).sample()
                 sampled_gene = self.data.unique_genes[np.where(M.numpy() == 1)][0]
                 resampled_nodes.append(nghs[n].numpy().tolist())

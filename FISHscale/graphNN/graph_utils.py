@@ -421,13 +421,16 @@ class GraphPlotting:
         else:
             from sklearn.cluster import MiniBatchKMeans
             import gc
+            '''import scanpy as sc
             print('Running MBKMeans clustering from scanpy...')
-            #adata = sc.AnnData(X=self.latent_unlabelled.detach().numpy())
-            #sc.pp.neighbors(adata, n_neighbors=25)
-            #sc.tl.leiden(adata, random_state=42)
-            #self.clusters= adata.obs['leiden'].values
+            adata = sc.AnnData(X=self.latent_unlabelled.detach().numpy())
+            sc.pp.neighbors(adata, n_neighbors=25)
+            sc.tl.leiden(adata, random_state=42)
+            self.clusters= adata.obs['leiden'].values'''
+            
             kmeans = MiniBatchKMeans(n_clusters=n_clusters)
             self.clusters = kmeans.fit_predict(self.latent_unlabelled.detach().numpy())
+            
             molecules_id = self.g.ndata['indices']
             import gc
             gc.collect()
@@ -598,7 +601,7 @@ class GraphPlotting:
         bible1 = np.zeros([self.data.unique_genes.shape[0], self.data.unique_genes.shape[0]])
         bible2 = np.zeros([self.data.unique_genes.shape[0], self.data.unique_genes.shape[0]])
 
-        for c in tqdm(np.unique(self.clusters)[:5]):
+        for c in tqdm(np.unique(self.clusters)):
             g1,bg1 = self.plot_cluster(c,e0,e1,dic_,self.attention_ngh1)
             bg1.to_parquet('{}/attention/VersicleNGH1_Cluster{}.parquet'.format(self.folder,c))
             g2,bg2 = self.plot_cluster(c,e0,e1,dic_,self.attention_ngh2)
