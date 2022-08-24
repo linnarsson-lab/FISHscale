@@ -198,6 +198,15 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting, GraphDecoder)
     def prepare_data(self):
         # do-something
         pass
+    
+    def save_graph(self):
+        dgluns = self.save_to+'graph/{}Unsupervised_smooth{}_dst{}_mNodes{}.graph'.format(self.molecules.shape[0],self.smooth,self.distance_factor,self.minimum_nodes_connected)
+        self.g = self.buildGraph()
+        graph_labels = {"UnsupervisedDGL": th.tensor([0])}
+        print('Saving model...')
+        dgl.data.utils.save_graphs(dgluns, [self.g], graph_labels)
+        print('Model saved.')
+
 
     def setup(self, stage: Optional[str] = None):
         #self.d = th.tensor(self.molecules_df(),dtype=th.float32) #works
