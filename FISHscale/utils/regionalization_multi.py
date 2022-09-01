@@ -58,7 +58,8 @@ class RegionalizeMulti(Decomposition):
     #### PLOTTING ####        
     def hexbin_plot(self, c:list, cm=None, gridspec=None, figsize=None, 
                     show_sample_title:bool = True, vmin:float = None,
-                     vmax:float = None, save:bool=False, savename:str=''):
+                     vmax:float = None, save:bool=False, savename:str='',
+                     save_format:str='pdf'):
         """Plot spatial multidataset hexbin results
 
         Args:
@@ -117,7 +118,7 @@ class RegionalizeMulti(Decomposition):
         
         #Save figure
         if save:
-            plt.savefig(f'{savename}_hexbinmulti.pdf')
+            plt.savefig(f'{savename}_hexbinmulti.{save_format}', facecolor='white', bbox_inches='tight')
             
     def hexbin_tsne_plot(self, data = None, samples=None, tsne:np.ndarray = None, components: int = 2, 
                          save:bool=False, savename:str=''):
