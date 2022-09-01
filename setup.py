@@ -4,7 +4,7 @@ __version__ = "0.12.0"
 
 setup(
 	name="FISHscale",
-	python_requires ='>=3.6',
+	python_requires ='>=3.7',
 	version=__version__,
 	packages=find_packages(),
 	install_requires=[

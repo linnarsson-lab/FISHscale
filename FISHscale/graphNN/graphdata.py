@@ -13,6 +13,7 @@ import pandas as pd
 import dgl
 from FISHscale.graphNN.models import SAGELightning
 from FISHscale.graphNN.graph_utils import GraphUtils, GraphPlotting
+from FISHscale.graphNN.graph_decoder import GraphDecoder
 
 from pyro.distributions.util import broadcast_shape
 from torch.optim import Adam
@@ -21,7 +22,7 @@ from pyro.infer.autoguide import init_to_mean
 from pyro.infer import SVI, config_enumerate, Trace_ELBO
 from pyro.infer.autoguide import AutoDiagonalNormal, AutoGuideList, AutoNormal, AutoDelta
 
-class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
+class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting, GraphDecoder):
     """
     Class to prepare the data for GraphSAGE
 
@@ -35,7 +36,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
         ngh_sizes = [20, 10],
         minimum_nodes_connected = 5,
         fraction_edges = 10,
-        train_p = 0.5,
+        train_p = 0.75,
         batch_size= 512,
         num_workers=0,
         save_to = '',
@@ -197,6 +198,15 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
     def prepare_data(self):
         # do-something
         pass
+    
+    def save_graph(self):
+        dgluns = self.save_to+'graph/{}Unsupervised_smooth{}_dst{}_mNodes{}.graph'.format(self.molecules.shape[0],self.smooth,self.distance_factor,self.minimum_nodes_connected)
+        self.g = self.buildGraph()
+        graph_labels = {"UnsupervisedDGL": th.tensor([0])}
+        print('Saving model...')
+        dgl.data.utils.save_graphs(dgluns, [self.g], graph_labels)
+        print('Model saved.')
+
 
     def setup(self, stage: Optional[str] = None):
         #self.d = th.tensor(self.molecules_df(),dtype=th.float32) #works
@@ -206,7 +216,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting):
             monitor='train_loss',
             dirpath=self.folder,
             filename=self.analysis_name+'-{epoch:02d}-{train_loss:.2f}',
-            save_top_k=5,
+            save_top_k=1,
             mode='min',
             )
         self.early_stop_callback = EarlyStopping(

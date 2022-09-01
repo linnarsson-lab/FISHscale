@@ -13,6 +13,10 @@ from tqdm import tqdm
 from sklearn.mixture import GaussianMixture
 import loompy
 from os import path
+import pandas as pd
+import holoviews as hv
+from holoviews import opts
+hv.extension('bokeh')
 
 class GraphUtils(object):
 
@@ -79,10 +83,10 @@ class GraphUtils(object):
             d,i = kdT.query(np.array([x,y]).T,k=2)
             d_th = np.percentile(d[:,1],97)*omega
             self.distance_threshold = d_th
-            print('Chosen dist: {}'.format(d_th))
+            print('Chosen dist to connect molecules into a graph: {}'.format(d_th))
         else:
             self.distance_threshold = tau
-            print('Chosen dist: {}'.format(tau))
+            print('Chosen dist to connect molecules into a graph: {}'.format(tau))
 
     def compute_library_size(self):
         data= self.g.ndata['ngh'].T
@@ -137,7 +141,7 @@ class GraphUtils(object):
         
         def find_nn_distance(coords,tree,distance):
             print('Find neighbors below distance: {}'.format(d_th))
-            res,nodes,ngh_ = [],[],[]
+            res,nodes,ngh_, ncoords = [],[],[], []
             for i in trange(coords.shape[0]):
                 # 100 sets the number of neighbors to find for each node
                 #  it is set to 100 since we usually will compute neighbors
@@ -165,6 +169,7 @@ class GraphUtils(object):
 
             res= th.tensor(np.array(res)).T
             nodes = th.tensor(np.array(nodes))
+            
             return res,nodes,ngh_
 
         d = self.molecules_df()
@@ -216,6 +221,7 @@ class GraphUtils(object):
         remove = molecules[sum_nodes_connected.numpy() < self.minimum_nodes_connected]
         g.remove_nodes(th.tensor(remove))
         g.ndata['indices'] = th.tensor(molecules_connected)
+        g.ndata['coords'] = th.tensor(coords[molecules_connected])
         return g
 
     def prepare_reference(self):
@@ -415,13 +421,16 @@ class GraphPlotting:
         else:
             from sklearn.cluster import MiniBatchKMeans
             import gc
+            '''import scanpy as sc
             print('Running MBKMeans clustering from scanpy...')
-            #adata = sc.AnnData(X=self.latent_unlabelled.detach().numpy())
-            #sc.pp.neighbors(adata, n_neighbors=25)
-            #sc.tl.leiden(adata, random_state=42)
-            #self.clusters= adata.obs['leiden'].values
+            adata = sc.AnnData(X=self.latent_unlabelled.detach().numpy())
+            sc.pp.neighbors(adata, n_neighbors=25)
+            sc.tl.leiden(adata, random_state=42)
+            self.clusters= adata.obs['leiden'].values'''
+            
             kmeans = MiniBatchKMeans(n_clusters=n_clusters)
             self.clusters = kmeans.fit_predict(self.latent_unlabelled.detach().numpy())
+            
             molecules_id = self.g.ndata['indices']
             import gc
             gc.collect()
@@ -589,12 +598,45 @@ class GraphPlotting:
         else:
              os.mkdir(path.join(self.folder,'attention'))
 
+        bible1 = np.zeros([self.data.unique_genes.shape[0], self.data.unique_genes.shape[0]])
+        bible2 = np.zeros([self.data.unique_genes.shape[0], self.data.unique_genes.shape[0]])
+
         for c in tqdm(np.unique(self.clusters)):
-            self.plot_cluster(c,e0,e1,dic_,self.attention_ngh1,'NGH1')
-            self.plot_cluster(c,e0,e1,dic_,self.attention_ngh2, 'NGH2')
+            g1,bg1 = self.plot_cluster(c,e0,e1,dic_,self.attention_ngh1)
+            bg1.to_parquet('{}/attention/VersicleNGH1_Cluster{}.parquet'.format(self.folder,c))
+            g2,bg2 = self.plot_cluster(c,e0,e1,dic_,self.attention_ngh2)
+            bg2.to_parquet('{}/attention/VersicleNGH2_Cluster{}.parquet'.format(self.folder,c))
+            bible1 += bg1.values
+            bible2 += bg2.values
+            g = hv.Layout([g1.opts(title='Attention 1'), g2.opts(title='Attention 2')]).cols(1)
+            hv.save(g, '{}/attention/Attention_{}.html'.format(self.folder, c))
 
+        bible1 = pd.DataFrame(index=self.data.unique_genes, columns=self.data.unique_genes, data=bible1)
+        bible1.to_parquet('{}/attention/ChapterNGH1.parquet'.format(self.folder))
+        bible2 = pd.DataFrame(index=self.data.unique_genes, columns=self.data.unique_genes, data=bible2)
+        bible2.to_parquet('{}/attention/ChapterNGH2.parquet'.format(self.folder))
 
-    def plot_cluster(self,cluster, e0,e1,dic_,attention,name):
+    def bible_grammar(self, e0, e1, att):
+        import torch as th
+        from tqdm import tqdm
+        network_grammar = []
+        
+        for g in self.data.unique_genes:
+            filter1 = e0 == g
+            probs_gene = []
+            for g2 in self.data.unique_genes:
+                filter2 = e1 == g2
+                probs = att[filter1 & filter2].sum()
+                probs_gene.append(probs)
+            
+            pstack = th.hstack(probs_gene)
+            pstack = pstack/pstack.sum()
+            network_grammar.append(pstack)
+        network_grammar = th.stack(network_grammar).numpy()
+        bible_network_ngh = pd.DataFrame(index=self.data.unique_genes, columns= self.data.unique_genes ,data=network_grammar)
+        return bible_network_ngh
+
+    def plot_cluster(self,cluster, e0,e1,dic_,attention):
         import networkx as nx
         import matplotlib.pyplot as plt
         from matplotlib import cm
@@ -607,44 +649,31 @@ class GraphPlotting:
         e1_cluster_genes = np.array([dic_[e] for e in e1_cluster])
         edges = np.array([e0_cluster_genes,e1_cluster_genes])
 
-        G_cluster_att1 = nx.Graph()
-        dic= {}
-        for e, weight in zip(edges.T, weights_adges_ngh1):
-            e = tuple(sorted(e))
-            if e not in dic:
-                dic[e] = weight
-            else:
-                dic[e] += weight
-        for e in dic: 
-            l =  tuple([x for x in e]+[dic[e]])
-            G_cluster_att1.add_weighted_edges_from([l])
-            
-        # function to rescale list of values to range [newmin,newmax]
-        def rescale(l,newmin,newmax):
-            arr = list(l)
-            return [(x-min(arr))/(max(arr)-min(arr))*(newmax-newmin)+newmin for x in arr]
-        # use the matplotlib plasma colormap
-        graph_colormap = cm.get_cmap('plasma', 12)
-        # node color varies with Degree
-        c = rescale([G_cluster_att1.degree(v) for v in G_cluster_att1],0.0,0.9) 
-        c = [graph_colormap(i) for i in c]
-        # node size varies with betweeness centrality - map to range [10,100] 
-        bc = nx.betweenness_centrality(G_cluster_att1) # betweeness centrality
-        s =  rescale([v for v in bc.values()],50,700)
+        bg = self.bible_grammar(e0_cluster_genes, e1_cluster_genes, weights_adges_ngh1).fillna(0)
+        #node_frequency = np.array([(edges_genes == g).sum() for g in GD.data.unique_genes])
+        weights = weights_adges_ngh1[:,0]
+        q10 = np.quantile(weights,0.1)
+        edges = edges[:,weights <= q10]
+        weights = weights[weights <= q10]
 
-        # edge width shows 1-weight to convert cost back to strength of interaction 
-        ew = rescale([float(G_cluster_att1[u][v]['weight']) for u,v in G_cluster_att1.edges],0.1,4)
-        # edge color also shows weight
-        ec = rescale([float(G_cluster_att1[u][v]['weight']) for u,v in G_cluster_att1.edges],0.1,1)
-        ec = [graph_colormap(i) for i in ec]
+        node_frequency = np.unique(edges,return_counts=True)[1]
+        node_frequency = node_frequency#/node_frequency.sum()
 
-        T = nx.minimum_spanning_tree(G_cluster_att1,)
-        pos = nx.spring_layout(T, k=0.3*1/np.sqrt(len(T.nodes())), iterations=20)
-        plt.figure(figsize=(19,9),facecolor=[0.7,0.7,0.7,0.4])
-        nx.draw_networkx(T, pos=pos, with_labels=True,node_color=c, node_size=s,edge_color= ec,width=ew,
-                        font_color='black',font_weight='bold',font_size='4')
-        plt.savefig('{}/attention/Attention_{}_{}'.format(self.folder,name,cluster),dpi=250)
+        graph = hv.Graph(((edges[0,:],edges[1,:], weights),),vdims='Attention').opts(
+            opts.Graph(edge_cmap='viridis', edge_color='Attention'),
+            )#, edge_cmap='viridis', edge_color='Attention')
 
+        df = graph.nodes.data
+        df['Frequency'] = node_frequency
+        graph = hv.Graph(((edges[0,:],edges[1,:], weights),df),vdims='Attention').opts(
+            opts.Graph(
+                edge_cmap='viridis', edge_color='Attention',node_color='Frequency',
+                cmap='plasma', edge_line_width=hv.dim('Attention')*100,
+                edge_nonselection_alpha=0, width=1000,height=1000)
+                )
+        labels = hv.Labels(graph.nodes, ['x', 'y'],'index')
+        graph = graph * labels.opts(text_font_size='8pt', text_color='white', bgcolor='grey')
+        return graph, bg
 
 class NegativeSampler(object):
     def __init__(self, g, k, neg_share=False):
