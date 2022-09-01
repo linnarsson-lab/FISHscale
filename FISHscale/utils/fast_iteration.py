@@ -6,9 +6,11 @@ from difflib import get_close_matches
 
 class Iteration:
 
-    def get_gene(self, gene: str, include_z:bool = False, include_other:list = []):
+    def get_gene(self, gene: str, include_z:bool = False, 
+                 include_other:list = [], selection:str = None):
         """Get the xy(z) coordinates of points of a queried gene.
         
+        Takes "working_selection" into account (see dataset.Dataset for info).
         This causes the data to get loaded in RAM.
 
         Args:
@@ -17,6 +19,8 @@ class Iteration:
                 returned. Defaults to False
             include_other (list, optional): List of other column headers to 
                 return. Defaults to [].
+            selection (str): Name of column to use as boolean selection of
+                datapoints. If None, returns all datapoints. Defaults to None.
 
         Returns:
             [pd.DataFrame]: Pandas Dataframe with coordinates.
@@ -35,12 +39,26 @@ class Iteration:
             columns.append('z')
         for c in include_other:
             columns.append(c)
+            
+        #Filter based on input
+        if selection != None:
+            row_filter = self.df.get_partition(gene_i).loc[:, selection].astype(bool)
+            return self.df.get_partition(gene_i).loc[row_filter, columns].compute()
         
-        return self.df.get_partition(gene_i).loc[:, columns].compute()
+        #Filter based on working selection
+        elif self.working_selection != None:
+            row_filter = self.df.get_partition(gene_i).loc[:, self.working_selection].astype(bool)
+            return self.df.get_partition(gene_i).loc[row_filter, columns].compute()
+        
+        #No selection
+        else:
+            return self.df.get_partition(gene_i).loc[:, columns].compute()
+
     
     def get_gene_sample(self, gene: str, include_z = False, 
                         include_other:list = [], frac: float=0.1, 
-                        minimum: int=None, random_state: int=None):
+                        minimum: int=None, random_state: int=None,
+                        selection:str = None):
         """Get the xyz coordinates of a sample of points of a queried gene.
         
         This causes the data to get loaded in RAM.
@@ -82,8 +100,20 @@ class Iteration:
             columns.append('z')
         for c in include_other:
             columns.append(c)
-            
-        return self.df.get_partition(gene_i).loc[:, columns].sample(frac=frac, random_state=random_state).compute()
+
+        #Filter based on input
+        if selection != None:
+            row_filter = self.df.get_partition(gene_i).loc[:, selection].astype(bool)
+            return self.df.get_partition(gene_i).loc[row_filter, columns].sample(frac=frac, random_state=random_state).compute()
+        
+        #Filter based on working selection
+        elif self.working_selection != None:
+            row_filter = self.df.get_partition(gene_i).loc[:, self.working_selection].astype(bool)
+            return self.df.get_partition(gene_i).loc[row_filter, columns].sample(frac=frac, random_state=random_state).compute()
+        
+        #No selection
+        else:
+            return self.df.get_partition(gene_i).loc[:, columns].sample(frac=frac, random_state=random_state).compute()
     
     
     

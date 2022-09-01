@@ -1,7 +1,7 @@
 try:
     import bone_fight as bf
 except ModuleNotFoundError as e:
-    print(f'Please install "BoneFight". Error: {e}')
+    print(f'Please install "BoneFight" or its missing dependencies. Error message: {e}')
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt

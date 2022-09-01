@@ -13,6 +13,7 @@ from FISHscale.utils.inside_polygon import is_inside_sm_parallel
 from pyarrow.parquet import ParquetFile
 from pyarrow import ArrowInvalid
 import warnings
+from typing import Union
 
 class DataLoader_base():
       
@@ -33,9 +34,6 @@ class DataLoader_base():
         """
         # .parquet files
         if filename.endswith('.parquet'):
-            #Dask Dataframe
-            #open_f = lambda f, c: dd.read_parquet(f, columns = c)
-            #Pandas Dataframe, This turned out to be faster and more RAM effcient.
             open_f = lambda f, c: pd.read_parquet(f, columns = c)
             
             def open_f(f, columns):
@@ -43,7 +41,7 @@ class DataLoader_base():
                     return pd.read_parquet(f, columns = columns)
                 except ArrowInvalid as e:
                     p = ParquetFile(f)
-                    raise Exception(f'Columns not found, choose from: {p.schema.names}. Error message: {e}')
+                    raise Exception(f'Columns not found, choose from: {p.schema.names}, not: {columns}. Error message: {e}')
                     
         # .csv files
         else:
@@ -317,7 +315,8 @@ class DataLoader(DataLoader_base):
 
     def load_data(self, filename: str, x_label: str, y_label: str, gene_label: str, other_columns: Optional[list], 
                   x_offset: float, y_offset: float, z_offset: float, pixel_size: str, unique_genes: Optional[np.ndarray],
-                  exclude_genes: list = None, polygon: np.ndarray = None, reparse: bool = False) -> Any:             
+                  exclude_genes: list = None, polygon: np.ndarray = None, select_valid: Union[bool, str] = False,
+                  reparse: bool = False) -> Any:             
         """Load data from data file.
         
         Opens a file containing XY coordinates of points with a gene label.
@@ -358,7 +357,14 @@ class DataLoader(DataLoader_base):
             exclude_genes (list, optional): List with genes to exclude from
                 dataset. Defaults to None. 
             polygon (np.ndarray, optional): Array with shape (X,2) with closed
-                polygon to select points.
+                polygon to select datapoints.
+            select_valid ([bool, str], optional): If the datafile already 
+                contains information which datapoints to include this can be
+                used to trim the dataset. The column should contain a boolean
+                or binary array where "True" or "1" means that the datapoint
+                should be included. 
+                A string can be passed with the column name to use. If True is
+                passed it will look for the default column name "Valid".
             reparse (bool, optional): True if you want to reparse the data,
                 if False, it will repeat the parsing. Parsing will apply the
                 offset. Defaults to False.
@@ -389,7 +395,9 @@ class DataLoader(DataLoader_base):
                 rename_col = dict(zip([gene_label, x_label, y_label], ['g', 'x', 'y']))
                 
                 #Read the data file
-                data = open_f(filename, col_to_open) 
+                data = open_f(filename, col_to_open)
+                    
+                #Rename columns
                 data = data.rename(columns = rename_col)
                 
                 #Offset data
@@ -436,6 +444,13 @@ class DataLoader(DataLoader_base):
                     filt = is_inside_sm_parallel(polygon, data.loc[:,['x', 'y']].to_numpy())
                     data = data.loc[filt,:]
                     self._metadatafile_add({'polygon': polygon})
+                    
+                #Select rows based on pre-existing selection
+                if select_valid != False:
+                    if select_valid == True:
+                        select_valid = 'Valid' #Fall back to default
+                    row_filt = open_f(filename, [select_valid]).T.to_numpy().astype(bool)[0]
+                    data = data.loc[row_filt,:]
                 
                 #Get data shape
                 self.shape = data.shape

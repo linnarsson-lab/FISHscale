@@ -53,8 +53,8 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
 
     def __init__(self,
         filename: str,
-        x_label: str = 'r_px_microscope_stitched',
-        y_label: str ='c_px_microscope_stitched',
+        x_label: str = 'r_transformed',
+        y_label: str ='c_transformed',
         gene_label: str = 'decoded_genes',
         other_columns: Optional[list] = [],
         unique_genes: Optional[np.ndarray] = None,
@@ -65,8 +65,10 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         y_offset: float = 0,
         z_offset: float = 0,
         polygon: np.ndarray = None,
+        select_valid: Union[bool, str] = False,
         reparse: bool = False,
         color_input: Optional[Union[str, dict]] = None,
+        working_selection: str = None,
         verbose: bool = False,
         part_of_multidataset: bool = False):
         """initiate Dataset
@@ -111,6 +113,13 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 need to be selected, a single array containing the points of
                 all polygons can be passed as long as each one is closed (First
                 and last point are identical). Defaults to None.
+            select_valid ([bool, str], optional): If the datafile already 
+                contains information which datapoints to include this can be
+                used to trim the dataset. The column should contain a boolean
+                or binary array where "True" or "1" means that the datapoint
+                should be included. 
+                A string can be passed with the column name to use. If True is
+                passed it will look for the default column name "Valid".
             reparse (bool, optional): True if you want to reparse the data,
                 if False, it will repeat the parsing. Parsing will apply the
                 offset. Defaults to False.
@@ -123,6 +132,13 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 proivided it will use that dictionary. If None is provided the 
                 function will first try to load a previously generated color 
                 dictionary and make a new one if this fails. Defaults to None.
+            working_selection (str, optional): Datasets can contain multiple 
+                boolean selectors, for instance for different anatomical
+                regions of the sample like; brain, eye, jaw. If you want to
+                perform analysis only on a selection, you can set the
+                "working_selection" to that name. It is required that the 
+                column was initially passed to "other_columns" to be selected.
+                Defaults to None.
             verbose (bool, optional): If True prints additional output.
             part_of_multidataset (bool, optional): True if dataset is part of
                 a multidataset. 
@@ -137,6 +153,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         self.y_offset = y_offset
         self.z_offset = z_offset
         self.polygon = close_polygon(polygon) if isinstance(polygon, np.ndarray) else polygon
+        self.select_valid = select_valid
         if not isinstance(other_columns, list):
             other_columns = [other_columns]
         self.other_columns = other_columns
@@ -164,14 +181,23 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         
         #Load data
         self.load_data(self.filename, x_label, y_label, gene_label, self.other_columns, x_offset, y_offset, z_offset, 
-                       self.pixel_size.magnitude, unique_genes, exclude_genes, self.polygon, reparse=reparse)
+                       self.pixel_size.magnitude, unique_genes, exclude_genes, self.polygon, self.select_valid, 
+                       reparse=reparse)
 
         #Gene metadata
         self.gene_index = dict(zip(self.unique_genes, range(self.unique_genes.shape[0])))
         self.gene_n_points = self._get_gene_n_points()
 
+        #Set up divisions of dataframe so that rows of partitions can be indexed
+        div = np.cumsum([self.gene_n_points[g] for g in self.unique_genes])
+        div = np.insert(div, 0, 0)
+        self.df.divisions = tuple(div)
+
         #Handle colors
         self.auto_handle_color_dict(color_input)
+        
+        #Working selection
+        self.working_selection = working_selection
         
         #Verbosity
         self.verbose = verbose
@@ -382,6 +408,7 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
         y_offset: float = 0,
         z_offset: float = 0,
         polygon: Union[np.ndarray, list] = None,
+        select_valid: Union[bool, str] = False,
         reparse: bool = False,
         parse_num_threads: int = -1):
         """initiate PandasDataset
@@ -530,6 +557,7 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
         y_offset: float = 0,
         z_offset: float = 0,
         polygon: Union[np.ndarray, list] = None,
+        select_valid: Union[bool, str] = False,
         reparse: bool = False,
         color_input: dict = None,
         num_threads: int = -1):
@@ -576,6 +604,13 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
                 arrays with shape (X,2) to select points. If a single polygon 
                 is given this is used for all datasets. If the polygon is
                 changed the dataset needs to be re-parsed. Defaults to None.
+            select_valid ([bool, str], optional): If the datafile already 
+                contains information which datapoints to include this can be
+                used to trim the dataset. The column should contain a boolean
+                or binary array where "True" or "1" means that the datapoint
+                should be included. 
+                A string can be passed with the column name to use. If True is
+                passed it will look for the default column name "Valid".
             unique_genes (np.ndarray, optional): Array with unique genes for
                 dataset. If not given can take some type to compute for large
                 datasets.
@@ -644,7 +679,7 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
         lazy_result = []
         for f, zz, pxs, xo, yo, zo, pol in tqdm(zip(files, z, pixel_size, x_offset, y_offset, z_offset, polygon)):
             lr = dask.delayed(Dataset) (f, x_label, y_label, gene_label, other_columns, self.unique_genes, exclude_genes, 
-                                        zz, pxs, xo, yo, zo, pol, reparse, color_input, verbose = self.verbose, 
+                                        zz, pxs, xo, yo, zo, pol, select_valid, reparse, color_input, verbose = self.verbose, 
                                         part_of_multidataset=True)
             lazy_result.append(lr)
         futures = dask.persist(*lazy_result, num_workers=1, num_threads = num_threads)
