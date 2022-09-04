@@ -583,9 +583,9 @@ class GraphPlotting:
 
     def execute(self, c, nodes,att1, att2):
         bg1 = self.plot_cluster(nodes,att1)
-        #np.save('{}/attention/VersicleNGH1_Cluster{}.parquet'.format(self.folder,c), bg1)
-        #bg2 = self.plot_cluster(nodes,e0,e1,dic_,att2)
-        #np.save('{}/attention/VersicleNGH2_Cluster{}.parquet'.format(self.folder,c), bg2)
+        np.save('{}/attention/VersicleNGH1_Cluster{}.parquet'.format(self.folder,c), bg1)
+        bg2 = self.plot_cluster(nodes,e0,e1,dic_,att2)
+        np.save('{}/attention/VersicleNGH2_Cluster{}.parquet'.format(self.folder,c), bg2)
         #bible1 += bg1.values
         #bible2 += bg2.values
         #g = hv.Layout([g1.opts(title='Attention 1'), g2.opts(title='Attention 2')]).cols(1)
@@ -632,7 +632,7 @@ class GraphPlotting:
     def bible_grammar(self, e0, e1, att):
         network_grammar = []
         
-        for g in self.data.unique_genes:
+        for g in tqdm(self.data.unique_genes):
             filter1 = e0 == g
             probs_gene = []
             for g2 in self.data.unique_genes:
@@ -655,15 +655,17 @@ class GraphPlotting:
         #nodes_cluster_i = self.g.nodes()[self.clusters == cluster]
         print('A')
         
-        edges = self.g.edges()
+        '''edges = self.g.edges()
         e0 = edges[0].numpy()
         e1 = edges[1].numpy()
 
-        e0 = e0[np.isin(e0,nodes_cluster_i) & np.isin(e1,nodes_cluster_i)]
-        e1 = e1[np.isin(e0,nodes_cluster_i) & np.isin(e1,nodes_cluster_i)]
+        e0_cluster = e0[np.isin(e0,nodes_cluster_i) & np.isin(e1,nodes_cluster_i)]
+        e1_cluster = e1[np.isin(e0,nodes_cluster_i) & np.isin(e1,nodes_cluster_i)]'''
 
-        e0_cluster_genes = np.array([self.dic_[e] for e in e0])
-        e1_cluster_genes = np.array([self.dic_[e] for e in e1])
+        edges = dgl.in_subgraph(self.g,nodes_cluster_i).edges()[0]
+
+        e0_cluster_genes = np.array([self.dic_[e] for e in edges[0]])
+        e1_cluster_genes = np.array([self.dic_[e] for e in edges[1]])
         edges = np.array([e0_cluster_genes,e1_cluster_genes])
 
         print(e0_cluster_genes.shape,att.shape)
