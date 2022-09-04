@@ -581,29 +581,29 @@ class GraphPlotting:
         ws.Nonzeros = shoji.Tensor('uint64',('clusters','genes'), inits= np.array(exp[:,0,:] > 0, dtype=np.uint64))
 
 
-    def execute(self, c, nodes,e0, e1, dic_,att1, att2):
-        g1,bg1 = self.plot_cluster(nodes,e0,e1,dic_,att1)
-        bg1.to_parquet('{}/attention/VersicleNGH1_Cluster{}.parquet'.format(self.folder,c))
-        g2,bg2 = self.plot_cluster(nodes,e0,e1,dic_,att2)
-        bg2.to_parquet('{}/attention/VersicleNGH2_Cluster{}.parquet'.format(self.folder,c))
+    def execute(self, c, nodes,att1, att2):
+        bg1 = self.plot_cluster(nodes,att1)
+        #np.save('{}/attention/VersicleNGH1_Cluster{}.parquet'.format(self.folder,c), bg1)
+        #bg2 = self.plot_cluster(nodes,e0,e1,dic_,att2)
+        #np.save('{}/attention/VersicleNGH2_Cluster{}.parquet'.format(self.folder,c), bg2)
         #bible1 += bg1.values
         #bible2 += bg2.values
-        g = hv.Layout([g1.opts(title='Attention 1'), g2.opts(title='Attention 2')]).cols(1)
-        print('Saving')
-        hv.save(g, '{}/attention/Attention_{}.html'.format(self.folder, c))
-        return (bg1,bg2)
+        #g = hv.Layout([g1.opts(title='Attention 1'), g2.opts(title='Attention 2')]).cols(1)
+        #print('Saving')
+        #hv.save(g, '{}/attention/Attention_{}.html'.format(self.folder, c))
+        return (bg1)#,bg2)
 
     def plot_networkx(self):
         import shutil
     
-        e = self.g.edges()
+        '''e = self.g.edges()
         e0 = e[0].numpy()
         e1 = e[1].numpy()
 
         gene_ = self.g.ndata['gene'].numpy()
         result = np.where(gene_==1)
         rg = [self.data.unique_genes[r] for r in result[1]]
-        dic_ = dict(zip(result[0],rg))
+        dic_ = dict(zip(result[0],rg))'''
 
         if os.path.exists(path.join(self.folder,'attention')):
             shutil.rmtree(path.join(self.folder,'attention'))
@@ -615,20 +615,25 @@ class GraphPlotting:
         bible2 = np.zeros([self.data.unique_genes.shape[0], self.data.unique_genes.shape[0]])
 
         from joblib import Parallel, delayed
-        result = Parallel(n_jobs=12)(delayed(self.execute)(c,self.g.nodes()[self.clusters == c],e0, e1, dic_, self.attention_ngh1, self.attention_ngh2) for c in tqdm(np.unique(self.clusters)))
+        result = []
+        for c in tqdm(np.unique(self.clusters)[:2]):
+            print('Execute')
+            nodes= self.g.nodes()[self.clusters == c]
+            att1, att2 = self.get_attention_nodes(nodes=nodes)
+            bg1,bg2 = self.execute(c, nodes,att1,att2)
+            result.appennd((bg1,bg2))
         
-        for b1,b2 in result:
-            bible1 += b1
-            bible2 += b2
+
+        for b in result:
+            bible1 += b[0]
+            bible2 += b[1]
 
         bible1 = pd.DataFrame(index=self.data.unique_genes, columns=self.data.unique_genes, data=bible1)
-        bible1.to_parquet('{}/attention/ChapterNGH1.parquet'.format(self.folder))
+        bible1.to_parquet('{}/attention/ChapterNGH1'.format(self.folder))
         bible2 = pd.DataFrame(index=self.data.unique_genes, columns=self.data.unique_genes, data=bible2)
-        bible2.to_parquet('{}/attention/ChapterNGH2.parquet'.format(self.folder))
+        bible2.to_parquet('{}/attention/ChapterNGH2'.format(self.folder))
 
     def bible_grammar(self, e0, e1, att):
-        import torch as th
-        from tqdm import tqdm
         network_grammar = []
         
         for g in self.data.unique_genes:
@@ -647,22 +652,30 @@ class GraphPlotting:
         #bible_network_ngh = pd.DataFrame(index=self.data.unique_genes, columns= self.data.unique_genes ,data=network_grammar)
         return network_grammar
 
-    def plot_cluster(self,nodes_cluster_i,e0,e1,dic_,attention):
+    def plot_cluster(self,nodes_cluster_i,att):
         import networkx as nx
         import matplotlib.pyplot as plt
         from matplotlib import cm
         #nodes_cluster_i = self.g.nodes()[self.clusters == cluster]
-        weights_adges_ngh1 = attention[np.isin(e0,nodes_cluster_i) & np.isin(e1,nodes_cluster_i)]
-        e0_cluster = e0[np.isin(e0,nodes_cluster_i) & np.isin(e1,nodes_cluster_i)]
-        e1_cluster = e1[np.isin(e0,nodes_cluster_i) & np.isin(e1,nodes_cluster_i)]
+        print('A')
 
-        e0_cluster_genes = np.array([dic_[e] for e in e0_cluster])
-        e1_cluster_genes = np.array([dic_[e] for e in e1_cluster])
+        gene_ = self.g.ndata['gene'].numpy()[nodes_cluster_i,:]
+        result = np.where(gene_==1)
+        rg = [self.data.unique_genes[r] for r in result[1]]
+        dic_ = dict(zip(result[0],rg))
+        
+        edges = self.g.find_edges(nodes_cluster_i)
+        e0 = edges[0].numpy()
+        e1 = edges[1].numpy()
+
+        e0_cluster_genes = np.array([dic_[e] for e in e0])
+        e1_cluster_genes = np.array([dic_[e] for e in e1])
         edges = np.array([e0_cluster_genes,e1_cluster_genes])
 
-        bg = self.bible_grammar(e0_cluster_genes, e1_cluster_genes, weights_adges_ngh1).fillna(0)
+        bg = self.bible_grammar(e0_cluster_genes, e1_cluster_genes, att).fillna(0)
+        
         #node_frequency = np.array([(edges_genes == g).sum() for g in GD.data.unique_genes])
-        weights = weights_adges_ngh1[:,0]
+        '''weights = weights_adges_ngh1[:,0]
         q10 = np.quantile(weights,0.2)
         edges = edges[:,weights <= q10]
         weights = weights[weights <= q10]
@@ -684,7 +697,8 @@ class GraphPlotting:
                 )
         labels = hv.Labels(graph.nodes, ['x', 'y'],'index')
         graph = graph * labels.opts(text_font_size='8pt', text_color='white', bgcolor='grey')
-        return graph, bg
+        print('B')'''
+        return bg
 
 class NegativeSampler(object):
     def __init__(self, g, k, neg_share=False):

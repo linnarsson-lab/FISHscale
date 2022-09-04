@@ -379,13 +379,16 @@ class SAGE(nn.Module):
                 g.ndata['h'] = y
             return y, p_class
 
-    def inference_attention(self, g, device, batch_size, num_workers, buffer_device=None):
+    def inference_attention(self, g, device, batch_size, num_workers, nodes=None,buffer_device=None):
         # The difference between this inference function and the one in the official
         # example is that the intermediate results can also benefit from prefetching.
+        if type(nodes) == type(None):
+            nodes = th.arange(g.num_nodes()).to(g.device)
+
         g.ndata['h'] = th.log(g.ndata['gene']+1)
         sampler = dgl.dataloading.MultiLayerFullNeighborSampler(1, prefetch_node_feats=['h'])
         dataloader = dgl.dataloading.NodeDataLoader(
-                g, th.arange(g.num_nodes()).to(g.device), sampler, device=device,
+                g, nodes, sampler, device=device,
                 batch_size=batch_size, shuffle=False, drop_last=False, num_workers=num_workers,
                 persistent_workers=(num_workers > 0))
 
@@ -400,7 +403,7 @@ class SAGE(nn.Module):
                     y = th.zeros(g.num_nodes(), self.n_hidden*4, device=buffer_device)
                     att1_list = []
                 
-            for input_nodes, output_nodes, blocks in tqdm.tqdm(dataloader):
+            for input_nodes, output_nodes, blocks in dataloader:
                 x = blocks[0].srcdata['h']
                 if l != self.n_layers-1:
                     h,att1 = layer(blocks[0], x,get_attention=True)
