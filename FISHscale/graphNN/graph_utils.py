@@ -583,15 +583,15 @@ class GraphPlotting:
 
     def execute(self, c, nodes,att1, att2):
         bg1 = self.plot_cluster(nodes,att1)
-        np.save('{}/attention/VersicleNGH1_Cluster{}.parquet'.format(self.folder,c), bg1)
-        bg2 = self.plot_cluster(nodes,e0,e1,dic_,att2)
-        np.save('{}/attention/VersicleNGH2_Cluster{}.parquet'.format(self.folder,c), bg2)
-        #bible1 += bg1.values
-        #bible2 += bg2.values
-        #g = hv.Layout([g1.opts(title='Attention 1'), g2.opts(title='Attention 2')]).cols(1)
-        #print('Saving')
-        #hv.save(g, '{}/attention/Attention_{}.html'.format(self.folder, c))
-        return (bg1)#,bg2)
+        bg1.to_parquet('{}/attention/VersicleNGH1_Cluster{}.parquet'.format(self.folder,c))
+        bg2 = self.plot_cluster(nodes,att2)
+        bg2.to_parquet('{}/attention/VersicleNGH2_Cluster{}.parquet'.format(self.folder,c))
+        bible1 += bg1.values
+        bible2 += bg2.values
+        g = hv.Layout([g1.opts(title='Attention 1'), g2.opts(title='Attention 2')]).cols(1)
+        print('Saving')
+        hv.save(g, '{}/attention/Attention_{}.html'.format(self.folder, c))
+        return (bg1,bg2)
 
     def plot_networkx(self):
         import shutil
@@ -613,7 +613,6 @@ class GraphPlotting:
         from joblib import Parallel, delayed
         result = []
         for c in tqdm(np.unique(self.clusters)[:2]):
-            print('Execute')
             nodes= self.g.nodes()[self.clusters == c]
             att1, att2 = self.get_attention_nodes(nodes=nodes)
             #print(att1.shape,att2.shape)
@@ -647,32 +646,39 @@ class GraphPlotting:
         network_grammar = np.stack(network_grammar)
         #bible_network_ngh = pd.DataFrame(index=self.data.unique_genes, columns= self.data.unique_genes ,data=network_grammar)
         return network_grammar
+    
+    def bible_grammar2(self, e0, e1, att):
+        df = pd.DataFrame({'0':e0,'1':e1, 'w':att})
+        df2 = df.pivot_table(index='0', columns='1',aggfunc='sum')
+        return df2
 
     def plot_cluster(self,nodes_cluster_i,att):
         import networkx as nx
         import matplotlib.pyplot as plt
         from matplotlib import cm
-        #nodes_cluster_i = self.g.nodes()[self.clusters == cluster]
-        print('A')
+        import itertools
+
+        edges = dgl.in_subgraph(self.g,nodes_cluster_i).edges()
+
+        e0_cluster_genes = [self.dic_[e] for e in edges[0].numpy()]
+        e1_cluster_genes = [self.dic_[e] for e in edges[1].numpy()]
         
-        '''edges = self.g.edges()
-        e0 = edges[0].numpy()
-        e1 = edges[1].numpy()
-
-        e0_cluster = e0[np.isin(e0,nodes_cluster_i) & np.isin(e1,nodes_cluster_i)]
-        e1_cluster = e1[np.isin(e0,nodes_cluster_i) & np.isin(e1,nodes_cluster_i)]'''
-
-        edges = dgl.in_subgraph(self.g,nodes_cluster_i).edges()[0]
-
-        e0_cluster_genes = np.array([self.dic_[e] for e in edges[0]])
-        e1_cluster_genes = np.array([self.dic_[e] for e in edges[1]])
+        a = itertools.combinations(self.data.unique_genes,2)
+        att_add = []
+        for x in a:
+            e0_cluster_genes.append(x[0])
+            e1_cluster_genes.append(x[1])
+            att_add += [0]
+        e0_cluster_genes = np.array(e0_cluster_genes)
+        e1_cluster_genes = np.array(e1_cluster_genes)
         edges = np.array([e0_cluster_genes,e1_cluster_genes])
+        att_add = np.array(att_add)
+        att = np.concatenate([att[:,0],att_add])
 
-        print(e0_cluster_genes.shape,att.shape)
-        bg = self.bible_grammar(e0_cluster_genes, e1_cluster_genes, att).fillna(0)
+        bg = self.bible_grammar2(e0_cluster_genes, e1_cluster_genes, att).fillna(0)
         
         #node_frequency = np.array([(edges_genes == g).sum() for g in GD.data.unique_genes])
-        '''weights = weights_adges_ngh1[:,0]
+        weights = att
         q10 = np.quantile(weights,0.2)
         edges = edges[:,weights <= q10]
         weights = weights[weights <= q10]
@@ -694,8 +700,7 @@ class GraphPlotting:
                 )
         labels = hv.Labels(graph.nodes, ['x', 'y'],'index')
         graph = graph * labels.opts(text_font_size='8pt', text_color='white', bgcolor='grey')
-        print('B')'''
-        return bg
+        return graph, bg
 
 class NegativeSampler(object):
     def __init__(self, g, k, neg_share=False):
