@@ -616,6 +616,7 @@ class GraphPlotting:
             print('Execute')
             nodes= self.g.nodes()[self.clusters == c]
             att1, att2 = self.get_attention_nodes(nodes=nodes)
+            #print(att1.shape,att2.shape)
             bg1,bg2 = self.execute(c, nodes,att1,att2)
             result.appennd((bg1,bg2)) 
 
@@ -662,7 +663,7 @@ class GraphPlotting:
         e1_cluster_genes = np.array([self.dic_[e] for e in e1])
         edges = np.array([e0_cluster_genes,e1_cluster_genes])
 
-        print(e0_cluster_genes,att.shape)
+        print(e0_cluster_genes.shape,att.shape)
         bg = self.bible_grammar(e0_cluster_genes, e1_cluster_genes, att).fillna(0)
         
         #node_frequency = np.array([(edges_genes == g).sum() for g in GD.data.unique_genes])

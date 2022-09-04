@@ -452,12 +452,13 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting, GraphDecoder)
             labelled (bool, optional): [description]. Defaults to True.
         """        
         self.model.eval()
-        return self.model.module.inference_attention(self.g,
+        att1,att2 =  self.model.module.inference_attention(self.g,
                         self.model.device,
                         5*512,
                         0,
                         nodes=nodes,
                         buffer_device=self.g.device)#.detach().numpy()
+        return att1, att2
                 
 
 
