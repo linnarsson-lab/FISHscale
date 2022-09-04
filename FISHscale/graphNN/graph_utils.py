@@ -582,12 +582,11 @@ class GraphPlotting:
 
 
     def execute(self, c, nodes,att1, att2):
-        bg1 = self.plot_cluster(nodes,att1)
+        g1,bg1 = self.plot_cluster(nodes,att1)
         bg1.to_parquet('{}/attention/VersicleNGH1_Cluster{}.parquet'.format(self.folder,c))
-        bg2 = self.plot_cluster(nodes,att2)
+        g2,bg2 = self.plot_cluster(nodes,att2)
         bg2.to_parquet('{}/attention/VersicleNGH2_Cluster{}.parquet'.format(self.folder,c))
-        bible1 += bg1.values
-        bible2 += bg2.values
+
         g = hv.Layout([g1.opts(title='Attention 1'), g2.opts(title='Attention 2')]).cols(1)
         print('Saving')
         hv.save(g, '{}/attention/Attention_{}.html'.format(self.folder, c))
@@ -610,18 +609,18 @@ class GraphPlotting:
         bible1 = np.zeros([self.data.unique_genes.shape[0], self.data.unique_genes.shape[0]])
         bible2 = np.zeros([self.data.unique_genes.shape[0], self.data.unique_genes.shape[0]])
 
-        from joblib import Parallel, delayed
+        #from joblib import Parallel, delayed
         result = []
-        for c in tqdm(np.unique(self.clusters)[:2]):
+        for c in tqdm(np.unique(self.clusters)):
             nodes= self.g.nodes()[self.clusters == c]
             att1, att2 = self.get_attention_nodes(nodes=nodes)
             #print(att1.shape,att2.shape)
             bg1,bg2 = self.execute(c, nodes,att1,att2)
-            result.appennd((bg1,bg2)) 
+            result.append((bg1,bg2)) 
 
         for b in result:
-            bible1 += b[0]
-            bible2 += b[1]
+            bible1 += b[0].values
+            bible2 += b[1].values
 
         bible1 = pd.DataFrame(index=self.data.unique_genes, columns=self.data.unique_genes, data=bible1)
         bible1.to_parquet('{}/attention/ChapterNGH1'.format(self.folder))
