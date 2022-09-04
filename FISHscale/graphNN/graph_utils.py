@@ -580,6 +580,17 @@ class GraphPlotting:
         exp =np.array(ws.MeanExpression)
         ws.Nonzeros = shoji.Tensor('uint64',('clusters','genes'), inits= np.array(exp[:,0,:] > 0, dtype=np.uint64))
 
+
+    def execute(self, c, e0, e1, dic_,att1, att2):
+        g1,bg1 = self.plot_cluster(c,e0,e1,dic_,att1)
+        bg1.to_parquet('{}/attention/VersicleNGH1_Cluster{}.parquet'.format(self.folder,c))
+        g2,bg2 = self.plot_cluster(c,e0,e1,dic_,att2)
+        bg2.to_parquet('{}/attention/VersicleNGH2_Cluster{}.parquet'.format(self.folder,c))
+        #bible1 += bg1.values
+        #bible2 += bg2.values
+        g = hv.Layout([g1.opts(title='Attention 1'), g2.opts(title='Attention 2')]).cols(1)
+        hv.save(g, '{}/attention/Attention_{}.html'.format(self.folder, c))
+
     def plot_networkx(self):
         import shutil
     
@@ -601,15 +612,25 @@ class GraphPlotting:
         bible1 = np.zeros([self.data.unique_genes.shape[0], self.data.unique_genes.shape[0]])
         bible2 = np.zeros([self.data.unique_genes.shape[0], self.data.unique_genes.shape[0]])
 
+        from dask.distributed import Client
+        client = Client(n_workers=8)
+        futures = []
         for c in tqdm(np.unique(self.clusters)):
-            g1,bg1 = self.plot_cluster(c,e0,e1,dic_,self.attention_ngh1)
+            future = client.submit(self.execute, c, e0, e1, dic_, self.attention_ngh1, self.attention_ngh2)
+            futures.append(future)
+
+            #self.execute(c, e0, e1, dic_,self.attention_ngh1,self.attention_ngh2)
+            '''g1,bg1 = self.plot_cluster(c,e0,e1,dic_,self.attention_ngh1)
             bg1.to_parquet('{}/attention/VersicleNGH1_Cluster{}.parquet'.format(self.folder,c))
             g2,bg2 = self.plot_cluster(c,e0,e1,dic_,self.attention_ngh2)
             bg2.to_parquet('{}/attention/VersicleNGH2_Cluster{}.parquet'.format(self.folder,c))
             bible1 += bg1.values
             bible2 += bg2.values
             g = hv.Layout([g1.opts(title='Attention 1'), g2.opts(title='Attention 2')]).cols(1)
-            hv.save(g, '{}/attention/Attention_{}.html'.format(self.folder, c))
+            hv.save(g, '{}/attention/Attention_{}.html'.format(self.folder, c))'''
+        
+        client.gather(futures)
+        client.close()
 
         bible1 = pd.DataFrame(index=self.data.unique_genes, columns=self.data.unique_genes, data=bible1)
         bible1.to_parquet('{}/attention/ChapterNGH1.parquet'.format(self.folder))
@@ -669,7 +690,7 @@ class GraphPlotting:
             opts.Graph(
                 edge_cmap='viridis', edge_color='Attention',node_color='Frequency',
                 cmap='plasma', edge_line_width=hv.dim('Attention')*100,
-                edge_nonselection_alpha=0, width=1000,height=1000)
+                edge_nonselection_alpha=0, width=2000,height=2000)
                 )
         labels = hv.Labels(graph.nodes, ['x', 'y'],'index')
         graph = graph * labels.opts(text_font_size='8pt', text_color='white', bgcolor='grey')
