@@ -615,7 +615,9 @@ class GraphPlotting:
         bible2 = np.zeros([self.data.unique_genes.shape[0], self.data.unique_genes.shape[0]])
 
         from joblib import Parallel, delayed
-        result = Parallel(n_jobs=12)(delayed(self.execute)(c,self.g.nodes()[self.clusters == c],e0, e1, dic_, self.attention_ngh1, self.attention_ngh2) for c in tqdm(np.unique(self.clusters)))
+        import multiprocessing
+        cpu = multiprocessing.cpu_count()
+        result = Parallel(n_jobs=cpu)(delayed(self.execute)(c,self.g.nodes()[self.clusters == c],e0, e1, dic_, self.attention_ngh1, self.attention_ngh2) for c in tqdm(np.unique(self.clusters)))
         
         for b1,b2 in result:
             bible1 += b1
