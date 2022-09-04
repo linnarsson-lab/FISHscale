@@ -595,15 +595,11 @@ class GraphPlotting:
 
     def plot_networkx(self):
         import shutil
-    
-        '''e = self.g.edges()
-        e0 = e[0].numpy()
-        e1 = e[1].numpy()
 
         gene_ = self.g.ndata['gene'].numpy()
         result = np.where(gene_==1)
         rg = [self.data.unique_genes[r] for r in result[1]]
-        dic_ = dict(zip(result[0],rg))'''
+        self.dic_ = dict(zip(result[0],rg))
 
         if os.path.exists(path.join(self.folder,'attention')):
             shutil.rmtree(path.join(self.folder,'attention'))
@@ -621,8 +617,7 @@ class GraphPlotting:
             nodes= self.g.nodes()[self.clusters == c]
             att1, att2 = self.get_attention_nodes(nodes=nodes)
             bg1,bg2 = self.execute(c, nodes,att1,att2)
-            result.appennd((bg1,bg2))
-        
+            result.appennd((bg1,bg2)) 
 
         for b in result:
             bible1 += b[0]
@@ -658,20 +653,16 @@ class GraphPlotting:
         from matplotlib import cm
         #nodes_cluster_i = self.g.nodes()[self.clusters == cluster]
         print('A')
-
-        gene_ = self.g.ndata['gene'].numpy()[nodes_cluster_i,:]
-        result = np.where(gene_==1)
-        rg = [self.data.unique_genes[r] for r in result[1]]
-        dic_ = dict(zip(result[0],rg))
         
         edges = self.g.find_edges(nodes_cluster_i)
         e0 = edges[0].numpy()
         e1 = edges[1].numpy()
 
-        e0_cluster_genes = np.array([dic_[e] for e in e0])
-        e1_cluster_genes = np.array([dic_[e] for e in e1])
+        e0_cluster_genes = np.array([self.dic_[e] for e in e0])
+        e1_cluster_genes = np.array([self.dic_[e] for e in e1])
         edges = np.array([e0_cluster_genes,e1_cluster_genes])
 
+        print(e0_cluster_genes,att.shape)
         bg = self.bible_grammar(e0_cluster_genes, e1_cluster_genes, att).fillna(0)
         
         #node_frequency = np.array([(edges_genes == g).sum() for g in GD.data.unique_genes])
