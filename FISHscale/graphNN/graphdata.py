@@ -440,5 +440,27 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting, GraphDecoder)
                         buffer_device=self.g.device)#.detach().numpy()
 
 
+    def get_attention_nodes(self,nodes=None):
+        """
+        get_latents: get the new embedding for each molecule
+        
+        Passes the validation data through the model to generate the neighborhood 
+        embedding. If the model is in supervised version, the model will also
+        output the predicted cell type.
+
+        Args:
+            labelled (bool, optional): [description]. Defaults to True.
+        """        
+        self.model.eval()
+        att1,att2 =  self.model.module.inference_attention(self.g,
+                        self.model.device,
+                        5*512,
+                        0,
+                        nodes=nodes,
+                        buffer_device=self.g.device)#.detach().numpy()
+        return att1, att2
+                
+
+
 
 
