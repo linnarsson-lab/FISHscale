@@ -118,7 +118,7 @@ class GraphDecoder:
                     probs2 = 1        
                 #probs2 = np.array([ self.attentionNN2_scores[center_gene][g]*(genes_ngh2 == g).sum() for g in self.data.unique_genes])
                 #probs2 = probs2/(probs2.sum() +1e-6)
-                print(probs1, probs2)                          
+              
                 if probs1.sum() == 0:
                     probs1 = 1
                 if probs2.sum() == 0:
