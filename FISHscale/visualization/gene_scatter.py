@@ -212,11 +212,6 @@ class GeneScatter(AxSize):
         if invert_xaxis:
             ax.invert_xaxis()
         
-        if invert_yaxis:
-            ax.invert_yaxis()
-        if invert_xaxis:
-            ax.invert_xaxis()
-        
         #Rescale
         if isinstance(view, list):
             x_extent = view[1][0] - view[0][0]
