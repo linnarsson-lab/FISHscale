@@ -655,9 +655,12 @@ class GraphPlotting:
         #nodes_cluster_i = self.g.nodes()[self.clusters == cluster]
         print('A')
         
-        edges = self.g.find_edges(nodes_cluster_i)
+        edges = self.g.edges()
         e0 = edges[0].numpy()
         e1 = edges[1].numpy()
+
+        e0 = e0[np.isin(e0,nodes_cluster_i) & np.isin(e1,nodes_cluster_i)]
+        e1 = e1[np.isin(e0,nodes_cluster_i) & np.isin(e1,nodes_cluster_i)]
 
         e0_cluster_genes = np.array([self.dic_[e] for e in e0])
         e1_cluster_genes = np.array([self.dic_[e] for e in e1])
