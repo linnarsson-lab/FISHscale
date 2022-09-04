@@ -69,8 +69,8 @@ class GraphUtils(object):
         """
         compute_distance_th: deprecated, now inside BuildGraph
 
-        Computes the distance at which 97 percentile molecules are connected to
-        at least one other molecule. Like PArtel & Wahlby
+        Computes the distance at which 95 percentile molecules are connected to
+        at least 2 other molecules. Like PArtel & Wahlby
 
         Args:
             omega ([type]): [description]
@@ -80,8 +80,8 @@ class GraphUtils(object):
             from scipy.spatial import cKDTree as KDTree
             x,y = self.data.df.x.values.compute(),self.data.df.y.values.compute()
             kdT = KDTree(np.array([x,y]).T)
-            d,i = kdT.query(np.array([x,y]).T,k=2)
-            d_th = np.percentile(d[:,1],97)*omega
+            d,i = kdT.query(np.array([x,y]).T,k=3)
+            d_th = np.percentile(d[:,-1],95)*omega
             self.distance_threshold = d_th
             print('Chosen dist to connect molecules into a graph: {}'.format(d_th))
         else:
@@ -674,6 +674,9 @@ class GraphPlotting:
         labels = hv.Labels(graph.nodes, ['x', 'y'],'index')
         graph = graph * labels.opts(text_font_size='8pt', text_color='white', bgcolor='grey')
         return graph, bg
+
+
+        
 
 class NegativeSampler(object):
     def __init__(self, g, k, neg_share=False):
