@@ -581,15 +581,17 @@ class GraphPlotting:
         ws.Nonzeros = shoji.Tensor('uint64',('clusters','genes'), inits= np.array(exp[:,0,:] > 0, dtype=np.uint64))
 
 
-    def execute(self, c, e0, e1, dic_,att1, att2):
-        g1,bg1 = self.plot_cluster(c,e0,e1,dic_,att1)
+    def execute(self, c, nodes,e0, e1, dic_,att1, att2):
+        g1,bg1 = self.plot_cluster(nodes,e0,e1,dic_,att1)
         bg1.to_parquet('{}/attention/VersicleNGH1_Cluster{}.parquet'.format(self.folder,c))
-        g2,bg2 = self.plot_cluster(c,e0,e1,dic_,att2)
+        g2,bg2 = self.plot_cluster(nodes,e0,e1,dic_,att2)
         bg2.to_parquet('{}/attention/VersicleNGH2_Cluster{}.parquet'.format(self.folder,c))
         #bible1 += bg1.values
         #bible2 += bg2.values
         g = hv.Layout([g1.opts(title='Attention 1'), g2.opts(title='Attention 2')]).cols(1)
+        print('Saving')
         hv.save(g, '{}/attention/Attention_{}.html'.format(self.folder, c))
+        return (bg1,bg2)
 
     def plot_networkx(self):
         import shutil
@@ -612,25 +614,12 @@ class GraphPlotting:
         bible1 = np.zeros([self.data.unique_genes.shape[0], self.data.unique_genes.shape[0]])
         bible2 = np.zeros([self.data.unique_genes.shape[0], self.data.unique_genes.shape[0]])
 
-        from dask.distributed import Client
-        client = Client(n_workers=8)
-        futures = []
-        for c in tqdm(np.unique(self.clusters)):
-            future = client.submit(self.execute, c, e0, e1, dic_, self.attention_ngh1, self.attention_ngh2)
-            futures.append(future)
-
-            #self.execute(c, e0, e1, dic_,self.attention_ngh1,self.attention_ngh2)
-            '''g1,bg1 = self.plot_cluster(c,e0,e1,dic_,self.attention_ngh1)
-            bg1.to_parquet('{}/attention/VersicleNGH1_Cluster{}.parquet'.format(self.folder,c))
-            g2,bg2 = self.plot_cluster(c,e0,e1,dic_,self.attention_ngh2)
-            bg2.to_parquet('{}/attention/VersicleNGH2_Cluster{}.parquet'.format(self.folder,c))
-            bible1 += bg1.values
-            bible2 += bg2.values
-            g = hv.Layout([g1.opts(title='Attention 1'), g2.opts(title='Attention 2')]).cols(1)
-            hv.save(g, '{}/attention/Attention_{}.html'.format(self.folder, c))'''
+        from joblib import Parallel, delayed
+        result = Parallel(n_jobs=12)(delayed(self.execute)(c,self.g.nodes()[self.clusters == c],e0, e1, dic_, self.attention_ngh1, self.attention_ngh2) for c in tqdm(np.unique(self.clusters)))
         
-        client.gather(futures)
-        client.close()
+        for b1,b2 in result:
+            bible1 += b1
+            bible2 += b2
 
         bible1 = pd.DataFrame(index=self.data.unique_genes, columns=self.data.unique_genes, data=bible1)
         bible1.to_parquet('{}/attention/ChapterNGH1.parquet'.format(self.folder))
@@ -650,18 +639,19 @@ class GraphPlotting:
                 probs = att[filter1 & filter2].sum()
                 probs_gene.append(probs)
             
-            pstack = th.hstack(probs_gene)
+            pstack = np.stack(probs_gene)
             pstack = pstack/pstack.sum()
             network_grammar.append(pstack)
-        network_grammar = th.stack(network_grammar).numpy()
-        bible_network_ngh = pd.DataFrame(index=self.data.unique_genes, columns= self.data.unique_genes ,data=network_grammar)
-        return bible_network_ngh
+        print('versicule learned')
+        network_grammar = np.stack(network_grammar)
+        #bible_network_ngh = pd.DataFrame(index=self.data.unique_genes, columns= self.data.unique_genes ,data=network_grammar)
+        return network_grammar
 
-    def plot_cluster(self,cluster, e0,e1,dic_,attention):
+    def plot_cluster(self,nodes_cluster_i,e0,e1,dic_,attention):
         import networkx as nx
         import matplotlib.pyplot as plt
         from matplotlib import cm
-        nodes_cluster_i = self.g.nodes()[self.clusters == cluster]
+        #nodes_cluster_i = self.g.nodes()[self.clusters == cluster]
         weights_adges_ngh1 = attention[np.isin(e0,nodes_cluster_i) & np.isin(e1,nodes_cluster_i)]
         e0_cluster = e0[np.isin(e0,nodes_cluster_i) & np.isin(e1,nodes_cluster_i)]
         e1_cluster = e1[np.isin(e0,nodes_cluster_i) & np.isin(e1,nodes_cluster_i)]
@@ -673,7 +663,7 @@ class GraphPlotting:
         bg = self.bible_grammar(e0_cluster_genes, e1_cluster_genes, weights_adges_ngh1).fillna(0)
         #node_frequency = np.array([(edges_genes == g).sum() for g in GD.data.unique_genes])
         weights = weights_adges_ngh1[:,0]
-        q10 = np.quantile(weights,0.1)
+        q10 = np.quantile(weights,0.2)
         edges = edges[:,weights <= q10]
         weights = weights[weights <= q10]
 
