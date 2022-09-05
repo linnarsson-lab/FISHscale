@@ -623,9 +623,9 @@ class GraphPlotting:
             bible2 += b[1].values
 
         bible1 = pd.DataFrame(index=self.data.unique_genes, columns=self.data.unique_genes, data=bible1)
-        bible1.to_parquet('{}/attention/ChapterNGH1'.format(self.folder))
+        bible1.to_parquet('{}/attention/ChapterNGH1.parquet'.format(self.folder))
         bible2 = pd.DataFrame(index=self.data.unique_genes, columns=self.data.unique_genes, data=bible2)
-        bible2.to_parquet('{}/attention/ChapterNGH2'.format(self.folder))
+        bible2.to_parquet('{}/attention/ChapterNGH2.parquet'.format(self.folder))
 
     def bible_grammar(self, e0, e1, att):
         network_grammar = []
