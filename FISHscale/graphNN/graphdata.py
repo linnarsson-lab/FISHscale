@@ -214,7 +214,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting, GraphDecoder)
 
         self.checkpoint_callback = ModelCheckpoint(
             monitor='train_loss',
-            dirpath=self.folder,
+            dirpath=self.save_to,
             filename=self.analysis_name+'-{epoch:02d}-{train_loss:.2f}',
             save_top_k=1,
             mode='min',
@@ -387,7 +387,25 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting, GraphDecoder)
                             log_every_n_steps=50,
                             callbacks=[self.checkpoint_callback], 
                             max_epochs=self.n_epochs,)
-        trainer.fit(self.model, train_dataloaders=self.train_dataloader())#,val_dataloaders=self.test_dataloader())
+
+        is_trained = 0
+        for File in os.listdir(self.save_to):
+            if File.count('.ckpt'):
+                is_trained = 1
+                break
+
+        if is_trained:
+            print('Pretrained model exists in folder, loading model parameters. If you wish to re-train, delete .ckpt file.')
+            self.model = self.model.load_from_checkpoint(os.path.join(self.save_to, File),
+                                        in_feats=self.model.in_feats,
+                                        n_latent=self.model.n_latent,
+                                        n_classes=self.model.module.n_classes,
+                                        n_layers=self.model.module.n_layers,
+                                        )
+
+        
+        else:
+            trainer.fit(self.model, train_dataloaders=self.train_dataloader())#,val_dataloaders=self.test_dataloader())
 
     #### plotting and latent factors #####
 
