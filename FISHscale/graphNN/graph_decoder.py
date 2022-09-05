@@ -31,7 +31,7 @@ class GraphDecoder:
         self.attentionNN2_scores = pd.read_parquet(attentionNN2_file)
 
     def _multinomial_hexbin(self,spacing=500,
-        min_count=10,
+        min_count=0,
         ) -> None:
 
         df_hex,centroids = self.data.hexbin_make(spacing=spacing, min_count=min_count)
