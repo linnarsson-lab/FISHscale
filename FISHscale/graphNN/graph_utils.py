@@ -16,6 +16,7 @@ from os import path
 import pandas as pd
 import holoviews as hv
 from holoviews import opts
+from holoviews.operation.datashader import datashade, bundle_graph
 hv.extension('bokeh')
 
 class GraphUtils(object):
@@ -716,6 +717,7 @@ class GraphPlotting:
 
         labels = hv.Labels(graph.nodes, ['x', 'y'],'index')
         graph = graph * labels.opts(text_font_size='8pt', text_color='white', bgcolor='grey')
+        graph = bundle_graph(graph)
         return graph, bg
 
 
