@@ -389,7 +389,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting, GraphDecoder)
                             max_epochs=self.n_epochs,)
 
         is_trained = 0
-        for File in os.listdir(self.save_to):
+        for File in os.listdir(os.path.join(self.folder, '..')):
             if File.count('.ckpt'):
                 is_trained = 1
                 break
