@@ -464,6 +464,8 @@ class GraphPlotting:
                 enriched_genes[c] = self.data.unique_genes[en_genes]
                 #print(np.unique(clusters_)[c], self.data.unique_genes[en_genes])
 
+            self.g.ndata['GSclusters'] = th.tensor(self.clusters,dtype=th.int64)
+            
             np.save(self.folder+'/clusters',self.clusters)
             print('Clustering done.')
             print('Generating umap embedding...')
@@ -649,6 +651,7 @@ class GraphPlotting:
     def bible_grammar2(self, e0, e1, att):
         df = pd.DataFrame({'0':e0,'1':e1, 'w':att})
         df2 = df.pivot_table(index='0', columns='1',aggfunc='sum')
+        df2.columns = self.data.unique_genes
         return df2
 
     def plot_cluster(self,nodes_cluster_i,att):
@@ -675,6 +678,7 @@ class GraphPlotting:
         att = np.concatenate([att[:,0],att_add])
 
         bg = self.bible_grammar2(e0_cluster_genes, e1_cluster_genes, att).fillna(0)
+        #print(bg,)
         
         #node_frequency = np.array([(edges_genes == g).sum() for g in GD.data.unique_genes])
         weights = att
@@ -682,21 +686,34 @@ class GraphPlotting:
         edges = edges[:,weights <= q10]
         weights = weights[weights <= q10]
 
+        graph_edges1 = []
+        graph_edges2 = []
+        graph_weights = []
+
+        a = itertools.combinations(self.data.unique_genes,2)
+        for x in a:
+            graph_edges1.append(x[0])
+            graph_edges2.append(x[1])
+            graph_weights.append(bg[x[0]][x[1]])
+        graph_weights = np.array(graph_weights)
+        graph_weights = np.array(graph_weights)/graph_weights.sum()
+        
         node_frequency = np.unique(edges,return_counts=True)[1]
         node_frequency = node_frequency#/node_frequency.sum()
 
-        graph = hv.Graph(((edges[0,:],edges[1,:], weights),),vdims='Attention').opts(
+        graph = hv.Graph(((graph_edges1,graph_edges2, graph_weights),),vdims='Attention').opts(
             opts.Graph(edge_cmap='viridis', edge_color='Attention'),
             )#, edge_cmap='viridis', edge_color='Attention')
 
         df = graph.nodes.data
         df['Frequency'] = node_frequency
-        graph = hv.Graph(((edges[0,:],edges[1,:], weights),df),vdims='Attention').opts(
+        graph = hv.Graph(((graph_edges1,graph_edges2, graph_weights),df),vdims='Attention').opts(
             opts.Graph(
                 edge_cmap='viridis', edge_color='Attention',node_color='Frequency',
-                cmap='plasma', edge_line_width=hv.dim('Attention')*100,
+                cmap='plasma', edge_line_width=hv.dim('Attention')*10,
                 edge_nonselection_alpha=0, width=2000,height=2000)
                 )
+
         labels = hv.Labels(graph.nodes, ['x', 'y'],'index')
         graph = graph * labels.opts(text_font_size='8pt', text_color='white', bgcolor='grey')
         return graph, bg
