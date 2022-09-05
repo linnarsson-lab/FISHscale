@@ -42,7 +42,10 @@ class GraphDecoder:
         self.multinomial_region = []
         for h in np.unique(hex_region):
             freq = self.g.ndata['gene'][hex_region == h].sum(axis=0)
-            self.multinomial_region.append(freq/freq.sum())
+            freq = freq/freq.sum()
+            if freq.sum() == 0 or np.isnan(freq.sum()):
+                freq = np.ones_like(freq)/freq.shape[0]
+            self.multinomial_region.append(freq)
 
     def simulate_expression(self, ntimes=100):
         self._multinomial_hexbin()
