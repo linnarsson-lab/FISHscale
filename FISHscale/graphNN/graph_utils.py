@@ -696,8 +696,15 @@ class GraphPlotting:
             graph_edges1.append(x[0])
             graph_edges2.append(x[1])
             graph_weights.append(bg[x[0]][x[1]])
+        
+        graph_edges1 = np.array(graph_edges1)
+        graph_edges2 = np.array(graph_edges2)
         graph_weights = np.array(graph_weights)
-        graph_weights = np.array(graph_weights)/graph_weights.sum()
+        graph_weights = np.array(graph_weights)/graph_weights.sum(axis=0)
+
+        graph_edges1 = graph_edges1[graph_weights > np.quantile(graph_weights,0.1)]
+        graph_edges2 = graph_edges2[graph_weights > np.quantile(graph_weights,0.1)]
+
         
         node_frequency = np.unique(edges,return_counts=True)[1]
         node_frequency = node_frequency#/node_frequency.sum()
