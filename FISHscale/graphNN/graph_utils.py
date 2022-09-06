@@ -717,7 +717,7 @@ class GraphPlotting:
 
         labels = hv.Labels(graph.nodes, ['x', 'y'],'index')
         #graph = graph #* labels.opts(text_font_size='8pt', text_color='white', bgcolor='grey')
-        graph = bundle_graph(graph)*labels.opts(text_font_size='5pt', text_color='white', bgcolor='grey')
+        graph = graph*labels.opts(text_font_size='5pt', text_color='white', bgcolor='grey')
         '''graph = datashade(graph, normalization='linear', width=1000, height=1000).opts(
             opts.Graph(
                     edge_cmap='viridis', edge_color='Attention',node_color='Frequency',
