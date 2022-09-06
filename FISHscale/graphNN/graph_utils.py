@@ -707,7 +707,7 @@ class GraphPlotting:
 
         df = graph.nodes.data
 
-        enrichment =  self.enrichment[np.isin(self.data.unique_genes,genes_present),cluster]
+        enrichment =  self.enrichment[:,cluster]
         df['Enrichment'] = enrichment
 
         enrichmentQ = np.quantile(enrichment,0.5)
