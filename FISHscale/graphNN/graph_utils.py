@@ -459,6 +459,7 @@ class GraphPlotting:
                 ds.ra['enrichment'] = r
 
             enriched_genes = {}
+            self.enrichment = r
             enrichment = r.argsort(axis=0)[::-1]
             for c in range(np.unique(clusters_).shape[0]):
                 en_genes = enrichment[:,c][:10]
@@ -705,6 +706,7 @@ class GraphPlotting:
 
         df = graph.nodes.data
         df['Frequency'] = node_frequency
+        
         graph = hv.Graph(((graph_edges1,graph_edges2, graph_weights),df),vdims='Attention').opts(
             opts.Graph(
                 edge_cmap='viridis', edge_color='Attention',node_color='Frequency',
