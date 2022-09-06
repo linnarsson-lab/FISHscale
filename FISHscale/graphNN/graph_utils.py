@@ -613,7 +613,7 @@ class GraphPlotting:
 
         #from joblib import Parallel, delayed
         result = []
-        for c in tqdm(np.unique(self.clusters)):
+        for c in tqdm(np.unique(self.clusters)[10:]):
             nodes= self.g.nodes()[self.clusters == c]
             att1, att2 = self.get_attention_nodes(nodes=nodes)
             #print(att1.shape,att2.shape)
@@ -706,10 +706,7 @@ class GraphPlotting:
             )#, edge_cmap='viridis', edge_color='Attention')
 
         df = graph.nodes.data
-
         enrichment =  self.enrichment[:,cluster]
-        df['Enrichment'] = enrichment
-
         enrichmentQ = np.quantile(enrichment,0.5)
         enriched_genes = self.data.unique_genes[enrichment > enrichmentQ]
         
@@ -723,7 +720,13 @@ class GraphPlotting:
         graph_weights = graph_weights[filter_enrichment]
 
 
-        df['Frequency'] = node_frequency[np.isin(self.data.unique_genes,enriched_genes_connected)]
+
+        node_freq =  node_frequency[np.isin(df['index'].values,enriched_genes_connected)]
+        node_enrich = enrichment[np.isin(self.data.unique_genes,enriched_genes_connected)]
+
+        df = df[np.isin(df['index'].values,enriched_genes_connected)]
+        df.loc[:'Frequency'] = node_freq
+        df.loc[:'Enrichment'] = node_enrich
 
         graph = hv.Graph(((graph_edges1,graph_edges2, graph_weights),df),vdims='Attention').opts(
             opts.Graph(
