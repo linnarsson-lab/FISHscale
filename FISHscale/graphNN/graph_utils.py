@@ -708,7 +708,6 @@ class GraphPlotting:
         df = graph.nodes.data
 
         enrichment =  self.enrichment[:,cluster]
-        df['Enrichment'] = enrichment
 
         enrichmentQ = np.quantile(enrichment,0.5)
         enriched_genes = self.data.unique_genes[enrichment > enrichmentQ]
@@ -724,6 +723,7 @@ class GraphPlotting:
 
 
         df['Frequency'] = node_frequency[np.isin(self.data.unique_genes,enriched_genes_connected)]
+        df['Enrichment'] = enrichment[np.isin(self.data.unique_genes,enriched_genes_connected)]
 
         graph = hv.Graph(((graph_edges1,graph_edges2, graph_weights),df),vdims='Attention').opts(
             opts.Graph(
