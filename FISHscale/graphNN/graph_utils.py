@@ -677,14 +677,6 @@ class GraphPlotting:
         att = np.concatenate([att[:,0],att_add])
 
         bg = self.bible_grammar2(e0_cluster_genes, e1_cluster_genes, att).fillna(0)
-        #print(bg,)
-        
-        #node_frequency = np.array([(edges_genes == g).sum() for g in GD.data.unique_genes])
-        weights = att
-        q10 = np.quantile(weights,0.2)
-        edges = edges[:,weights <= q10]
-        weights = weights[weights <= q10]
-
         graph_edges1 = []
         graph_edges2 = []
         graph_weights = []
