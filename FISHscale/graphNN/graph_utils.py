@@ -587,10 +587,10 @@ class GraphPlotting:
 
     def execute(self, c, nodes,att1, att2):
         g1,bg1 = self.plot_cluster(c,nodes,att1)
-        bg1.to_parquet('{}/attention/VersicleNGH1_Cluster{}.parquet'.format(self.folder,c))
+        bg1.to_parquet('{}/attention/SyntaxNGH1_Cluster{}.parquet'.format(self.folder,c))
         hv.save(g1, '{}/attention/AttentionNGH1_{}.html'.format(self.folder, c))
         g2,bg2 = self.plot_cluster(c,nodes,att2)
-        bg2.to_parquet('{}/attention/VersicleNGH2_Cluster{}.parquet'.format(self.folder,c))
+        bg2.to_parquet('{}/attention/SyntaxNGH2_Cluster{}.parquet'.format(self.folder,c))
         hv.save(g2, '{}/attention/AttentionNGH2_{}.html'.format(self.folder, c))
         return (bg1,bg2)
 
