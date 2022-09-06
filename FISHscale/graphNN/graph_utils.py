@@ -587,12 +587,10 @@ class GraphPlotting:
     def execute(self, c, nodes,att1, att2):
         g1,bg1 = self.plot_cluster(nodes,att1)
         bg1.to_parquet('{}/attention/VersicleNGH1_Cluster{}.parquet'.format(self.folder,c))
+        hv.save(g1, '{}/attention/AttentionNGH1_{}.html'.format(self.folder, c))
         g2,bg2 = self.plot_cluster(nodes,att2)
         bg2.to_parquet('{}/attention/VersicleNGH2_Cluster{}.parquet'.format(self.folder,c))
-
-        g = hv.Layout([g1.opts(title='Attention 1'), g2.opts(title='Attention 2')]).cols(1)
-        print('Saving')
-        hv.save(g, '{}/attention/Attention_{}.html'.format(self.folder, c))
+        hv.save(g2, '{}/attention/AttentionNGH2_{}.html'.format(self.folder, c))
         return (bg1,bg2)
 
     def plot_networkx(self):
@@ -626,9 +624,9 @@ class GraphPlotting:
             bible2 += b[1].values
 
         bible1 = pd.DataFrame(index=self.data.unique_genes, columns=self.data.unique_genes, data=bible1)
-        bible1.to_parquet('{}/attention/ChapterNGH1.parquet'.format(self.folder))
+        bible1.to_parquet('{}/attention/GrammarNGH1.parquet'.format(self.folder))
         bible2 = pd.DataFrame(index=self.data.unique_genes, columns=self.data.unique_genes, data=bible2)
-        bible2.to_parquet('{}/attention/ChapterNGH2.parquet'.format(self.folder))
+        bible2.to_parquet('{}/attention/GrammarNGH2.parquet'.format(self.folder))
 
     def bible_grammar(self, e0, e1, att):
         network_grammar = []
@@ -644,7 +642,7 @@ class GraphPlotting:
             pstack = np.stack(probs_gene)
             pstack = pstack/pstack.sum()
             network_grammar.append(pstack)
-        print('Versicle learned')
+        print('Syntax learned')
         network_grammar = np.stack(network_grammar)
         #bible_network_ngh = pd.DataFrame(index=self.data.unique_genes, columns= self.data.unique_genes ,data=network_grammar)
         return network_grammar
@@ -700,11 +698,11 @@ class GraphPlotting:
         graph_edges1 = np.array(graph_edges1)
         graph_edges2 = np.array(graph_edges2)
         graph_weights = np.array(graph_weights)
+
+        graph_edges1 = graph_edges1[graph_weights > np.quantile(graph_weights,0.5)]
+        graph_edges2 = graph_edges2[graph_weights > np.quantile(graph_weights,0.5)]
+        graph_weights = graph_weights[graph_weights > np.quantile(graph_weights,0.5)]
         graph_weights = np.array(graph_weights)/graph_weights.sum(axis=0)
-
-        graph_edges1 = graph_edges1[graph_weights > np.quantile(graph_weights,0.1)]
-        graph_edges2 = graph_edges2[graph_weights > np.quantile(graph_weights,0.1)]
-
         
         node_frequency = np.unique(edges,return_counts=True)[1]
         node_frequency = node_frequency#/node_frequency.sum()
