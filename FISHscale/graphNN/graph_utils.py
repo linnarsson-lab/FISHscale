@@ -590,7 +590,10 @@ class GraphPlotting:
         hv.save(g1, '{}/attention/AttentionNGH1_{}.html'.format(self.folder, c))
         g2,bg2 = self.plot_cluster(nodes,att2)
         bg2.to_parquet('{}/attention/VersicleNGH2_Cluster{}.parquet'.format(self.folder,c))
-        hv.save(g2, '{}/attention/AttentionNGH2_{}.html'.format(self.folder, c))
+
+        g = hv.Layout([g1.opts(title='Attention 1'), g2.opts(title='Attention 2')]).cols(1)
+        print('Saving')
+        hv.save(g, '{}/attention/Attention_{}.html'.format(self.folder, c))
         return (bg1,bg2)
 
     def plot_networkx(self):
@@ -698,11 +701,11 @@ class GraphPlotting:
         graph_edges1 = np.array(graph_edges1)
         graph_edges2 = np.array(graph_edges2)
         graph_weights = np.array(graph_weights)
-
-        graph_edges1 = graph_edges1[graph_weights > np.quantile(graph_weights,0.5)]
-        graph_edges2 = graph_edges2[graph_weights > np.quantile(graph_weights,0.5)]
-        graph_weights = graph_weights[graph_weights > np.quantile(graph_weights,0.5)]
         graph_weights = np.array(graph_weights)/graph_weights.sum(axis=0)
+
+        graph_edges1 = graph_edges1[graph_weights > np.quantile(graph_weights,0.1)]
+        graph_edges2 = graph_edges2[graph_weights > np.quantile(graph_weights,0.1)]
+
         
         node_frequency = np.unique(edges,return_counts=True)[1]
         node_frequency = node_frequency#/node_frequency.sum()
