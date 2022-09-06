@@ -719,8 +719,6 @@ class GraphPlotting:
         graph_edges2 = graph_edges2[filter_enrichment]
         graph_weights = graph_weights[filter_enrichment]
 
-
-
         node_freq =  node_frequency[np.isin(df['index'].values,enriched_genes_connected)]
         node_enrich = enrichment[np.isin(self.data.unique_genes,enriched_genes_connected)]
 
