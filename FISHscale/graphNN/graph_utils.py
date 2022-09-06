@@ -586,10 +586,10 @@ class GraphPlotting:
 
 
     def execute(self, c, nodes,att1, att2):
-        g1,bg1 = self.plot_cluster(nodes,att1)
+        g1,bg1 = self.plot_cluster(c,nodes,att1)
         bg1.to_parquet('{}/attention/VersicleNGH1_Cluster{}.parquet'.format(self.folder,c))
         hv.save(g1, '{}/attention/AttentionNGH1_{}.html'.format(self.folder, c))
-        g2,bg2 = self.plot_cluster(nodes,att2)
+        g2,bg2 = self.plot_cluster(c,nodes,att2)
         bg2.to_parquet('{}/attention/VersicleNGH2_Cluster{}.parquet'.format(self.folder,c))
         hv.save(g2, '{}/attention/AttentionNGH2_{}.html'.format(self.folder, c))
         return (bg1,bg2)
@@ -654,7 +654,7 @@ class GraphPlotting:
         df2.columns = self.data.unique_genes
         return df2
 
-    def plot_cluster(self,nodes_cluster_i,att):
+    def plot_cluster(self,cluster,nodes_cluster_i,att):
         import networkx as nx
         import matplotlib.pyplot as plt
         from matplotlib import cm
@@ -692,12 +692,13 @@ class GraphPlotting:
         graph_edges2 = np.array(graph_edges2)
         graph_weights = np.array(graph_weights)
 
-        graph_edges1 = graph_edges1[graph_weights > np.quantile(graph_weights,0.75)]
-        graph_edges2 = graph_edges2[graph_weights > np.quantile(graph_weights,0.75)]
-        graph_weights = graph_weights[graph_weights > np.quantile(graph_weights,0.75)]
+        graph_edges1 = graph_edges1[graph_weights > np.quantile(graph_weights,0.5)]
+        graph_edges2 = graph_edges2[graph_weights > np.quantile(graph_weights,0.5)]
+        graph_weights = graph_weights[graph_weights > np.quantile(graph_weights,0.5)]
         graph_weights = np.array(graph_weights)/graph_weights.sum(axis=0)
         
-        node_frequency = np.unique(np.array([graph_edges1,graph_edges2]),return_counts=True)[1]
+        node_frequency = np.unique(np.array([graph_edges1,graph_edges2]),return_counts=True)
+        genes_present,node_frequency = node_frequency[0],node_frequency[1]
         node_frequency = node_frequency#/node_frequency.sum()
 
         graph = hv.Graph(((graph_edges1,graph_edges2, graph_weights),),vdims='Attention').opts(
@@ -705,12 +706,29 @@ class GraphPlotting:
             )#, edge_cmap='viridis', edge_color='Attention')
 
         df = graph.nodes.data
-        df['Frequency'] = node_frequency
+
+        enrichment =  self.enrichment[np.isin(self.data.unique_genes,genes_present),cluster]
+        df['Enrichment'] = enrichment
+
+        enrichmentQ = np.quantile(enrichment,0.5)
+        enriched_genes = self.data.unique_genes[enrichment > enrichmentQ]
         
+        genes1 = graph_edges1[np.isin(graph_edges1,enriched_genes)| np.isin(graph_edges2,enriched_genes)]
+        genes2 = graph_edges2[np.isin(graph_edges1,enriched_genes)| np.isin(graph_edges2,enriched_genes)]
+        enriched_genes_connected= np.unique(np.array([genes1,genes2]))
+
+        filter_enrichment = np.isin(graph_edges1,enriched_genes)| np.isin(graph_edges2,enriched_genes)
+        graph_edges1 = graph_edges1[filter_enrichment]
+        graph_edges2 = graph_edges2[filter_enrichment]
+        graph_weights = graph_weights[filter_enrichment]
+
+
+        df['Frequency'] = node_frequency[np.isin(self.data.unique_genes,enriched_genes_connected)]
+
         graph = hv.Graph(((graph_edges1,graph_edges2, graph_weights),df),vdims='Attention').opts(
             opts.Graph(
                 edge_cmap='viridis', edge_color='Attention',node_color='Frequency',
-                cmap='plasma', edge_line_width=hv.dim('Attention')*20,
+                cmap='plasma', edge_line_width=hv.dim('Attention')*20,node_size=hv.dim('Enrichment')*10,
                 edge_nonselection_alpha=0, width=1500,height=1500)
                 )
 
