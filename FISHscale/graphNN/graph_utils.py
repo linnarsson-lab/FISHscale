@@ -704,7 +704,6 @@ class GraphPlotting:
 
         graph_edges1 = graph_edges1[graph_weights > np.quantile(graph_weights,0.1)]
         graph_edges2 = graph_edges2[graph_weights > np.quantile(graph_weights,0.1)]
-
         
         node_frequency = np.unique(edges,return_counts=True)[1]
         node_frequency = node_frequency#/node_frequency.sum()
