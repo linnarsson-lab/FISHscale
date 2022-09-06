@@ -729,7 +729,7 @@ class GraphPlotting:
         graph = hv.Graph(((graph_edges1,graph_edges2, graph_weights),df),vdims='Attention').opts(
             opts.Graph(
                 edge_cmap='viridis', edge_color='Attention',node_color='Frequency',
-                cmap='plasma', edge_line_width=hv.dim('Attention')*20,node_size=hv.dim('Enrichment')*10,
+                cmap='plasma', edge_line_width=hv.dim('Attention')*20,node_size=hv.dim('Enrichment')*5,
                 edge_nonselection_alpha=0, width=1500,height=1500)
                 )
 
