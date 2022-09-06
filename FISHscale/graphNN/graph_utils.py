@@ -613,7 +613,7 @@ class GraphPlotting:
 
         #from joblib import Parallel, delayed
         result = []
-        for c in tqdm(np.unique(self.clusters)[35:]):
+        for c in tqdm(np.unique(self.clusters)):
             nodes= self.g.nodes()[self.clusters == c]
             att1, att2 = self.get_attention_nodes(nodes=nodes)
             #print(att1.shape,att2.shape)
