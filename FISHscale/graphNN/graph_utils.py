@@ -691,13 +691,12 @@ class GraphPlotting:
         graph_edges2 = np.array(graph_edges2)
         graph_weights = np.array(graph_weights)
 
-        graph_edges1 = graph_edges1[graph_weights > np.quantile(graph_weights,0.5)]
-        graph_edges2 = graph_edges2[graph_weights > np.quantile(graph_weights,0.5)]
-        graph_weights = graph_weights[graph_weights > np.quantile(graph_weights,0.5)]
+        graph_edges1 = graph_edges1[graph_weights > np.quantile(graph_weights,0.75)]
+        graph_edges2 = graph_edges2[graph_weights > np.quantile(graph_weights,0.75)]
+        graph_weights = graph_weights[graph_weights > np.quantile(graph_weights,0.75)]
         graph_weights = np.array(graph_weights)/graph_weights.sum(axis=0)
-
         
-        node_frequency = np.unique(edges,return_counts=True)[1]
+        node_frequency = np.unique(np.array([graph_edges1,graph_edges2]),return_counts=True)[1]
         node_frequency = node_frequency#/node_frequency.sum()
 
         graph = hv.Graph(((graph_edges1,graph_edges2, graph_weights),),vdims='Attention').opts(
