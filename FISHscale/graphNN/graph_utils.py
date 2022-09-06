@@ -17,6 +17,7 @@ import pandas as pd
 import holoviews as hv
 from holoviews import opts
 from holoviews.operation.datashader import datashade, bundle_graph, spread
+from FISHscale.graphNN.cluster_utils import ClusterCleaner
 hv.extension('bokeh')
 
 class GraphUtils(object):
@@ -421,6 +422,7 @@ class GraphPlotting:
 
         else:
             from sklearn.cluster import MiniBatchKMeans
+            
             import gc
             '''import scanpy as sc
             print('Running MBKMeans clustering from scanpy...')
@@ -442,6 +444,13 @@ class GraphPlotting:
 
             if not os.path.isdir(os.path.join(self.folder,'Clusters')):
                 os.mkdir('{}/Clusters'.format(self.folder))
+
+            merged_clusters= ClusterCleaner(
+                genes=self.data.unique_genes[np.where(self.g.ndata['gene'].numpy())[1]],
+                clusters=self.clusters
+                ).merge()
+            
+            self.clusters = merged_clusters
             
             self.data.add_dask_attribute('Clusters',new_labels.astype('str'),include_genes=True)
             
@@ -850,3 +859,5 @@ class enrich_: #sparese
             enrichment = (f_nnz + 0.1) / (f_nnz_other + 0.1) * (means + 0.01) / (means_other + 0.01)
 
             return enrichment
+
+
