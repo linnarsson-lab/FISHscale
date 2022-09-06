@@ -725,8 +725,8 @@ class GraphPlotting:
         node_enrich = enrichment[np.isin(self.data.unique_genes,enriched_genes_connected)]
 
         df = df[np.isin(df['index'].values,enriched_genes_connected)]
-        df.loc[:'Frequency'] = node_freq
-        df.loc[:'Enrichment'] = node_enrich
+        df.loc[:,'Frequency'] = node_freq
+        df.loc[:,'Enrichment'] = node_enrich
 
         graph = hv.Graph(((graph_edges1,graph_edges2, graph_weights),df),vdims='Attention').opts(
             opts.Graph(
