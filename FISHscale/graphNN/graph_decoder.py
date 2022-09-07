@@ -13,7 +13,7 @@ from scipy.spatial import KDTree
 import torch as th
 from pyro import distributions as dist
 import dgl
-from tqdm import trange
+from tqdm import trange, tqdm
 
 class GraphDecoder:
     def __init__(
@@ -93,7 +93,7 @@ class GraphDecoder:
         resampled_nodes = []
         resampled_genes = []
 
-        for nghs, nodes, blocks in self.decoder_dataloader:
+        for nghs, nodes, blocks in tqdm(self.decoder_dataloader):
             ngh2 = blocks[0]
             ngh1 = blocks[1]
             for n in range(nodes.shape[0]):
