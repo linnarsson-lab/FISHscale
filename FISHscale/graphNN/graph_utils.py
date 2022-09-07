@@ -5,6 +5,7 @@ import numpy as np
 from scipy import sparse
 import pytorch_lightning as pl
 import os
+from typing import Any, Dict
 from annoy import AnnoyIndex
 import networkx as nx
 from tqdm import trange
@@ -17,8 +18,27 @@ import pandas as pd
 import holoviews as hv
 from holoviews import opts
 from holoviews.operation.datashader import datashade, bundle_graph, spread
+from sklearn.preprocessing import LabelEncoder
 from FISHscale.graphNN.cluster_utils import ClusterCleaner
 hv.extension('bokeh')
+
+
+color_alphabet = np.array([
+	[240, 163, 255], [0, 117, 220], [153, 63, 0], [76, 0, 92], [0, 92, 49], [43, 206, 72], [255, 204, 153], [128, 128, 128], [148, 255, 181], [143, 124, 0], [157, 204, 0], [194, 0, 136], [0, 51, 128], [255, 164, 5], [255, 168, 187], [66, 102, 0], [255, 0, 16], [94, 241, 242], [0, 153, 143], [224, 255, 102], [116, 10, 255], [153, 0, 0], [255, 255, 128], [255, 255, 0], [255, 80, 5]
+]) / 256
+
+colors75 = np.concatenate([color_alphabet, 1 - (1 - color_alphabet) / 2, color_alphabet / 2])
+def colorize(x: np.ndarray, *, bgval: Any = None, cmap: np.ndarray = None) -> np.ndarray:
+	le = LabelEncoder().fit(x)
+	xt = le.transform(x)
+	if cmap is None:
+		cmap = colors75
+	colors = cmap[np.mod(xt, 75), :]
+	if bgval is not None:
+		colors[x == bgval, :] = np.array([0.8, 0.8, 0.8])
+	return colors
+
+
 
 class GraphUtils(object):
 
@@ -337,9 +357,11 @@ class GraphPlotting:
             clusters= self.prediction_unlabelled.argsort(axis=-1)[:,-1]
             import random
             r = lambda: random.randint(0,255)
+            colors = colorize(np.arange(self.ClusterNames.shape[0]))
             color_dic = {}
             for x in range(self.ClusterNames.shape[0]):
-                color_dic[x] = (r()/255,r()/255,r()/255)
+                c = colors[x,:].tolist()
+                color_dic[x] =  (c[0],c[1],c[2])
             clusters_colors = np.array([color_dic[x] for x in clusters])
 
             fig=plt.figure(figsize=(7,4),dpi=500)
@@ -482,11 +504,12 @@ class GraphPlotting:
             print('Generating umap embedding...')
             gc.collect()
             
-            import random
-            r = lambda: random.randint(0,255)
+            colors = colorize(np.arange(np.unique(self.clusters).shape[0]))
             color_dic = {}
             for x in np.unique(self.clusters):
-                color_dic[x] = (r()/255,r()/255,r()/255)
+                c = colors[x,:].tolist()
+                color_dic[x] = (c[0],c[1],c[2])
+            print(color_dic)
             clusters_colors = np.array([color_dic[x] for x in self.clusters])
 
             some = np.random.choice(np.arange(self.latent_unlabelled.shape[0]),random_n,replace=False)
