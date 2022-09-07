@@ -85,7 +85,7 @@ class GraphDecoder:
         sampler = dgl.dataloading.MultiLayerFullNeighborSampler(2)
         self.decoder_dataloader = dgl.dataloading.DataLoader(
                 self.g, th.tensor(self.lost_nodes).to(self.g.device), sampler,
-                batch_size=512, shuffle=True, drop_last=False, num_workers=0,
+                batch_size=512, shuffle=True, drop_last=False, num_workers=self.num_workers,
                 #persistent_workers=(num_workers > 0)
                 )
 
