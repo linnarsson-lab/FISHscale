@@ -13,6 +13,7 @@ from scipy.spatial import KDTree
 import torch as th
 from pyro import distributions as dist
 import dgl
+from tqdm import trange
 
 class GraphDecoder:
     def __init__(
@@ -52,7 +53,7 @@ class GraphDecoder:
     def simulate_expression(self, ntimes=100):
         self._multinomial_hexbin()
         simulation = []
-        for _ in range(ntimes):
+        for _ in trange(ntimes):
             self._lose_identity()
             self.random_sampler()
             simulated_expression= self.random_decoder()
