@@ -37,11 +37,34 @@ class DataLoader_base():
             open_f = lambda f, c: pd.read_parquet(f, columns = c)
             
             def open_f(f, columns):
+                
+                #Check available columns
+                p = ParquetFile(f)
+                existing_columns = p.schema.names
+                valid_columns = []
+                critical_columns = []
+                invalid_columns = []
+                
+                for i, c in enumerate(columns):
+                    if c in existing_columns:
+                        valid_columns.append(c)
+                    else:
+                        if i < 4: #First 3 columns are critical for data opening
+                            critical_columns.append(c)
+                        else:
+                            invalid_columns.append(c)
+                
+                if invalid_columns != []:
+                    warnings.warn(f"""Could not open the following columns: {invalid_columns}. Ignore if not required.
+                                  Otherwise choose from: {existing_columns}""")
+                if critical_columns != []:
+                    raise Exception(f'Could not open critical columns: {critical_columns}. Choose from: {existing_columns}')
+ 
                 try:
-                    return pd.read_parquet(f, columns = columns)
+                    return pd.read_parquet(f, columns = valid_columns)
                 except ArrowInvalid as e:
                     p = ParquetFile(f)
-                    raise Exception(f'Columns not found, choose from: {p.schema.names}, not: {columns}. Error message: {e}')
+                    raise Exception(f'Could not open .parquet file using Pandas.read_parquet(). Error message: {e}')
                     
         # .csv files
         else:
@@ -417,6 +440,13 @@ class DataLoader(DataLoader_base):
                 
                 #Find data extent and make metadata file
                 self._coordinate_properties(data)
+                
+                #Select rows based on pre-existing selection
+                if select_valid != False:
+                    if select_valid == True:
+                        select_valid = 'Valid' #Fall back to default
+                    row_filt = open_f(filename, [select_valid]).T.to_numpy().astype(bool)[0]
+                    data = data.loc[row_filt,:]
 
                 #unique genes
                 if not isinstance(unique_genes, (np.ndarray, list)):
@@ -444,14 +474,7 @@ class DataLoader(DataLoader_base):
                     filt = is_inside_sm_parallel(polygon, data.loc[:,['x', 'y']].to_numpy())
                     data = data.loc[filt,:]
                     self._metadatafile_add({'polygon': polygon})
-                    
-                #Select rows based on pre-existing selection
-                if select_valid != False:
-                    if select_valid == True:
-                        select_valid = 'Valid' #Fall back to default
-                    row_filt = open_f(filename, [select_valid]).T.to_numpy().astype(bool)[0]
-                    data = data.loc[row_filt,:]
-                
+
                 #Get data shape
                 self.shape = data.shape
                 self._metadatafile_add({'shape': self.shape})

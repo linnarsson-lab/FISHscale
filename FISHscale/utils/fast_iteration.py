@@ -26,9 +26,9 @@ class Iteration:
             [pd.DataFrame]: Pandas Dataframe with coordinates.
         """
         #Input checking
-        if not gene in self.unique_genes:
-            raise Exception(f'Given gene: "{gene}" can not be found in dataset. Did you maybe mean: {get_close_matches(gene, self.unique_genes, cutoff=0.4)}?')
-        
+        #if not gene in self.unique_genes:
+        #    raise Exception(f'Given gene: "{gene}" can not be found in dataset. Did you maybe mean: {get_close_matches(gene, self.unique_genes, cutoff=0.4)}?')
+        self.check_gene_input(gene)
         gene_i= self.gene_index[gene]
         
         if isinstance(include_other, str):
@@ -46,8 +46,8 @@ class Iteration:
             return self.df.get_partition(gene_i).loc[row_filter, columns].compute()
         
         #Filter based on working selection
-        elif self.working_selection != None:
-            row_filter = self.df.get_partition(gene_i).loc[:, self.working_selection].astype(bool)
+        elif self._working_selection != None:
+            row_filter = self.df.get_partition(gene_i).loc[:, self._working_selection].astype(bool)
             return self.df.get_partition(gene_i).loc[row_filter, columns].compute()
         
         #No selection
@@ -107,8 +107,8 @@ class Iteration:
             return self.df.get_partition(gene_i).loc[row_filter, columns].sample(frac=frac, random_state=random_state).compute()
         
         #Filter based on working selection
-        elif self.working_selection != None:
-            row_filter = self.df.get_partition(gene_i).loc[:, self.working_selection].astype(bool)
+        elif self._working_selection != None:
+            row_filter = self.df.get_partition(gene_i).loc[:, self._working_selection].astype(bool)
             return self.df.get_partition(gene_i).loc[row_filter, columns].sample(frac=frac, random_state=random_state).compute()
         
         #No selection

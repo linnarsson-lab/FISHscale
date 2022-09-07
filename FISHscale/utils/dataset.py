@@ -21,6 +21,7 @@ from FISHscale.spatial.boundaries import Boundaries, Boundaries_Multi
 from FISHscale.spatial.gene_order import Gene_order
 from FISHscale.segmentation.cellpose import Cellpose
 from FISHscale.utils.regionalization_gradient import Regionalization_Gradient, Regionalization_Gradient_Multi
+from FISHscale.utils.volume_align import Volume_Align
 import sys
 from datetime import datetime
 import pandas as pd
@@ -41,6 +42,7 @@ try:
 except ModuleNotFoundError as e:
     print(f'Please install "pyarrow" to load ".parquet" files. Without only .csv files are supported which are memory inefficient. Error: {e}')
 from tqdm import tqdm
+from difflib import get_close_matches
 
 class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, AttributeScatter, SpatialMetrics, DataLoader, Normalization, 
               Density1D, BoneFight, Decomposition, Boundaries, Gene_order, Cellpose, 
@@ -69,7 +71,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         reparse: bool = False,
         color_input: Optional[Union[str, dict]] = None,
         working_selection: str = None,
-        verbose: bool = False,
+        verbose: bool = True,
         part_of_multidataset: bool = False):
         """initiate Dataset
 
@@ -86,8 +88,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 dataframe that contains the gene labels of the points. 
                 Defaults to 'decoded_genes'.
             other_columns (list, optional): List with labels of other columns 
-                that need to be loaded. Data will stored under "self.other"
-                as Pandas Dataframe. Defaults to None.
+                that need to be loaded. Defaults to None.
             unique_genes (np.ndarray, optional): Array with unique gene names.
                 This can also be a selection of genes to load. After a
                 selection is made data needs to be re-parsed to include all
@@ -197,7 +198,8 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         self.auto_handle_color_dict(color_input)
         
         #Working selection
-        self.working_selection = working_selection
+        self._working_selection = working_selection
+        self._working_selection_options = other_columns
         
         #Verbosity
         self.verbose = verbose
@@ -208,7 +210,13 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         """
         if self.verbose:
             for arg in args:
-                print('    ' + arg)
+                print('    ' + str(arg))
+                
+    def check_gene_input(self, gene):
+        """Check if gene is in dataset. If not give suggestion.
+        """            
+        if not gene in self.unique_genes:
+            raise Exception(f'Given gene: "{gene}" can not be found in dataset. Did you maybe mean: {get_close_matches(gene, self.unique_genes, cutoff=0.4)}?')
                 
     def offset_data_temp(self, x_offset: float = 0, y_offset: float = 0, z_offset: float = 0):
         """Offset the data with the given offset values.
@@ -283,6 +291,29 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                             y_alt=y,
                             c_alt=c)
             gui.Application.instance.run()
+            
+    def set_working_selection(self, level: Union[None, str] = None):
+        """Set the working selection on which to work.
+        
+        If your dataset contains columns with boolean filters for certain 
+        subsets of the data, you can select on which sub-selection you work 
+        by setting the working_selection. This can for instance be different
+        anatomical regions in your dataset.
+        Setting the level to "None" resets the working selection. 
+
+        Args:
+            level (Union[None, str], optional): _description_. Defaults to None.
+        """
+        if level == None or level in self._working_selection_options:
+            self._working_selection = level
+            self.vp(f'Working selection set to: {self._working_selection}')
+        else:
+            raise Exception(f'Selection: "{level}" is not found in dataset, choose from: {self.other_columns}')
+    
+    def reset_working_selection(self):
+        """Reset the working selection to include all datapoints.
+        """
+        self.set_working_selection(level = None)
         
     def segment(self,
                     label_column,
@@ -384,7 +415,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
 
 
 class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base, Normalization, RegionalizeMulti,
-                   Decomposition, BoneFightMulti, Regionalization_Gradient_Multi, Boundaries_Multi):
+                   Decomposition, BoneFightMulti, Regionalization_Gradient_Multi, Boundaries_Multi, Volume_Align):
     """Load multiple datasets as Dataset objects.
     """
 
@@ -541,7 +572,13 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
             """
             if self.verbose:
                 for arg in args:
-                    print('    ' + arg)
+                    print('    ' + str(arg))
+                    
+    def check_gene_input(self, gene):
+        """Check if gene is in dataset. If not give suggestion.
+        """            
+        if not gene in self.unique_genes:
+            raise Exception(f'Given gene: "{gene}" can not be found in dataset. Did you maybe mean: {get_close_matches(gene, self.unique_genes, cutoff=0.4)}?')
 
     def load_from_files(self, 
         filepath: str, 
@@ -801,6 +838,8 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
 
         max_x_extent = max([d.x_extent for d in self.datasets])
         max_y_extent = max([d.y_extent for d in self.datasets])
+        max_x_extent = max_x_extent + (max_x_extent * 0.03)
+        max_y_extent = max_y_extent + (max_y_extent * 0.03)
         n_datasets = len(self.datasets)
         grid_size = ceil(np.sqrt(n_datasets))
         x_extent = (grid_size - 1) * max_x_extent

@@ -184,7 +184,10 @@ class GeneScatter(AxSize):
         #Check input
         if not isinstance(genes, list) and not isinstance(genes, np.ndarray):
             genes = [genes]
-
+            
+        for g in genes:
+            self.check_gene_input(g)
+        
         #Make figure
         if type(ax) == type(None):
             fig = plt.figure(figsize=(20,10))
@@ -318,6 +321,9 @@ class MultiGeneScatter(AxSize):
         #Check input
         if not isinstance(genes, list) and not isinstance(genes, np.ndarray):
             genes = [genes]
+            
+        for g in genes:
+            self.check_gene_input(g)
 
         #Make figure
         fig = plt.figure(figsize=(20,10))
