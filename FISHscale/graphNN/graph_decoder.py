@@ -112,7 +112,7 @@ class GraphDecoder:
                     probs1 = np.sum(np.log(probs1+1e-6),axis=0)#probs1/ (probs1.sum() + 1e-6)
 
                 else:
-                    probs1 = 1
+                    probs1 = th.ones(self.data.unique_genes.shape[0])/self.data.unique_genes.shape[0]
                 
                 
                 nodes_ngh2 = ngh2.edges()[0][th.isin(ngh2.edges()[1],nodes_ngh1)]
@@ -124,7 +124,7 @@ class GraphDecoder:
                     probs2 = np.sum(np.log(probs2+1e-6),axis=0)#probs1/ (probs1.sum() + 1e-6)
 
                 else:
-                    probs2 = 1        
+                    probs2 = th.ones(self.data.unique_genes.shape[0])/self.data.unique_genes.shape[0] 
 
               
                 if probs1.sum() == 0:
