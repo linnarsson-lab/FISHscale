@@ -13,7 +13,7 @@ from scipy.spatial import KDTree
 import torch as th
 from pyro import distributions as dist
 import dgl
-from tqdm import trange
+from tqdm import trange, tqdm
 
 class GraphDecoder:
     def __init__(
@@ -85,7 +85,7 @@ class GraphDecoder:
         sampler = dgl.dataloading.MultiLayerFullNeighborSampler(2)
         self.decoder_dataloader = dgl.dataloading.DataLoader(
                 self.g, th.tensor(self.lost_nodes).to(self.g.device), sampler,
-                batch_size=512, shuffle=True, drop_last=False, num_workers=0,
+                batch_size=512, shuffle=True, drop_last=False, num_workers=self.num_workers,
                 #persistent_workers=(num_workers > 0)
                 )
 
@@ -93,7 +93,7 @@ class GraphDecoder:
         resampled_nodes = []
         resampled_genes = []
 
-        for nghs, nodes, blocks in self.decoder_dataloader:
+        for nghs, nodes, blocks in tqdm(self.decoder_dataloader):
             ngh2 = blocks[0]
             ngh1 = blocks[1]
             for n in range(nodes.shape[0]):
