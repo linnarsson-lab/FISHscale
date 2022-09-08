@@ -201,7 +201,6 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting, GraphDecoder)
     
     def save_graph(self):
         dgluns = self.save_to+'graph/{}Unsupervised_smooth{}_dst{}_mNodes{}.graph'.format(self.molecules.shape[0],self.smooth,self.distance_factor,self.minimum_nodes_connected)
-        self.g = self.buildGraph()
         graph_labels = {"UnsupervisedDGL": th.tensor([0])}
         print('Saving model...')
         dgl.data.utils.save_graphs(dgluns, [self.g], graph_labels)
