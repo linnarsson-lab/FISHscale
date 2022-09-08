@@ -18,7 +18,7 @@ from tqdm import trange, tqdm
 class GraphDecoder:
     def __init__(
         self,
-        lose_identity_percentage = 0.05,
+        lose_identity_percentage = 0.95,
         ):
         self.lose_identity_percentage = lose_identity_percentage
 
@@ -79,7 +79,7 @@ class GraphDecoder:
         'a'
 
     def _lose_identity(self):
-        self.lost_nodes = th.tensor(np.random.choice(np.arange(self.g.num_nodes()) ,size=int(0.2*self.g.num_nodes())))
+        self.lost_nodes = th.tensor(np.random.choice(np.arange(self.g.num_nodes()) ,size=int(self.lose_identity_percentage*self.g.num_nodes())))
 
     def random_sampler(self):
         sampler = dgl.dataloading.NeighborSampler([1])
