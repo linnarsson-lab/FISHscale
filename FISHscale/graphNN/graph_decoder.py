@@ -82,14 +82,14 @@ class GraphDecoder:
         self.lost_nodes = th.tensor(np.random.choice(np.arange(self.g.num_nodes()) ,size=int(0.2*self.g.num_nodes())))
 
     def random_sampler(self):
-        sampler = dgl.dataloading.MultiLayerFullNeighborSampler(2)
+        sampler = dgl.dataloading.NeighborSampler([1])
         self.decoder_dataloader = dgl.dataloading.DataLoader(
                 self.g, th.tensor(self.lost_nodes).to(self.g.device), sampler,
-                batch_size=512, shuffle=True, drop_last=False, num_workers=self.num_workers,
-                #persistent_workers=(num_workers > 0)
+                batch_size=1, shuffle=True, drop_last=False, num_workers=self.num_workers,
+                persistent_workers=(self.num_workers > 0)
                 )
 
-    def random_decoder(self):
+    def random_decoder_deprecated(self):
         resampled_nodes = []
         resampled_genes = []
 
@@ -132,12 +132,53 @@ class GraphDecoder:
                 if probs2.sum() == 0:
                     probs2 += 1e-6
 
-
                 probabilities_genes = np.log(multinomial_region_probs+1e-6)+probs1+probs2
                 #print(probabilities_genes)
                 
                 M = dist.Multinomial(total_count=1, logits=probabilities_genes/probabilities_genes.sum()).sample()
                 sampled_gene = self.data.unique_genes[np.where(M.numpy() == 1)][0]
+                resampled_nodes.append(nghs[n].numpy().tolist())
+                resampled_genes.append(sampled_gene)
+                
+            self.lost_nodes = self.lost_nodes[th.isin(self.lost_nodes, nghs, invert=True)]
+
+        simulated_expression = self.data.unique_genes[(np.where(self.g.ndata['gene'])[1])]
+        simulated_expression[resampled_nodes] = resampled_genes
+        return simulated_expression
+                
+
+    def random_decoder(self):
+        resampled_nodes = []
+        resampled_genes = []
+
+        for nghs, nodes, _ in tqdm(self.decoder_dataloader):
+            for n in range(nodes.shape[0]):
+                center_node = nghs[n]
+                
+                multinomial_region = self.multinomial_region[int(self.g.ndata['hex_region'][nodes[n]])]
+                multinomial_region_probs = multinomial_region/(multinomial_region.sum()+1e-6)
+
+                nodes_1hop = th.unique(th.cat(self.g.in_subgraph(center_node).edges()))
+                genes_ngh1 = self.data.unique_genes[np.where(self.g.ndata['gene'][nodes_1hop,:] == 1)[1]]
+
+                if genes_ngh1.shape[0] > 0:
+                    probs1 = np.stack([self.attentionNN1_scores[:][g].values for g in genes_ngh1])
+                    probs1 = np.sum(np.log(probs1+1e-6),axis=0)#probs1/ (probs1.sum() + 1e-6)
+                else:
+                    probs1 = 1
+
+                nodes_2hop = th.unique(th.cat(self.g.in_subgraph(nodes_1hop).edges()))
+                genes_ngh2 = self.data.unique_genes[np.where(self.g.ndata['gene'][nodes_2hop,:] == 1)[1]]
+                if genes_ngh2.shape[0] > 0:
+                    probs2 = np.stack([self.attentionNN2_scores[:][g].values for g in genes_ngh2])
+                    probs2 = np.sum(np.log(probs2+1e-6),axis=0)#probs1/ (probs1.sum() + 1e-6)
+                else:
+                    probs2 = 1
+                    
+                probabilities_genes = np.log(multinomial_region_probs+1e-6)+probs1+probs2
+
+                M = dist.Multinomial(total_count=1, logits=probabilities_genes/probabilities_genes.sum()).sample()
+                sampled_gene = self.data.unique_genes[np.where(M == 1)][0]
                 resampled_nodes.append(nghs[n].numpy().tolist())
                 resampled_genes.append(sampled_gene)
                 
