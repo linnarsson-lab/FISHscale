@@ -18,7 +18,7 @@ from tqdm import trange, tqdm
 class GraphDecoder:
     def __init__(
         self,
-        lose_identity_percentage = 0.25,
+        lose_identity_percentage = 0.05,
         ):
         self.lose_identity_percentage = lose_identity_percentage
 
