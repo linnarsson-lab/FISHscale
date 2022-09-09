@@ -682,7 +682,7 @@ class GraphPlotting:
     
     def bible_grammar2(self, e0, e1, att):
         df = pd.DataFrame({'0':e0,'1':e1, 'w':att})
-        df2 = df.pivot_table(index='0', columns='1',aggfunc='sum')
+        df2 = df.pivot_table(index='0', columns='1',aggfunc='sum',fill_value=0)
         df2.columns = self.data.unique_genes
         return df2
 
