@@ -51,7 +51,7 @@ class GraphDecoder:
                 freq = np.ones_like(freq)/freq.shape[0]
             self.multinomial_region[h]= freq
 
-    def simulate_expression(self, ntimes=100):
+    def simulate_expression(self, ntimes=10):
         self._multinomial_hexbin()
         simulation = []
         for _ in trange(ntimes):
