@@ -80,13 +80,13 @@ class GraphDecoder:
         'a'
 
     def _lose_identity(self):
-        self.lost_nodes = th.tensor(np.random.choice(np.arange(self.g.num_nodes()) ,size=int(self.lose_identity_percentage*self.g.num_nodes())))
+        self.lost_nodes = th.tensor(np.random.choice(np.arange(self.g.num_nodes()) ,size=int(self.lose_identity_percentage*self.g.num_nodes())),replace=False)
 
     def random_sampler(self):
         sampler = dgl.dataloading.MultiLayerFullNeighborSampler(2)
         self.decoder_dataloader = dgl.dataloading.DataLoader(
                 self.g, th.tensor(self.lost_nodes).to(self.g.device), sampler,
-                batch_size=1024, shuffle=True, drop_last=False, num_workers=self.num_workers,
+                batch_size=512, shuffle=True, drop_last=False, num_workers=self.num_workers,
                 persistent_workers=(self.num_workers > 0)
                 )
                 
