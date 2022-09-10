@@ -82,8 +82,8 @@ class GraphDecoder:
     def _lose_identity(self):
         self.lost_nodes = th.tensor(
             np.random.choice(np.arange(self.g.num_nodes()) ,
-            size=int(self.lose_identity_percentage*self.g.num_nodes())),
-            replace=False,
+            size=int(self.lose_identity_percentage*self.g.num_nodes()),
+            replace=False),
             )
 
     def random_sampler(self):
