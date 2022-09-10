@@ -165,7 +165,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting, GraphDecoder)
 
         print(self.g)
         self.make_train_test_validation()
-        l_loc,l_scale= self.compute_library_size()
+        l_loc,l_scale= 1,1# self.compute_library_size()
         
         ### Prepare Model
         if type(self.model) == type(None):
