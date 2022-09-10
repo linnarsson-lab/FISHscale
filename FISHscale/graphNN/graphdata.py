@@ -165,7 +165,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting, GraphDecoder)
 
         print(self.g)
         self.make_train_test_validation()
-        l_loc,l_scale= 1,1# self.compute_library_size()
+        l_loc,l_scale= self.compute_library_size()
         
         ### Prepare Model
         if type(self.model) == type(None):
@@ -188,9 +188,6 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting, GraphDecoder)
                                         scale_factor=1/(batch_size*self.data.unique_genes.shape[0]),
                                         warmup_factor=int(self.edges_train.shape[0]/self.batch_size)*self.n_epochs,
                                     )
-
-        if self.model.supervised == False:
-            del self.g.ndata['ngh']
 
         #self.g.ndata['gene'] = th.log(1+self.g.ndata['gene'])
         self.model.to(self.device)
