@@ -827,7 +827,7 @@ class GraphPlotting:
         import itertools
         df = self._intercluster_df(dic)
         node_frequency = df.sum(axis=1)
-        df = df/df.sum(axis=1)
+        df = (df.T/df.sum(axis=1)).T
 
         a = itertools.combinations(np.arange(len(df)),2)
         graph_edges1 = []
