@@ -659,9 +659,9 @@ class GraphPlotting:
             counts_cluster[c] = [counts_cl1, counts_cl2]
 
         inter_graph, df = self.plot_intercluster(counts_cluster)
+        hv.save(inter_graph, '{}/attention/ClusterConnectivity.html'.format(self.folder, c))
         df = pd.DataFrame(index=np.unique(self.clusters),columns=np.unique(self.clusters), data=df)
         df.to_parquet('{}/attention/ClusterConnectivity.parquet'.format(self.folder,c))
-        hv.save(inter_graph, '{}/attention/ClusterConnectivity.html'.format(self.folder, c))
 
 
         for b in result:
@@ -826,7 +826,8 @@ class GraphPlotting:
     def plot_intercluster(self, dic):
         import itertools
         df = self._intercluster_df(dic)
-        print(df.shape)
+        node_frequency = df.sum(axis=1)
+        df = df/df.sum(axis=1)
 
         a = itertools.combinations(np.arange(len(df)),2)
         graph_edges1 = []
@@ -841,10 +842,6 @@ class GraphPlotting:
         graph_edges1 = np.array(graph_edges1)
         graph_edges2 = np.array(graph_edges2)
         graph_weights = np.array(graph_weights)
-
-        node_frequency = np.unique(np.array([graph_edges1,graph_edges2]),return_counts=True)
-        _, node_frequency = node_frequency[0],node_frequency[1]
-        node_frequency = node_frequency#/node_frequency.sum()
 
         graph = hv.Graph(((graph_edges1,graph_edges2, graph_weights),),vdims='Attention').opts(
             opts.Graph(edge_cmap='viridis', edge_color='Attention'),
