@@ -87,20 +87,21 @@ class GraphDecoder:
             )
 
     def random_sampler(self):
-        sampler = dgl.dataloading.MultiLayerFullNeighborSampler(2)
-        self.decoder_dataloader = dgl.dataloading.DataLoader(
-                self.g, th.tensor(self.lost_nodes).to(self.g.device), sampler,
-                batch_size=512, shuffle=True, drop_last=False, num_workers=self.num_workers,
-                persistent_workers=(self.num_workers > 0)
-                )
-                
-    def random_decoder(self):
         nodes_gene =  self.g.ndata['gene']
         self.g.ndata['gene'] = th.tensor(self.g.ndata['gene'],dtype=th.float32)
         self.g.ndata['tmp_gene'] = nodes_gene.clone().float()
         self.g.ndata['tmp_gene'][self.lost_nodes,:] = th.zeros_like(self.g.ndata['tmp_gene'][self.lost_nodes,:],dtype=th.float32)
 
         print((self.g.ndata['tmp_gene'].sum(axis=1) > 0).sum())
+
+        sampler = dgl.dataloading.MultiLayerFullNeighborSampler(2,prefetch_node_feats=['tmp_gene'])
+        self.decoder_dataloader = dgl.dataloading.DataLoader(
+                self.g, th.tensor(self.lost_nodes).to(self.g.device), sampler,
+                batch_size=1024, shuffle=True, drop_last=False, num_workers=self.num_workers,
+                #persistent_workers=(self.num_workers > 0)
+                )
+                
+    def random_decoder(self):
 
         for _, nodes, blocks in tqdm(self.decoder_dataloader):
             block_1hop = blocks[1]

@@ -682,7 +682,14 @@ class GraphPlotting:
     
     def bible_grammar2(self, e0, e1, att):
         df = pd.DataFrame({'0':e0,'1':e1, 'w':att})
-        df2 = df.pivot_table(index='0', columns='1',aggfunc='sum',fill_value=0)
+        df2 = df.pivot_table(
+            index='0', 
+            columns='1',
+            aggfunc='sum',
+            fill_value=0,
+            dropna=False
+            ).reindex(self.data.unique_genes, axis=0)
+            
         df2.columns = self.data.unique_genes
         return df2
 
@@ -702,7 +709,11 @@ class GraphPlotting:
         for x in a:
             e0_cluster_genes.append(x[0])
             e1_cluster_genes.append(x[1])
-            att_add += [0]
+
+            e0_cluster_genes.append(x[1])
+            e1_cluster_genes.append(x[0])
+            att_add += [0,0]
+
         e0_cluster_genes = np.array(e0_cluster_genes)
         e1_cluster_genes = np.array(e1_cluster_genes)
         edges = np.array([e0_cluster_genes,e1_cluster_genes])
