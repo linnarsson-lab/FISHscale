@@ -98,7 +98,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting, GraphDecoder)
             distance_factor (float, optional): Distance selected to construct 
                 network graph will be multiplied by the distance factor. 
                 Defaults to 3.
-            device (str, optional): Device where pytorch is run. Defaults to 'cpu'.
+            device (str, optional): Device where pytorch is run. Defaults to 'gpu'.
             lr (float, optional): learning rate .Defaults to 1e-3.
             aggregator (str, optional). Aggregator type for SAGEConv. Choose 
                 between 'pool','mean','min','lstm'. Defaults to 'pool'.
