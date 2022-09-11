@@ -619,13 +619,13 @@ class GraphPlotting:
 
 
     def execute(self, c, nodes,att1, att2):
-        g1,bg1 = self.plot_cluster(c,nodes,att1)
+        g1,bg1, counts_cl1 = self.plot_cluster(c,nodes,att1)
         bg1.to_parquet('{}/attention/SyntaxNGH1_Cluster{}.parquet'.format(self.folder,c))
         hv.save(g1, '{}/attention/AttentionNGH1_{}.html'.format(self.folder, c))
-        g2,bg2 = self.plot_cluster(c,nodes,att2)
+        g2,bg2, counts_cl2 = self.plot_cluster(c,nodes,att2)
         bg2.to_parquet('{}/attention/SyntaxNGH2_Cluster{}.parquet'.format(self.folder,c))
         hv.save(g2, '{}/attention/AttentionNGH2_{}.html'.format(self.folder, c))
-        return (bg1,bg2)
+        return bg1, bg2, counts_cl1, counts_cl2
 
     def plot_networkx(self):
         import shutil
@@ -634,6 +634,7 @@ class GraphPlotting:
         result = np.where(gene_==1)
         rg = [self.data.unique_genes[r] for r in result[1]]
         self.dic_ = dict(zip(result[0],rg))
+        self.dic_clusters = dict(zip([int(n) for n in self.g.nodes()] ,self.clusters))
 
         if os.path.exists(path.join(self.folder,'attention')):
             shutil.rmtree(path.join(self.folder,'attention'))
@@ -646,12 +647,19 @@ class GraphPlotting:
 
         #from joblib import Parallel, delayed
         result = []
-        for c in tqdm(np.unique(self.clusters)):
+
+        counts_cluster = {}
+        for c in tqdm(np.unique(self.clusters)[:3]):
             nodes= self.g.nodes()[self.clusters == c]
             att1, att2 = self.get_attention_nodes(nodes=nodes)
             #print(att1.shape,att2.shape)
-            bg1,bg2 = self.execute(c, nodes,att1,att2)
+            bg1,bg2, counts_cl1, counts_cl2 = self.execute(c, nodes,att1,att2)
             result.append((bg1,bg2)) 
+
+            counts_cluster[c] = [counts_cl1, counts_cl2]
+
+        self.plot_intercluster(counts_cluster)
+
 
         for b in result:
             bible1 += b[0].values
@@ -704,7 +712,12 @@ class GraphPlotting:
 
         e0_cluster_genes = [self.dic_[e] for e in edges[0].numpy()]
         e1_cluster_genes = [self.dic_[e] for e in edges[1].numpy()]
-        
+
+        edges_cluster = [self.dic_clusters[e] for e in edges[0].numpy()]
+        edges_cluster += [self.dic_clusters[e] for e in edges[1].numpy()]
+        counts_cluster = np.unique(edges_cluster, return_counts=True)
+        counts_cluster = dict(zip(counts_cluster[0],counts_cluster[1]))
+
         a = itertools.combinations(self.data.unique_genes,2)
         att_add = []
         for x in a:
@@ -786,7 +799,72 @@ class GraphPlotting:
                     cmap='plasma', edge_line_width=hv.dim('Attention')*10,
                     edge_nonselection_alpha=0, width=2000,height=2000)
             )'''
-        return graph, bg
+        return graph, bg, counts_cluster
+
+    def _intercluster_df(self, dic):
+        intercluster_network = []
+        for c in dic:
+            counts_cl_i = []
+            dic1_cluster_i = dic[c][0]
+            dic2_cluster_i = dic[c][1]
+
+            for c2 in np.unique(self.clusters):
+                counts = 0
+                if c2 in dic1_cluster_i:
+                    counts += dic1_cluster_i[c2]
+                if c2 in dic2_cluster_i:
+                    counts += dic2_cluster_i[c2]
+                counts_cl_i.append(counts)
+            intercluster_network.append(counts_cl_i)
+
+        return np.stack(intercluster_network)
+
+
+    def plot_intercluster(self, dic):
+        import itertools
+        df = self._intercluster_df(dic)
+        print(df.shape)
+
+        a = itertools.combinations(np.arange(len(df)),2)
+        graph_edges1 = []
+        graph_edges2 = []
+        graph_weights = []
+
+        for x in a:
+            graph_edges1.append(x[0])
+            graph_edges2.append(x[1])
+            graph_weights.append(df[x[0]][x[1]])
+        
+        graph_edges1 = np.array(graph_edges1)
+        graph_edges2 = np.array(graph_edges2)
+        graph_weights = np.array(graph_weights)
+
+        node_frequency = np.unique(np.array([graph_edges1,graph_edges2]),return_counts=True)
+        _, node_frequency = node_frequency[0],node_frequency[1]
+        node_frequency = node_frequency#/node_frequency.sum()
+
+        graph = hv.Graph(((graph_edges1,graph_edges2, graph_weights),),vdims='Attention').opts(
+            opts.Graph(edge_cmap='viridis', edge_color='Attention'),
+            )
+
+        df_info = graph.nodes.data
+        df_info.loc[:,'Frequency'] = node_frequency
+
+        graph = hv.Graph(((graph_edges1,graph_edges2, graph_weights),df_info),vdims='Attention').opts(
+            opts.Graph(
+                edge_cmap='viridis', edge_color='Attention',node_color='Frequency',
+                cmap='plasma', edge_line_width=hv.dim('Attention')*20,
+                edge_nonselection_alpha=0, width=1500,height=1500)
+                )
+
+        labels = hv.Labels(graph.nodes, ['x', 'y'],'index')
+        #graph = graph #* labels.opts(text_font_size='8pt', text_color='white', bgcolor='grey')
+        inter_graph = graph*labels.opts(text_font_size='5pt', text_color='white', bgcolor='grey')
+
+        return inter_graph
+
+
+
 
 
         
