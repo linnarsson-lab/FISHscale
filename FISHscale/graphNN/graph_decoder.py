@@ -51,7 +51,7 @@ class GraphDecoder:
                 freq = np.ones_like(freq)/freq.shape[0]
             self.multinomial_region[h]= freq
 
-    def simulate_expression(self, ntimes=10):
+    def simulate_expression(self, ntimes=10, simulation_name='base_simulation'):
         self._multinomial_hexbin()
         simulation = []
         for _ in trange(ntimes):
@@ -73,7 +73,7 @@ class GraphDecoder:
             expression_by_region_by_simulation.append(expression_simulation)
             
         expression_by_simulation_by_region = np.array(expression_by_region_by_simulation)
-        self.g.ndata['simulation'] = simulation
+        self.g.ndata[simulation_name] = simulation
         return expression_by_simulation_by_region
 
     def plot_distribution(self):
