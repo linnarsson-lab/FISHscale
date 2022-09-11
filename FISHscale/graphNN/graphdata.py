@@ -192,6 +192,9 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting, GraphDecoder)
         #self.g.ndata['gene'] = th.log(1+self.g.ndata['gene'])
         self.model.to(self.device)
 
+        if 'clusters' in self.g.ndata.keys():
+            self.clusters = self.g.ndata['clusters']
+
     def prepare_data(self):
         # do-something
         pass

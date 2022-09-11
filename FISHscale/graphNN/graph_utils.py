@@ -577,6 +577,7 @@ class GraphPlotting:
 
 
             hv.save(hmap, "{}/Clusters.html".format(self.folder),fmt='html')
+            self.g.save_graph()
             '''except:
                 print('Could not generate html file')'''
     
