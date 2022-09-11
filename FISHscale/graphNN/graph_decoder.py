@@ -96,7 +96,7 @@ class GraphDecoder:
 
         sampler = dgl.dataloading.MultiLayerFullNeighborSampler(2,prefetch_node_feats=['tmp_gene'])
         self.decoder_dataloader = dgl.dataloading.DataLoader(
-                self.g, self.lost_nodes.to(self.g.device), sampler,
+                self.g.to('cpu'), self.lost_nodes.to('cpu'), sampler,
                 batch_size=1024, shuffle=True, drop_last=False, num_workers=self.num_workers,
                 #persistent_workers=(self.num_workers > 0)
                 )
