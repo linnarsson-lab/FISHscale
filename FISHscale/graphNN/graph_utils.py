@@ -658,7 +658,9 @@ class GraphPlotting:
 
             counts_cluster[c] = [counts_cl1, counts_cl2]
 
-        self.plot_intercluster(counts_cluster)
+        inter_graph, df = self.plot_intercluster(counts_cluster)
+        df.to_parquet('{}/attention/ClusterConnectivity.parquet'.format(self.folder,c))
+        hv.save(inter_graph, '{}/attention/ClusterConnectivity.html'.format(self.folder, c))
 
 
         for b in result:
@@ -861,7 +863,7 @@ class GraphPlotting:
         #graph = graph #* labels.opts(text_font_size='8pt', text_color='white', bgcolor='grey')
         inter_graph = graph*labels.opts(text_font_size='5pt', text_color='white', bgcolor='grey')
 
-        return inter_graph
+        return inter_graph, df
 
 
 
