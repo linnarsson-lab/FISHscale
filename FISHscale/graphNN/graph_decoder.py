@@ -98,42 +98,31 @@ class GraphDecoder:
         self.decoder_dataloader = dgl.dataloading.DataLoader(
                 self.g.to('cpu'), self.lost_nodes.to('cpu'), sampler,
                 batch_size=1024, shuffle=True, drop_last=False, num_workers=self.num_workers,
-                #persistent_workers=(self.num_workers > 0)
+                persistent_workers=(self.num_workers > 0)
                 )
                 
     def random_decoder(self):
-        import time
-
-
         for _, nodes, blocks in tqdm(self.decoder_dataloader):
             block_1hop = blocks[1]
             block_2hop = blocks[0]
             
-            start = time.time()
             probmultinomial_region = th.stack([self.multinomial_region[int(n)] for n in self.g.ndata['hex_region'][nodes] ])
-            end = time.time()
-            print('Time mult', end - start)
-
-            
-            
             block_1hop.srcdata['tmp_gene']=  block_1hop.srcdata['tmp_gene'].float()
             block_1hop.update_all(fn.copy_u('tmp_gene', 'e'), fn.sum('e', 'h'))
             genes_1hop = block_1hop.dstdata['h']
-            logprobs1_hop = np.array([np.array([np.log(self.attentionNN1_scores[:][gene]+1e-6)*counts.numpy() for gene,counts in zip(self.data.unique_genes,center)]).sum(axis=0) for center in genes_1hop])
-            
-            
-            block_2hop = blocks[0]
+
+            logprobs1_hop = np.log(np.stack([(center*self.attentionNN1_scores.T).values.sum(axis=0) for center in genes_1hop])+1e-6)
+
             block_2hop.srcdata['tmp_gene']=  block_2hop.srcdata['tmp_gene'].float()
             repeated_nodes = np.where(np.isin(block_2hop.srcnodes(),block_1hop.srcnodes()))[0]
             block_2hop.srcdata['tmp_gene'][repeated_nodes,:] = th.zeros_like(block_2hop.srcdata['tmp_gene'][repeated_nodes,:]).float()
-            
             block_2hop.update_all(fn.copy_u('tmp_gene', 'e'), fn.sum('e', 'h'))
             
             block_1hop.srcdata['tmp_gene2hop'] = block_2hop.dstdata['h'].float()
             block_1hop.update_all(fn.copy_u('tmp_gene2hop', 'e2'), fn.sum('e2', 'h2'))
             genes_2hop = block_1hop.dstdata['h2']
-            logprobs2_hop = np.array([np.array([np.log(self.attentionNN2_scores[:][gene]+1e-6)*counts.numpy() for gene,counts in zip(self.data.unique_genes,center)]).sum(axis=0) for center in genes_2hop])
-            
+            logprobs2_hop = np.log(np.stack([(center*self.attentionNN2_scores.T).values.sum(axis=0) for center in genes_2hop])+1e-6)
+
             probabilities = th.log(probmultinomial_region+1e-6) + logprobs1_hop + logprobs2_hop
             M = dist.Multinomial(total_count=1, logits=probabilities).sample()
             
