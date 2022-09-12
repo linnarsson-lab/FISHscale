@@ -102,12 +102,19 @@ class GraphDecoder:
                 )
                 
     def random_decoder(self):
+        import time
+
 
         for _, nodes, blocks in tqdm(self.decoder_dataloader):
             block_1hop = blocks[1]
             block_2hop = blocks[0]
             
+            start = time.time()
             probmultinomial_region = th.stack([self.multinomial_region[int(n)] for n in self.g.ndata['hex_region'][nodes] ])
+            end = time.time()
+            print('Time mult', end - start)
+
+            
             
             block_1hop.srcdata['tmp_gene']=  block_1hop.srcdata['tmp_gene'].float()
             block_1hop.update_all(fn.copy_u('tmp_gene', 'e'), fn.sum('e', 'h'))
