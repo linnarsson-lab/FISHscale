@@ -111,7 +111,7 @@ class GraphDecoder:
             block_1hop.update_all(fn.copy_u('tmp_gene', 'e'), fn.sum('e', 'h'))
             genes_1hop = block_1hop.dstdata['h']
 
-            logprobs1_hop = np.log(np.stack([(center*self.attentionNN1_scores.T).values.sum(axis=0) for center in genes_1hop])+1e-6)
+            logprobs1_hop = np.log((genes_1hop@self.attentionNN1_scores).values+1e-6)
 
             block_2hop.srcdata['tmp_gene']=  block_2hop.srcdata['tmp_gene'].float()
             repeated_nodes = np.where(np.isin(block_2hop.srcnodes(),block_1hop.srcnodes()))[0]
@@ -121,7 +121,7 @@ class GraphDecoder:
             block_1hop.srcdata['tmp_gene2hop'] = block_2hop.dstdata['h'].float()
             block_1hop.update_all(fn.copy_u('tmp_gene2hop', 'e2'), fn.sum('e2', 'h2'))
             genes_2hop = block_1hop.dstdata['h2']
-            logprobs2_hop = np.log(np.stack([(center*self.attentionNN2_scores.T).values.sum(axis=0) for center in genes_2hop])+1e-6)
+            logprobs2_hop = np.log((genes_2hop@self.attentionNN2_scores).values+1e-6)
 
             probabilities = th.log(probmultinomial_region+1e-6) + logprobs1_hop + logprobs2_hop
             M = dist.Multinomial(total_count=1, logits=probabilities).sample()
@@ -132,44 +132,3 @@ class GraphDecoder:
         simulated_genes = self.data.unique_genes[np.where(self.g.ndata['tmp_gene'].numpy() == 1)][0]
         del self.g.ndata['tmp_gene']
         return simulated_genes
-
-    def random_decoder_deprecated(self):
-        resampled_nodes = []
-        resampled_genes = []
-
-        for nghs, nodes, _ in tqdm(self.decoder_dataloader):
-            for n in range(nodes.shape[0]):
-                center_node = nghs[n]
-                
-                multinomial_region = self.multinomial_region[int(self.g.ndata['hex_region'][nodes[n]])]
-                multinomial_region_probs = multinomial_region/(multinomial_region.sum()+1e-6)
-
-                nodes_1hop = th.unique(th.cat(self.g.in_subgraph(center_node).edges()))
-                genes_ngh1 = self.data.unique_genes[np.where(self.g.ndata['gene'][nodes_1hop,:] == 1)[1]]
-
-                if genes_ngh1.shape[0] > 0:
-                    probs1 = np.stack([self.attentionNN1_scores[:][g].values for g in genes_ngh1])
-                    probs1 = np.sum(np.log(probs1+1e-6),axis=0)#probs1/ (probs1.sum() + 1e-6)
-                else:
-                    probs1 = 1
-
-                nodes_2hop = th.unique(th.cat(self.g.in_subgraph(nodes_1hop).edges()))
-                genes_ngh2 = self.data.unique_genes[np.where(self.g.ndata['gene'][nodes_2hop,:] == 1)[1]]
-                if genes_ngh2.shape[0] > 0:
-                    probs2 = np.stack([self.attentionNN2_scores[:][g].values for g in genes_ngh2])
-                    probs2 = np.sum(np.log(probs2+1e-6),axis=0)#probs1/ (probs1.sum() + 1e-6)
-                else:
-                    probs2 = 1
-                    
-                probabilities_genes = np.log(multinomial_region_probs+1e-6)+probs1+probs2
-
-                M = dist.Multinomial(total_count=1, logits=probabilities_genes/probabilities_genes.sum()).sample()
-                sampled_gene = self.data.unique_genes[np.where(M == 1)][0]
-                resampled_nodes.append(nghs[n].numpy().tolist())
-                resampled_genes.append(sampled_gene)
-                
-            self.lost_nodes = self.lost_nodes[th.isin(self.lost_nodes, nghs, invert=True)]
-
-        simulated_expression = self.data.unique_genes[(np.where(self.g.ndata['gene'])[1])]
-        simulated_expression[resampled_nodes] = resampled_genes
-        return simulated_expression
