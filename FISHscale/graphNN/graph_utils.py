@@ -660,7 +660,7 @@ class GraphPlotting:
 
         inter_graph, df = self.plot_intercluster(counts_cluster)
         hv.save(inter_graph, '{}/attention/ClusterConnectivity.html'.format(self.folder, c))
-        df = pd.DataFrame(index=np.unique(self.clusters),columns=np.unique(self.clusters), data=df)
+        df = pd.DataFrame(index=np.unique(self.clusters).astype('str'),columns=np.unique(self.clusters).astype('str'), data=df)
         df.to_parquet('{}/attention/ClusterConnectivity.parquet'.format(self.folder,c))
 
 
