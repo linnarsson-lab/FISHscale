@@ -54,11 +54,15 @@ class GraphDecoder:
     def simulate_expression(self, ntimes=10, simulation_name='base_simulation'):
         self._multinomial_hexbin()
         simulation = []
+
+        simulation_zeros = np.zeros((self.g.num_nodes(),self.g.ndata['gene'].shape[1]))
         for _ in trange(ntimes):
             self._lose_identity()
             self.random_sampler()
             simulated_expression= self.random_decoder()
             simulation.append(simulated_expression)
+            simulation_zeros += self.g.ndata['tmp_gene'].numpy()
+            del self.g.ndata['tmp_gene']
 
         simulation =  np.stack(simulation).T
         expression_by_region_by_simulation = []
@@ -73,7 +77,7 @@ class GraphDecoder:
             expression_by_region_by_simulation.append(expression_simulation)
             
         expression_by_simulation_by_region = np.array(expression_by_region_by_simulation)
-        self.g.ndata[simulation_name] = simulation
+        self.g.ndata[simulation_name] = th.tensor(simulation_zeros)
         return expression_by_simulation_by_region
 
     def plot_distribution(self):
@@ -129,6 +133,5 @@ class GraphDecoder:
             self.g.ndata['tmp_gene'][nodes,:] = M.float()
             #print((self.g.ndata['tmp_gene'].sum(axis=1) > 0).sum())
             
-        simulated_genes = self.data.unique_genes[np.where(self.g.ndata['tmp_gene'].numpy() == 1)][0]
-        del self.g.ndata['tmp_gene']
+        simulated_genes = self.data.unique_genes[np.where(self.g.ndata['tmp_gene'].numpy() == 1)[1]]
         return simulated_genes
