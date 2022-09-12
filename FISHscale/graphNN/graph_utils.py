@@ -716,10 +716,10 @@ class GraphPlotting:
         e0_cluster_genes = [self.dic_[e] for e in edges[0].numpy()]
         e1_cluster_genes = [self.dic_[e] for e in edges[1].numpy()]
 
-        print('s')
         ### This part is for the cluster interconnectivity
-        filt_edges_cluster1 = edges[0][att >  np.quantile(att,0.75)]
-        filt_edges_cluster2 = edges[1][att > np.quantile(att,0.75)]
+        Q = np.quantile(att[:,0],0.75)
+        filt_edges_cluster1 = edges[0][att[:,0] >  Q]
+        filt_edges_cluster2 = edges[1][att[:,0] > Q]
         edges_cluster1 = [self.dic_clusters[e] for e in filt_edges_cluster1.numpy()]
         edges_cluster2 = [self.dic_clusters[e] for e in filt_edges_cluster2.numpy()]
         edges_cluster = edges_cluster1 + edges_cluster2
