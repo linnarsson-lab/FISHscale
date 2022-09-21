@@ -230,7 +230,6 @@ class Visualizer:
 
     def execute(self):
         self.visM.poll_events()
-        #self.visM.poll_events()
         self.visM.update_renderer()
         if sys.platform == 'linux':
             QCoreApplication.processEvents()
@@ -334,13 +333,10 @@ class ListWidget(QWidget):
                         cs = np.array([x for x in selected[self.section].apply(lambda x: d.color_dict[str(x)])])
                         points.append(ps)
                         colors.append(cs)
-                    
             ps,cs = np.concatenate(points), np.concatenate(colors)
-            self.vis.visM.clear_geometries()
-            pcd = o3d.geometry.PointCloud()
-            pcd.points = o3d.utility.Vector3dVector(ps)
-            pcd.colors = o3d.utility.Vector3dVector(cs)
-            self.vis.visM.update_geometry(pcd)
+            self.vis.pcd.points = o3d.utility.Vector3dVector(ps)
+            self.vis.pcd.colors = o3d.utility.Vector3dVector(cs)
+            self.vis.visM.update_geometry(self.vis.pcd)
             self.vis.loop_execute()
 
 class CollapsibleDialog(QDialog,QObject):
