@@ -1,5 +1,3 @@
-# If you see this message it means that we are doing some last minute fixes to FISHscale. Please check beck in a few hours. Thank you!
-
 # FISHscale
 
 > *Everything that glitters ain't fishscale*
@@ -17,7 +15,7 @@ Software package for the visualization, exploration and analysis of point based 
 
 # Getting started
 
-The following instructions should work for Linux and Mac.
+The following instructions should work for Linux and Mac, and probably also Windows.
 
 In a fresh Anaconda environment install FISHscale:
 ```
@@ -32,6 +30,6 @@ Use the [single-dataset](https://github.com/linnarsson-lab/FISHscale/blob/master
 If you want to use multiple datasets, use the [multi-dataset](https://github.com/linnarsson-lab/FISHscale/blob/master/example_notebooks/FISHscale_tutorial_multi_dataset.ipynb) notebook to get started with multi-dataset objects. 
 
 ### Linux and Open3D
-If the visualizer does not work, please follow these steps:  
+If the visualizer does not open the window after calling `.visualize()`, please follow these steps:  
 - Uninstall Open3D: `pip uninstall open3d`
 - Build Open3D from source using these instructions: [Open3D](http://www.open3d.org/docs/release/compilation.html)
