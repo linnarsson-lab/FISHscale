@@ -1,3 +1,5 @@
+# If you see this message it means that we are doing some last minute fixes to FISHscale. Please check beck in a few hours. Thank you!
+
 # FISHscale
 
 > *Everything that glitters ain't fishscale*
