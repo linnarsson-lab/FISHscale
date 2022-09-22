@@ -247,6 +247,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         self.xy_center = (self.x_max - 0.5*self.x_extent, self.y_max - 0.5*self.y_extent)
 
     def visualize(self,
+                columns:list=[],
                 color_dic=None,
                 x=None,
                 y=None,
