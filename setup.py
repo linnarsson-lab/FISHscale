@@ -4,7 +4,7 @@ __version__ = "0.13.0"
 
 setup(
 	name="FISHscale",
-	python_requires ='>=3.7, <=3.9', #open3d does not work in python 3.10
+	python_requires ='>=3.7, <3.10', #open3d does not work in python 3.10
 	version=__version__,
 	packages=find_packages(),
 	install_requires=[

@@ -501,6 +501,7 @@ class AttributeScatter(AxSize):
             plt.gca().yaxis.set_major_locator(plt.NullLocator())
         ax.add_patch(plt.Rectangle((0,0), 1, 1, facecolor=(0,0,0),
                                 transform=ax.transAxes, zorder=-1))
+        fig.patch.set_facecolor('k')
         
         if show_legend:
             if len(attributes) > 15:
