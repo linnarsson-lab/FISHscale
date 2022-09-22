@@ -526,8 +526,8 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
             if parse_num_threads == -1 or parse_num_threads > self.cpu_count:
                 parse_num_threads = self.cpu_count
             self.load_from_files(data, x_label, y_label, gene_label, other_columns, unique_genes, exclude_genes, z, 
-                                 pixel_size, x_offset, y_offset, z_offset, polygon, reparse, color_input, 
-                                 num_threads=parse_num_threads)
+                                 pixel_size, x_offset, y_offset, z_offset, polygon, select_valid, reparse, color_input, 
+                                 parse_num_threads)
         else:
             raise Exception(f'Input for "data" not understood. Should be list with initiated Datasets or valid path to files.')
         
