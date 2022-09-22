@@ -125,7 +125,7 @@ class AxSize:
 
         #Set scale bar
         ax.text(text_center, hight_text, bar_name, color='white', ha='center', fontsize=fs,
-            bbox=dict(facecolor='black', edgecolor=None), zorder=5)
+            bbox=dict(facecolor='black', edgecolor='k'), zorder=5)
         ax.hlines(hight_bar, left, right, colors=['white'], linewidth=lw, zorder=10)
 
 
@@ -181,6 +181,8 @@ class GeneScatter(AxSize):
                 rasterized. Defaults to '.eps'.
             alpha (float, optional): transparency. Defaults to 1.
         """        
+        plt.style.use('dark_background')
+
         #Check input
         if not isinstance(genes, list) and not isinstance(genes, np.ndarray):
             genes = [genes]
@@ -259,6 +261,7 @@ class GeneScatter(AxSize):
                 save_name = f'Scatter_plot_{self.dataset_name}_{strftime("%Y-%m-%d_%H-%M-%S")}'
             plt.savefig(f'{save_name}', dpi=dpi, bbox_inches='tight', pad_inches=0)
         
+        plt.style.use('default')
         gc.collect()
 
 
@@ -272,7 +275,7 @@ class MultiGeneScatter(AxSize):
                     alpha=1) -> None:
         """Make a scatter plot of all data.
 
-        Use self.arange_grid_ffset() to arrange datasets in a grid.   
+        Use self.arange_grid_offset() to arrange datasets in a grid.   
         Uses a black background. Plots in real size if `ax_scale_factor` is 1. 
         If the plot is saved it rasterizes the points because vector plots of
         milions of points get very huge. All other parts of the plot are 
@@ -312,7 +315,8 @@ class MultiGeneScatter(AxSize):
                 rasterized. Defaults to '.eps'.
             alpha (float, optional): transparency. Defaults to 1.
         """   
-
+        plt.style.use('dark_background')
+        
         #Check input
         if not isinstance(genes, list) and not isinstance(genes, np.ndarray):
             genes = [genes]
@@ -389,7 +393,8 @@ class MultiGeneScatter(AxSize):
             if save_name == '':
                 save_name = f'Scatter_plot_{self.dataset_name}_{strftime("%Y-%m-%d_%H-%M-%S")}'
             plt.savefig(f'{save_name}', dpi=dpi, bbox_inches='tight', pad_inches=0)
-            
+        
+        plt.style.use('default')
         gc.collect()
 
 
@@ -443,6 +448,8 @@ class AttributeScatter(AxSize):
                 rasterized. Defaults to '.eps'.
             alpha (float, optional): transparency. Defaults to 1.
         """        
+        plt.style.use('dark_background')
+        
         #Check input
         if not isinstance(attributes, list) and not isinstance(attributes, np.ndarray):
             attributes = [attributes]
@@ -521,4 +528,5 @@ class AttributeScatter(AxSize):
                 save_name = f'Scatter_plot_{self.dataset_name}_{strftime("%Y-%m-%d_%H-%M-%S")}'
             plt.savefig(f'{save_name}', dpi=dpi, bbox_inches='tight', pad_inches=0)
 
+        plt.style.use('default')
         gc.collect()
