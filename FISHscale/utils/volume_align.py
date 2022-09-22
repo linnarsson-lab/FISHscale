@@ -7,6 +7,7 @@ from dask import delayed
 from dask.diagnostics import ProgressBar
 import pandas as pd
 import math
+from scipy.interpolate import LinearNDInterpolator
 
 class Volume_Align():
     
@@ -145,8 +146,6 @@ class Volume_Align():
             
         return results        
     
-
-    
     def _register_worker(self, imgA: np.ndarray, imgB: np.ndarray, 
                          attachment: int=20, tightness: float=0.3, 
                          num_warp: int=10, num_iter: int=10, 
@@ -165,104 +164,20 @@ class Volume_Align():
         
         return v, u
     
-    def find_warp(self, images: list, attachment: int=20, 
-                  tightness: float=0.3, num_warp: int=10, num_iter: int=10, 
-                  tol: float=0.0001, prefilter: bool=False, 
-                  mixing_factor: float=0.3):
+    def _warp(self, img: np.ndarray, v: np.ndarray, u: np.ndarray, factor: float=1):
         
-        #Mixing_factor = 0 #Completely use synthetic made by img0 and img2
-        #Mixing_facotro = 0.3 # All three images weigh equal. 
-        #Mixing_factor = 0.5 #img1 weighs 50% and img0 and img2 weigh 25% each
-        #Mixing_factore = 1 #Img1 weighs 100%
+        if factor < 0 or factor > 1:
+            raise Exception('Factor should be between 0 and 1')
+        v = v * factor
+        u = u * factor
         
-        z_ordered = self._check_z_sort()
-        n_datasets = len(self.datasets)
-        dataset_names = [self.datasets[i].dataset_name for i in z_ordered]
-
-        synthetic_images = []
-        warped_images = []
-        vs = []
-        us = []
-
-        self.vp(f'Warping datasets. Z levels should be consecutive')
-        for i, dn in enumerate(dataset_names):
-            self.vp(f'Finding warp for dataset {i}/{n_datasets} with Z: {self.datasets[i].z}')
-
-            #First section
-            if i == 0:
-                section_type = 'first'
-                before = 0
-                after = 1
-                factor=0.333 #Closer to first section
-
-            #Last section    
-            elif i == n_datasets-1:
-                section_type = 'last'
-                before = i-1
-                after = i 
-                factor=0.666 #Closer to last section
-
-            #Sections inbetween   
-            else:
-                section_type = 'normal'
-                before = i-1
-                after = i+1
-                #Calculate how close the section is to the next image as a fraction
-                z_before = self.datasets[z_ordered[before]].z
-                z_after = self.datasets[z_ordered[after]].z
-                z_middle = self.datasets[z_ordered[i]].z
-                factor = (z_middle - z_before) / (z_after - z_before)
-  
-
-            img0 = images[before]
-            img1 = images[i]
-            img2 = images[after]
-
-            ##########################################    
-            #Register img0 and img2 to calculate synthetic image inbetween img0 and img2
-            v0, u0 = self._register_worker(img0, img2,
-                            attachment=attachment,
-                            tightness=tightness,
-                            num_warp=num_warp,
-                            num_iter=num_iter,
-                            tol=tol,
-                            prefilter=prefilter)
-            #Make synthetic image that would be the image inbetween img0 and img2
-            synt_image = self._warp(img2, v0, u0, factor=factor) #Factor based on relative distances of img1 between img0 and img2
-            
-            ##########################################    
-            #Register img1 and syntetic image so that img1 weigs in into the synthetic image
-            if section_type == 'normal':
-                v1, u1 = self._register_worker(img1, synt_image,
-                            attachment=attachment,
-                            tightness=tightness,
-                            num_warp=num_warp,
-                            num_iter=num_iter,
-                            tol=tol,
-                            prefilter=prefilter)
-                #Make synthetic image that would be the image inbetween img0 and img2 guided by img1
-                synt_image = self._warp(synt_image, v1, u1, factor=mixing_factor)
-            
-            ##########################################
-            #Register img1 and synt_image to calculate the warp of img0 to the image that should be between img0 and img2
-            v2, u2 = self._register_worker(synt_image, img1,
-                            attachment=attachment,
-                            tightness=tightness,
-                            num_warp=num_warp,
-                            num_iter=num_iter,
-                            tol=tol,
-                            prefilter=prefilter)
-            #Warp img1 to the synthetic image so that it fits inbetween img0 and img2
-            warped_image = self._warp(img1, v2, u2, factor=1) #Completely warp
-
-            synthetic_images.append(synt_image)
-            warped_images.append(warped_image)
-            vs.append(v2)
-            us.append(u2)
-            
-        return vs, us, synthetic_images, warped_images
+        nr, nc = img.shape[:2]
+        row_coords, col_coords = np.meshgrid(np.arange(nr), np.arange(nc), indexing='ij')
+        img_warp = warp(img, np.array([row_coords + v, col_coords + u]), mode='edge', clip=False)
+        
+        return img_warp
     
-    def find_warp2(self, images: list, attachment: int=20, 
+    def find_warp(self, images: list, attachment: int=20, 
                   tightness: float=0.3, num_warp: int=10, num_iter: int=10, 
                   tol: float=0.0001, prefilter: bool=False, 
                   mixing_factor: float=0.3, second_order=True):
@@ -273,6 +188,7 @@ class Volume_Align():
         #Mixing_factore = 1 #Img1 weighs 100%
         
         z_ordered = self._check_z_sort()
+        z_loc = [self.datasets[i].z for i in z_ordered]
         n_datasets = len(self.datasets)
         dataset_names = [self.datasets[i].dataset_name for i in z_ordered]
 
@@ -294,15 +210,13 @@ class Volume_Align():
             
             return warped, v, u
         
-
         self.vp(f'Warping datasets. Z levels should be consecutive')
         for i, dn in enumerate(dataset_names):
-            self.vp(f'Finding warp for dataset {i}/{n_datasets} with Z: {self.datasets[i].z}')
+            self.vp(f'Finding warp for dataset {i+1}/{n_datasets} with Z: {self.datasets[i].z}')
 
             #Prepare imput
             #First  and second section
             if i <= 1:
-                print('first two sections')
                 #img0
                 img0 = images[0]
                 #img1
@@ -311,17 +225,16 @@ class Volume_Align():
                 if second_order == True:
                     img2, _, _ = reg_warp(images[i+1], images[i+2], factor=0.5)
                 else:
-                    img2 = images[i]   
-                factor = 0.3333 #Closer to first section
+                    img2 = images[i+1]   
+                factor = 0.333 #Closer to first section
 
             #Last two sections
             elif i >= n_datasets-2:
-                print('last 2 sections')
                 #img0
                 if second_order == True:
                     img0, _, _ = reg_warp(images[i-1], images[i-2], factor=0.5)
                 else:
-                    img0 = images[i] 
+                    img0 = images[i-1] 
                 #img1
                 img1 = images[i]
                 #img2
@@ -333,16 +246,25 @@ class Volume_Align():
                 #img0
                 if second_order == True:
                     img0, _, _ = reg_warp(images[i-1], images[i-2], factor=0.5)
+                    z0 = z_loc[i-1] -  z_loc[i-2]
+                    z0 = z_loc[i-2] + (0.5 * z0)
                 else:
                     img0 = images[i] 
+                    z0 = z_loc[i-1]
                 #img1
                 img1 = images[i]
+                z1 = z_loc[i]
                 #img2
                 if second_order == True:
                     img2, _, _ = reg_warp(images[i+1], images[i+2], factor=0.5)
+                    z2 = z_loc[i+2] - z_loc[i+1]
+                    z2 = z_loc[i+1] + (0.5 * z2)
                 else:
-                    img2 = images[i]
-                factor = 0.5   
+                    img2 = images[i+1]
+                    z2 = z_loc[i+1]
+                    
+                #Calculate, as a fraction, the location of img1 between img0 and img2                                  
+                factor = (z1 - z0) / (z2 - z0) 
                     
             #Warp
             #Make synthetic image
@@ -350,7 +272,7 @@ class Volume_Align():
             #Let img1 weigh into the synthetic image
             synt_image, _, _ = reg_warp(img1, synt_image, factor=mixing_factor)
             #Warp image
-            warped_image, v, u = reg_warp(synt_image, img1, factor=factor) #Closer to first section
+            warped_image, v, u = reg_warp(synt_image, img1, factor=factor)
 
             #Output handling
             synthetic_images.append(synt_image)
@@ -359,19 +281,7 @@ class Volume_Align():
             us.append(u)
             
         return vs, us, synthetic_images, warped_images
-        
-    def _warp(self, img: np.ndarray, v: np.ndarray, u: np.ndarray, factor: float=1):
-        
-        if factor < 0 or factor > 1:
-            raise Exception('Factor should be between 0 and 1')
-        v = v * factor
-        u = u * factor
-        
-        nr, nc = img.shape[:2]
-        row_coords, col_coords = np.meshgrid(np.arange(nr), np.arange(nc), indexing='ij')
-        img_warp = warp(img, np.array([row_coords + v, col_coords + u]), mode='edge', clip=False)
-        
-        return img_warp
+
     
     def warp_all(self, squarebin:list, v:list, u:list):
         
@@ -383,6 +293,7 @@ class Volume_Align():
             result.append(warped)
         
         return result
+    
     
     def warped_to_pandas(self, warped, min_count=1):
         
@@ -403,26 +314,145 @@ class Volume_Align():
             filters.append(filt)
             
         return results, filters, w.shape[:2]
+    
+    def voxels_to_pandas(self, interpolated, min_count=1):
+        #Assumes interpolated is in same order as self.unique_genes
+        
+        interp_sum = np.sum(np.stack(interpolated), axis=0) #Change to "interpolated_all" if rerun
+        interp_filt = interp_sum >= min_count
+        interp_stack = np.stack(interpolated, axis=3) #Genes as 4th dimension
+        shape = interp_stack.shape
+        
+        results = []
+        for i in range(shape[2]): #Iterate through Z
+            filt = interp_filt[:,:,i]
+            data = interp_stack[:,:,i,:]#.reshape((shape[0] * shape[1], shape[3]))
+            data = data[filt]
+            columns = [f'{i}_{j}' for j in range(data.shape[0])]
             
-    def warped_per_gene(self, warped, bin_size: int=100, return_dict=False):
+            df = pd.DataFrame(data=data.T, index=self.unique_genes, columns=columns)
+            results.append(df)
+        return results, interp_filt, shape
+        
+        
+            
+    def warped_per_gene(self, warped, bin_size: int=100, return_dict=False, z_locations=None):
         
         x, y = warped[0].shape[:2]
         zmin, zmax = self.get_z_range_datasets()
-        z_locations = [int(d.z / bin_size) for d in self.datasets]
-        z = math.ceil((zmax - zmin) / bin_size)
+        if type(z_locations) == type(None):
+            z_locations = [int(d.z / bin_size) for d in self.datasets]
+            z = math.ceil((zmax - zmin) / bin_size)
+        else:
+            z = z_locations.shape[0]
         n_genes = len(self.unique_genes)
         
-        gene_data = [np.zeros((x,y,z)) for i in range(n_genes)]
+        gene_data = [np.zeros((x,y,z), dtype='float32') for i in range(n_genes)]
         
         for w, zi in zip(warped, z_locations):
             for gi in range(n_genes):
                 gene_data[gi][:,:,zi] = w[:,:,gi]
-        
-        #for wi, (w, zi) in enumerate(zip(warped, z_locations)):
-        #    for gi in range(n_genes):
-        #        gene_data[gi][:,:,zi] = w[:,:,gi]
                 
         if return_dict == True:
             gene_data = dict(zip(self.unique_genes, gene_data))
             
         return gene_data
+    
+    def interpolate_genes(self, warped_genes, bin_size: int=100):
+        
+        
+        gene_data = self.warped_per_gene(warped_genes, bin_size=bin_size, return_dict=False)
+        n_genes = len(gene_data)
+        #warped_sum = np.rollaxis(np.sum(gene_data, axis=3), 0, 3)
+        warped_sum = np.sum(np.stack(gene_data), axis=0)
+        
+        #Make regular 3D grid
+        x, y, z = warped_sum.shape
+        grid_3d_complete = np.mgrid[0:x, 0:y, 0:z]
+
+        #Find missing Z slices and make data mask for them
+        z_data_filt = []
+        missing_masks = []
+        for i in range(warped_sum.shape[2]):
+            if warped_sum[:,:,i].sum() > 0:
+                z_data_filt.append(True)
+            
+            else:
+                z_data_filt.append(False)
+                synthetic_mask = np.logical_or(warped_sum[:,:,i-1]>0, warped_sum[:,:,i+1]>0)
+                missing_masks.append(synthetic_mask)
+        z_data_filt = np.array(z_data_filt)
+        missing_masks = np.stack(missing_masks, axis=2)
+        self.vp(f'Interpolating for {missing_masks.sum()} points over {len(self.unique_genes)} genes. Total: {len(self.unique_genes) * missing_masks.sum()} calculations.')
+
+        grid_3d = grid_3d_complete[:, :, :, z_data_filt]
+        grid_3d = np.rollaxis(grid_3d, 0, 4)
+        grid_3d = grid_3d.reshape((x*y*z_data_filt.sum(), 3))
+
+        grid_3d_missing = grid_3d_complete[:,:, :,~z_data_filt]
+        grid_3d_missing = np.rollaxis(grid_3d_missing, 0, 4)
+        
+        def worker(data, z_data_filt, grid_3d, missing_masks, grid_3d_missing):
+            #print('got to worker')
+            #Get voxels with data
+            values = data[:,:,z_data_filt]
+            #print(values.shape, values.ravel().shape)
+            #Scale to one
+            for i in range(values.shape[2]):
+                values[:,:,i] = np.sqrt(values[:,:,i]) #Normalize the data
+            value_filt = values > 0
+            value_filtered = values[value_filt]
+            grid_3d = grid_3d[value_filt.ravel()]
+            
+            try:
+                #Learn
+                #print(f'Starting learining')
+                values_x = LinearNDInterpolator(grid_3d, value_filtered.ravel())
+                #print(f'Done with learning')
+                
+                #Interpolate
+                interpolated = []
+                mm_shape = missing_masks.shape
+                for i in range(mm_shape[2]):
+                    mm = missing_masks[:,:,i]
+                    points = grid_3d_missing[:,:,i,:].reshape((mm_shape[0] * mm_shape[1], 3))[mm.ravel()]
+                    #print(f'{i}/{mm_shape[2]}, n points: {points.shape[0]}')
+                    #print(f': {points.shape} points')
+                    interp = np.zeros(mm_shape[:2])
+                    interp[mm] = values_x(points) #Interpolate
+                    interpolated.append(interp)
+                    print('Done')
+            
+            except Exception as e:
+                print(e)
+                print(f'Encountered error during interpolation in gene: "". Filling with zeros')
+                interpolated = []
+                mm_shape = missing_masks.shape
+                for i in range(mm_shape[2]):
+                    interpolated.append(np.zeros(mm_shape[:2]))
+                
+            #Merge with real data
+            #interp = np.copy(data)
+            #interp[:,:,~z_data_filt] = np.stack(interpolated, axis=2)
+            
+            interp_full = np.zeros_like(data)
+            interp_full[:,:,z_data_filt] = values
+            interp_full[:,:,~z_data_filt] = np.stack(interpolated, axis=2)
+            interp_full[np.isnan(interp_full)] = 0
+            
+            return interp_full
+        
+        print('Starting')
+        
+        gene_data = dask.delayed(gene_data)
+        
+        results = []
+        #for data in gene_data:
+        for i in range(n_genes):
+            r = delayed(worker)(gene_data[i], z_data_filt, grid_3d, missing_masks, grid_3d_missing)
+            results.append(r)
+        
+        with ProgressBar():
+            final_results = dask.compute(*results)   
+            
+        return final_results

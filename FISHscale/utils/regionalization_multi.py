@@ -258,12 +258,14 @@ class RegionalizeMulti(Decomposition):
             c.append(results[k][item])
         return c
             
-    def merge_norm(self, data:list, mode:str=None, plot:bool = False, **kwargs):
+    def merge_norm(self, data:list, mode:str=None, plot:bool = False, alternative_dimensions=False, **kwargs):
         """Merge multiple datasets and optionaly normalize before merging.
 
         Args:
             data (list): List of pandas dataframes in the same order as 
-                self.datasets_names. 
+                self.datasets_names, unless "alternative_dimensions" is True.
+                In which case each dataset will be named after its index in the
+                data list. 
             mode (str, optional):Normalization method. Choose from: "log",
                 "sqrt",  "z", "APR" or None. for log +1 transform, square root 
                 transform, z scores or Analytic Pearson residuals respectively.
@@ -271,6 +273,9 @@ class RegionalizeMulti(Decomposition):
                 the input is the output. Defaults to None.
             plot (bool, optional): Plot a histogram of the data. Usefull to
                 evaluate normalization performace. Defaults to False.
+            alternative_dimensions (bool, optional): Set to True if "data" is 
+                not in the same order or dimensions as self.datasets.
+                Defaults to False.
 
         Kwargs:
             Will be passed to the APR() normalization function.
@@ -286,7 +291,12 @@ class RegionalizeMulti(Decomposition):
         if plot:
             fig, axes = plt.subplots(ncols=2, nrows=nrows, figsize=(10,1.5*nrows), sharey=True, sharex=True)
         
-        for i, (df_next, name) in tqdm(enumerate(zip(data, self.datasets_names))):
+        if alternative_dimensions == True:
+            names = [str(i) for i in range(len(data))]
+        else:
+            names = self.datasets_names
+        
+        for i, (df_next, name) in tqdm(enumerate(zip(data, names))):
             if i == 0:
                 df_all = df_next
                 samples = [name for j in df_all.columns]
