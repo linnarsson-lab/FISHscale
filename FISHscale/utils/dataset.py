@@ -247,10 +247,6 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         self.xy_center = (self.x_max - 0.5*self.x_extent, self.y_max - 0.5*self.y_extent)
 
     def visualize(self,
-                columns:list=[],
-                width=2000,
-                height=2000,
-                show_axis=False,
                 color_dic=None,
                 x=None,
                 y=None,
@@ -264,33 +260,20 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             width (int, optional): Frame width. Defaults to 2000.
             height (int, optional): Frame height. Defaults to 2000.
         """
+        from FISHscale.visualization.vis_macos import Window
+        from open3d.visualization import gui
+        
+        gui.Application.instance.initialize()
+        if self.color_dict:
+            color_dic = self.color_dict
 
-        if sys.platform == 'linux':
-
-            from FISHscale.visualization.vis_linux import Window
-            self.window = Window(self,
-                columns,
-                color_dic,
-                x_alt=x,
-                y_alt=y,
-                c_alt=c)
-            
-
-        else:
-            from FISHscale.visualization.vis_macos import Window
-            from open3d.visualization import gui
-            
-            gui.Application.instance.initialize()
-            if self.color_dict:
-                color_dic = self.color_dict
-
-            self.window = Window(self,
-                            columns,
-                            color_dic,
-                            x_alt=x,
-                            y_alt=y,
-                            c_alt=c)
-            gui.Application.instance.run()
+        self.window = Window(self,
+                        columns,
+                        color_dic,
+                        x_alt=x,
+                        y_alt=y,
+                        c_alt=c)
+        gui.Application.instance.run()
             
     def set_working_selection(self, level: Union[None, str] = None):
         """Set the working selection on which to work.
@@ -893,9 +876,6 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
 
     def visualize(self,
                 columns:list=[],
-                width=2000,
-                height=2000,
-                show_axis=False,
                 color_dic=None,
                 x=None,
                 y=None,
@@ -909,31 +889,19 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
             width (int, optional): Frame width. Defaults to 2000.
             height (int, optional): Frame height. Defaults to 2000.
         """        
+        from FISHscale.visualization.vis_macos import Window
+        from open3d.visualization import gui
+        
+        gui.Application.instance.initialize()
+        if self.color_dict:
+            color_dic = self.color_dict
 
-        if sys.platform == 'linux':
-
-            from FISHscale.visualization.vis_linux import Window
-            self.window = Window(self,
-                columns,
-                color_dic,
-                x_alt=x,
-                y_alt=y,
-                c_alt=c)
-            
-        else:
-            from FISHscale.visualization.vis_macos import Window
-            from open3d.visualization import gui
-            
-            gui.Application.instance.initialize()
-            if self.color_dict:
-                color_dic = self.color_dict
-
-            self.window = Window(self,
-                            columns,
-                            color_dic,
-                            x_alt=x,
-                            y_alt=y,
-                            c_alt=c)
-            gui.Application.instance.run()
+        self.window = Window(self,
+                        columns,
+                        color_dic,
+                        x_alt=x,
+                        y_alt=y,
+                        c_alt=c)
+        gui.Application.instance.run()
         
         
