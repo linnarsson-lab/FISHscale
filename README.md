@@ -10,7 +10,7 @@ Software package for the visualization, exploration and analysis of point based 
 
 # Gallery
 ### Visualization
-![](FISHscale_open_3D.gif)
+![](FISHscale_open_3D_2.gif)
 
 ### Analysis
 ![](FISHscale_demo.png)  
