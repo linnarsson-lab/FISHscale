@@ -98,7 +98,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting, GraphDecoder)
             distance_factor (float, optional): Distance selected to construct 
                 network graph will be multiplied by the distance factor. 
                 Defaults to 3.
-            device (str, optional): Device where pytorch is run. Defaults to 'cpu'.
+            device (str, optional): Device where pytorch is run. Defaults to 'gpu'.
             lr (float, optional): learning rate .Defaults to 1e-3.
             aggregator (str, optional). Aggregator type for SAGEConv. Choose 
                 between 'pool','mean','min','lstm'. Defaults to 'pool'.
@@ -189,11 +189,11 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting, GraphDecoder)
                                         warmup_factor=int(self.edges_train.shape[0]/self.batch_size)*self.n_epochs,
                                     )
 
-        if self.model.supervised == False:
-            del self.g.ndata['ngh']
-
         #self.g.ndata['gene'] = th.log(1+self.g.ndata['gene'])
         self.model.to(self.device)
+
+        if 'clusters' in self.g.ndata.keys():
+            self.clusters = self.g.ndata['clusters']
 
     def prepare_data(self):
         # do-something
@@ -201,7 +201,6 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting, GraphDecoder)
     
     def save_graph(self):
         dgluns = self.save_to+'graph/{}Unsupervised_smooth{}_dst{}_mNodes{}.graph'.format(self.molecules.shape[0],self.smooth,self.distance_factor,self.minimum_nodes_connected)
-        self.g = self.buildGraph()
         graph_labels = {"UnsupervisedDGL": th.tensor([0])}
         print('Saving model...')
         dgl.data.utils.save_graphs(dgluns, [self.g], graph_labels)
@@ -214,7 +213,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting, GraphDecoder)
 
         self.checkpoint_callback = ModelCheckpoint(
             monitor='train_loss',
-            dirpath=self.folder,
+            dirpath=self.save_to,
             filename=self.analysis_name+'-{epoch:02d}-{train_loss:.2f}',
             save_top_k=1,
             mode='min',
@@ -387,7 +386,25 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting, GraphDecoder)
                             log_every_n_steps=50,
                             callbacks=[self.checkpoint_callback], 
                             max_epochs=self.n_epochs,)
-        trainer.fit(self.model, train_dataloaders=self.train_dataloader())#,val_dataloaders=self.test_dataloader())
+
+        is_trained = 0
+        for File in os.listdir(os.path.join(self.folder, '..')):
+            if File.count('.ckpt'):
+                is_trained = 1
+                break
+
+        if is_trained:
+            print('Pretrained model exists in folder, loading model parameters. If you wish to re-train, delete .ckpt file.')
+            self.model = self.model.load_from_checkpoint(os.path.join(self.save_to, File),
+                                        in_feats=self.model.in_feats,
+                                        n_latent=self.model.n_latent,
+                                        n_classes=self.model.module.n_classes,
+                                        n_layers=self.model.module.n_layers,
+                                        )
+
+        
+        else:
+            trainer.fit(self.model, train_dataloaders=self.train_dataloader())#,val_dataloaders=self.test_dataloader())
 
     #### plotting and latent factors #####
 
@@ -438,6 +455,28 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting, GraphDecoder)
                         5*512,
                         0,
                         buffer_device=self.g.device)#.detach().numpy()
+
+
+    def get_attention_nodes(self,nodes=None):
+        """
+        get_latents: get the new embedding for each molecule
+        
+        Passes the validation data through the model to generate the neighborhood 
+        embedding. If the model is in supervised version, the model will also
+        output the predicted cell type.
+
+        Args:
+            labelled (bool, optional): [description]. Defaults to True.
+        """        
+        self.model.eval()
+        att1,att2 =  self.model.module.inference_attention(self.g,
+                        self.model.device,
+                        5*512,
+                        0,
+                        nodes=nodes,
+                        buffer_device=self.g.device)#.detach().numpy()
+        return att1, att2
+                
 
 
 

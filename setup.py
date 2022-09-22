@@ -36,6 +36,8 @@ setup(
 		'scikit-image',
 		'torch-scatter',
 		'dask[distributed]',
+		'pyro-ppl',
+		'scvi-tools',
 	],
 
 	author="Linnarsson Lab",

@@ -5,6 +5,7 @@ import numpy as np
 from scipy import sparse
 import pytorch_lightning as pl
 import os
+from typing import Any, Dict
 from annoy import AnnoyIndex
 import networkx as nx
 from tqdm import trange
@@ -16,7 +17,28 @@ from os import path
 import pandas as pd
 import holoviews as hv
 from holoviews import opts
+from holoviews.operation.datashader import datashade, bundle_graph, spread
+from sklearn.preprocessing import LabelEncoder
+from FISHscale.graphNN.cluster_utils import ClusterCleaner
 hv.extension('bokeh')
+
+
+color_alphabet = np.array([
+	[240, 163, 255], [0, 117, 220], [153, 63, 0], [76, 0, 92], [0, 92, 49], [43, 206, 72], [255, 204, 153], [128, 128, 128], [148, 255, 181], [143, 124, 0], [157, 204, 0], [194, 0, 136], [0, 51, 128], [255, 164, 5], [255, 168, 187], [66, 102, 0], [255, 0, 16], [94, 241, 242], [0, 153, 143], [224, 255, 102], [116, 10, 255], [153, 0, 0], [255, 255, 128], [255, 255, 0], [255, 80, 5]
+]) / 256
+
+colors75 = np.concatenate([color_alphabet, 1 - (1 - color_alphabet) / 2, color_alphabet / 2])
+def colorize(x: np.ndarray, *, bgval: Any = None, cmap: np.ndarray = None) -> np.ndarray:
+	le = LabelEncoder().fit(x)
+	xt = le.transform(x)
+	if cmap is None:
+		cmap = colors75
+	colors = cmap[np.mod(xt, 75), :]
+	if bgval is not None:
+		colors[x == bgval, :] = np.array([0.8, 0.8, 0.8])
+	return colors
+
+
 
 class GraphUtils(object):
 
@@ -69,8 +91,8 @@ class GraphUtils(object):
         """
         compute_distance_th: deprecated, now inside BuildGraph
 
-        Computes the distance at which 97 percentile molecules are connected to
-        at least one other molecule. Like PArtel & Wahlby
+        Computes the distance at which 95 percentile molecules are connected to
+        at least 2 other molecules. Like PArtel & Wahlby
 
         Args:
             omega ([type]): [description]
@@ -80,8 +102,8 @@ class GraphUtils(object):
             from scipy.spatial import cKDTree as KDTree
             x,y = self.data.df.x.values.compute(),self.data.df.y.values.compute()
             kdT = KDTree(np.array([x,y]).T)
-            d,i = kdT.query(np.array([x,y]).T,k=2)
-            d_th = np.percentile(d[:,1],97)*omega
+            d,i = kdT.query(np.array([x,y]).T,k=3)
+            d_th = np.percentile(d[:,-1],95)*omega
             self.distance_threshold = d_th
             print('Chosen dist to connect molecules into a graph: {}'.format(d_th))
         else:
@@ -335,9 +357,11 @@ class GraphPlotting:
             clusters= self.prediction_unlabelled.argsort(axis=-1)[:,-1]
             import random
             r = lambda: random.randint(0,255)
+            colors = colorize(np.arange(self.ClusterNames.shape[0]))
             color_dic = {}
             for x in range(self.ClusterNames.shape[0]):
-                color_dic[x] = (r()/255,r()/255,r()/255)
+                c = colors[x,:].tolist()
+                color_dic[x] =  (c[0],c[1],c[2])
             clusters_colors = np.array([color_dic[x] for x in clusters])
 
             fig=plt.figure(figsize=(7,4),dpi=500)
@@ -420,6 +444,7 @@ class GraphPlotting:
 
         else:
             from sklearn.cluster import MiniBatchKMeans
+            
             import gc
             '''import scanpy as sc
             print('Running MBKMeans clustering from scanpy...')
@@ -441,6 +466,13 @@ class GraphPlotting:
 
             if not os.path.isdir(os.path.join(self.folder,'Clusters')):
                 os.mkdir('{}/Clusters'.format(self.folder))
+
+            merged_clusters= ClusterCleaner(
+                genes=self.data.unique_genes[np.where(self.g.ndata['gene'].numpy())[1]],
+                clusters=self.clusters
+                ).merge()
+            
+            self.clusters = merged_clusters
             
             self.data.add_dask_attribute('Clusters',new_labels.astype('str'),include_genes=True)
             
@@ -458,22 +490,26 @@ class GraphPlotting:
                 ds.ra['enrichment'] = r
 
             enriched_genes = {}
+            self.enrichment = r
             enrichment = r.argsort(axis=0)[::-1]
             for c in range(np.unique(clusters_).shape[0]):
                 en_genes = enrichment[:,c][:10]
                 enriched_genes[c] = self.data.unique_genes[en_genes]
                 #print(np.unique(clusters_)[c], self.data.unique_genes[en_genes])
 
+            self.g.ndata['GSclusters'] = th.tensor(self.clusters,dtype=th.int64)
+            
             np.save(self.folder+'/clusters',self.clusters)
             print('Clustering done.')
             print('Generating umap embedding...')
             gc.collect()
             
-            import random
-            r = lambda: random.randint(0,255)
+            colors = colorize(np.arange(np.unique(self.clusters).shape[0]))
             color_dic = {}
             for x in np.unique(self.clusters):
-                color_dic[x] = (r()/255,r()/255,r()/255)
+                c = colors[x,:].tolist()
+                color_dic[x] = (c[0],c[1],c[2])
+            print(color_dic)
             clusters_colors = np.array([color_dic[x] for x in self.clusters])
 
             some = np.random.choice(np.arange(self.latent_unlabelled.shape[0]),random_n,replace=False)
@@ -541,6 +577,7 @@ class GraphPlotting:
 
 
             hv.save(hmap, "{}/Clusters.html".format(self.folder),fmt='html')
+            self.save_graph()
             '''except:
                 print('Could not generate html file')'''
     
@@ -580,17 +617,24 @@ class GraphPlotting:
         exp =np.array(ws.MeanExpression)
         ws.Nonzeros = shoji.Tensor('uint64',('clusters','genes'), inits= np.array(exp[:,0,:] > 0, dtype=np.uint64))
 
+
+    def execute(self, c, nodes,att1, att2):
+        g1,bg1, counts_cl1 = self.plot_cluster(c,nodes,att1)
+        bg1.to_parquet('{}/attention/SyntaxNGH1_Cluster{}.parquet'.format(self.folder,c))
+        hv.save(g1, '{}/attention/AttentionNGH1_{}.html'.format(self.folder, c))
+        g2,bg2, counts_cl2 = self.plot_cluster(c,nodes,att2)
+        bg2.to_parquet('{}/attention/SyntaxNGH2_Cluster{}.parquet'.format(self.folder,c))
+        hv.save(g2, '{}/attention/AttentionNGH2_{}.html'.format(self.folder, c))
+        return bg1, bg2, counts_cl1, counts_cl2
+
     def plot_networkx(self):
         import shutil
-    
-        e = self.g.edges()
-        e0 = e[0].numpy()
-        e1 = e[1].numpy()
 
         gene_ = self.g.ndata['gene'].numpy()
         result = np.where(gene_==1)
         rg = [self.data.unique_genes[r] for r in result[1]]
-        dic_ = dict(zip(result[0],rg))
+        self.dic_ = dict(zip(result[0],rg))
+        self.dic_clusters = dict(zip([int(n) for n in self.g.nodes()] ,self.clusters))
 
         if os.path.exists(path.join(self.folder,'attention')):
             shutil.rmtree(path.join(self.folder,'attention'))
@@ -601,27 +645,38 @@ class GraphPlotting:
         bible1 = np.zeros([self.data.unique_genes.shape[0], self.data.unique_genes.shape[0]])
         bible2 = np.zeros([self.data.unique_genes.shape[0], self.data.unique_genes.shape[0]])
 
+        #from joblib import Parallel, delayed
+        result = []
+
+        counts_cluster = {}
         for c in tqdm(np.unique(self.clusters)):
-            g1,bg1 = self.plot_cluster(c,e0,e1,dic_,self.attention_ngh1)
-            bg1.to_parquet('{}/attention/VersicleNGH1_Cluster{}.parquet'.format(self.folder,c))
-            g2,bg2 = self.plot_cluster(c,e0,e1,dic_,self.attention_ngh2)
-            bg2.to_parquet('{}/attention/VersicleNGH2_Cluster{}.parquet'.format(self.folder,c))
-            bible1 += bg1.values
-            bible2 += bg2.values
-            g = hv.Layout([g1.opts(title='Attention 1'), g2.opts(title='Attention 2')]).cols(1)
-            hv.save(g, '{}/attention/Attention_{}.html'.format(self.folder, c))
+            nodes= self.g.nodes()[self.clusters == c]
+            att1, att2 = self.get_attention_nodes(nodes=nodes)
+            #print(att1.shape,att2.shape)
+            bg1,bg2, counts_cl1, counts_cl2 = self.execute(c, nodes,att1,att2)
+            result.append((bg1,bg2)) 
+
+            counts_cluster[c] = [counts_cl1, counts_cl2]
+
+        inter_graph, df = self.plot_intercluster(counts_cluster)
+        hv.save(inter_graph, '{}/attention/ClusterConnectivity.html'.format(self.folder, c))
+        df = pd.DataFrame(index=np.unique(self.clusters).astype('str'),columns=np.unique(self.clusters).astype('str'), data=df)
+        df.to_parquet('{}/attention/ClusterConnectivity.parquet'.format(self.folder,c))
+
+
+        for b in result:
+            bible1 += b[0].values
+            bible2 += b[1].values
 
         bible1 = pd.DataFrame(index=self.data.unique_genes, columns=self.data.unique_genes, data=bible1)
-        bible1.to_parquet('{}/attention/ChapterNGH1.parquet'.format(self.folder))
+        bible1.to_parquet('{}/attention/GrammarNGH1.parquet'.format(self.folder))
         bible2 = pd.DataFrame(index=self.data.unique_genes, columns=self.data.unique_genes, data=bible2)
-        bible2.to_parquet('{}/attention/ChapterNGH2.parquet'.format(self.folder))
+        bible2.to_parquet('{}/attention/GrammarNGH2.parquet'.format(self.folder))
 
     def bible_grammar(self, e0, e1, att):
-        import torch as th
-        from tqdm import tqdm
         network_grammar = []
         
-        for g in self.data.unique_genes:
+        for g in tqdm(self.data.unique_genes):
             filter1 = e0 == g
             probs_gene = []
             for g2 in self.data.unique_genes:
@@ -629,51 +684,196 @@ class GraphPlotting:
                 probs = att[filter1 & filter2].sum()
                 probs_gene.append(probs)
             
-            pstack = th.hstack(probs_gene)
+            pstack = np.stack(probs_gene)
             pstack = pstack/pstack.sum()
             network_grammar.append(pstack)
-        network_grammar = th.stack(network_grammar).numpy()
-        bible_network_ngh = pd.DataFrame(index=self.data.unique_genes, columns= self.data.unique_genes ,data=network_grammar)
-        return bible_network_ngh
+        print('Syntax learned')
+        network_grammar = np.stack(network_grammar)
+        #bible_network_ngh = pd.DataFrame(index=self.data.unique_genes, columns= self.data.unique_genes ,data=network_grammar)
+        return network_grammar
+    
+    def bible_grammar2(self, e0, e1, att):
+        df = pd.DataFrame({'0':e0,'1':e1, 'w':att})
+        df2 = df.pivot_table(
+            index='0', 
+            columns='1',
+            aggfunc='sum',
+            fill_value=0,
+            dropna=False
+            ).reindex(self.data.unique_genes, axis=0)
+            
+        df2.columns = self.data.unique_genes
+        return df2
 
-    def plot_cluster(self,cluster, e0,e1,dic_,attention):
+    def plot_cluster(self,cluster,nodes_cluster_i,att):
         import networkx as nx
         import matplotlib.pyplot as plt
         from matplotlib import cm
-        nodes_cluster_i = self.g.nodes()[self.clusters == cluster]
-        weights_adges_ngh1 = attention[np.isin(e0,nodes_cluster_i) & np.isin(e1,nodes_cluster_i)]
-        e0_cluster = e0[np.isin(e0,nodes_cluster_i) & np.isin(e1,nodes_cluster_i)]
-        e1_cluster = e1[np.isin(e0,nodes_cluster_i) & np.isin(e1,nodes_cluster_i)]
+        import itertools
 
-        e0_cluster_genes = np.array([dic_[e] for e in e0_cluster])
-        e1_cluster_genes = np.array([dic_[e] for e in e1_cluster])
+        edges = dgl.in_subgraph(self.g,nodes_cluster_i).edges()
+
+        e0_cluster_genes = [self.dic_[e] for e in edges[0].numpy()]
+        e1_cluster_genes = [self.dic_[e] for e in edges[1].numpy()]
+
+        ### This part is for the cluster interconnectivity
+        Q = np.quantile(att[:,0],0.75)
+        filt_edges_cluster1 = edges[0][att[:,0] >  Q]
+        filt_edges_cluster2 = edges[1][att[:,0] > Q]
+        edges_cluster1 = [self.dic_clusters[e] for e in filt_edges_cluster1.numpy()]
+        edges_cluster2 = [self.dic_clusters[e] for e in filt_edges_cluster2.numpy()]
+        edges_cluster = edges_cluster1 + edges_cluster2
+        counts_cluster = np.unique(edges_cluster, return_counts=True)
+        counts_cluster = dict(zip(counts_cluster[0],counts_cluster[1]))
+        ###
+
+        a = itertools.combinations(self.data.unique_genes,2)
+        att_add = []
+        for x in a:
+            e0_cluster_genes.append(x[0])
+            e1_cluster_genes.append(x[1])
+
+            e0_cluster_genes.append(x[1])
+            e1_cluster_genes.append(x[0])
+            att_add += [0,0]
+
+        e0_cluster_genes = np.array(e0_cluster_genes)
+        e1_cluster_genes = np.array(e1_cluster_genes)
         edges = np.array([e0_cluster_genes,e1_cluster_genes])
+        att_add = np.array(att_add)
+        att = np.concatenate([att[:,0],att_add])
 
-        bg = self.bible_grammar(e0_cluster_genes, e1_cluster_genes, weights_adges_ngh1).fillna(0)
-        #node_frequency = np.array([(edges_genes == g).sum() for g in GD.data.unique_genes])
-        weights = weights_adges_ngh1[:,0]
-        q10 = np.quantile(weights,0.1)
-        edges = edges[:,weights <= q10]
-        weights = weights[weights <= q10]
+        bg = self.bible_grammar2(e0_cluster_genes, e1_cluster_genes, att).fillna(0)
+        graph_edges1 = []
+        graph_edges2 = []
+        graph_weights = []
 
-        node_frequency = np.unique(edges,return_counts=True)[1]
+        a = itertools.combinations(self.data.unique_genes,2)
+        for x in a:
+            graph_edges1.append(x[0])
+            graph_edges2.append(x[1])
+            graph_weights.append(bg[x[0]][x[1]])
+        
+        graph_edges1 = np.array(graph_edges1)
+        graph_edges2 = np.array(graph_edges2)
+        graph_weights = np.array(graph_weights)
+
+        graph_edges1 = graph_edges1[graph_weights > np.quantile(graph_weights,0.5)]
+        graph_edges2 = graph_edges2[graph_weights > np.quantile(graph_weights,0.5)]
+        graph_weights = graph_weights[graph_weights > np.quantile(graph_weights,0.5)]
+        graph_weights = np.array(graph_weights)/graph_weights.sum(axis=0)
+        
+        node_frequency = np.unique(np.array([graph_edges1,graph_edges2]),return_counts=True)
+        genes_present,node_frequency = node_frequency[0],node_frequency[1]
         node_frequency = node_frequency#/node_frequency.sum()
 
-        graph = hv.Graph(((edges[0,:],edges[1,:], weights),),vdims='Attention').opts(
+        graph = hv.Graph(((graph_edges1,graph_edges2, graph_weights),),vdims='Attention').opts(
             opts.Graph(edge_cmap='viridis', edge_color='Attention'),
             )#, edge_cmap='viridis', edge_color='Attention')
 
         df = graph.nodes.data
-        df['Frequency'] = node_frequency
-        graph = hv.Graph(((edges[0,:],edges[1,:], weights),df),vdims='Attention').opts(
+        enrichment =  self.enrichment[:,cluster]
+        enrichmentQ = np.quantile(enrichment,0.5)
+        enriched_genes = self.data.unique_genes[enrichment > enrichmentQ]
+        
+        genes1 = graph_edges1[np.isin(graph_edges1,enriched_genes)| np.isin(graph_edges2,enriched_genes)]
+        genes2 = graph_edges2[np.isin(graph_edges1,enriched_genes)| np.isin(graph_edges2,enriched_genes)]
+        enriched_genes_connected= np.unique(np.array([genes1,genes2]))
+
+        filter_enrichment = np.isin(graph_edges1,enriched_genes)| np.isin(graph_edges2,enriched_genes)
+        graph_edges1 = graph_edges1[filter_enrichment]
+        graph_edges2 = graph_edges2[filter_enrichment]
+        graph_weights = graph_weights[filter_enrichment]
+
+        node_freq =  node_frequency[np.isin(df['index'].values,enriched_genes_connected)]
+        node_enrich = enrichment[np.isin(self.data.unique_genes,enriched_genes_connected)]
+
+        df = df[np.isin(df['index'].values,enriched_genes_connected)]
+        df.loc[:,'Frequency'] = node_freq
+        df.loc[:,'Enrichment'] = node_enrich
+
+        graph = hv.Graph(((graph_edges1,graph_edges2, graph_weights),df),vdims='Attention').opts(
             opts.Graph(
                 edge_cmap='viridis', edge_color='Attention',node_color='Frequency',
-                cmap='plasma', edge_line_width=hv.dim('Attention')*100,
-                edge_nonselection_alpha=0, width=1000,height=1000)
+                cmap='plasma', edge_line_width=hv.dim('Attention')*20,node_size=hv.dim('Enrichment')*5,
+                edge_nonselection_alpha=0, width=1500,height=1500)
                 )
+
         labels = hv.Labels(graph.nodes, ['x', 'y'],'index')
-        graph = graph * labels.opts(text_font_size='8pt', text_color='white', bgcolor='grey')
-        return graph, bg
+        #graph = graph #* labels.opts(text_font_size='8pt', text_color='white', bgcolor='grey')
+        graph = graph*labels.opts(text_font_size='5pt', text_color='white', bgcolor='grey')
+        '''graph = datashade(graph, normalization='linear', width=1000, height=1000).opts(
+            opts.Graph(
+                    edge_cmap='viridis', edge_color='Attention',node_color='Frequency',
+                    cmap='plasma', edge_line_width=hv.dim('Attention')*10,
+                    edge_nonselection_alpha=0, width=2000,height=2000)
+            )'''
+        return graph, bg, counts_cluster
+
+    def _intercluster_df(self, dic):
+        intercluster_network = []
+        for c in dic:
+            counts_cl_i = []
+            dic1_cluster_i = dic[c][0]
+            dic2_cluster_i = dic[c][1]
+
+            for c2 in np.unique(self.clusters):
+                counts = 0
+                if c2 in dic1_cluster_i:
+                    counts += dic1_cluster_i[c2]
+                if c2 in dic2_cluster_i:
+                    counts += dic2_cluster_i[c2]
+                counts_cl_i.append(counts)
+            intercluster_network.append(counts_cl_i)
+
+        return np.stack(intercluster_network)
+
+
+    def plot_intercluster(self, dic):
+        import itertools
+        df = self._intercluster_df(dic)
+        node_frequency = df.sum(axis=1)
+        df = (df.T/df.sum(axis=1)).T
+
+        a = itertools.combinations(np.arange(len(df)),2)
+        graph_edges1 = []
+        graph_edges2 = []
+        graph_weights = []
+
+        for x in a:
+            graph_edges1.append(x[0])
+            graph_edges2.append(x[1])
+            graph_weights.append(df[x[0]][x[1]])
+        
+        graph_edges1 = np.array(graph_edges1)
+        graph_edges2 = np.array(graph_edges2)
+        graph_weights = np.array(graph_weights)
+
+        graph = hv.Graph(((graph_edges1,graph_edges2, graph_weights),),vdims='Attention').opts(
+            opts.Graph(edge_cmap='viridis', edge_color='Attention'),
+            )
+
+        df_info = graph.nodes.data
+        df_info.loc[:,'Frequency'] = node_frequency
+
+        graph = hv.Graph(((graph_edges1,graph_edges2, graph_weights),df_info),vdims='Attention').opts(
+            opts.Graph(
+                edge_cmap='viridis', edge_color='Attention',node_color='Frequency',
+                cmap='plasma', edge_line_width=hv.dim('Attention')*20,
+                edge_nonselection_alpha=0, width=1500,height=1500)
+                )
+
+        labels = hv.Labels(graph.nodes, ['x', 'y'],'index')
+        #graph = graph #* labels.opts(text_font_size='8pt', text_color='white', bgcolor='grey')
+        inter_graph = graph*labels.opts(text_font_size='5pt', text_color='white', bgcolor='grey')
+
+        return inter_graph, df
+
+
+
+
+
+        
 
 class NegativeSampler(object):
     def __init__(self, g, k, neg_share=False):
@@ -778,3 +978,5 @@ class enrich_: #sparese
             enrichment = (f_nnz + 0.1) / (f_nnz_other + 0.1) * (means + 0.01) / (means_other + 0.01)
 
             return enrichment
+
+
