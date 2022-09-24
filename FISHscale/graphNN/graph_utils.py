@@ -466,7 +466,6 @@ class GraphPlotting:
             clf.fit(training_latents, self.clusters)
             self.clusters = clf.predict(self.latent_unlabelled.detach().numpy()).astype('uint16')
             print('Max clusters detected in training: {}'.format(np.max(self.clusters)))
-            
 
             molecules_id = self.g.ndata['indices']
             import gc
