@@ -468,6 +468,10 @@ class GraphPlotting:
             clf = make_pipeline(StandardScaler(), SGDClassifier(max_iter=1000, tol=1e-3))
             clf.fit(training_latents, self.clusters)
             self.clusters = clf.predict(self.latent_unlabelled.detach().numpy()).astype('uint16')
+
+            unique_clusters = np.unique(self.clusters)
+            dic = dict(zip(unique_clusters, np.arange(unique_clusters.shape[0])))
+            self.clusters = np.array([dic[i] for i in self.clusters])
             print('Max clusters detected in training: {}'.format(np.max(self.clusters)))
 
             molecules_id = self.g.ndata['indices']
