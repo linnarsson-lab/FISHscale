@@ -450,6 +450,7 @@ class GraphPlotting:
             from sklearn.linear_model import SGDClassifier
             from sklearn.preprocessing import StandardScaler
             from sklearn.pipeline import make_pipeline
+            #import leidenalg as la
 
             random_sample_train = np.random.choice(
                                     len(self.latent_unlabelled.detach().numpy()), 
@@ -463,7 +464,7 @@ class GraphPlotting:
 
             clf = make_pipeline(StandardScaler(), SGDClassifier(max_iter=1000, tol=1e-3))
             clf.fit(training_latents, self.clusters)
-            self.clusters = clf.predict(self.latent_unlabelled.detach().numpy())
+            self.clusters = clf.predict(self.latent_unlabelled.detach().numpy()).astype('uint16')
             print('Max clusters detected in training: {}'.format(np.max(self.clusters)))
             
 
