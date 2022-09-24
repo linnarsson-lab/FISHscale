@@ -454,12 +454,15 @@ class GraphPlotting:
 
             random_sample_train = np.random.choice(
                                     len(self.latent_unlabelled.detach().numpy()), 
-                                    np.min([len(self.latent_unlabelled),500000]), 
+                                    np.min([len(self.latent_unlabelled),250000]), 
                                     replace=False)
             training_latents =self.latent_unlabelled.detach().numpy()[random_sample_train,:]
             adata = sc.AnnData(X=training_latents)
-            sc.pp.neighbors(adata, n_neighbors=25)
+            print('Building neighbor graph for clustering...')
+            sc.pp.neighbors(adata, n_neighbors=15)
+            print('Running Leiden clustering...')
             sc.tl.leiden(adata, random_state=42)
+            print('Leiden clustering done.')
             self.clusters= adata.obs['leiden'].values
 
             clf = make_pipeline(StandardScaler(), SGDClassifier(max_iter=1000, tol=1e-3))
