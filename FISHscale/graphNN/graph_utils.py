@@ -306,7 +306,7 @@ class GraphUtils(object):
 
 
 class GraphPlotting:
-    def analyze(self,random_n=250000,n_clusters=100, eps=25, min_samples=18):
+    def analyze(self,random_n=250000,n_clusters=100, eps=25, min_samples=10):
         import umap
         import matplotlib.pyplot as plt
 
@@ -446,16 +446,26 @@ class GraphPlotting:
             from sklearn.cluster import MiniBatchKMeans
             
             import gc
-            '''import scanpy as sc
-            print('Running MBKMeans clustering from scanpy...')
-            adata = sc.AnnData(X=self.latent_unlabelled.detach().numpy())
+            import scanpy as sc
+            from sklearn.linear_model import SGDClassifier
+            from sklearn.preprocessing import StandardScaler
+            from sklearn.pipeline import make_pipeline
+
+            random_sample_train = np.random.choice(
+                                    len(self.latent_unlabelled.detach().numpy()), 
+                                    np.min([len(self.latent_unlabelled),500000]), 
+                                    replace=False)
+            training_latents =self.latent_unlabelled.detach().numpy()[random_sample_train,:]
+            adata = sc.AnnData(X=training_latents)
             sc.pp.neighbors(adata, n_neighbors=25)
             sc.tl.leiden(adata, random_state=42)
-            self.clusters= adata.obs['leiden'].values'''
+            self.clusters= adata.obs['leiden'].values
+
+            clf = make_pipeline(StandardScaler(), SGDClassifier(max_iter=1000, tol=1e-3))
+            clf.fit(training_latents, self.clusters)
+            self.clusters = clf.predict(self.latent_unlabelled.detach().numpy())
             
-            kmeans = MiniBatchKMeans(n_clusters=n_clusters)
-            self.clusters = kmeans.fit_predict(self.latent_unlabelled.detach().numpy())
-            
+
             molecules_id = self.g.ndata['indices']
             import gc
             gc.collect()
