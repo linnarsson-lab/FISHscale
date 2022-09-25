@@ -475,16 +475,9 @@ class GraphPlotting:
             molecules_id = self.g.ndata['indices']
             import gc
             gc.collect()
-            new_labels = np.zeros(self.data.shape[0]) -1
-            new_labels = new_labels#.astype('str')
-            for i,l in zip(molecules_id, clusters):
-                new_labels[i] = l
 
             if not os.path.isdir(os.path.join(self.folder,'Clusters')):
                 os.mkdir('{}/Clusters'.format(self.folder))
-
-            clusters= new_labels
-            
 
             merged_clusters= ClusterCleaner(
                 genes=self.data.unique_genes[np.where(self.g.ndata['gene'].numpy())[1]],
@@ -492,8 +485,12 @@ class GraphPlotting:
                 ).merge()
 
             self.clusters = np.array(merged_clusters)
-            self.data.add_dask_attribute('Clusters',self.clusters.astype('str'),include_genes=True)
-            
+            new_labels = np.zeros(self.data.shape[0]) -1
+            for i,l in zip(molecules_id, self.clusters):
+                new_labels[i] = l
+
+            self.data.add_dask_attribute('Clusters',new_labels.astype('str'),include_genes=True)
+
             from sklearn.cluster import DBSCAN
             db = DBSCAN(eps=eps,min_samples=min_samples)
             self.data.segment('Clusters',save_to=os.path.join(self.folder),func=db)
