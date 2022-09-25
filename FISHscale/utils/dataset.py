@@ -46,6 +46,7 @@ from difflib import get_close_matches
 import logging
 FORMAT = '%(asctime)s %(clientip)-15s %(user)-8s %(message)s'
 logging.basicConfig(format=FORMAT)
+logging.captureWarnings(True)
 
 class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, AttributeScatter, SpatialMetrics, DataLoader, Normalization, 
               Density1D, BoneFight, Decomposition, Boundaries, Gene_order, Cellpose, 
