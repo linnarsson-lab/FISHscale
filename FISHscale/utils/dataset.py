@@ -44,10 +44,7 @@ except ModuleNotFoundError as e:
 from tqdm import tqdm
 from difflib import get_close_matches
 import logging
-
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s',stream=sys.stdout, level=logging.INFO,force=True,)
-#logging.captureWarnings(True)
-
 
 
 class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, AttributeScatter, SpatialMetrics, DataLoader, Normalization, 
