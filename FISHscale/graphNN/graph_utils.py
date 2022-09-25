@@ -306,7 +306,7 @@ class GraphUtils(object):
 
 
 class GraphPlotting:
-    def analyze(self,random_n=250000,n_clusters=100, eps=25, min_samples=10):
+    def analyze(self,random_n=250000, n_clusters=100, eps=25, min_samples=10):
         import umap
         import matplotlib.pyplot as plt
 
@@ -444,7 +444,6 @@ class GraphPlotting:
 
         else:
             from sklearn.cluster import MiniBatchKMeans
-            
             import gc
             import scanpy as sc
             from sklearn.linear_model import SGDClassifier
