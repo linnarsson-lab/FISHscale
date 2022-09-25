@@ -487,15 +487,12 @@ class GraphPlotting:
                 genes=self.data.unique_genes[np.where(self.g.ndata['gene'].numpy())[1]],
                 clusters=self.clusters
                 ).merge()
-            
+
             self.clusters = np.array(merged_clusters)
-            print('clusters merged max: ', print(self.clusters.max()))
-            print('clusters merged max2: ', print(self.clusters))
             self.data.add_dask_attribute('Clusters',new_labels.astype('str'),include_genes=True)
             
             from sklearn.cluster import DBSCAN
             db = DBSCAN(eps=eps,min_samples=min_samples)
-            print('Assigning clusters to molecules using QTClustering...')
             self.data.segment('Clusters',save_to=os.path.join(self.folder),func=db)
             gc.collect()
 
@@ -513,8 +510,6 @@ class GraphPlotting:
             for c in range(np.unique(clusters_).shape[0]):
                 en_genes = enrichment[:,c][:10]
                 enriched_genes[c] = self.data.unique_genes[en_genes]
-                #print(np.unique(clusters_)[c], self.data.unique_genes[en_genes])
-
             self.g.ndata['GSclusters'] = th.tensor(self.clusters,dtype=th.int64)
             
             np.save(self.folder+'/clusters',self.clusters)
