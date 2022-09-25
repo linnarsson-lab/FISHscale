@@ -476,14 +476,15 @@ class GraphPlotting:
             import gc
             gc.collect()
             new_labels = np.zeros(self.data.shape[0]) -1
-            new_labels = new_labels.astype('str')
+            new_labels = new_labels#.astype('str')
             for i,l in zip(molecules_id, clusters):
-                new_labels[i] = str(l)
+                new_labels[i] = l
 
             if not os.path.isdir(os.path.join(self.folder,'Clusters')):
                 os.mkdir('{}/Clusters'.format(self.folder))
 
-            clusters= new_labels.astype('int16')
+            clusters= new_labels
+            
 
             merged_clusters= ClusterCleaner(
                 genes=self.data.unique_genes[np.where(self.g.ndata['gene'].numpy())[1]],
