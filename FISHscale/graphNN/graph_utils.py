@@ -505,7 +505,6 @@ class GraphPlotting:
 
             enriched_genes = {}
             self.enrichment = r
-            logging.info('Ennrichment: ',self.enrichment.shape)
             enrichment = r.argsort(axis=0)[::-1]
             for c in range(np.unique(clusters_).shape[0]):
                 en_genes = enrichment[:,c][:10]
