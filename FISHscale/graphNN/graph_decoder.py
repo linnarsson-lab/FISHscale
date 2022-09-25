@@ -93,8 +93,8 @@ class GraphDecoder:
 
     def random_sampler(self):
         nodes_gene =  self.g.ndata['gene']
-        self.g.ndata['gene'] = th.tensor(self.g.ndata['gene'],dtype=th.float32)
-        self.g.ndata['tmp_gene'] = nodes_gene.clone().float()
+        #self.g.ndata['gene'] = th.tensor(self.g.ndata['gene'],dtype=th.float32)
+        self.g.ndata['tmp_gene'] = th.tensor(nodes_gene.clone(),dtype=th.uint8)
         self.g.ndata['tmp_gene'][self.lost_nodes,:] = th.zeros_like(self.g.ndata['tmp_gene'][self.lost_nodes,:],dtype=th.uint8)
 
         logging.info((self.g.ndata['tmp_gene'].sum(axis=1) > 0).sum())
