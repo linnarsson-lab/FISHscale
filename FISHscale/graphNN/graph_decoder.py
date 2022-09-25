@@ -131,7 +131,7 @@ class GraphDecoder:
             probabilities = th.log(probmultinomial_region+1e-6) + logprobs1_hop + logprobs2_hop
             M = dist.Multinomial(total_count=1, logits=probabilities).sample()
             
-            self.g.ndata['tmp_gene'][nodes,:] = M.float()
+            self.g.ndata['tmp_gene'][nodes,:] = M.int()
             #logging.info((self.g.ndata['tmp_gene'].sum(axis=1) > 0).sum())
             
         simulated_genes = self.data.unique_genes[np.where(self.g.ndata['tmp_gene'].numpy() == 1)[1]]
