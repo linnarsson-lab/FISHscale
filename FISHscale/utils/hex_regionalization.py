@@ -23,6 +23,7 @@ import copy
 from functools import lru_cache
 import colorsys
 from sklearn.manifold import TSNE, SpectralEmbedding
+import logging
 
 class Regionalize(Iteration, Decomposition):
     """Class for regionalization of multidimensional 2D point data.
@@ -231,7 +232,7 @@ class Regionalize(Iteration, Decomposition):
             p.set_linewidth(linewidth) #To hide small white lines between the polygons
             p.set_edgecolor(c)
             if colorbar:
-                print('Colorbar not possible to add when giving a list of RGB colors')
+                logging.info('Colorbar not possible to add when giving a list of RGB colors')
                 colorbar=False
             
         #Set colors from an array of values
@@ -1163,7 +1164,7 @@ class Regionalize(Iteration, Decomposition):
             ordered_points = self.polygon_smooth_points(ordered_points, degree = smooth_polygon_degree)
             if recount == False:
                 recount = True
-                print('Recount set to True after "Smooth_polygon" was set to True.')
+                logging.info('Recount set to True after "Smooth_polygon" was set to True.')
         
         #Recount points in polygons and make geoDataFrame
         if recount == True:

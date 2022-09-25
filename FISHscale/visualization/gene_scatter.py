@@ -4,6 +4,7 @@ from pint import UnitRegistry
 from typing import Union, Any, List
 from time import strftime
 import gc
+import logging
 
 class AxSize:
 

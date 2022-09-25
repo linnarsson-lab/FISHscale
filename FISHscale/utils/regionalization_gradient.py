@@ -3,7 +3,7 @@ import numpy as np
 from sklearn.ensemble import RandomForestClassifier
 from tqdm import tqdm
 from numpy.lib.stride_tricks import sliding_window_view
-
+import logging
 
 class Regionalization_Gradient:
     
@@ -73,10 +73,10 @@ class Regionalization_Gradient:
         total = labels.shape[0]
         matches = (labels == predicted_labels).sum()
         percentage = round((matches/total)*100)
-        print(f'Perfect matches: {matches} out of {total} which is {percentage}% accuracy')
+        logging.info(f'Perfect matches: {matches} out of {total} which is {percentage}% accuracy')
         if percentage > 98:
-            print('Warning, percentage of identical matches is high which might indicate over fitting of the classifier.')
-            print('Consider initiating the classifier again with more stringent settings.')
+            logging.info('Warning, percentage of identical matches is high which might indicate over fitting of the classifier.')
+            logging.info('Consider initiating the classifier again with more stringent settings.')
     
         #Get probability of class
         predicted_prob = clf.predict_proba(df_hex.T)
