@@ -371,7 +371,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting, GraphDecoder)
                         )
         return validation
 
-    def train(self,gpus=0):
+    def train(self,gpus=0, continue_training=False):
         """
         train
 
@@ -404,7 +404,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting, GraphDecoder)
                                         )
 
         
-        else:
+        if continue_training:
             trainer.fit(self.model, train_dataloaders=self.train_dataloader())#,val_dataloaders=self.test_dataloader())
 
     #### plotting and latent factors #####
