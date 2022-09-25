@@ -454,7 +454,7 @@ class GraphPlotting:
 
             random_sample_train = np.random.choice(
                                     len(self.latent_unlabelled.detach().numpy()), 
-                                    np.min([len(self.latent_unlabelled),250000]), 
+                                    np.min([len(self.latent_unlabelled),10000]), 
                                     replace=False)
             training_latents =self.latent_unlabelled.detach().numpy()[random_sample_train,:]
             adata = sc.AnnData(X=training_latents)
@@ -472,8 +472,6 @@ class GraphPlotting:
             unique_clusters = np.unique(self.clusters)
             dic = dict(zip(unique_clusters, np.arange(unique_clusters.shape[0])))
             self.clusters = np.array([dic[i] for i in self.clusters])
-            print('Max clusters detected in training: {}'.format(np.max(self.clusters)))
-
             molecules_id = self.g.ndata['indices']
             import gc
             gc.collect()
@@ -490,8 +488,9 @@ class GraphPlotting:
                 clusters=self.clusters
                 ).merge()
             
-            self.clusters = merged_clusters
-            
+            self.clusters = np.array(merged_clusters)
+            print('clusters merged max: ', print(self.clusters.max()))
+            print('clusters merged max2: ', print(self.clusters))
             self.data.add_dask_attribute('Clusters',new_labels.astype('str'),include_genes=True)
             
             from sklearn.cluster import DBSCAN
