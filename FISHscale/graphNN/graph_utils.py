@@ -792,7 +792,7 @@ class GraphPlotting:
 
         df = graph.nodes.data
         print('cluster to extract: ', cluster)
-        print('enrich2', self.ennrichment.shape)
+        print('enrich2', self.enrichment.shape)
         enrichment =  self.enrichment[:,cluster]
         enrichmentQ = np.quantile(enrichment,0.5)
         enriched_genes = self.data.unique_genes[enrichment > enrichmentQ]
