@@ -509,6 +509,7 @@ class GraphPlotting:
 
             enriched_genes = {}
             self.enrichment = r
+            print('Ennrichment: ',self.enrichment.shape)
             enrichment = r.argsort(axis=0)[::-1]
             for c in range(np.unique(clusters_).shape[0]):
                 en_genes = enrichment[:,c][:10]
@@ -790,6 +791,8 @@ class GraphPlotting:
             )#, edge_cmap='viridis', edge_color='Attention')
 
         df = graph.nodes.data
+        print('cluster to extract: ', cluster)
+        print('enrich2', self.ennrichment.shape)
         enrichment =  self.enrichment[:,cluster]
         enrichmentQ = np.quantile(enrichment,0.5)
         enriched_genes = self.data.unique_genes[enrichment > enrichmentQ]

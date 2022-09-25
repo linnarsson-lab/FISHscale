@@ -94,7 +94,7 @@ class GraphDecoder:
         nodes_gene =  self.g.ndata['gene']
         self.g.ndata['gene'] = th.tensor(self.g.ndata['gene'],dtype=th.float32)
         self.g.ndata['tmp_gene'] = nodes_gene.clone().float()
-        self.g.ndata['tmp_gene'][self.lost_nodes,:] = th.zeros_like(self.g.ndata['tmp_gene'][self.lost_nodes,:],dtype=th.float32)
+        self.g.ndata['tmp_gene'][self.lost_nodes,:] = th.zeros_like(self.g.ndata['tmp_gene'][self.lost_nodes,:],dtype=th.uint8)
 
         print((self.g.ndata['tmp_gene'].sum(axis=1) > 0).sum())
 
