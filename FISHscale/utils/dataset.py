@@ -44,9 +44,10 @@ except ModuleNotFoundError as e:
 from tqdm import tqdm
 from difflib import get_close_matches
 import logging
-FORMAT = '%(asctime)s %(clientip)-15s %(user)-8s %(message)s'
-logging.basicConfig(format=FORMAT,stream=sys.stdout, level=logging.INFO)
-logging.captureWarnings(True)
+
+logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s',stream=sys.stdout, level=logging.INFO,force=True,)
+#logging.captureWarnings(True)
+
 
 
 class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, AttributeScatter, SpatialMetrics, DataLoader, Normalization, 
