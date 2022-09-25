@@ -29,6 +29,7 @@ import colorsys
 from dask.diagnostics import ProgressBar
 
 from collections import Counter
+import logging
 
 class RegionalizeMulti(Decomposition):
     
@@ -738,7 +739,7 @@ class MultiRegionalize:
         norm = normalizer != None
         
         for i, d in enumerate(list(hex_bin.keys())):
-            print(f'Merging datasets. Processing sample: {i}                    ', end='\r')
+            logging.info(f'Merging datasets. Processing sample: {i}                    ', end='\r')
             if i == 0:
                 df_next = hex_bin[d]['df']
                 df_all = df_next
@@ -948,7 +949,7 @@ class MultiRegionalize:
         labels_all = []
         datasets = list(hex_bin.keys())
         for i, d in enumerate(datasets):
-            print(f'Connected clustering. Processing sample: {i}                    ', end='\r')
+            logging.info(f'Connected clustering. Processing sample: {i}                    ', end='\r')
             ax = fig.add_subplot(gs[int(i/3), (i%3)*2:((i%3)*2)+2])
             
             n_neighbors = (neighbor_rings * 6)
@@ -1073,8 +1074,8 @@ class MultiRegionalize:
         the cutoff.
         
         """
-        print(type(correlation_matrix))
-        print(type(links))
+        logging.info(type(correlation_matrix))
+        logging.info(type(links))
         if type(correlation_matrix) == pd.core.frame.DataFrame and type(links) != pd.core.frame.DataFrame:
             links = correlation_matrix.stack().reset_index()
             links.columns = ['Var1', 'Var2', 'value']
@@ -1322,7 +1323,7 @@ def clust_hex(hex_bin, manifold, n_clusters=None, data=None, clustering=None,
 
     datasets = list(hex_bin.keys())
     for i, d in enumerate(datasets):
-        print(f'Clustering. Processing sample: {i}                    ', end='\r')
+        logging.info(f'Clustering. Processing sample: {i}                    ', end='\r')
         ax = fig.add_subplot(gs[int(i/2), (i%2)*2:((i%2)*2)+2])
 
         ydata = hex_bin[d]['coordinates_filt'][:,0]
@@ -1340,7 +1341,7 @@ def clust_hex(hex_bin, manifold, n_clusters=None, data=None, clustering=None,
             if i == 0:
                 ylim = ax.get_ylim()
                 xlim = ax.get_xlim()
-                print(xlim)
+                logging.info(xlim)
         else:
             ax.set_ylim(ylim)
             ax.set_xlim(xlim)

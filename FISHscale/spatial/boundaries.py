@@ -10,6 +10,7 @@ from scipy.ndimage import binary_erosion
 from typing import Tuple
 from scipy.spatial import distance
 from tqdm import tqdm
+import logging
 
 def _worker_bisect(points: np.ndarray, grid: np.ndarray, radius: float, 
                    lines: list, n_angles: int):
@@ -219,10 +220,10 @@ class Boundaries:
             results.append(y)
 
         #Compute
-        print('Computation 1 / 2: ', end='\r') 
+        logging.info('Computation 1 / 2: ', end='\r') 
         with ProgressBar():
             results = dask.compute(*results, scheduler='processes', n_workers=n_jobs)
-        print('Computation 2 / 2: ', end='\r') 
+        logging.info('Computation 2 / 2: ', end='\r') 
 
         #Identify grid points without molecules
         count_matrix = np.array([i[1] for i in results])

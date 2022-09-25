@@ -4,11 +4,12 @@ import pickle as pkl
 from typing import Union
 from os import path, makedirs
 from skimage.segmentation import expand_labels
+import logging
     
 try:
     from cellpose import models, io
 except ModuleNotFoundError as e:
-    print(f'Could not import Cellpose. Ignore if cell segmentation is not needed. Error: {e}')
+    logging.info(f'Could not import Cellpose. Ignore if cell segmentation is not needed. Error: {e}')
     
 class Cellpose():
     """Wrapper around Cellpose:"""

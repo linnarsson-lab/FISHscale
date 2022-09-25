@@ -20,6 +20,7 @@ from holoviews import opts
 from holoviews.operation.datashader import datashade, bundle_graph, spread
 from sklearn.preprocessing import LabelEncoder
 from FISHscale.graphNN.cluster_utils import ClusterCleaner
+import logging
 hv.extension('bokeh')
 
 
@@ -105,10 +106,10 @@ class GraphUtils(object):
             d,i = kdT.query(np.array([x,y]).T,k=3)
             d_th = np.percentile(d[:,-1],95)*omega
             self.distance_threshold = d_th
-            print('Chosen dist to connect molecules into a graph: {}'.format(d_th))
+            logging.info('Chosen dist to connect molecules into a graph: {}'.format(d_th))
         else:
             self.distance_threshold = tau
-            print('Chosen dist to connect molecules into a graph: {}'.format(tau))
+            logging.info('Chosen dist to connect molecules into a graph: {}'.format(tau))
 
     def compute_library_size(self):
         data= self.g.ndata['ngh'].T
@@ -134,7 +135,7 @@ class GraphUtils(object):
         Returns:
             dgl.Graph: molecule spatial graph.
         """        
-        print('Building graph...')
+        logging.info('Building graph...')
         if type(coords)  == type(None):
             supervised = False
             edge_file = os.path.join(self.save_to,'graph/DGL-Edges-{}Nodes-dst{}'.format(self.molecules.shape[0],self.distance_factor))
@@ -159,10 +160,10 @@ class GraphUtils(object):
         dists = np.array([t.get_nns_by_item(i, 2,include_distances=True)[1][1] for i in range(coords.shape[0])])
         d_th = np.percentile(dists[np.isnan(dists) == False],97)*self.distance_factor
         self.distance_threshold = d_th
-        print('Chosen dist: {}'.format(self.distance_threshold))
+        logging.info('Chosen dist: {}'.format(self.distance_threshold))
         
         def find_nn_distance(coords,tree,distance):
-            print('Find neighbors below distance: {}'.format(d_th))
+            logging.info('Find neighbors below distance: {}'.format(d_th))
             res,nodes,ngh_, ncoords = [],[],[], []
             for i in trange(coords.shape[0]):
                 # 100 sets the number of neighbors to find for each node
@@ -258,13 +259,13 @@ class GraphUtils(object):
             self.supervised = True
             import loompy
             with loompy.connect(self.ref_celltypes,'r') as ds:
-                print(ds.ca.keys())
+                logging.info(ds.ca.keys())
                 try:
                     k = list(self.exclude_clusters.keys())[0]
                     v = self.exclude_clusters[k]
                     region_filt = np.isin(ds.ca[k], v, invert=True)
                     self.ClusterNames = ds.ca[k][region_filt]
-                    print('Selected clusters: {}'.format(self.ClusterNames))
+                    logging.info('Selected clusters: {}'.format(self.ClusterNames))
                 except:
                     self.ClusterNames = ds.ca[k]
 
@@ -280,7 +281,7 @@ class GraphUtils(object):
                 ref = ref[order]
                 ref = ref[:,region_filt]
                 self.ref_celltypes = ref
-                print('Reference dataset shape: {}'.format(self.ref_celltypes.shape))
+                logging.info('Reference dataset shape: {}'.format(self.ref_celltypes.shape))
             
             if self.celltype_distribution == 'uniform':
                 dist = th.ones(self.ncells.shape[0])
@@ -393,7 +394,7 @@ class GraphPlotting:
             nd_dic = {}
 
             allm = 0
-            print('Generating plots for cluster assigned to molecules...')
+            logging.info('Generating plots for cluster assigned to molecules...')
             
             if not os.path.isdir(os.path.join(self.folder,'Clusters')):
                 os.mkdir('{}/Clusters'.format(self.folder))
@@ -422,7 +423,7 @@ class GraphPlotting:
             pred_labels = th.tensor(self.prediction_unlabelled)
             merge = np.concatenate([molecules_x[:,np.newaxis],molecules_y[:,np.newaxis]],axis=1)
             L = []
-            print('Generating plots for molecule cluster probabilities...')
+            logging.info('Generating plots for molecule cluster probabilities...')
             os.mkdir('{}/ClusterProbabilities'.format(self.folder))
             for n in range(self.ClusterNames.shape[0]):
                 ps = pred_labels.detach().numpy()[:,n][:,np.newaxis]
@@ -440,7 +441,7 @@ class GraphPlotting:
                 hv.save(scatter,"{}/ClusterProbabilities/{}.png".format(self.folder,str(self.ClusterNames[n])))
             
             layout = hv.Layout([x for x in L]).cols(2)
-            print('Plots saved.')
+            logging.info('Plots saved.')
 
         else:
             from sklearn.cluster import MiniBatchKMeans
@@ -457,11 +458,11 @@ class GraphPlotting:
                                     replace=False)
             training_latents =self.latent_unlabelled.detach().numpy()[random_sample_train,:]
             adata = sc.AnnData(X=training_latents)
-            print('Building neighbor graph for clustering...')
+            logging.info('Building neighbor graph for clustering...')
             sc.pp.neighbors(adata, n_neighbors=15)
-            print('Running Leiden clustering...')
+            logging.info('Running Leiden clustering...')
             sc.tl.leiden(adata, random_state=42)
-            print('Leiden clustering done.')
+            logging.info('Leiden clustering done.')
             self.clusters= adata.obs['leiden'].values
 
             clf = make_pipeline(StandardScaler(), SGDClassifier(max_iter=1000, tol=1e-3))
@@ -504,7 +505,7 @@ class GraphPlotting:
 
             enriched_genes = {}
             self.enrichment = r
-            print('Ennrichment: ',self.enrichment.shape)
+            logging.info('Ennrichment: ',self.enrichment.shape)
             enrichment = r.argsort(axis=0)[::-1]
             for c in range(np.unique(clusters_).shape[0]):
                 en_genes = enrichment[:,c][:10]
@@ -512,8 +513,8 @@ class GraphPlotting:
             self.g.ndata['GSclusters'] = th.tensor(self.clusters,dtype=th.int64)
             
             np.save(self.folder+'/clusters',self.clusters)
-            print('Clustering done.')
-            print('Generating umap embedding...')
+            logging.info('Clustering done.')
+            logging.info('Generating umap embedding...')
             gc.collect()
             
             colors = colorize(np.arange(np.unique(self.clusters).shape[0]))
@@ -521,7 +522,7 @@ class GraphPlotting:
             for x in np.unique(self.clusters):
                 c = colors[x,:].tolist()
                 color_dic[x] = (c[0],c[1],c[2])
-            print(color_dic)
+            logging.info(color_dic)
             clusters_colors = np.array([color_dic[x] for x in self.clusters])
 
             some = np.random.choice(np.arange(self.latent_unlabelled.shape[0]),random_n,replace=False)
@@ -558,7 +559,7 @@ class GraphPlotting:
             molecules_x = self.data.df.x.values.compute()[molecules_id.numpy()]
             nd_dic = {}
             allm = 0
-            print('Generating plots for cluster assigned to molecules...')
+            logging.info('Generating plots for cluster assigned to molecules...')
             lay = []
             for cl in np.unique(self.clusters):
                 try:
@@ -576,7 +577,7 @@ class GraphPlotting:
                     lay.append(nd_dic[cl])
                     hv.save(scatter,"{}/Clusters/{}.png".format(self.folder,str(cl)), )   
                 except:
-                    print('Could not get cluster {}'.format(cl))   
+                    logging.info('Could not get cluster {}'.format(cl))   
 
             layout = hv.Layout(lay).cols(5).opts(opts.Scatter(s=0.1,fontsize={'title':8}))
             hv.save(layout,"{}/molecule_prediction.png".format(self.folder))
@@ -591,7 +592,7 @@ class GraphPlotting:
             hv.save(hmap, "{}/Clusters.html".format(self.folder),fmt='html')
             self.save_graph()
             '''except:
-                print('Could not generate html file')'''
+                logging.info('Could not generate html file')'''
     
     def export_to_shoji(self,ws):
         import shoji
@@ -664,7 +665,7 @@ class GraphPlotting:
         for c in tqdm(np.unique(self.clusters)):
             nodes= self.g.nodes()[self.clusters == c]
             att1, att2 = self.get_attention_nodes(nodes=nodes)
-            #print(att1.shape,att2.shape)
+            #logging.info(att1.shape,att2.shape)
             bg1,bg2, counts_cl1, counts_cl2 = self.execute(c, nodes,att1,att2)
             result.append((bg1,bg2)) 
 
@@ -699,7 +700,7 @@ class GraphPlotting:
             pstack = np.stack(probs_gene)
             pstack = pstack/pstack.sum()
             network_grammar.append(pstack)
-        print('Syntax learned')
+        logging.info('Syntax learned')
         network_grammar = np.stack(network_grammar)
         #bible_network_ngh = pd.DataFrame(index=self.data.unique_genes, columns= self.data.unique_genes ,data=network_grammar)
         return network_grammar
@@ -784,8 +785,8 @@ class GraphPlotting:
             )#, edge_cmap='viridis', edge_color='Attention')
 
         df = graph.nodes.data
-        print('cluster to extract: ', cluster)
-        print('enrich2', self.enrichment.shape)
+        logging.info('cluster to extract: ', cluster)
+        logging.info('enrich2', self.enrichment.shape)
         enrichment =  self.enrichment[:,cluster]
         enrichmentQ = np.quantile(enrichment,0.5)
         enriched_genes = self.data.unique_genes[enrichment > enrichmentQ]
@@ -942,7 +943,7 @@ class enrich_: #sparese
             if permute:
                 enrich_._shuffle()
                 labels = self.permute_labs
-                print(f'permute{labels}')
+                logging.info(f'permute{labels}')
             
             else: 
                 labels = self.labels_attr 

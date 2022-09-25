@@ -15,6 +15,7 @@ from pyro import distributions as dist
 import dgl
 import dgl.function as fn
 from tqdm import trange, tqdm
+import logging
 
 class GraphDecoder:
     def __init__(
@@ -96,7 +97,7 @@ class GraphDecoder:
         self.g.ndata['tmp_gene'] = nodes_gene.clone().float()
         self.g.ndata['tmp_gene'][self.lost_nodes,:] = th.zeros_like(self.g.ndata['tmp_gene'][self.lost_nodes,:],dtype=th.uint8)
 
-        print((self.g.ndata['tmp_gene'].sum(axis=1) > 0).sum())
+        logging.info((self.g.ndata['tmp_gene'].sum(axis=1) > 0).sum())
 
         sampler = dgl.dataloading.MultiLayerFullNeighborSampler(2,prefetch_node_feats=['tmp_gene'])
         self.decoder_dataloader = dgl.dataloading.DataLoader(
@@ -131,7 +132,7 @@ class GraphDecoder:
             M = dist.Multinomial(total_count=1, logits=probabilities).sample()
             
             self.g.ndata['tmp_gene'][nodes,:] = M.float()
-            #print((self.g.ndata['tmp_gene'].sum(axis=1) > 0).sum())
+            #logging.info((self.g.ndata['tmp_gene'].sum(axis=1) > 0).sum())
             
         simulated_genes = self.data.unique_genes[np.where(self.g.ndata['tmp_gene'].numpy() == 1)[1]]
         return simulated_genes

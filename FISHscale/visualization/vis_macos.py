@@ -1,5 +1,6 @@
 from re import search
 import sys
+import logging
 from PyQt5.QtWidgets import (QPushButton, QDialog, QTreeWidget,
                             QTreeWidgetItem, QVBoxLayout,
                             QHBoxLayout, QFrame, QLabel,
@@ -30,7 +31,7 @@ try:
     import open3d.visualization.rendering as rendering
     import threading
 except:
-    print('Import Error: open3d')
+    logging.info('Import Error: open3d')
 import pandas as pd
 import numpy as np
 import random
@@ -79,7 +80,7 @@ class Window:
         # setting title 
         #if str(self.dataset.__class__) == str(FISHscale.utils.dataset.Dataset):
         if isinstance(self.dataset,FISHscale.utils.dataset.Dataset):
-            print('Single Dataset')
+            logging.info('Single Dataset')
             self.unique_genes = self.dataset.unique_genes
             self.dataset = [dataset]
             self.dic_pointclouds ={'g':self.unique_genes}
@@ -90,7 +91,7 @@ class Window:
 
         #elif str(self.dataset.__class__) == str(FISHscale.utils.dataset.MultiDataset):
         elif isinstance(self.dataset, FISHscale.utils.dataset.MultiDataset):
-            print('MultiDataset')
+            logging.info('MultiDataset')
             self.dataset = dataset
             self.dic_pointclouds ={'g':self.dataset.unique_genes}
             self.dic_pointclouds['File'] = []
@@ -112,7 +113,7 @@ class Window:
         r = lambda: random.randint(0,255)
         ds = []
         for dataframe in self.dataset:
-            print(dataframe.filename)
+            logging.info(dataframe.filename)
 
             for c in self.columns:
                 unique_ca = dataframe.dask_attrs[c][c].unique().values.compute()
@@ -284,7 +285,7 @@ class Visualizer:
 
     def _on_voxel_down(self, down):
         self.voxel_down = down/100
-        #print(self.voxel_down)
+        #logging.info(self.voxel_down)
 
     def _on_file_checked(self, is_checked):
         self.tissue_selected = []
