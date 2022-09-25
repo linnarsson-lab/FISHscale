@@ -463,33 +463,35 @@ class GraphPlotting:
             logging.info('Running Leiden clustering...')
             sc.tl.leiden(adata, random_state=42)
             logging.info('Leiden clustering done.')
-            self.clusters= adata.obs['leiden'].values
+            clusters= adata.obs['leiden'].values
 
             clf = make_pipeline(StandardScaler(), SGDClassifier(max_iter=1000, tol=1e-3))
-            clf.fit(training_latents, self.clusters)
-            self.clusters = clf.predict(self.latent_unlabelled.detach().numpy()).astype('uint16')
+            clf.fit(training_latents, clusters)
+            clusters = clf.predict(self.latent_unlabelled.detach().numpy()).astype('uint16')
 
-            unique_clusters = np.unique(self.clusters)
+            unique_clusters = np.unique(clusters)
             dic = dict(zip(unique_clusters, np.arange(unique_clusters.shape[0])))
-            self.clusters = np.array([dic[i] for i in self.clusters])
+            clusters = np.array([dic[i] for i in clusters])
             molecules_id = self.g.ndata['indices']
             import gc
             gc.collect()
             new_labels = np.zeros(self.data.shape[0]) -1
             new_labels = new_labels.astype('str')
-            for i,l in zip(molecules_id, self.clusters):
+            for i,l in zip(molecules_id, clusters):
                 new_labels[i] = str(l)
 
             if not os.path.isdir(os.path.join(self.folder,'Clusters')):
                 os.mkdir('{}/Clusters'.format(self.folder))
 
+            clusters= new_labels.astype('uint16')
+
             merged_clusters= ClusterCleaner(
                 genes=self.data.unique_genes[np.where(self.g.ndata['gene'].numpy())[1]],
-                clusters=self.clusters
+                clusters=clusters
                 ).merge()
 
             self.clusters = np.array(merged_clusters)
-            self.data.add_dask_attribute('Clusters',new_labels.astype('str'),include_genes=True)
+            self.data.add_dask_attribute('Clusters',self.clusters.astype('str'),include_genes=True)
             
             from sklearn.cluster import DBSCAN
             db = DBSCAN(eps=eps,min_samples=min_samples)
@@ -505,6 +507,7 @@ class GraphPlotting:
 
             enriched_genes = {}
             self.enrichment = r
+            logging.info('Enrichment shape: {}'.format(self.enrichment.shape))
             enrichment = r.argsort(axis=0)[::-1]
             for c in range(np.unique(clusters_).shape[0]):
                 en_genes = enrichment[:,c][:10]
@@ -784,9 +787,11 @@ class GraphPlotting:
             )#, edge_cmap='viridis', edge_color='Attention')
 
         df = graph.nodes.data
+        logging.info('Enrichment shape {}'.format(self.enrichment.shape))
         enrichment =  self.enrichment[:,cluster]
         enrichmentQ = np.quantile(enrichment,0.5)
         enriched_genes = self.data.unique_genes[enrichment > enrichmentQ]
+
         
         genes1 = graph_edges1[np.isin(graph_edges1,enriched_genes)| np.isin(graph_edges2,enriched_genes)]
         genes2 = graph_edges2[np.isin(graph_edges1,enriched_genes)| np.isin(graph_edges2,enriched_genes)]
