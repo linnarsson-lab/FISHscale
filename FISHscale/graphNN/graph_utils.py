@@ -483,7 +483,7 @@ class GraphPlotting:
             if not os.path.isdir(os.path.join(self.folder,'Clusters')):
                 os.mkdir('{}/Clusters'.format(self.folder))
 
-            clusters= new_labels.astype('uint16')
+            clusters= new_labels.astype('int16')
 
             merged_clusters= ClusterCleaner(
                 genes=self.data.unique_genes[np.where(self.g.ndata['gene'].numpy())[1]],
