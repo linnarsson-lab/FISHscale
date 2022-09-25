@@ -404,9 +404,9 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting, GraphDecoder)
                                         )
 
         
-        if continue_training:
+        if continue_training or not is_trained:
             trainer.fit(self.model, train_dataloaders=self.train_dataloader())#,val_dataloaders=self.test_dataloader())
-
+            
     #### plotting and latent factors #####
 
     def get_latents(self):
