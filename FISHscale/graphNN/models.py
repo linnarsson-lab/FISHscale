@@ -278,6 +278,13 @@ class SAGELightning(LightningModule):
     def validation_step(self,batch, batch_idx):
         pass
 
+    def training_epoch_end(self, outputs):
+        sch = self.lr_schedulers()
+
+        # If the selected scheduler is a ReduceLROnPlateau scheduler.
+        if isinstance(sch, th.optim.lr_scheduler.ReduceLROnPlateau):
+            sch.step(self.trainer.callback_metrics["train_loss"])
+
 class PyroOptWrap(pyro.infer.SVI):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
