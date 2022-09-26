@@ -489,6 +489,9 @@ class GraphPlotting:
             for i,l in zip(molecules_id, self.clusters):
                 new_labels[i] = l
 
+            logging.info('Merged clusters: {}'.format(np.unique(merged_clusters)))
+            logging.info('Merged clusters: {}'.format(np.max(merged_clusters)))
+
             self.data.add_dask_attribute('Clusters',new_labels.astype('str'),include_genes=True)
 
             from sklearn.cluster import DBSCAN
