@@ -107,7 +107,7 @@ class GraphDecoder:
                 )
                 
     def random_decoder(self):
-        for _, nodes, blocks in tqdm(self.decoder_dataloader):
+        for _, nodes, blocks in self.decoder_dataloader:
             block_1hop = blocks[1]
             block_2hop = blocks[0]
             
