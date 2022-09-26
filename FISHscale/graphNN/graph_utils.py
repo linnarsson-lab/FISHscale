@@ -509,8 +509,15 @@ class GraphPlotting:
                 enrich = enrich_(labels_attr = ds.ca.Clusters)
                 sparse_tmp = ds.sparse().tocsr()
                 clusters_ = ds.ca['Clusters'].astype(float)
+                cell_unique_clusters = np.unique(clusters_)
                 r = enrich._fit(sparse_tmp,permute=False)
                 ds.ra['enrichment'] = r
+
+                dic = dict(zip(cell_unique_clusters, np.arange(cell_unique_clusters.shape[0])))
+                self.clusters = np.array([dic[i] for i in self.clusters])
+                cell_clusters = np.array([dic[i] for i in clusters_])
+                ds.ca['Clusters'] = cell_clusters.astype('str')
+
 
             enriched_genes = {}
             self.enrichment = r
