@@ -488,15 +488,10 @@ class GraphPlotting:
             dic = dict(zip(unique_clusters, np.arange(unique_clusters.shape[0])))
             merged_clusters = np.array([dic[i] for i in merged_clusters])
 
-            logging.info('Merged clusters: {}'.format(np.unique(merged_clusters)))
-            logging.info('Merged clusters: {}'.format(np.max(merged_clusters)))
             self.clusters = np.array(merged_clusters)
             new_labels = np.zeros(self.data.shape[0]) -1
             for i,l in zip(molecules_id, self.clusters):
                 new_labels[i] = l
-
-            logging.info('Merged clusters: {}'.format(np.unique(merged_clusters)))
-            logging.info('Merged clusters: {}'.format(np.max(merged_clusters)))
 
             self.data.add_dask_attribute('Clusters',new_labels.astype('str'),include_genes=True)
 
@@ -514,9 +509,12 @@ class GraphPlotting:
                 ds.ra['enrichment'] = r
 
                 dic = dict(zip(cell_unique_clusters, np.arange(cell_unique_clusters.shape[0])))
-                self.clusters = np.array([dic[i] for i in self.clusters])
+                self.clusters = np.array([dic[i] if i in dic else -1 for i in self.clusters])
                 cell_clusters = np.array([dic[i] for i in clusters_])
                 ds.ca['Clusters'] = cell_clusters.astype('str')
+                self.cell_unique_clusters = np.unique(cell_clusters)
+
+            self.cell_clusters = self.clusters[self.clusters != -1]
 
 
             enriched_genes = {}
@@ -541,7 +539,7 @@ class GraphPlotting:
             logging.info(color_dic)
             clusters_colors = np.array([color_dic[x] for x in self.clusters])
 
-            some = np.random.choice(np.arange(self.latent_unlabelled.shape[0]),random_n,replace=False)
+            some = np.random.choice(np.arange(self.latent_unlabelled.shape[0]),np.min([random_n, self.latent_unlabelled.shape[0]]),replace=False)
             umap_embedding = reducer.fit_transform(self.latent_unlabelled[some])
             #embedding = umap_embedding.transform(self.latent_unlabelled)
             Y_umap = umap_embedding
@@ -678,7 +676,7 @@ class GraphPlotting:
         result = []
 
         counts_cluster = {}
-        for c in tqdm(np.unique(self.clusters)):
+        for c in tqdm(np.unique(self.cell_unique_clusters)):
             nodes= self.g.nodes()[self.clusters == c]
             att1, att2 = self.get_attention_nodes(nodes=nodes)
             #logging.info(att1.shape,att2.shape)
@@ -689,9 +687,9 @@ class GraphPlotting:
 
         inter_graph, df = self.plot_intercluster(counts_cluster)
         hv.save(inter_graph, '{}/attention/ClusterConnectivity.html'.format(self.folder, c))
-        df = pd.DataFrame(index=np.unique(self.clusters).astype('str'),columns=np.unique(self.clusters).astype('str'), data=df)
-        df.to_parquet('{}/attention/ClusterConnectivity.parquet'.format(self.folder,c))
 
+        df = pd.DataFrame(index=np.unique(self.clusters[self.clusters != -1]).astype('str'),columns=np.unique(self.clusters[self.clusters != -1]).astype('str'), data=df)
+        df.to_parquet('{}/attention/ClusterConnectivity.parquet'.format(self.folder,c))
 
         for b in result:
             bible1 += b[0].values
@@ -752,8 +750,8 @@ class GraphPlotting:
         edges_cluster1 = [self.dic_clusters[e] for e in filt_edges_cluster1.numpy()]
         edges_cluster2 = [self.dic_clusters[e] for e in filt_edges_cluster2.numpy()]
         edges_cluster = edges_cluster1 + edges_cluster2
-        counts_cluster = np.unique(edges_cluster, return_counts=True)
-        counts_cluster = dict(zip(counts_cluster[0],counts_cluster[1]))
+        cluster_, counts = np.unique(edges_cluster, return_counts=True)
+        counts_cluster = dict(zip(cluster_[cluster_ != -1], counts[cluster_ != -1]))
         ###
 
         a = itertools.combinations(self.data.unique_genes,2)
@@ -801,7 +799,6 @@ class GraphPlotting:
             )#, edge_cmap='viridis', edge_color='Attention')
 
         df = graph.nodes.data
-        logging.info('Enrichment shape {}'.format(self.enrichment.shape))
         enrichment =  self.enrichment[:,cluster]
         enrichmentQ = np.quantile(enrichment,0.5)
         enriched_genes = self.data.unique_genes[enrichment > enrichmentQ]
@@ -848,7 +845,7 @@ class GraphPlotting:
             dic1_cluster_i = dic[c][0]
             dic2_cluster_i = dic[c][1]
 
-            for c2 in np.unique(self.clusters):
+            for c2 in np.unique(self.clusters[self.clusters != -1]):
                 counts = 0
                 if c2 in dic1_cluster_i:
                     counts += dic1_cluster_i[c2]
