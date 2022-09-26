@@ -484,6 +484,12 @@ class GraphPlotting:
                 clusters=clusters
                 ).merge()
 
+            unique_clusters = np.unique(merged_clusters)
+            dic = dict(zip(unique_clusters, np.arange(unique_clusters.shape[0])))
+            merged_clusters = np.array([dic[i] for i in merged_clusters])
+
+            logging.info('Merged clusters: {}'.format(np.unique(merged_clusters)))
+            logging.info('Merged clusters: {}'.format(np.max(merged_clusters)))
             self.clusters = np.array(merged_clusters)
             new_labels = np.zeros(self.data.shape[0]) -1
             for i,l in zip(molecules_id, self.clusters):
