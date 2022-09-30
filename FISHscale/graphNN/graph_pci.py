@@ -29,6 +29,7 @@ class GraphPCI:
         df = dd.read_parquet(segmentation_path).compute()
         df.to_parquet(output_name)
         df= df.rename(columns={"g":'Gene', 'Segmentation':'label'})
+        print(df.head())
         labels = df.label.values
         label, counts= np.unique(df.label.values,return_counts=True)
         to_background = label[np.where(counts <= 3)]
