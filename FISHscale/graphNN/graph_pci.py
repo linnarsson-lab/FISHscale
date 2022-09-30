@@ -1,4 +1,4 @@
-import pciSeq
+
 import loompy
 import dask.dataframe as dd
 import os
