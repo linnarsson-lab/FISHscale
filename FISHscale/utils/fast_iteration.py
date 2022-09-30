@@ -94,7 +94,9 @@ class Iteration:
             elif frac * n_points < minimum:
                 frac = minimum / n_points
         
+        
         gene_i= self.gene_index[gene]
+
         
         columns = ['x', 'y']
         if include_z:
