@@ -535,7 +535,6 @@ class GraphPlotting:
                 analysis_name,
                 )
 
-
             ### PCI Seq ###
             if type(pci_file) != type(None):
                 GPCI = GraphPCI(pci_file)
