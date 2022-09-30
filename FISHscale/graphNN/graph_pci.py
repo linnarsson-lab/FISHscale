@@ -37,7 +37,7 @@ class GraphPCI:
         df.to_parquet(output_name)
 
     def run(self, folder, analysis_name):
-        pci = pciSeq.fit(self.graph_df, self.scRNAseq)
+        pci = pciSeq.fit(self.graph_df, self.scRNAseq)#, opts={'max_iter': 20,})
         self.cellData, geneData = pci
         os.mkdir(os.path.join(folder,'GATpciseq'))
         self.cellData.to_parquet(os.path.join(folder,'/GATpciseq/{}pci_celldata.parquet'.format(analysis_name)))
