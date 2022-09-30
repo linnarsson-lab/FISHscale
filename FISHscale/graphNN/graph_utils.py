@@ -673,7 +673,7 @@ class GraphPlotting:
 
         genes = pd.read_parquet('/wsfish/glioblastoma/EEL/codebookHG1_20201124.parquet')['Gene'].dropna().values.tolist()
         genes += pd.read_parquet('/wsfish/glioblastoma/EEL/codebookHG2_20210508.parquet')['Gene'].dropna().values.tolist()
-        genes += pd.read_parquet('/wsfish/glioblastoma/codebookHG3_20211214.parquet')['Gene'].dropna().values.tolist()
+        genes += pd.read_parquet('/wsfish/glioblastoma/EEL/codebookHG3_20211214.parquet')['Gene'].dropna().values.tolist()
         genes = np.array([u for u in np.unique(genes) if u.count('Control') == 0 ])
 
         unspliced, spliced = [], []
