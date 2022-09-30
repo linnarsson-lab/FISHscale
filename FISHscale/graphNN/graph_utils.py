@@ -541,9 +541,9 @@ class GraphPlotting:
                 GPCI = GraphPCI(pci_file)
                 GPCI.load_segmentation(
                     segmentation_path=os.path.join(self.folder,'Segmentation/*.parquet'),
-                    output_name = os.path.join([self.folder,analysis_name])
-
+                    output_name = os.path.join(self.folder,analysis_name)
                     )
+                GPCI.run(self.folder, analysis_name)
 
                 cellData= GPCI.cellData
                 db = shoji.connect()

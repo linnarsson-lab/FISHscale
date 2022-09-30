@@ -23,12 +23,8 @@ class GraphPCI:
             self.scRNAseq = pd.DataFrame(columns=clusters.astype('str'),data=scRNAseq,index=gene)
 
     def load_segmentation(self, segmentation_path:str, output_name:str) -> None:
-        #os.path.join(self.folder,'/Segmentation/*.parquet')
-        #os.path.join(self.folder,"AMEXP20211210_EEL_SL001A_S2_RNA_transformed_assigned_GATsegment.parquet")
-        print(segmentation_path)
         df = dd.read_parquet(segmentation_path).compute()
         df= df.rename(columns={"g":'Gene', 'Segmentation':'label'})
-        print(df.head())
         labels = df.label.values
         label, counts= np.unique(df.label.values,return_counts=True)
         to_background = label[np.where(counts <= 3)]
@@ -41,9 +37,9 @@ class GraphPCI:
         df.to_parquet(output_name)
 
     def run(self, folder, analysis_name):
-        pci = pciSeq.fit(self.graph_df, self.scRNAseq, opts={'max_iter': 2,})
+        pci = pciSeq.fit(self.graph_df, self.scRNAseq)
         self.cellData, geneData = pci
-        os.mkdir(os.path.join(folder,'/GATpciseq'))
+        os.mkdir(os.path.join(folder,'GATpciseq'))
         self.cellData.to_parquet(os.path.join(folder,'/GATpciseq/{}pci_celldata.parquet'.format(analysis_name)))
         geneData.to_parquet(os.path.join(folder,'/GATpciseq/{}pci_genedata.parquet').format(analysis_name))
 

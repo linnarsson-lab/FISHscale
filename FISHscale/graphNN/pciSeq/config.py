@@ -40,7 +40,7 @@ DEFAULT = {
     # a misread
     
     #'nNeighbors': 3,
-    'nNeighbors': 5,
+    'nNeighbors': 4,
 
 
     # A gamma distributed variate from Gamma(rSpot, 1) is applied to the mean expression, hence the counts
