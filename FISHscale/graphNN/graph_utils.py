@@ -540,7 +540,7 @@ class GraphPlotting:
             if type(pci_file) != type(None):
                 GPCI = GraphPCI(pci_file)
                 GPCI.load_segmentation(
-                    segmentation_path=os.path.join([self.folder,'Segmentation/*.parquet']),
+                    segmentation_path=os.path.join(self.folder,'Segmentation/*.parquet'),
                     output_name = os.path.join([self.folder,analysis_name])
 
                     )
