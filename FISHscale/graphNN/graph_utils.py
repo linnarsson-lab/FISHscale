@@ -22,6 +22,7 @@ from sklearn.preprocessing import LabelEncoder
 from FISHscale.graphNN.cluster_utils import ClusterCleaner
 from FISHscale.graphNN.graph_pci import GraphPCI
 import logging
+import shoji
 hv.extension('bokeh')
 
 
@@ -544,6 +545,46 @@ class GraphPlotting:
 
                     )
 
+                celldata= GPCI.cellData
+                db = shoji.connect()
+                filaname =  loom_filename.split('RNA_transformed')[0].split('_')[-3]
+                ws = db.eel.glioblastoma.graphicalCells[filename]
+
+                pci_expression = np.zeros_like(ws.Expression[:])
+                probs_classes = np.zeros([ws.Expression[:].shape[0], clusters.shape[0]])
+
+
+                for cell, i in tqdm(zip(cell_ID, range(cell_ID.shape[0]))):
+                    cell_i= cellData[cellData.Cell_Num == cell]
+                    genes_i = cell_i.Genenames.values[0]
+                    values = cell_i.CellGeneCount.values[0]
+                    
+                    where = np.where(np.isin(gene_order,genes_i))[0]
+                    expression = np.zeros([gene_order.shape[0]])
+                    for w, e in zip(where, values):
+                        expression[w] = e
+                    pci_expression[i,:] = expression
+
+                    predicted_classes = np.array(cell_i.ClassName.values[0])
+                    p = np.array(cell_i.Prob.values[0])
+                    order = np.argsort(p)[::-1]
+
+                    predicted_classes = predicted_classes[order]
+                    p = p[order]
+
+                    dic_p = dict(zip(predicted_classes,p))
+                    probs_cell_i = np.zeros([clusters.shape[0]])
+                    for c, n  in zip(clusters, range(clusters.shape[0])):
+                        if c in dic_p.keys():
+                            probs_cell_i[n] = dic_p[c]
+                    probs_classes[i,:] = probs_cell_i
+                
+
+                ws.pciExpression =shoji.Tensor("float32", ("cells", "genes"), inits=pci_expression.astype('float32'))  
+                ws.pciClusters = shoji.Tensor("string", ("pciClusters",), inits=clusters.astype(object))  
+                ws.pciProbabilities = shoji.Tensor("float32", ("cells","pciClusters"), inits=probs_classes.astype('float32'))
+
+
             #### Plotting ####
             logging.info('Clustering done.')
             logging.info('Generating umap embedding...')
@@ -627,7 +668,6 @@ class GraphPlotting:
                 logging.info('Could not generate html file')'''
     
     def add_graphicalcells_2shoji(self,filepath, analysis_name):
-        import shoji
         db = shoji.connect()
 
         genes = pd.read_parquet('/wsfish/glioblastoma/EEL/codebookHG1_20201124.parquet')['Gene'].dropna().values.tolist()
