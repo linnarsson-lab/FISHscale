@@ -16,7 +16,7 @@ class GraphPCI:
 
     def __init__(self, scRNAseq_path:str) -> None:
         
-        with loompy.connect(scRNAseq, 'r') as ds:
+        with loompy.connect(scRNAseq_path, 'r') as ds:
             scRNAseq = ds[:,:]
             clusters = ds.ca.Cluster[:]
             gene = ds.ra.Gene[:]
