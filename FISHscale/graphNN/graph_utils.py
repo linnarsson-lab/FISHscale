@@ -719,8 +719,6 @@ class GraphPlotting:
             if data_u.shape[1] > 0:
                 Unspliced[:,order_u] = data_u
             data = Expression + Unspliced
-
-            'RNA_transformed'
             filename = filepath.split('RNA_transformed')[0].split('_')[-3]
             
             del db.eel.glioblastoma.graphicalCells[filename]
@@ -1007,12 +1005,7 @@ class GraphPlotting:
         labels = hv.Labels(graph.nodes, ['x', 'y'],'index')
         #graph = graph #* labels.opts(text_font_size='8pt', text_color='white', bgcolor='grey')
         inter_graph = graph*labels.opts(text_font_size='5pt', text_color='white', bgcolor='grey')
-
         return inter_graph, df
-
-
-
-
 
         
 
