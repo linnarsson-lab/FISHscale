@@ -545,14 +545,15 @@ class GraphPlotting:
 
                     )
 
-                celldata= GPCI.cellData
+                cellData= GPCI.cellData
                 db = shoji.connect()
-                filaname =  loom_filename.split('RNA_transformed')[0].split('_')[-3]
+                filename =  loom_filename.split('RNA_transformed')[0].split('_')[-3]
                 ws = db.eel.glioblastoma.graphicalCells[filename]
+                cell_ID = ws.ID[:]
+                gene_order = ws.Gene[:]
 
                 pci_expression = np.zeros_like(ws.Expression[:])
                 probs_classes = np.zeros([ws.Expression[:].shape[0], clusters.shape[0]])
-
 
                 for cell, i in tqdm(zip(cell_ID, range(cell_ID.shape[0]))):
                     cell_i= cellData[cellData.Cell_Num == cell]
@@ -672,7 +673,7 @@ class GraphPlotting:
 
         genes = pd.read_parquet('/wsfish/glioblastoma/EEL/codebookHG1_20201124.parquet')['Gene'].dropna().values.tolist()
         genes += pd.read_parquet('/wsfish/glioblastoma/EEL/codebookHG2_20210508.parquet')['Gene'].dropna().values.tolist()
-        genes += pd.read_parquet('/wsfish/glioblastoma//codebookHG3_20211214.parquet')['Gene'].dropna().values.tolist()
+        genes += pd.read_parquet('/wsfish/glioblastoma/codebookHG3_20211214.parquet')['Gene'].dropna().values.tolist()
         genes = np.array([u for u in np.unique(genes) if u.count('Control') == 0 ])
 
         unspliced, spliced = [], []
