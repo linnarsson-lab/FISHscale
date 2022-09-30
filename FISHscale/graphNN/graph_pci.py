@@ -5,20 +5,12 @@ import os
 from tqdm import tqdm
 import pandas as pd
 import numpy as np
-import shoji
-
-genes = pd.read_parquet('/wsfish/glioblastoma/EEL/codebookHG1_20201124.parquet')['Gene'].dropna().values.tolist()
-genes += pd.read_parquet('/wsfish/glioblastoma/EEL/codebookHG2_20210508.parquet')['Gene'].dropna().values.tolist()
-genes += pd.read_parquet('/wsfish/glioblastoma/EEL/codebookHG3_20211214.parquet')['Gene'].dropna().values.tolist()
-genes = np.array([u for u in np.unique(genes) if u.count('Control') == 0 ])
-
-unspliced, spliced = [], []
-for g in genes:
-    if g[-1] == 'i':
-        unspliced.append(g)
-    else:
-        spliced.append(g)
-unspliced, spliced = np.array(unspliced), np.array(spliced)
+import logging
+try:
+    import shoji
+except ImportError:
+    logging.info('Shoji not installed. Please install from')
+from FISHscale.graphNN import pciSeq
 
 class GraphPCI:
 
