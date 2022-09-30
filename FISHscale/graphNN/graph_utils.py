@@ -20,6 +20,7 @@ from holoviews import opts
 from holoviews.operation.datashader import datashade, bundle_graph, spread
 from sklearn.preprocessing import LabelEncoder
 from FISHscale.graphNN.cluster_utils import ClusterCleaner
+from FISHscale.graphNN.graph_pci import GraphPCI
 import logging
 hv.extension('bokeh')
 
@@ -307,7 +308,7 @@ class GraphUtils(object):
 
 
 class GraphPlotting:
-    def analyze(self,random_n=250000, n_clusters=100, eps=25, min_samples=10):
+    def analyze(self,random_n=250000, n_clusters=100, eps=25, min_samples=10,pci_file=None):
         import umap
         import matplotlib.pyplot as plt
 
@@ -516,7 +517,6 @@ class GraphPlotting:
 
             self.cell_clusters = self.clusters[self.clusters != -1]
 
-
             enriched_genes = {}
             self.enrichment = r
             logging.info('Enrichment shape: {}'.format(self.enrichment.shape))
@@ -525,8 +525,27 @@ class GraphPlotting:
                 en_genes = enrichment[:,c][:10]
                 enriched_genes[c] = self.data.unique_genes[en_genes]
             self.g.ndata['GSclusters'] = th.tensor(self.clusters,dtype=th.int64)
-            
             np.save(self.folder+'/clusters',self.clusters)
+
+            ### Add data to shoji ###
+            loom_filename = os.path.join(self.folder,self.data.filename.split('.')[0]+'_cells.loom')
+            analysis_name = loom_filename.split('/')[-2]
+            self.add_graphicalcells_2shoji(
+                loom_filename,
+                analysis_name,
+                )
+
+
+            ### PCI Seq ###
+            if type(pci_file) != type(None):
+                GPCI = GraphPCI(pci_file)
+                GPCI.load_segmentation(
+                    segmentation_path=os.path.join(self.folder,'/Segmentation/*.parquet'),
+                    output_name = os.path.join(self.folder,analysis_name)
+
+                    )
+
+            #### Plotting ####
             logging.info('Clustering done.')
             logging.info('Generating umap embedding...')
             gc.collect()
@@ -608,41 +627,95 @@ class GraphPlotting:
             '''except:
                 logging.info('Could not generate html file')'''
     
-    def export_to_shoji(self,ws):
+    def add_graphicalcells_2shoji(self,filepath, analysis_name):
         import shoji
-        import cytograph as cg
-        with loompy.connect(os.path.join(self.folder,self.data.filename.split('.')[0]+'_cells.loom'),'r') as ds:
+        db = shoji.connect()
 
-            ws.cells = shoji.Dimension(ds.shape[1])
-            ws.genes = shoji.Dimension(ds.shape[0])
-            data = ds[:, :].T  # Note the matrix is transposed
-            ws.Expression = shoji.Tensor("uint16", ("cells", "genes"), inits=data.astype('uint16'))  
-            ws.Gene = shoji.Tensor("string", ("genes",), inits=ds.ra.Gene)  
+        genes = pd.read_parquet('/wsfish/glioblastoma/EEL/codebookHG1_20201124.parquet')['Gene'].dropna().values.tolist()
+        genes += pd.read_parquet('/wsfish/glioblastoma/EEL/codebookHG2_20210508.parquet')['Gene'].dropna().values.tolist()
+        genes += pd.read_parquet('/wsfish/glioblastoma//codebookHG3_20211214.parquet')['Gene'].dropna().values.tolist()
+        genes = np.array([u for u in np.unique(genes) if u.count('Control') == 0 ])
+
+        unspliced, spliced = [], []
+        for g in genes:
+            if g[-1] == 'i':
+                unspliced.append(g)
+            else:
+                spliced.append(g)
+        unspliced, spliced = np.array(unspliced), np.array(spliced)
+
+        with loompy.connect(filepath, 'r') as ds:
             
+            print('Row attributes',ds.ra.keys())
+            print('Column Attributes',ds.ca.keys())
+            genes = ds.ra.Gene[:]
+            control_remove = np.array([True if g.count('Control') + g.count('CONTROL') == 0  else False for g in genes])
+            genes_ = genes[control_remove]
+            data = ds[:, :].T 
+            data = data[:,control_remove]
+            filter_cells = (data.sum(axis=1) >= 5) & (data.sum(axis=1) < 500) & ((data > 0).sum(axis=1) >= 3)  & ((data >= 2).sum(axis=1) > 0)
+            print('Remaining cells: {}'.format(filter_cells.sum()))
+
+            genes_spliced = genes_[np.isin(genes_, spliced)]
+            genes_unspliced = genes_[np.isin(genes_, unspliced)]
+
+            data_s = data[filter_cells,:][:,np.isin(genes_, spliced)]
+            data_u = data[filter_cells,:][:,np.isin(genes_, unspliced)]
+
+            order_s, order_u = [], []
+            for g in genes_spliced:
+                idx_s = np.where(spliced == g)[0][0]
+                order_s.append(idx_s)
+            for g in genes_unspliced:
+                idx_u = np.where(spliced == g[:-1])[0][0]
+                order_u.append(idx_u)
+
+            order_s, order_u = np.array(order_s), np.array(order_u)
+
+            Expression = np.zeros([data_s.shape[0], spliced.shape[0]],dtype=np.uint16)
+            Unspliced = np.zeros([data_s.shape[0], spliced.shape[0]],dtype=np.uint16)
+
+            Expression[:,order_s] = data_s
+            if data_u.shape[1] > 0:
+                Unspliced[:,order_u] = data_u
+            data = Expression + Unspliced
+
+            'RNA_transformed'
+            filename = filepath.split('RNA_transformed')[0].split('_')[-3]
+            
+            del db.eel.glioblastoma.graphicalCells[filename]
+            db.eel.glioblastoma.graphicalCells[filename] = shoji.Workspace()
+            ws = db.eel.glioblastoma.graphicalCells[filename]
+            
+            ws.AnalysisName = shoji.Tensor("string", (), inits=analysis_name)  
+
+            ws.cells = shoji.Dimension(data.shape[0])
+            ws.genes = shoji.Dimension(data.shape[1])
+
+            ws.Expression = shoji.Tensor("uint16", ("cells", "genes"), inits=data.astype('uint16'))  
+            ws.Unspliced = shoji.Tensor("uint16", ("cells", "genes"), inits=Unspliced.astype('uint16'))  
+            ws.Gene = shoji.Tensor("string", ("genes",), inits=spliced.astype('object'))  
+            ws.Accession = shoji.Tensor("string", ("genes",), inits=spliced.astype('object'))  
+            
+            ws.NGenes = shoji.Tensor("uint16", ("cells",), inits = (data >0).sum(axis=1).astype('uint16'))
+
             ws.SelectedFeatures = shoji.Tensor("bool", ("genes",), inits=np.ones(ws.genes.length, dtype="bool"))
             ws.TotalUMIs = shoji.Tensor("uint32", ("cells",), inits=data.sum(axis=1).astype("uint32"))
-            
+
             ws.GeneTotalUMIs = shoji.Tensor("uint32", ("genes",), inits=data.sum(axis=0).astype("uint32"))
             ws.OverallTotalUMIs = shoji.Tensor("uint64", (), inits=data.sum().astype("uint64"))
-            ws.X = shoji.Tensor("float32", ("cells",), inits=ds.ca.Centroid[:,0]) # Load the spatial X and Y coordinates 
-            ws.Y = shoji.Tensor("float32", ("cells",), inits=ds.ca.Centroid[:,1])
-            ws.GraphClusters = shoji.Tensor("uint8", ("cells",), inits=ds.ca.Clusters[:].astype('uint8'))
-            ws.Sample = shoji.Tensor("string", ("cells",), inits=np.array([self.data.filename.split('.')[0]]*data.shape[0]).astype('object'))
+            ws.X = shoji.Tensor("float32", ("cells",), inits=ds.ca.Centroid[:,0][filter_cells].astype('float32')) # Load the spatial X and Y coordinates 
+            ws.Y = shoji.Tensor("float32", ("cells",), inits=ds.ca.Centroid[:,1][filter_cells].astype('float32'))
+            ws.GraphCluster = shoji.Tensor("uint16", ("cells",), inits=ds.ca.Clusters[filter_cells].astype('uint16'))
+            #ws.NucleusArea_um = shoji.Tensor("float32", ("cells",), inits=ds.ca.Nucelus_area_um2[:].astype('float32')) # Load the spatial X and Y coordinates 
+            #ws.NucleusArea_px = shoji.Tensor("float32", ("cells",), inits=ds.ca.Nucleus_area_px[:][filter_cells].astype('float32'))
 
-        # Run the cytograph shoji pipeline
-        factors, loadings = cg.ResidualsPCA(n_factors=250).fit(ws, save=True)
-        cg.RnnManifold(k=25, metric="euclidean").fit(ws, save=True)
-        xy = cg.ArtOfTsne().fit(ws, save=True)
-        labels, _, _, _ = cg.MorePolishedLeiden().fit(ws, save=True)
+            ws.Species = shoji.Tensor("string", (), inits='Homo sapiens')
+            ws.SelectedFeatures = shoji.Tensor("bool", ('genes',), inits=np.ones([ws.genes.length]).astype(bool))
 
-        # Compute some aggregate values
-        cg.Aggregate("Clusters", using="first", into="ClusterID").fit(ws, save=True)
-        cg.Aggregate("Expression", using="mean", into="MeanExpression").fit(ws, save=True)
-        cg.Aggregate("Clusters", using="count", into="NCells").fit(ws, save=True)
-        cg.Aggregate("Clusters", using="count", into="NCells").fit(ws, save=True)
-
-        exp =np.array(ws.MeanExpression)
-        ws.Nonzeros = shoji.Tensor('uint64',('clusters','genes'), inits= np.array(exp[:,0,:] > 0, dtype=np.uint64))
+            ws.ValidGenes = shoji.Tensor("bool", ('genes',), inits=np.ones([ws.genes.length]).astype(bool))
+            ws.Sample = shoji.Tensor("string", ("cells",), inits= np.array([filename]*filter_cells.sum(),dtype='object' ))
+            ws.ID = shoji.Tensor("uint64", ("cells",), inits= ds.ca.Segmentation[:][filter_cells].astype("uint64"))
 
 
     def execute(self, c, nodes,att1, att2):
