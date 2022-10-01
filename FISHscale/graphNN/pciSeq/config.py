@@ -8,7 +8,7 @@ DEFAULT = {
     'exclude_genes': [],
 
     # Maximum number of loops allowed for the Variational Bayes to run
-    'max_iter': 1000,
+    'max_iter': 200,
 
     # Convergence achieved if assignment probabilities between two successive loops is less than the tolerance
     'CellCallTolerance': 0.02,
@@ -40,7 +40,7 @@ DEFAULT = {
     # a misread
     
     #'nNeighbors': 3,
-    'nNeighbors': 4,
+    'nNeighbors': 5,
 
 
     # A gamma distributed variate from Gamma(rSpot, 1) is applied to the mean expression, hence the counts
