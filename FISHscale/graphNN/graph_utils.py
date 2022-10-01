@@ -531,6 +531,7 @@ class GraphPlotting:
             try:
                 import shoji
                 loom_filename = os.path.join(self.folder,self.data.filename.split('.')[0]+'_cells.loom')
+                logging.info('Adding {} to shoji'.format(loom_filename))
                 analysis_name = loom_filename.split('/')[-2]
                 self.add_graphicalcells_2shoji(
                     loom_filename,
@@ -583,9 +584,10 @@ class GraphPlotting:
                             probs_cell_i[n] = dic_p[c]
                     probs_classes[i,:] = probs_cell_i
                 
-                ws.pciExpression =shoji.Tensor("float32", ("cells", "genes"), inits=pci_expression.astype('float32'))  
-                ws.pciClusters = shoji.Tensor("string", ("pciClusters",), inits=GPCI.ref_clusters.astype(object))  
-                ws.pciProbabilities = shoji.Tensor("float32", ("cells","pciClusters"), inits=probs_classes.astype('float32'))
+                ws.ExpressionPCI =shoji.Tensor("float32", ("cells", "genes"), inits=pci_expression.astype('float32'))  
+                ws.pciClusters = shoji.Dimension(GPCI.ref_clusters.shape[0])
+                ws.ClustersPCI = shoji.Tensor("string", ("pciClusters",), inits=GPCI.ref_clusters.astype(object))  
+                ws.ProbabilitiesPCI = shoji.Tensor("float32", ("cells","pciClusters"), inits=probs_classes.astype('float32'))
 
             #### Plotting ####
             logging.info('Clustering done.')

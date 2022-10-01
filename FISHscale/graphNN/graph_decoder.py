@@ -131,6 +131,7 @@ class GraphDecoder:
             probabilities = th.log(probmultinomial_region+1e-6) + logprobs1_hop + logprobs2_hop
             M = dist.Multinomial(total_count=1, logits=probabilities).sample()
             
+            
             self.g.ndata['tmp_gene'][nodes,:] = th.tensor(M,dtype=th.uint8)
             #logging.info((self.g.ndata['tmp_gene'].sum(axis=1) > 0).sum())
             
