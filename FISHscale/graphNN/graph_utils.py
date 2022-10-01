@@ -528,13 +528,16 @@ class GraphPlotting:
             np.save(self.folder+'/clusters',self.clusters)
 
             ### Add data to shoji ###
-            import shoji
-            loom_filename = os.path.join(self.folder,self.data.filename.split('.')[0]+'_cells.loom')
-            analysis_name = loom_filename.split('/')[-2]
-            self.add_graphicalcells_2shoji(
-                loom_filename,
-                analysis_name,
-                )
+            try:
+                import shoji
+                loom_filename = os.path.join(self.folder,self.data.filename.split('.')[0]+'_cells.loom')
+                analysis_name = loom_filename.split('/')[-2]
+                self.add_graphicalcells_2shoji(
+                    loom_filename,
+                    analysis_name,
+                    )
+            except ImportError:
+                logging.info('Shoji not installed. Please install from')
 
             ### PCI Seq ###
             if type(pci_file) != type(None):
