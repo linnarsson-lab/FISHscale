@@ -81,8 +81,6 @@ def fit(iss_spots: pd.DataFrame, scRNAseq: pd.DataFrame, opts: dict = None) -> T
     # 3. cell typing
     cellData, geneData = cell_type(_cells, _spots, scRNAseq, cfg)
 
-    print('cellData',cellData)
-
     # 4. save to filesystem
     if cfg['save_data']:
         write_data(cellData, geneData, cellBoundaries)

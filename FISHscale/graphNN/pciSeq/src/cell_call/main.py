@@ -64,6 +64,9 @@ class VarBayes:
             if converged:
                 iss_df, gene_df = collect_data(self.cells, self.spots, self.genes, self.single_cell)
                 break
+            else:
+                logger.info(' Loop exhausted. Not converged but returning results')
+                iss_df, gene_df = collect_data(self.cells, self.spots, self.genes, self.single_cell)
 
             if i == max_iter-1:
                 logger.info(' Loop exhausted. Exiting with convergence status: %s' % converged)
