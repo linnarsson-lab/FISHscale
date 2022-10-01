@@ -556,7 +556,7 @@ class GraphPlotting:
                 gene_order = ws.Gene[:]
 
                 pci_expression = np.zeros_like(ws.Expression[:])
-                probs_classes = np.zeros([ws.Expression[:].shape[0], clusters.shape[0]])
+                probs_classes = np.zeros([ws.Expression[:].shape[0], GPCI.ref_clusters.shape[0]],dtype=np.float32)
 
                 for cell, i in tqdm(zip(cell_ID, range(cell_ID.shape[0]))):
                     cell_i= cellData[cellData.Cell_Num == cell]

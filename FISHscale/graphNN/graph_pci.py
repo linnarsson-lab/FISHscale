@@ -18,9 +18,9 @@ class GraphPCI:
         
         with loompy.connect(scRNAseq_path, 'r') as ds:
             scRNAseq = ds[:,:]
-            clusters = ds.ca.Cluster[:]
-            gene = ds.ra.Gene[:]
-            self.scRNAseq = pd.DataFrame(columns=clusters.astype('str'),data=scRNAseq,index=gene)
+            self.ref_clusters = ds.ca.Cluster[:]
+            self.gene_order = ds.ra.Gene[:]
+            self.scRNAseq = pd.DataFrame(columns=self.ref_clusters.astype('str'),data=scRNAseq,index=self.gene_order)
 
     def load_segmentation(self, segmentation_path:str, output_name:str) -> None:
         df = dd.read_parquet(segmentation_path).compute()
