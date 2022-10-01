@@ -577,15 +577,15 @@ class GraphPlotting:
                     p = p[order]
 
                     dic_p = dict(zip(predicted_classes,p))
-                    probs_cell_i = np.zeros([clusters.shape[0]])
-                    for c, n  in zip(clusters, range(clusters.shape[0])):
+                    probs_cell_i = np.zeros([GPCI.ref_clusters.shape[0]])
+                    for c, n  in zip(GPCI.ref_clusters, range(GPCI.ref_clusters.shape[0])):
                         if c in dic_p.keys():
                             probs_cell_i[n] = dic_p[c]
                     probs_classes[i,:] = probs_cell_i
                 
 
                 ws.pciExpression =shoji.Tensor("float32", ("cells", "genes"), inits=pci_expression.astype('float32'))  
-                ws.pciClusters = shoji.Tensor("string", ("pciClusters",), inits=clusters.astype(object))  
+                ws.pciClusters = shoji.Tensor("string", ("pciClusters",), inits=GPCI.ref_clusters.astype(object))  
                 ws.pciProbabilities = shoji.Tensor("float32", ("cells","pciClusters"), inits=probs_classes.astype('float32'))
 
 
