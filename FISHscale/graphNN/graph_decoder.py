@@ -56,15 +56,18 @@ class GraphDecoder:
         self._multinomial_hexbin()
         simulation = []
 
-        simulation_zeros = np.zeros((self.g.num_nodes(),self.g.ndata['gene'].shape[1]))
-        for _ in trange(ntimes):
+        simulation_zeros = np.zeros([self.g.num_nodes(), ntimes])
+        for n in trange(ntimes):
             self._lose_identity()
             self.random_sampler()
             simulated_expression= self.random_decoder()
             simulation.append(simulated_expression)
-            simulation_zeros += self.g.ndata['tmp_gene'].numpy()
+            idx = np.where(self.g.ndata['tmp_gene'].numpy())[1]
+            simulation_zeros[:,n] = idx
             del self.g.ndata['tmp_gene']
 
+        logging.info((simulation_zeros.sum(axis=1) == 0).sum())
+            
         simulation =  np.stack(simulation).T
         expression_by_region_by_simulation = []
 
@@ -107,7 +110,7 @@ class GraphDecoder:
                 )
                 
     def random_decoder(self):
-        for _, nodes, blocks in self.decoder_dataloader:
+        for _, nodes, blocks in tqdm(self.decoder_dataloader):
             block_1hop = blocks[1]
             block_2hop = blocks[0]
             
@@ -136,4 +139,7 @@ class GraphDecoder:
             #logging.info((self.g.ndata['tmp_gene'].sum(axis=1) > 0).sum())
             
         simulated_genes = self.data.unique_genes[np.where(self.g.ndata['tmp_gene'].numpy() == 1)[1]]
-        return simulated_genes
+        logging.info((self.g.ndata['tmp_gene'].sum(axis=1) == 0).sum())
+            
+        #simulated_genes_onehot = self.g.ndata['tmp_gene'].numpy().clone()
+        return simulated_genes#, simulated_genes_onehot
