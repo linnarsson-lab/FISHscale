@@ -22,7 +22,6 @@ from sklearn.preprocessing import LabelEncoder
 from FISHscale.graphNN.cluster_utils import ClusterCleaner
 from FISHscale.graphNN.graph_pci import GraphPCI
 import logging
-import shoji
 hv.extension('bokeh')
 
 
@@ -529,6 +528,7 @@ class GraphPlotting:
             np.save(self.folder+'/clusters',self.clusters)
 
             ### Add data to shoji ###
+            import shoji
             loom_filename = os.path.join(self.folder,self.data.filename.split('.')[0]+'_cells.loom')
             analysis_name = loom_filename.split('/')[-2]
             self.add_graphicalcells_2shoji(
