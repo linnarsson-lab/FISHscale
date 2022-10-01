@@ -672,6 +672,7 @@ class GraphPlotting:
                 logging.info('Could not generate html file')'''
     
     def add_graphicalcells_2shoji(self,filepath, analysis_name):
+        import shoji
         db = shoji.connect()
 
         genes = pd.read_parquet('/wsfish/glioblastoma/EEL/codebookHG1_20201124.parquet')['Gene'].dropna().values.tolist()
