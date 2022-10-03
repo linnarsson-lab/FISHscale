@@ -20,7 +20,7 @@ import logging
 class GraphDecoder:
     def __init__(
         self,
-        lose_identity_percentage = 0.9,
+        lose_identity_percentage = 0.99,
         ):
         self.lose_identity_percentage = lose_identity_percentage
 

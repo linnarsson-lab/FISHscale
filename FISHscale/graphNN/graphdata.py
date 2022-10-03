@@ -162,6 +162,10 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting, GraphDecoder)
             logging.info('Model loaded.')
         
         if self.aggregator == 'attentional':
+            # Remove all self loops because data will be saved, otherwise the 
+            # number of self-loops will be doubled with each new run.
+            remove = dgl.RemoveSelfLoop()
+            self.g = remove(self.g)
             self.g = dgl.add_self_loop(self.g)
 
         logging.info(self.g)
