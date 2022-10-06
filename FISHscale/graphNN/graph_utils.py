@@ -69,7 +69,7 @@ class GraphUtils(object):
         rows = np.array(rows)
         cols = np.array(cols)
         data= np.ones_like(cols)
-        sm = sparse.csr_matrix((data,(rows,cols))).T
+        sm = sparse.csr_matrix((data.astype(np.uint8),(rows,cols))).T
         return sm
     
     def subsample_xy(self):
@@ -686,6 +686,24 @@ class GraphPlotting:
                 unspliced.append(g)
             else:
                 spliced.append(g)
+
+        synonym_dic = {'CD40Li':'CD40LGi',
+                    'CD133i':'PROM1i', 
+                    'CD134Li':'TNFSF4i',
+                    'CD134i': 'TNFRSF4i',
+                    'CD137Li':'TNFSF9i'}        
+
+        new_unspliced = []
+        for g in unspliced:
+            if g in synonym_dic:
+                new_unspliced.append(synonym_dic[g])
+            else:
+                new_unspliced.append(g)
+        unspliced = new_unspliced
+
+        for g in unspliced:
+            if g[:-1] not in spliced:
+                spliced.append(g[:-1])
         unspliced, spliced = np.array(unspliced), np.array(spliced)
 
         with loompy.connect(filepath, 'r') as ds:
@@ -710,9 +728,13 @@ class GraphPlotting:
             for g in genes_spliced:
                 idx_s = np.where(spliced == g)[0][0]
                 order_s.append(idx_s)
+
             for g in genes_unspliced:
-                idx_u = np.where(spliced == g[:-1])[0][0]
-                order_u.append(idx_u)
+                try:
+                    idx_u = np.where(spliced == g[:-1])[0][0]
+                    order_u.append(idx_u)
+                except:
+                    print(g)
 
             order_s, order_u = np.array(order_s), np.array(order_u)
 
