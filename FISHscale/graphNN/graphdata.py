@@ -188,8 +188,8 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting, GraphDecoder)
                                         celltype_distribution=self.dist,
                                         ncells=self.ncells,
                                         inference_type=self.inference_type,
-                                        l_loc=l_loc[0][0],
-                                        l_scale= l_scale[0][0],
+                                        l_loc=l_loc,
+                                        l_scale= l_scale,
                                         scale_factor=1/(batch_size*self.data.unique_genes.shape[0]),
                                         warmup_factor=int(self.edges_train.shape[0]/self.batch_size)*self.n_epochs,
                                     )

@@ -113,13 +113,13 @@ class GraphUtils(object):
             logging.info('Chosen dist to connect molecules into a graph: {}'.format(tau))
 
     def compute_library_size(self):
-        data= self.g.ndata['ngh'].T
+        '''data= self.g.ndata['ngh'].T
         sum_counts = data.sum(axis=1)
         masked_log_sum = np.ma.log(sum_counts)
         log_counts = masked_log_sum.filled(0)
         local_mean = (np.mean(log_counts).reshape(-1, 1)).astype(np.float32)
-        local_var = (np.var(log_counts).reshape(-1, 1)).astype(np.float32)
-        return local_mean, local_var
+        local_var = (np.var(log_counts).reshape(-1, 1)).astype(np.float32)'''
+        return 0,1#local_mean, local_var
 
     def buildGraph(self, coords=None):
         """
@@ -205,9 +205,10 @@ class GraphUtils(object):
         g.ndata['gene'] = th.tensor(d.toarray(), dtype=th.uint8)#[molecules_id.numpy(),:]
         nghs = []
         for n in tqdm(ngh_):
-            nghs.append(th.tensor(g.ndata['gene'][n,:].sum(axis=0),dtype=th.uint8))
-        nghs = th.stack(nghs)
-        g.ndata['ngh'] = nghs
+            nghs.append(th.tensor(g.ndata['gene'][n,:].sum(axis=0),dtype=th.uint8).numpy())
+        nghs = np.stack(nghs)
+        nghs = sparse.csr_matrix(nghs)
+        #g.ndata['ngh'] = nghs
 
         if self.smooth:
             #self.g.ndata['zero'] = th.zeros_like(self.g.ndata['gene'])
@@ -239,9 +240,10 @@ class GraphUtils(object):
         g.ndata['ngh'] = g.ndata['zero'] + g.ndata['gene']
         del g.ndata['zero']
         '''
-
-        sum_nodes_connected = g.ndata['ngh'].sum(axis=1)
-        molecules_connected = molecules[sum_nodes_connected >= self.minimum_nodes_connected]
+        print('nghs', nghs.shape)
+        sum_nodes_connected = nghs.sum(axis=1)
+        print('sum nodes' , sum_nodes_connected.shape)
+        molecules_connected = molecules[sum_nodes_connected >= self.minimum_nodes_connected,0]
         remove = molecules[sum_nodes_connected.numpy() < self.minimum_nodes_connected]
         g.remove_nodes(th.tensor(remove))
         g.ndata['indices'] = th.tensor(molecules_connected)
