@@ -241,9 +241,9 @@ class GraphUtils(object):
         del g.ndata['zero']
         '''
         print('nghs', nghs.shape)
-        sum_nodes_connected = nghs.sum(axis=1)
+        sum_nodes_connected = nghs.sum(axis=1)[:,0]
         print('sum nodes' , sum_nodes_connected.shape)
-        molecules_connected = molecules[sum_nodes_connected >= self.minimum_nodes_connected,0]
+        molecules_connected = molecules[sum_nodes_connected >= self.minimum_nodes_connected]
         remove = molecules[sum_nodes_connected.numpy() < self.minimum_nodes_connected]
         g.remove_nodes(th.tensor(remove))
         g.ndata['indices'] = th.tensor(molecules_connected)
