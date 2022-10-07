@@ -4,6 +4,7 @@ import pickle
 from os import path
 import warnings
 from typing import Optional, Union
+import logging
 
 class ManyColors:
 

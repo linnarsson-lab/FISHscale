@@ -3,6 +3,7 @@ import numpy as np
 import scipy
 from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
+import logging
 
 class ClusterCleaner:
     """
@@ -15,7 +16,7 @@ class ClusterCleaner:
 
     def merge(self):
         hm = self.barcodes_df.groupby(['Gene','cluster']).size().unstack(fill_value=0)
-        print(hm.shape)
+        logging.info(hm.shape)
         # Z-score normalization
 
         scaler = StandardScaler()
@@ -23,7 +24,7 @@ class ClusterCleaner:
         hm.head()
 
         hm_merge = self.post_merge(hm, hm.columns, 0.1, linkage_metric='correlation', linkage_method='average', name='SupFig3Dend', save=True)
-        print(hm_merge)
+        logging.info(hm_merge)
 
         hm_merge = np.array(hm_merge)
         unique_clusters= np.unique(hm_merge)
@@ -33,7 +34,7 @@ class ClusterCleaner:
         dic = dict(zip(np.arange(np.unique(self.barcodes_df['cluster']).shape[0]), hm_merge))
 
         clusters = np.array([dic[i] for i in self.barcodes_df['cluster']])
-        print('Number of clusters after merging: {}'.format(unique_clusters.shape[0]))
+        logging.info('Number of clusters after merging: {}'.format(unique_clusters.shape[0]))
         return clusters
 
     # Auxiliary functions for merging clusters
@@ -116,7 +117,7 @@ class ClusterCleaner:
             labels = list(model)
             labels_a = model
         else:
-            print('Error wrong input type')
+            logging.info('Error wrong input type')
         
         return cell_labels, label_cells, cellID, labels, labels_a
 

@@ -20,6 +20,8 @@ from holoviews import opts
 from holoviews.operation.datashader import datashade, bundle_graph, spread
 from sklearn.preprocessing import LabelEncoder
 from FISHscale.graphNN.cluster_utils import ClusterCleaner
+from FISHscale.graphNN.graph_pci import GraphPCI
+import logging
 hv.extension('bokeh')
 
 
@@ -67,7 +69,7 @@ class GraphUtils(object):
         rows = np.array(rows)
         cols = np.array(cols)
         data= np.ones_like(cols)
-        sm = sparse.csr_matrix((data,(rows,cols))).T
+        sm = sparse.csr_matrix((data.astype(np.uint8),(rows,cols))).T
         return sm
     
     def subsample_xy(self):
@@ -105,19 +107,19 @@ class GraphUtils(object):
             d,i = kdT.query(np.array([x,y]).T,k=3)
             d_th = np.percentile(d[:,-1],95)*omega
             self.distance_threshold = d_th
-            print('Chosen dist to connect molecules into a graph: {}'.format(d_th))
+            logging.info('Chosen dist to connect molecules into a graph: {}'.format(d_th))
         else:
             self.distance_threshold = tau
-            print('Chosen dist to connect molecules into a graph: {}'.format(tau))
+            logging.info('Chosen dist to connect molecules into a graph: {}'.format(tau))
 
     def compute_library_size(self):
-        data= self.g.ndata['ngh'].T
+        '''data= self.g.ndata['ngh'].T
         sum_counts = data.sum(axis=1)
         masked_log_sum = np.ma.log(sum_counts)
         log_counts = masked_log_sum.filled(0)
         local_mean = (np.mean(log_counts).reshape(-1, 1)).astype(np.float32)
-        local_var = (np.var(log_counts).reshape(-1, 1)).astype(np.float32)
-        return local_mean, local_var
+        local_var = (np.var(log_counts).reshape(-1, 1)).astype(np.float32)'''
+        return 0,1#local_mean, local_var
 
     def buildGraph(self, coords=None):
         """
@@ -134,7 +136,7 @@ class GraphUtils(object):
         Returns:
             dgl.Graph: molecule spatial graph.
         """        
-        print('Building graph...')
+        logging.info('Building graph...')
         if type(coords)  == type(None):
             supervised = False
             edge_file = os.path.join(self.save_to,'graph/DGL-Edges-{}Nodes-dst{}'.format(self.molecules.shape[0],self.distance_factor))
@@ -159,10 +161,10 @@ class GraphUtils(object):
         dists = np.array([t.get_nns_by_item(i, 2,include_distances=True)[1][1] for i in range(coords.shape[0])])
         d_th = np.percentile(dists[np.isnan(dists) == False],97)*self.distance_factor
         self.distance_threshold = d_th
-        print('Chosen dist: {}'.format(self.distance_threshold))
+        logging.info('Chosen dist: {}'.format(self.distance_threshold))
         
         def find_nn_distance(coords,tree,distance):
-            print('Find neighbors below distance: {}'.format(d_th))
+            logging.info('Find neighbors below distance: {}'.format(d_th))
             res,nodes,ngh_, ncoords = [],[],[], []
             for i in trange(coords.shape[0]):
                 # 100 sets the number of neighbors to find for each node
@@ -203,9 +205,10 @@ class GraphUtils(object):
         g.ndata['gene'] = th.tensor(d.toarray(), dtype=th.uint8)#[molecules_id.numpy(),:]
         nghs = []
         for n in tqdm(ngh_):
-            nghs.append(th.tensor(g.ndata['gene'][n,:].sum(axis=0),dtype=th.uint8))
-        nghs = th.stack(nghs)
-        g.ndata['ngh'] = nghs
+            nghs.append(th.tensor(g.ndata['gene'][n,:].sum(axis=0),dtype=th.uint8).numpy())
+        nghs = np.stack(nghs)
+        nghs = sparse.csr_matrix(nghs)
+        #g.ndata['ngh'] = nghs
 
         if self.smooth:
             #self.g.ndata['zero'] = th.zeros_like(self.g.ndata['gene'])
@@ -237,8 +240,9 @@ class GraphUtils(object):
         g.ndata['ngh'] = g.ndata['zero'] + g.ndata['gene']
         del g.ndata['zero']
         '''
-
-        sum_nodes_connected = g.ndata['ngh'].sum(axis=1)
+        print('nghs', nghs.shape)
+        sum_nodes_connected = nghs.sum(axis=1)[:,0]
+        print('sum nodes' , sum_nodes_connected.shape)
         molecules_connected = molecules[sum_nodes_connected >= self.minimum_nodes_connected]
         remove = molecules[sum_nodes_connected.numpy() < self.minimum_nodes_connected]
         g.remove_nodes(th.tensor(remove))
@@ -258,13 +262,13 @@ class GraphUtils(object):
             self.supervised = True
             import loompy
             with loompy.connect(self.ref_celltypes,'r') as ds:
-                print(ds.ca.keys())
+                logging.info(ds.ca.keys())
                 try:
                     k = list(self.exclude_clusters.keys())[0]
                     v = self.exclude_clusters[k]
                     region_filt = np.isin(ds.ca[k], v, invert=True)
                     self.ClusterNames = ds.ca[k][region_filt]
-                    print('Selected clusters: {}'.format(self.ClusterNames))
+                    logging.info('Selected clusters: {}'.format(self.ClusterNames))
                 except:
                     self.ClusterNames = ds.ca[k]
 
@@ -280,7 +284,7 @@ class GraphUtils(object):
                 ref = ref[order]
                 ref = ref[:,region_filt]
                 self.ref_celltypes = ref
-                print('Reference dataset shape: {}'.format(self.ref_celltypes.shape))
+                logging.info('Reference dataset shape: {}'.format(self.ref_celltypes.shape))
             
             if self.celltype_distribution == 'uniform':
                 dist = th.ones(self.ncells.shape[0])
@@ -306,7 +310,7 @@ class GraphUtils(object):
 
 
 class GraphPlotting:
-    def analyze(self,random_n=250000,n_clusters=100, eps=25, min_samples=18):
+    def analyze(self,random_n=250000, n_clusters=100, eps=25, min_samples=10,pci_file=None):
         import umap
         import matplotlib.pyplot as plt
 
@@ -393,7 +397,7 @@ class GraphPlotting:
             nd_dic = {}
 
             allm = 0
-            print('Generating plots for cluster assigned to molecules...')
+            logging.info('Generating plots for cluster assigned to molecules...')
             
             if not os.path.isdir(os.path.join(self.folder,'Clusters')):
                 os.mkdir('{}/Clusters'.format(self.folder))
@@ -422,7 +426,7 @@ class GraphPlotting:
             pred_labels = th.tensor(self.prediction_unlabelled)
             merge = np.concatenate([molecules_x[:,np.newaxis],molecules_y[:,np.newaxis]],axis=1)
             L = []
-            print('Generating plots for molecule cluster probabilities...')
+            logging.info('Generating plots for molecule cluster probabilities...')
             os.mkdir('{}/ClusterProbabilities'.format(self.folder))
             for n in range(self.ClusterNames.shape[0]):
                 ps = pred_labels.detach().numpy()[:,n][:,np.newaxis]
@@ -440,45 +444,62 @@ class GraphPlotting:
                 hv.save(scatter,"{}/ClusterProbabilities/{}.png".format(self.folder,str(self.ClusterNames[n])))
             
             layout = hv.Layout([x for x in L]).cols(2)
-            print('Plots saved.')
+            logging.info('Plots saved.')
 
         else:
             from sklearn.cluster import MiniBatchKMeans
-            
             import gc
-            '''import scanpy as sc
-            print('Running MBKMeans clustering from scanpy...')
-            adata = sc.AnnData(X=self.latent_unlabelled.detach().numpy())
-            sc.pp.neighbors(adata, n_neighbors=25)
+            import scanpy as sc
+            from sklearn.linear_model import SGDClassifier
+            from sklearn.preprocessing import StandardScaler
+            from sklearn.pipeline import make_pipeline
+            #import leidenalg as la
+
+            random_sample_train = np.random.choice(
+                                    len(self.latent_unlabelled.detach().numpy()), 
+                                    np.min([len(self.latent_unlabelled),500000]), 
+                                    replace=False)
+            training_latents =self.latent_unlabelled.detach().numpy()[random_sample_train,:]
+            adata = sc.AnnData(X=training_latents)
+            logging.info('Building neighbor graph for clustering...')
+            sc.pp.neighbors(adata, n_neighbors=15)
+            logging.info('Running Leiden clustering...')
             sc.tl.leiden(adata, random_state=42)
-            self.clusters= adata.obs['leiden'].values'''
-            
-            kmeans = MiniBatchKMeans(n_clusters=n_clusters)
-            self.clusters = kmeans.fit_predict(self.latent_unlabelled.detach().numpy())
-            
+            logging.info('Leiden clustering done.')
+            clusters= adata.obs['leiden'].values
+
+            clf = make_pipeline(StandardScaler(), SGDClassifier(max_iter=1000, tol=1e-3))
+            clf.fit(training_latents, clusters)
+            clusters = clf.predict(self.latent_unlabelled.detach().numpy()).astype('uint16')
+
+            unique_clusters = np.unique(clusters)
+            dic = dict(zip(unique_clusters, np.arange(unique_clusters.shape[0])))
+            clusters = np.array([dic[i] for i in clusters])
             molecules_id = self.g.ndata['indices']
             import gc
             gc.collect()
-            new_labels = np.zeros(self.data.shape[0]) -1
-            new_labels = new_labels.astype('str')
-            for i,l in zip(molecules_id, self.clusters):
-                new_labels[i] = str(l)
 
             if not os.path.isdir(os.path.join(self.folder,'Clusters')):
                 os.mkdir('{}/Clusters'.format(self.folder))
 
             merged_clusters= ClusterCleaner(
                 genes=self.data.unique_genes[np.where(self.g.ndata['gene'].numpy())[1]],
-                clusters=self.clusters
+                clusters=clusters
                 ).merge()
-            
-            self.clusters = merged_clusters
-            
+
+            unique_clusters = np.unique(merged_clusters)
+            dic = dict(zip(unique_clusters, np.arange(unique_clusters.shape[0])))
+            merged_clusters = np.array([dic[i] for i in merged_clusters])
+
+            self.clusters = np.array(merged_clusters)
+            new_labels = np.zeros(self.data.shape[0]) -1
+            for i,l in zip(molecules_id, self.clusters):
+                new_labels[i] = l
+
             self.data.add_dask_attribute('Clusters',new_labels.astype('str'),include_genes=True)
-            
+
             from sklearn.cluster import DBSCAN
             db = DBSCAN(eps=eps,min_samples=min_samples)
-            print('Assigning clusters to molecules using QTClustering...')
             self.data.segment('Clusters',save_to=os.path.join(self.folder),func=db)
             gc.collect()
 
@@ -486,22 +507,93 @@ class GraphPlotting:
                 enrich = enrich_(labels_attr = ds.ca.Clusters)
                 sparse_tmp = ds.sparse().tocsr()
                 clusters_ = ds.ca['Clusters'].astype(float)
+                cell_unique_clusters = np.unique(clusters_)
                 r = enrich._fit(sparse_tmp,permute=False)
                 ds.ra['enrichment'] = r
 
+                dic = dict(zip(cell_unique_clusters, np.arange(cell_unique_clusters.shape[0])))
+                self.clusters = np.array([dic[i] if i in dic else -1 for i in self.clusters])
+                cell_clusters = np.array([dic[i] for i in clusters_])
+                ds.ca['Clusters'] = cell_clusters.astype('str')
+                self.cell_unique_clusters = np.unique(cell_clusters)
+
+            self.cell_clusters = self.clusters[self.clusters != -1]
+
             enriched_genes = {}
             self.enrichment = r
+            logging.info('Enrichment shape: {}'.format(self.enrichment.shape))
             enrichment = r.argsort(axis=0)[::-1]
             for c in range(np.unique(clusters_).shape[0]):
                 en_genes = enrichment[:,c][:10]
                 enriched_genes[c] = self.data.unique_genes[en_genes]
-                #print(np.unique(clusters_)[c], self.data.unique_genes[en_genes])
-
             self.g.ndata['GSclusters'] = th.tensor(self.clusters,dtype=th.int64)
-            
             np.save(self.folder+'/clusters',self.clusters)
-            print('Clustering done.')
-            print('Generating umap embedding...')
+
+            ### Add data to shoji ###
+            try:
+                import shoji
+                loom_filename = os.path.join(self.folder,self.data.filename.split('.')[0]+'_cells.loom')
+                logging.info('Adding {} to shoji'.format(loom_filename))
+                analysis_name = loom_filename.split('/')[-2]
+                self.add_graphicalcells_2shoji(
+                    loom_filename,
+                    analysis_name,
+                    )
+            except ImportError:
+                logging.info('Shoji not installed. Please install from')
+
+            ### PCI Seq ###
+            if type(pci_file) != type(None):
+                GPCI = GraphPCI(pci_file)
+                GPCI.load_segmentation(
+                    segmentation_path=os.path.join(self.folder,'Segmentation/*.parquet'),
+                    output_name = os.path.join(self.folder,analysis_name)
+                    )
+                GPCI.run(self.folder, analysis_name)
+
+                cellData= GPCI.cellData
+                db = shoji.connect()
+                filename =  loom_filename.split('RNA_transformed')[0].split('_')[-3]
+                ws = db.eel.glioblastoma.graphicalCells[filename]
+                cell_ID = ws.ID[:]
+                gene_order = ws.Gene[:]
+
+                pci_expression = np.zeros_like(ws.Expression[:])
+                probs_classes = np.zeros([ws.Expression[:].shape[0], GPCI.ref_clusters.shape[0]],dtype=np.float32)
+
+                for cell, i in tqdm(zip(cell_ID, range(cell_ID.shape[0]))):
+                    cell_i= cellData[cellData.Cell_Num == cell]
+                    genes_i = cell_i.Genenames.values[0]
+                    values = cell_i.CellGeneCount.values[0]
+                    
+                    where = np.where(np.isin(gene_order,genes_i))[0]
+                    expression = np.zeros([gene_order.shape[0]])
+                    for w, e in zip(where, values):
+                        expression[w] = e
+                    pci_expression[i,:] = expression
+
+                    predicted_classes = np.array(cell_i.ClassName.values[0])
+                    p = np.array(cell_i.Prob.values[0])
+                    order = np.argsort(p)[::-1]
+
+                    predicted_classes = predicted_classes[order]
+                    p = p[order]
+
+                    dic_p = dict(zip(predicted_classes,p))
+                    probs_cell_i = np.zeros([GPCI.ref_clusters.shape[0]])
+                    for c, n  in zip(GPCI.ref_clusters, range(GPCI.ref_clusters.shape[0])):
+                        if c in dic_p.keys():
+                            probs_cell_i[n] = dic_p[c]
+                    probs_classes[i,:] = probs_cell_i
+                
+                ws.ExpressionPCI =shoji.Tensor("float32", ("cells", "genes"), inits=pci_expression.astype('float32'))  
+                ws.pciClusters = shoji.Dimension(GPCI.ref_clusters.shape[0])
+                ws.ClustersPCI = shoji.Tensor("string", ("pciClusters",), inits=GPCI.ref_clusters.astype(object))  
+                ws.ProbabilitiesPCI = shoji.Tensor("float32", ("cells","pciClusters"), inits=probs_classes.astype('float32'))
+
+            #### Plotting ####
+            logging.info('Clustering done.')
+            logging.info('Generating umap embedding...')
             gc.collect()
             
             colors = colorize(np.arange(np.unique(self.clusters).shape[0]))
@@ -509,10 +601,10 @@ class GraphPlotting:
             for x in np.unique(self.clusters):
                 c = colors[x,:].tolist()
                 color_dic[x] = (c[0],c[1],c[2])
-            print(color_dic)
+            logging.info(color_dic)
             clusters_colors = np.array([color_dic[x] for x in self.clusters])
 
-            some = np.random.choice(np.arange(self.latent_unlabelled.shape[0]),random_n,replace=False)
+            some = np.random.choice(np.arange(self.latent_unlabelled.shape[0]),np.min([random_n, self.latent_unlabelled.shape[0]]),replace=False)
             umap_embedding = reducer.fit_transform(self.latent_unlabelled[some])
             #embedding = umap_embedding.transform(self.latent_unlabelled)
             Y_umap = umap_embedding
@@ -546,7 +638,7 @@ class GraphPlotting:
             molecules_x = self.data.df.x.values.compute()[molecules_id.numpy()]
             nd_dic = {}
             allm = 0
-            print('Generating plots for cluster assigned to molecules...')
+            logging.info('Generating plots for cluster assigned to molecules...')
             lay = []
             for cl in np.unique(self.clusters):
                 try:
@@ -564,7 +656,7 @@ class GraphPlotting:
                     lay.append(nd_dic[cl])
                     hv.save(scatter,"{}/Clusters/{}.png".format(self.folder,str(cl)), )   
                 except:
-                    print('Could not get cluster {}'.format(cl))   
+                    logging.info('Could not get cluster {}'.format(cl))   
 
             layout = hv.Layout(lay).cols(5).opts(opts.Scatter(s=0.1,fontsize={'title':8}))
             hv.save(layout,"{}/molecule_prediction.png".format(self.folder))
@@ -579,43 +671,117 @@ class GraphPlotting:
             hv.save(hmap, "{}/Clusters.html".format(self.folder),fmt='html')
             self.save_graph()
             '''except:
-                print('Could not generate html file')'''
+                logging.info('Could not generate html file')'''
     
-    def export_to_shoji(self,ws):
+    def add_graphicalcells_2shoji(self,filepath, analysis_name):
         import shoji
-        import cytograph as cg
-        with loompy.connect(os.path.join(self.folder,self.data.filename.split('.')[0]+'_cells.loom'),'r') as ds:
+        db = shoji.connect()
 
-            ws.cells = shoji.Dimension(ds.shape[1])
-            ws.genes = shoji.Dimension(ds.shape[0])
-            data = ds[:, :].T  # Note the matrix is transposed
-            ws.Expression = shoji.Tensor("uint16", ("cells", "genes"), inits=data.astype('uint16'))  
-            ws.Gene = shoji.Tensor("string", ("genes",), inits=ds.ra.Gene)  
+        genes = pd.read_parquet('/wsfish/glioblastoma/EEL/codebookHG1_20201124.parquet')['Gene'].dropna().values.tolist()
+        genes += pd.read_parquet('/wsfish/glioblastoma/EEL/codebookHG2_20210508.parquet')['Gene'].dropna().values.tolist()
+        genes += pd.read_parquet('/wsfish/glioblastoma/EEL/codebookHG3_20211214.parquet')['Gene'].dropna().values.tolist()
+        genes = np.array([u for u in np.unique(genes) if u.count('Control') == 0 ])
+
+        unspliced, spliced = [], []
+        for g in genes:
+            if g[-1] == 'i':
+                unspliced.append(g)
+            else:
+                spliced.append(g)
+
+        synonym_dic = {'CD40Li':'CD40LGi',
+                    'CD133i':'PROM1i', 
+                    'CD134Li':'TNFSF4i',
+                    'CD134i': 'TNFRSF4i',
+                    'CD137Li':'TNFSF9i'}        
+
+        new_unspliced = []
+        for g in unspliced:
+            if g in synonym_dic:
+                new_unspliced.append(synonym_dic[g])
+            else:
+                new_unspliced.append(g)
+        unspliced = new_unspliced
+
+        for g in unspliced:
+            if g[:-1] not in spliced:
+                spliced.append(g[:-1])
+        unspliced, spliced = np.array(unspliced), np.array(spliced)
+
+        with loompy.connect(filepath, 'r') as ds:
             
+            print('Row attributes',ds.ra.keys())
+            print('Column Attributes',ds.ca.keys())
+            genes = ds.ra.Gene[:]
+            control_remove = np.array([True if g.count('Control') + g.count('CONTROL') == 0  else False for g in genes])
+            genes_ = genes[control_remove]
+            data = ds[:, :].T 
+            data = data[:,control_remove]
+            filter_cells = (data.sum(axis=1) >= 5) & (data.sum(axis=1) < 500) & ((data > 0).sum(axis=1) >= 3)  & ((data >= 2).sum(axis=1) > 0)
+            print('Remaining cells: {}'.format(filter_cells.sum()))
+
+            genes_spliced = genes_[np.isin(genes_, spliced)]
+            genes_unspliced = genes_[np.isin(genes_, unspliced)]
+
+            data_s = data[filter_cells,:][:,np.isin(genes_, spliced)]
+            data_u = data[filter_cells,:][:,np.isin(genes_, unspliced)]
+
+            order_s, order_u = [], []
+            for g in genes_spliced:
+                idx_s = np.where(spliced == g)[0][0]
+                order_s.append(idx_s)
+
+            for g in genes_unspliced:
+                try:
+                    idx_u = np.where(spliced == g[:-1])[0][0]
+                    order_u.append(idx_u)
+                except:
+                    print(g)
+
+            order_s, order_u = np.array(order_s), np.array(order_u)
+
+            Expression = np.zeros([data_s.shape[0], spliced.shape[0]],dtype=np.uint16)
+            Unspliced = np.zeros([data_s.shape[0], spliced.shape[0]],dtype=np.uint16)
+
+            Expression[:,order_s] = data_s
+            if data_u.shape[1] > 0:
+                Unspliced[:,order_u] = data_u
+            data = Expression + Unspliced
+            filename = filepath.split('RNA_transformed')[0].split('_')[-3]
+            
+            del db.eel.glioblastoma.graphicalCells[filename]
+            db.eel.glioblastoma.graphicalCells[filename] = shoji.Workspace()
+            ws = db.eel.glioblastoma.graphicalCells[filename]
+            
+            ws.AnalysisName = shoji.Tensor("string", (), inits=analysis_name)  
+
+            ws.cells = shoji.Dimension(data.shape[0])
+            ws.genes = shoji.Dimension(data.shape[1])
+
+            ws.Expression = shoji.Tensor("uint16", ("cells", "genes"), inits=data.astype('uint16'))  
+            ws.Unspliced = shoji.Tensor("uint16", ("cells", "genes"), inits=Unspliced.astype('uint16'))  
+            ws.Gene = shoji.Tensor("string", ("genes",), inits=spliced.astype('object'))  
+            ws.Accession = shoji.Tensor("string", ("genes",), inits=spliced.astype('object'))  
+            
+            ws.NGenes = shoji.Tensor("uint16", ("cells",), inits = (data >0).sum(axis=1).astype('uint16'))
+
             ws.SelectedFeatures = shoji.Tensor("bool", ("genes",), inits=np.ones(ws.genes.length, dtype="bool"))
             ws.TotalUMIs = shoji.Tensor("uint32", ("cells",), inits=data.sum(axis=1).astype("uint32"))
-            
+
             ws.GeneTotalUMIs = shoji.Tensor("uint32", ("genes",), inits=data.sum(axis=0).astype("uint32"))
             ws.OverallTotalUMIs = shoji.Tensor("uint64", (), inits=data.sum().astype("uint64"))
-            ws.X = shoji.Tensor("float32", ("cells",), inits=ds.ca.Centroid[:,0]) # Load the spatial X and Y coordinates 
-            ws.Y = shoji.Tensor("float32", ("cells",), inits=ds.ca.Centroid[:,1])
-            ws.GraphClusters = shoji.Tensor("uint8", ("cells",), inits=ds.ca.Clusters[:].astype('uint8'))
-            ws.Sample = shoji.Tensor("string", ("cells",), inits=np.array([self.data.filename.split('.')[0]]*data.shape[0]).astype('object'))
+            ws.X = shoji.Tensor("float32", ("cells",), inits=ds.ca.Centroid[:,0][filter_cells].astype('float32')) # Load the spatial X and Y coordinates 
+            ws.Y = shoji.Tensor("float32", ("cells",), inits=ds.ca.Centroid[:,1][filter_cells].astype('float32'))
+            ws.GraphCluster = shoji.Tensor("uint16", ("cells",), inits=ds.ca.Clusters[filter_cells].astype('uint16'))
+            #ws.NucleusArea_um = shoji.Tensor("float32", ("cells",), inits=ds.ca.Nucelus_area_um2[:].astype('float32')) # Load the spatial X and Y coordinates 
+            #ws.NucleusArea_px = shoji.Tensor("float32", ("cells",), inits=ds.ca.Nucleus_area_px[:][filter_cells].astype('float32'))
 
-        # Run the cytograph shoji pipeline
-        factors, loadings = cg.ResidualsPCA(n_factors=250).fit(ws, save=True)
-        cg.RnnManifold(k=25, metric="euclidean").fit(ws, save=True)
-        xy = cg.ArtOfTsne().fit(ws, save=True)
-        labels, _, _, _ = cg.MorePolishedLeiden().fit(ws, save=True)
+            ws.Species = shoji.Tensor("string", (), inits='Homo sapiens')
+            ws.SelectedFeatures = shoji.Tensor("bool", ('genes',), inits=np.ones([ws.genes.length]).astype(bool))
 
-        # Compute some aggregate values
-        cg.Aggregate("Clusters", using="first", into="ClusterID").fit(ws, save=True)
-        cg.Aggregate("Expression", using="mean", into="MeanExpression").fit(ws, save=True)
-        cg.Aggregate("Clusters", using="count", into="NCells").fit(ws, save=True)
-        cg.Aggregate("Clusters", using="count", into="NCells").fit(ws, save=True)
-
-        exp =np.array(ws.MeanExpression)
-        ws.Nonzeros = shoji.Tensor('uint64',('clusters','genes'), inits= np.array(exp[:,0,:] > 0, dtype=np.uint64))
+            ws.ValidGenes = shoji.Tensor("bool", ('genes',), inits=np.ones([ws.genes.length]).astype(bool))
+            ws.Sample = shoji.Tensor("string", ("cells",), inits= np.array([filename]*filter_cells.sum(),dtype='object' ))
+            ws.ID = shoji.Tensor("uint64", ("cells",), inits= ds.ca.Segmentation[:][filter_cells].astype("uint64"))
 
 
     def execute(self, c, nodes,att1, att2):
@@ -649,10 +815,10 @@ class GraphPlotting:
         result = []
 
         counts_cluster = {}
-        for c in tqdm(np.unique(self.clusters)):
+        for c in tqdm(np.unique(self.cell_unique_clusters)):
             nodes= self.g.nodes()[self.clusters == c]
             att1, att2 = self.get_attention_nodes(nodes=nodes)
-            #print(att1.shape,att2.shape)
+            #logging.info(att1.shape,att2.shape)
             bg1,bg2, counts_cl1, counts_cl2 = self.execute(c, nodes,att1,att2)
             result.append((bg1,bg2)) 
 
@@ -660,9 +826,9 @@ class GraphPlotting:
 
         inter_graph, df = self.plot_intercluster(counts_cluster)
         hv.save(inter_graph, '{}/attention/ClusterConnectivity.html'.format(self.folder, c))
-        df = pd.DataFrame(index=np.unique(self.clusters).astype('str'),columns=np.unique(self.clusters).astype('str'), data=df)
-        df.to_parquet('{}/attention/ClusterConnectivity.parquet'.format(self.folder,c))
 
+        df = pd.DataFrame(index=np.unique(self.clusters[self.clusters != -1]).astype('str'),columns=np.unique(self.clusters[self.clusters != -1]).astype('str'), data=df)
+        df.to_parquet('{}/attention/ClusterConnectivity.parquet'.format(self.folder,c))
 
         for b in result:
             bible1 += b[0].values
@@ -687,7 +853,7 @@ class GraphPlotting:
             pstack = np.stack(probs_gene)
             pstack = pstack/pstack.sum()
             network_grammar.append(pstack)
-        print('Syntax learned')
+        logging.info('Syntax learned')
         network_grammar = np.stack(network_grammar)
         #bible_network_ngh = pd.DataFrame(index=self.data.unique_genes, columns= self.data.unique_genes ,data=network_grammar)
         return network_grammar
@@ -723,8 +889,8 @@ class GraphPlotting:
         edges_cluster1 = [self.dic_clusters[e] for e in filt_edges_cluster1.numpy()]
         edges_cluster2 = [self.dic_clusters[e] for e in filt_edges_cluster2.numpy()]
         edges_cluster = edges_cluster1 + edges_cluster2
-        counts_cluster = np.unique(edges_cluster, return_counts=True)
-        counts_cluster = dict(zip(counts_cluster[0],counts_cluster[1]))
+        cluster_, counts = np.unique(edges_cluster, return_counts=True)
+        counts_cluster = dict(zip(cluster_[cluster_ != -1], counts[cluster_ != -1]))
         ###
 
         a = itertools.combinations(self.data.unique_genes,2)
@@ -775,6 +941,7 @@ class GraphPlotting:
         enrichment =  self.enrichment[:,cluster]
         enrichmentQ = np.quantile(enrichment,0.5)
         enriched_genes = self.data.unique_genes[enrichment > enrichmentQ]
+
         
         genes1 = graph_edges1[np.isin(graph_edges1,enriched_genes)| np.isin(graph_edges2,enriched_genes)]
         genes2 = graph_edges2[np.isin(graph_edges1,enriched_genes)| np.isin(graph_edges2,enriched_genes)]
@@ -817,7 +984,7 @@ class GraphPlotting:
             dic1_cluster_i = dic[c][0]
             dic2_cluster_i = dic[c][1]
 
-            for c2 in np.unique(self.clusters):
+            for c2 in np.unique(self.clusters[self.clusters != -1]):
                 counts = 0
                 if c2 in dic1_cluster_i:
                     counts += dic1_cluster_i[c2]
@@ -866,12 +1033,7 @@ class GraphPlotting:
         labels = hv.Labels(graph.nodes, ['x', 'y'],'index')
         #graph = graph #* labels.opts(text_font_size='8pt', text_color='white', bgcolor='grey')
         inter_graph = graph*labels.opts(text_font_size='5pt', text_color='white', bgcolor='grey')
-
         return inter_graph, df
-
-
-
-
 
         
 
@@ -928,7 +1090,7 @@ class enrich_: #sparese
             if permute:
                 enrich_._shuffle()
                 labels = self.permute_labs
-                print(f'permute{labels}')
+                logging.info(f'permute{labels}')
             
             else: 
                 labels = self.labels_attr 

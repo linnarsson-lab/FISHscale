@@ -1,5 +1,6 @@
 from re import search
 import sys
+import logging
 from PyQt5.QtWidgets import (QPushButton, QDialog, QTreeWidget,
                             QTreeWidgetItem, QVBoxLayout,
                             QHBoxLayout, QFrame, QLabel,
@@ -27,7 +28,7 @@ import os
 try:
     import open3d as o3d
 except:
-    print('Import Error: open3d')
+    logging.info('Import Error: open3d')
 import pandas as pd
 import numpy as np
 import random
@@ -63,7 +64,7 @@ class Window:
         if self.App is None:
             self.App = QtWidgets.QApplication(sys.argv)
         else:
-            print('QApplication instance already exists: %s' % str(self.App))
+            logging.info('QApplication instance already exists: %s' % str(self.App))
         
         r = lambda: random.randint(0,255)
         self.columns= columns
@@ -81,7 +82,7 @@ class Window:
         # setting title 
         #if str(self.dataset.__class__) == str(FISHscale.utils.dataset.Dataset):
         if isinstance(self.dataset,FISHscale.utils.dataset.Dataset):
-            print('Single Dataset')
+            logging.info('Single Dataset')
             self.unique_genes = self.dataset.unique_genes
             self.dataset = [dataset]
             self.dic_pointclouds ={'g':self.unique_genes}
@@ -92,7 +93,7 @@ class Window:
 
         #elif str(self.dataset.__class__) == str(FISHscale.utils.dataset.MultiDataset):
         elif isinstance(self.dataset, FISHscale.utils.dataset.MultiDataset):
-            print('MultiDataset')
+            logging.info('MultiDataset')
             self.dataset = dataset
             self.dic_pointclouds ={'g':self.dataset.unique_genes}
             self.dic_pointclouds['File'] = []
@@ -144,7 +145,7 @@ class Window:
         r = lambda: random.randint(0,255)
         ds = []
         for dataframe in self.dataset:
-            print(dataframe.filename)
+            logging.info(dataframe.filename)
 
             for c in self.columns:
                 unique_ca = dataframe.dask_attrs[c][c].unique().values.compute()
@@ -220,7 +221,7 @@ class Visualizer:
         self.pcd.points = o3d.utility.Vector3dVector(self.allgenes)
         self.pcd.colors = o3d.utility.Vector3dVector(self.allcolors)   
         self.visM.add_geometry(self.pcd)
-        print('Data loaded')
+        logging.info('Data loaded')
         opt = self.visM.get_render_option()
 
         if show_axis:

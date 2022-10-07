@@ -4,6 +4,7 @@ from pint import UnitRegistry
 from typing import Union, Any, List
 from time import strftime
 import gc
+import logging
 
 class AxSize:
 
@@ -106,7 +107,7 @@ class AxSize:
         #Find closest scale bar
         indx = np.argmin(np.abs(scale_defaults - (x_extent_um * 0.1)))
         if x_extent_um > (scale_defaults[-1] * 5):
-            print(f'Scale bar warning: Scale bars longer than {scale_names[-1]} are not supported yet.')
+            logging.info(f'Scale bar warning: Scale bars longer than {scale_names[-1]} are not supported yet.')
             indx = len(scale_defaults)
         if indx == -1:
             indx = 0        
@@ -245,7 +246,7 @@ class GeneScatter(AxSize):
         
         if show_legend:
             if len(genes) > 15:
-                print('Can not add the legend for more than 15 genes. Please see self.color_dict for gene colors.')
+                logging.info('Can not add the legend for more than 15 genes. Please see self.color_dict for gene colors.')
             else:
                 lw, fs = self._line_font_size(ax)
                 lgnd = plt.legend(loc = 2, frameon=False, fontsize=fs, handletextpad=-0.3)
@@ -382,7 +383,7 @@ class MultiGeneScatter(AxSize):
         
         if show_legend:
             if len(genes) > 15:
-                print('Can not add the legend for more than 15 genes. Please see self.color_dict for gene colors.')
+                logging.info('Can not add the legend for more than 15 genes. Please see self.color_dict for gene colors.')
             else:
                 lw, fs = self._line_font_size(ax)
                 lgnd = plt.legend(loc = 2, frameon=False, fontsize=fs)
@@ -512,7 +513,7 @@ class AttributeScatter(AxSize):
         
         if show_legend:
             if len(attributes) > 15:
-                print('Can not add the legend for more than 15 genes. Please see self.color_dict for gene colors.')
+                logging.info('Can not add the legend for more than 15 genes. Please see self.color_dict for gene colors.')
             else:
                 lw, fs = self._line_font_size(ax)
                 lgnd = plt.legend(loc = 2, frameon=False, fontsize=fs, handletextpad=-0.3)

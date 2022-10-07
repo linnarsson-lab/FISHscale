@@ -5,7 +5,7 @@ from joblib import Parallel, delayed
 import matplotlib.pyplot as plt
 import math
 import dask
-
+import logging
 
 def _ripleyk_calc(r, s, xy, bc, csr):
 
@@ -46,9 +46,9 @@ class SpatialMetrics:
                 missing_genes.update(present_genes)
         
         if missing_genes != set():
-            print(f'\nMissing_genes: {missing_genes}')
-            print(f'Present_genes: {present_genes}')
-            print(f'Missing_r: {missing_r}')
+            logging.info(f'\nMissing_genes: {missing_genes}')
+            logging.info(f'Present_genes: {present_genes}')
+            logging.info(f'Missing_r: {missing_r}')
             
         return list(missing_r), list(missing_genes)
 
@@ -149,16 +149,16 @@ class SpatialMetrics:
         """
         
         if not isinstance(r, list) and not isinstance(r, np.ndarray):
-            print('For a Ripley K profile pick multiple radii.')
+            logging.info('For a Ripley K profile pick multiple radii.')
             r = [r]
 
         missing_r, missing_gene = self._ripleyk_to_calc(r, [gene])
         if missing_r != []:
-            print('The Ripley K value for the following gene and radii are not calculated yet.')
-            print('Please calculate them with the same setting for all using the "ripleyk_calc()" function.')
-            print('If some values were previously calculated with different settings, set the "re_calculate" parameter to True to overwrite.')
-            print(f'Missing gene: {missing_gene}')
-            print(f'Missing radii: {missing_r}')
+            logging.info('The Ripley K value for the following gene and radii are not calculated yet.')
+            logging.info('Please calculate them with the same setting for all using the "ripleyk_calc()" function.')
+            logging.info('If some values were previously calculated with different settings, set the "re_calculate" parameter to True to overwrite.')
+            logging.info(f'Missing gene: {missing_gene}')
+            logging.info(f'Missing radii: {missing_r}')
             raise Exception('Missing Ripley K values, please calculate')
         
         if not isinstance(r, np.ndarray):

@@ -14,6 +14,7 @@ from pyarrow.parquet import ParquetFile
 from pyarrow import ArrowInvalid
 import warnings
 from typing import Union
+import logging
 
 class DataLoader_base():
       
@@ -106,10 +107,10 @@ class DataLoader_base():
             with open(file_name, 'rb') as pf:
                 prop = pickle.load(pf)
         except FileNotFoundError as e:
-            print('Metadata file was not found, please reparse.')
+            logging.info('Metadata file was not found, please reparse.')
             raise e
         except Exception as e:
-            print('Could not open metadata file please reparse or remake.')
+            logging.info('Could not open metadata file please reparse or remake.')
             raise e
         
         if not isinstance(prop, dict):
@@ -156,8 +157,8 @@ class DataLoader_base():
             return result
         except KeyError:
             if verbose:
-                print(f'Key {item} not present in metadata.')
-                print(f'Existing keys: {existing_dict.keys()}')
+                logging.info(f'Key {item} not present in metadata.')
+                logging.info(f'Existing keys: {existing_dict.keys()}')
             return False
         
     def _metadatafile_get_bypass(self, file : str, item: str) -> Any:

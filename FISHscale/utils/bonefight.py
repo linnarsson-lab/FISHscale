@@ -1,10 +1,12 @@
+import logging
 try:
     import bone_fight as bf
 except ModuleNotFoundError as e:
-    print(f'Please install "BoneFight" or its missing dependencies. Error message: {e}')
+    logging.info(f'Please install "BoneFight" or its missing dependencies. Error message: {e}')
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+
 
 class BoneFight:
     
@@ -83,7 +85,7 @@ class BoneFight:
                 genes_1 = genes_1[gene_filt_1]
                 self.vp(f'{len(genes_1)} matching features between X_1 and X_2')
                 #missing = [g for g in genes_2 if g not in genes_1]
-                #print(f'Genes present in X_2 but not in X_1: {missing}')
+                #logging.info(f'Genes present in X_2 but not in X_1: {missing}')
                 X_1 = X_1.loc[genes_1, :].to_numpy()
                 X_2 = X_2.loc[genes_1, :].to_numpy()
         
@@ -91,7 +93,7 @@ class BoneFight:
             if X_1.shape[0] != X_2.shape[0]:
                 raise Exception('Both datasets should have the same number of rows')
             else:
-                print('Continuing with un-indexed input, make sure feature order is identical')
+                logging.info('Continuing with un-indexed input, make sure feature order is identical')
                 
         if X_1.shape[1] == volume_1.shape:
             raise Exception('X_1 columns should match the volume_1')
@@ -104,7 +106,7 @@ class BoneFight:
         view_2 = bf.View(X_2.T, volume_2) 
                 
         #make the model
-        #print(kwargs)
+        #logging.info(kwargs)
         model = bf.BoneFight(view_1, view_2).fit(**kwargs)
         
         #Plot losses
@@ -192,7 +194,7 @@ class BoneFightMulti(BoneFight):
             if type(X_2[0]) == pd.core.frame.DataFrame:
                 X_2 = pd.concat(X_2, axis=1)
             else:
-                print('Numpy!')
+                logging.info('Numpy!')
                 X_2 = np.concatenate(X_2, axis=1)
             
         #Make volumes if not given.

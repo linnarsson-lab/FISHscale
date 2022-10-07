@@ -15,11 +15,12 @@ from pyro import distributions as dist
 import dgl
 import dgl.function as fn
 from tqdm import trange, tqdm
+import logging
 
 class GraphDecoder:
     def __init__(
         self,
-        lose_identity_percentage = 0.9,
+        lose_identity_percentage = 0.99,
         ):
         self.lose_identity_percentage = lose_identity_percentage
 
@@ -55,15 +56,18 @@ class GraphDecoder:
         self._multinomial_hexbin()
         simulation = []
 
-        simulation_zeros = np.zeros((self.g.num_nodes(),self.g.ndata['gene'].shape[1]))
-        for _ in trange(ntimes):
+        simulation_zeros = np.zeros([self.g.num_nodes(), ntimes])
+        for n in trange(ntimes):
             self._lose_identity()
             self.random_sampler()
             simulated_expression= self.random_decoder()
             simulation.append(simulated_expression)
-            simulation_zeros += self.g.ndata['tmp_gene'].numpy()
+            idx = np.where(self.g.ndata['tmp_gene'].numpy())[1]
+            simulation_zeros[:,n] = idx
             del self.g.ndata['tmp_gene']
 
+        logging.info((simulation_zeros.sum(axis=1) == 0).sum())
+            
         simulation =  np.stack(simulation).T
         expression_by_region_by_simulation = []
 
@@ -92,11 +96,11 @@ class GraphDecoder:
 
     def random_sampler(self):
         nodes_gene =  self.g.ndata['gene']
-        self.g.ndata['gene'] = th.tensor(self.g.ndata['gene'],dtype=th.float32)
-        self.g.ndata['tmp_gene'] = nodes_gene.clone().float()
-        self.g.ndata['tmp_gene'][self.lost_nodes,:] = th.zeros_like(self.g.ndata['tmp_gene'][self.lost_nodes,:],dtype=th.float32)
+        #self.g.ndata['gene'] = th.tensor(self.g.ndata['gene'],dtype=th.float32)
+        self.g.ndata['tmp_gene'] = th.tensor(nodes_gene.clone(),dtype=th.uint8)
+        self.g.ndata['tmp_gene'][self.lost_nodes,:] = th.zeros_like(self.g.ndata['tmp_gene'][self.lost_nodes,:],dtype=th.uint8)
 
-        print((self.g.ndata['tmp_gene'].sum(axis=1) > 0).sum())
+        logging.info((self.g.ndata['tmp_gene'].sum(axis=1) > 0).sum())
 
         sampler = dgl.dataloading.MultiLayerFullNeighborSampler(2,prefetch_node_feats=['tmp_gene'])
         self.decoder_dataloader = dgl.dataloading.DataLoader(
@@ -130,8 +134,12 @@ class GraphDecoder:
             probabilities = th.log(probmultinomial_region+1e-6) + logprobs1_hop + logprobs2_hop
             M = dist.Multinomial(total_count=1, logits=probabilities).sample()
             
-            self.g.ndata['tmp_gene'][nodes,:] = M.float()
-            #print((self.g.ndata['tmp_gene'].sum(axis=1) > 0).sum())
+            
+            self.g.ndata['tmp_gene'][nodes,:] = th.tensor(M,dtype=th.uint8)
+            #logging.info((self.g.ndata['tmp_gene'].sum(axis=1) > 0).sum())
             
         simulated_genes = self.data.unique_genes[np.where(self.g.ndata['tmp_gene'].numpy() == 1)[1]]
-        return simulated_genes
+        logging.info((self.g.ndata['tmp_gene'].sum(axis=1) == 0).sum())
+            
+        #simulated_genes_onehot = self.g.ndata['tmp_gene'].numpy().clone()
+        return simulated_genes#, simulated_genes_onehot

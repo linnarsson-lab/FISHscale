@@ -21,6 +21,7 @@ from pyro.optim import Adam as AdamPyro
 from pyro.infer.autoguide import init_to_mean
 from pyro.infer import SVI, config_enumerate, Trace_ELBO
 from pyro.infer.autoguide import AutoDiagonalNormal, AutoGuideList, AutoNormal, AutoDelta
+import logging
 
 class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting, GraphDecoder):
     """
@@ -142,7 +143,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting, GraphDecoder)
         if not os.path.isdir(self.save_to+'graph'):
             os.mkdir(self.save_to+'graph')
 
-        #print('Device is: ',self.device)
+        #logging.info('Device is: ',self.device)
         #self.compute_distance_th(distance_factor,max_distance_nodes)
         self.subsample_xy()
         self.setup()
@@ -151,19 +152,23 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting, GraphDecoder)
         if not os.path.isfile(dgluns):
             self.g = self.buildGraph()
             graph_labels = {"UnsupervisedDGL": th.tensor([0])}
-            print('Saving model...')
+            logging.info('Saving model...')
             dgl.data.utils.save_graphs(dgluns, [self.g], graph_labels)
-            print('Model saved.')
+            logging.info('Model saved.')
         else:
-            print('Loading model.')
+            logging.info('Loading model.')
             glist, _ = dgl.data.utils.load_graphs(dgluns) # glist will be [g1, g2]
             self.g = glist[0]
-            print('Model loaded.')
+            logging.info('Model loaded.')
         
         if self.aggregator == 'attentional':
+            # Remove all self loops because data will be saved, otherwise the 
+            # number of self-loops will be doubled with each new run.
+            remove = dgl.RemoveSelfLoop()
+            self.g = remove(self.g)
             self.g = dgl.add_self_loop(self.g)
 
-        print(self.g)
+        logging.info(self.g)
         self.make_train_test_validation()
         l_loc,l_scale= self.compute_library_size()
         
@@ -183,8 +188,8 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting, GraphDecoder)
                                         celltype_distribution=self.dist,
                                         ncells=self.ncells,
                                         inference_type=self.inference_type,
-                                        l_loc=l_loc[0][0],
-                                        l_scale= l_scale[0][0],
+                                        l_loc=l_loc,
+                                        l_scale= l_scale,
                                         scale_factor=1/(batch_size*self.data.unique_genes.shape[0]),
                                         warmup_factor=int(self.edges_train.shape[0]/self.batch_size)*self.n_epochs,
                                     )
@@ -202,9 +207,9 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting, GraphDecoder)
     def save_graph(self):
         dgluns = self.save_to+'graph/{}Unsupervised_smooth{}_dst{}_mNodes{}.graph'.format(self.molecules.shape[0],self.smooth,self.distance_factor,self.minimum_nodes_connected)
         graph_labels = {"UnsupervisedDGL": th.tensor([0])}
-        print('Saving model...')
+        logging.info('Saving model...')
         dgl.data.utils.save_graphs(dgluns, [self.g], graph_labels)
-        print('Model saved.')
+        logging.info('Model saved.')
 
 
     def setup(self, stage: Optional[str] = None):
@@ -245,7 +250,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting, GraphDecoder)
         svi = SVI(self.model.model, self.guide, AdamPyro({'lr':1e-3}), self.elbo)
         dl = self.train_dataloader()
 
-        print('Training')
+        logging.info('Training')
         for epoch in range(n_epochs):
             losses = []
 
@@ -256,8 +261,8 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting, GraphDecoder)
 
             # Tell the scheduler we've done one epoch.
             #scheduler.step()
-            print("[Epoch %02d]  Loss: %.5f" % (epoch, np.mean(losses)))
-        print("Finished training!")
+            logging.info("[Epoch %02d]  Loss: %.5f" % (epoch, np.mean(losses)))
+        logging.info("Finished training!")
 
     def make_train_test_validation(self):
         """
@@ -292,8 +297,8 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting, GraphDecoder)
         self.edges_train  = np.random.choice(np.arange(edges_bool_train.shape[0])[edges_bool_train],int(edges_bool_train.sum()*(self.train_p/self.fraction_edges)),replace=False)
         self.edges_test  = np.random.choice(np.arange(edges_bool_test.shape[0])[edges_bool_test],int(edges_bool_test.sum()*(self.train_p/self.fraction_edges)),replace=False)
 
-        print('Training on {} edges.'.format(self.edges_train.shape[0]))
-        print('Testing on {} edges.'.format(self.edges_test.shape[0]))
+        logging.info('Training on {} edges.'.format(self.edges_train.shape[0]))
+        logging.info('Testing on {} edges.'.format(self.edges_test.shape[0]))
 
     def train_dataloader(self):
         """
@@ -370,7 +375,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting, GraphDecoder)
                         )
         return validation
 
-    def train(self,gpus=0):
+    def train(self,gpus=0, continue_training=False):
         """
         train
 
@@ -394,7 +399,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting, GraphDecoder)
                 break
 
         if is_trained:
-            print('Pretrained model exists in folder, loading model parameters. If you wish to re-train, delete .ckpt file.')
+            logging.info('Pretrained model exists in folder, loading model parameters. If you wish to re-train, delete .ckpt file.')
             self.model = self.model.load_from_checkpoint(os.path.join(self.save_to, File),
                                         in_feats=self.model.in_feats,
                                         n_latent=self.model.n_latent,
@@ -403,9 +408,9 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting, GraphDecoder)
                                         )
 
         
-        else:
+        if continue_training or not is_trained:
             trainer.fit(self.model, train_dataloaders=self.train_dataloader())#,val_dataloaders=self.test_dataloader())
-
+            
     #### plotting and latent factors #####
 
     def get_latents(self):

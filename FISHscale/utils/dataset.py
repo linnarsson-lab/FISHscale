@@ -40,9 +40,12 @@ from dask.distributed import Client, LocalCluster
 try:
     from pyarrow.parquet import ParquetFile
 except ModuleNotFoundError as e:
-    print(f'Please install "pyarrow" to load ".parquet" files. Without only .csv files are supported which are memory inefficient. Error: {e}')
+    logging.info(f'Please install "pyarrow" to load ".parquet" files. Without only .csv files are supported which are memory inefficient. Error: {e}')
 from tqdm import tqdm
 from difflib import get_close_matches
+import logging
+logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s',stream=sys.stdout, level=logging.INFO,force=True,)
+
 
 class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, AttributeScatter, SpatialMetrics, DataLoader, Normalization, 
               Density1D, BoneFight, Decomposition, Boundaries, Gene_order, Cellpose, 
@@ -163,7 +166,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         #if not self.part_of_multidataset:
         #    self.cluster = LocalCluster()
         #    self.client = Client(self.cluster)
-        #    print(f'Dask dashboard link: {self.client.dashboard_link}')
+        #    logging.info(f'Dask dashboard link: {self.client.dashboard_link}')
 
         #Files and folders
         self.filename = filename
@@ -210,7 +213,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         """
         if self.verbose:
             for arg in args:
-                print('    ' + str(arg))
+                logging.info('    ' + str(arg))
                 
     def check_gene_input(self, gene):
         """Check if gene is in dataset. If not give suggestion.
@@ -343,7 +346,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             data = pd.concat([g,d],join='outer',axis=1).fillna(0)
             return data.values.astype('int16')
 
-        print('Running segmentation by: {}'.format(label_column))
+        logging.info('Running segmentation by: {}'.format(label_column))
         if path.exists(path.join(save_to,'Segmentation')):
             shutil.rmtree(path.join(save_to,'Segmentation'))
             makedirs(path.join(save_to,'Segmentation'))
@@ -353,7 +356,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         count = 0
         matrices, labels_list, centroids, polygons, clusters = [], [], [], [], []
         segmentation_results = []
-        print('Segmentation V2')
+        logging.info('Segmentation V2')
         for x in trange(self.dask_attrs[label_column].npartitions - 1):
             partition = self.dask_attrs[label_column].get_partition(x).compute()
             s = segmentation(partition)
@@ -383,7 +386,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                         clusters.append(cl)
 
         matrices = np.concatenate(matrices,axis=1)
-        print('Shape of gene X cell matrix: {}'.format(matrices.shape))
+        logging.info('Shape of gene X cell matrix: {}'.format(matrices.shape))
         if type(save_to) == type(None):
             file = path.join(self.dataset_folder,self.filename.split('.')[0]+'_cells.loom')
         else:
@@ -391,11 +394,11 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         row_attrs = {'Gene':self.unique_genes}
         col_attrs = {'Segmentation':labels_list, 'Centroid':centroids,label_column:clusters, 'Polygons':polygons}# 'Polygon':polygons
         matrices = sparse.csr_matrix(matrices,dtype=np.int16)
-        print('Saving polygons')
+        logging.info('Saving polygons')
         np.save(path.join(save_to,self.filename.split('.')[0]+'_polygons'),polygons)
         np.save(path.join(save_to,self.filename.split('.')[0]+'_molecule_labels'),segmentation_results)
         loompy.create(file,matrices,row_attrs,col_attrs)
-        print('Number of cells found: {}. Loompy written.'.format(count))
+        logging.info('Number of cells found: {}. Loompy written.'.format(count))
 
 
 class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base, Normalization, RegionalizeMulti,
@@ -509,7 +512,7 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
         #Dask
         #self.cluster = LocalCluster()
         #self.client = Client(self.cluster)
-        #print(f'Dask dashboard link: {self.client.dashboard_link}')
+        #logging.info(f'Dask dashboard link: {self.client.dashboard_link}')
         
         #Name and folders
         if not MultiDataset_name:
@@ -556,7 +559,7 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
             """
             if self.verbose:
                 for arg in args:
-                    print('    ' + str(arg))
+                    logging.info('    ' + str(arg))
                     
     def check_gene_input(self, gene):
         """Check if gene is in dataset. If not give suggestion.
@@ -742,8 +745,8 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
         all_unit = [d.unit_scale for d in self.datasets]
         all_area = [d.area_scale for d in self.datasets]
         if not np.all([i == all_unit[0] for i in all_unit]):
-            print(all_unit)
-            print(all_area)
+            logging.info(all_unit)
+            logging.info(all_area)
             raise Exception('Unit is not identical for all datasets.')
         #if not np.all(all_area == all_area[0]):
         if not np.all(i == all_area[0] for i in all_area):

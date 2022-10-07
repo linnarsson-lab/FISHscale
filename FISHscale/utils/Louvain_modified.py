@@ -12,6 +12,7 @@ from sklearn.decomposition import PCA
 from sklearn.neighbors import NearestNeighbors
 from scipy.sparse.csgraph import connected_components
 import loompy
+import logging
 
 
 
@@ -103,20 +104,20 @@ class PolishedLouvain:
         xy = self.embedding
         knn = self.graph
 
-        print("Louvain community detection")
+        logging.info("Louvain community detection")
 
         g = nx.from_scipy_sparse_matrix(knn)
         partitions = community.best_partition(g, resolution=self.resolution, randomize=False)
         labels = np.array([partitions[key] for key in range(knn.shape[0])])
 
         # Mark tiny clusters as outliers
-        print("Marking tiny clusters as outliers")
+        logging.info("Marking tiny clusters as outliers")
         bigs = np.where(np.bincount(labels) >= 10)[0]
         mapping = {k: v for v, k in enumerate(bigs)}
         labels = np.array([mapping[x] if x in bigs else -1 for x in labels])
 
         # Mark outliers using DBSCAN
-        print("Using DBSCAN to mark outliers")
+        logging.info("Using DBSCAN to mark outliers")
         nn = NearestNeighbors(n_neighbors=10, algorithm="ball_tree", n_jobs=4)
         nn.fit(xy)
         knn = nn.kneighbors_graph(mode='distance')
@@ -127,7 +128,7 @@ class PolishedLouvain:
         labels[outliers] = -1
 
         # Mark outliers as cells in bad neighborhoods
-        print("Using neighborhood to mark outliers")
+        logging.info("Using neighborhood to mark outliers")
         nn = NearestNeighbors(n_neighbors=10, algorithm="ball_tree", n_jobs=4)
         nn.fit(xy)
         knn = nn.kneighbors_graph(mode='connectivity').tocoo()
@@ -150,7 +151,7 @@ class PolishedLouvain:
         labels = np.array([d[x] if x in d else -1 for x in labels])
 
         # Break clusters based on the embedding
-        print("Breaking clusters")
+        logging.info("Breaking clusters")
         max_label = 0
         labels2 = np.copy(labels)
         for lbl in range(labels.max() + 1):
@@ -166,7 +167,7 @@ class PolishedLouvain:
         labels = labels2
 
         # Set the local cluster label to the local majority vote
-        print("Smoothing cluster identity on the embedding")
+        logging.info("Smoothing cluster identity on the embedding")
         nn = NearestNeighbors(n_neighbors=10, algorithm="ball_tree", n_jobs=4)
         nn.fit(xy)
         knn = nn.kneighbors_graph(mode='connectivity').tocoo()
@@ -185,7 +186,7 @@ class PolishedLouvain:
         labels = np.array([d[x] if x in d else -1 for x in labels])
 
         if np.all(labels < 0):
-            print("All cells were determined to be outliers!")
+            logging.info("All cells were determined to be outliers!")
             return np.zeros_like(labels)
 
         if not self.outliers and np.any(labels == -1):

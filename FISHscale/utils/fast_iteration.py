@@ -3,6 +3,7 @@ import numpy as np
 from typing import Generator, Tuple
 from functools import lru_cache
 from difflib import get_close_matches
+import logging
 
 class Iteration:
 
@@ -93,7 +94,9 @@ class Iteration:
             elif frac * n_points < minimum:
                 frac = minimum / n_points
         
+        
         gene_i= self.gene_index[gene]
+
         
         columns = ['x', 'y']
         if include_z:
@@ -148,7 +151,7 @@ class _old_stuff:
             self._offset_flag = False
             
         else:
-            print('Gene coodinates already calculated. skipping')
+            logging.info('Gene coodinates already calculated. skipping')
             pass
     
 

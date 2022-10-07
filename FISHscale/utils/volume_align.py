@@ -8,6 +8,7 @@ from dask.diagnostics import ProgressBar
 import pandas as pd
 import math
 from scipy.interpolate import LinearNDInterpolator
+import logging
 
 class Volume_Align():
     
@@ -393,10 +394,10 @@ class Volume_Align():
         grid_3d_missing = np.rollaxis(grid_3d_missing, 0, 4)
         
         def worker(data, z_data_filt, grid_3d, missing_masks, grid_3d_missing):
-            #print('got to worker')
+            #logging.info('got to worker')
             #Get voxels with data
             values = data[:,:,z_data_filt]
-            #print(values.shape, values.ravel().shape)
+            #logging.info(values.shape, values.ravel().shape)
             #Scale to one
             for i in range(values.shape[2]):
                 values[:,:,i] = np.sqrt(values[:,:,i]) #Normalize the data
@@ -406,9 +407,9 @@ class Volume_Align():
             
             try:
                 #Learn
-                #print(f'Starting learining')
+                #logging.info(f'Starting learining')
                 values_x = LinearNDInterpolator(grid_3d, value_filtered.ravel())
-                #print(f'Done with learning')
+                #logging.info(f'Done with learning')
                 
                 #Interpolate
                 interpolated = []
@@ -416,16 +417,16 @@ class Volume_Align():
                 for i in range(mm_shape[2]):
                     mm = missing_masks[:,:,i]
                     points = grid_3d_missing[:,:,i,:].reshape((mm_shape[0] * mm_shape[1], 3))[mm.ravel()]
-                    #print(f'{i}/{mm_shape[2]}, n points: {points.shape[0]}')
-                    #print(f': {points.shape} points')
+                    #logging.info(f'{i}/{mm_shape[2]}, n points: {points.shape[0]}')
+                    #logging.info(f': {points.shape} points')
                     interp = np.zeros(mm_shape[:2])
                     interp[mm] = values_x(points) #Interpolate
                     interpolated.append(interp)
-                    print('Done')
+                    logging.info('Done')
             
             except Exception as e:
-                print(e)
-                print(f'Encountered error during interpolation in gene: "". Filling with zeros')
+                logging.info(e)
+                logging.info(f'Encountered error during interpolation in gene: "". Filling with zeros')
                 interpolated = []
                 mm_shape = missing_masks.shape
                 for i in range(mm_shape[2]):
@@ -442,7 +443,7 @@ class Volume_Align():
             
             return interp_full
         
-        print('Starting')
+        logging.info('Starting')
         
         gene_data = dask.delayed(gene_data)
         

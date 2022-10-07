@@ -4,6 +4,7 @@ import numpy as np
 from functools import lru_cache
 import pandas as pd
 from typing import Tuple, Any
+import logging
 
 class GeneCorr:
 
@@ -135,7 +136,7 @@ class GeneCorr:
 
         #Iterate through all combinations of genes and fill the r and p matrices
         for i, (geneA, geneB) in enumerate(combinations):
-            print(f'Radius {radius}: {i}/{combinations.shape[0]}             ', end='\r')
+            logging.info(f'Radius {radius}: {i}/{combinations.shape[0]}             ', end='\r')
             #Get the spearman r and p value for gene A versus gene B and gene B versus gene A
             cor_AB, cor_BA = self._CBC(geneA, geneB, radius, workers=workers)
             #Place in matrix
