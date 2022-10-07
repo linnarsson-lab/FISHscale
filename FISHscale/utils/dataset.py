@@ -799,7 +799,7 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
         self.datasets_names = [self.datasets_names[i] for i in sorted]            
         
 
-    def arange_grid_offset(self, orderby: str='order'):
+    def arange_grid_offset(self, orderby: str='order', ncol:int = None, spacing_fraction:float = 0.03):
         """Set offset of datasets so that they are in a XY grid side by side.
 
         Changes the X and Y coordinates so that all datasets are positioned in
@@ -815,6 +815,11 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
                 'y' : Sort by width in Y.
                 'name' : Sort by dataset name in alphanumerical order.                
                     Defaults to 'order'.
+            ncol (int, optional): Number of columns. If None is given, the 
+                datasets will be put in a square grid. Defaults to None.
+            specing_percentage (float, optional): Fraction of the largest 
+                dataset that is used to make the spacing between datasets.
+                Defults to 0.03. 
 
         Raises:
             Exception: If `orderby` is not properly defined.
@@ -822,18 +827,19 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
 
         max_x_extent = max([d.x_extent for d in self.datasets])
         max_y_extent = max([d.y_extent for d in self.datasets])
-        max_x_extent = max_x_extent + (max_x_extent * 0.03)
-        max_y_extent = max_y_extent + (max_y_extent * 0.03)
+        max_x_extent = max_x_extent + (max_x_extent * spacing_fraction)
+        max_y_extent = max_y_extent + (max_y_extent * spacing_fraction)
         n_datasets = len(self.datasets)
-        grid_size = ceil(np.sqrt(n_datasets))
-        x_extent = (grid_size - 1) * max_x_extent
-        y_extent = (grid_size - 1) * max_y_extent
-        x_spacing = np.linspace(-0.5 * x_extent, 0.5* x_extent, grid_size)
-        y_spacing = np.linspace(-0.5 * y_extent, 0.5* y_extent, grid_size)
+        if ncol == None:
+            ncol = ceil(np.sqrt(n_datasets))
+        nrow = ceil(n_datasets / ncol)
+        x_extent = (ncol - 1) * max_x_extent
+        y_extent = (nrow - 1) * max_y_extent
+        x_spacing = np.linspace(-0.5 * x_extent, 0.5* x_extent, ncol)
+        y_spacing = np.linspace(-0.5 * y_extent, 0.5* y_extent, nrow)
         x, y = np.meshgrid(x_spacing, y_spacing)
         x, y = x.ravel(), y.ravel()
         y = np.flip(y)
-
 
         if orderby == 'order':
             sorted = np.arange(0, len(self.datasets))
