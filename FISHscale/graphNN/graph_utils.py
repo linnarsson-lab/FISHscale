@@ -207,7 +207,6 @@ class GraphUtils(object):
         for n in tqdm(ngh_):
             nghs.append(th.tensor(g.ndata['gene'][n,:].sum(axis=0),dtype=th.uint8).numpy())
         nghs = np.stack(nghs)
-        nghs = sparse.csr_matrix(nghs)
         #g.ndata['ngh'] = nghs
 
         if self.smooth:
@@ -241,10 +240,11 @@ class GraphUtils(object):
         del g.ndata['zero']
         '''
         print('nghs', nghs.shape)
-        sum_nodes_connected = nghs.sum(axis=1)[:,0]
+        sum_nodes_connected = th.tensor(np.array(nghs.sum(axis=1),dtype=np.uint8))
         print('sum nodes' , sum_nodes_connected.shape)
+        print('mol', molecules.shape)
         molecules_connected = molecules[sum_nodes_connected >= self.minimum_nodes_connected]
-        remove = molecules[sum_nodes_connected.numpy() < self.minimum_nodes_connected]
+        remove = molecules[sum_nodes_connected < self.minimum_nodes_connected]
         g.remove_nodes(th.tensor(remove))
         g.ndata['indices'] = th.tensor(molecules_connected)
         g.ndata['coords'] = th.tensor(coords[molecules_connected])
