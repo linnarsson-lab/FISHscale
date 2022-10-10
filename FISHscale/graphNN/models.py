@@ -108,9 +108,9 @@ class SAGELightning(LightningModule):
         pos_ids = pos.edges()[0]
         mfgs = [mfg.int() for mfg in mfgs]
         batch_inputs = mfgs[0].srcdata['gene']
-        zn_loc, _ = self.module.encoder(batch_inputs,mfgs)
+        zn_loc = self.module.encoder(batch_inputs,mfgs)
         graph_loss = self.loss_fcn(zn_loc, pos, neg).mean()
-        opt_g, opt_nb= self.optimizers()
+        opt_g = self.optimizers()
         opt_g.zero_grad()
         self.manual_backward(graph_loss)
         opt_g.step()
@@ -122,15 +122,15 @@ class SAGELightning(LightningModule):
 
     def configure_optimizers(self):
         optimizer_graph = th.optim.Adam(self.module.encoder.parameters(), lr=self.lr)
-        optimizer_nb = th.optim.Adam(self.module.encoder_molecule.parameters(), lr=0.01)
-        lr_scheduler = th.optim.lr_scheduler.ReduceLROnPlateau(optimizer_nb,)
+        #optimizer_nb = th.optim.Adam(self.module.encoder_molecule.parameters(), lr=0.01)
+        lr_scheduler = th.optim.lr_scheduler.ReduceLROnPlateau(optimizer_graph,)
         scheduler = {
             'scheduler': lr_scheduler, 
             'reduce_on_plateau': True,
             # val_checkpoint_on is val_loss passed in as checkpoint_on
             'monitor': 'train_loss'
         }
-        return [optimizer_graph, optimizer_nb],[scheduler]
+        return [optimizer_graph],[scheduler]
 
     def validation_step(self,batch, batch_idx):
         pass
