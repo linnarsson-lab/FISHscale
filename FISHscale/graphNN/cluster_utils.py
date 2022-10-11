@@ -23,7 +23,7 @@ class ClusterCleaner:
         hm = pd.DataFrame(scaler.fit_transform(hm.values), columns=hm.columns, index=hm.index)
         hm.head()
 
-        hm_merge = self.post_merge(hm, hm.columns, 0.1, linkage_metric='correlation', linkage_method='average', name='SupFig3Dend', save=True)
+        hm_merge = self.post_merge(hm, hm.columns, 0.01, linkage_metric='correlation', linkage_method='average', name='SupFig3Dend', save=True)
         logging.info(hm_merge)
 
         hm_merge = np.array(hm_merge)

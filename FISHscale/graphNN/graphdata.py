@@ -46,7 +46,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting, GraphDecoder)
         exclude_clusters:dict={},
         smooth:bool=False,
         negative_samples:int=5,
-        distance_factor:int=1,
+        distance_factor:int=2,
         lr=1e-3,
         aggregator='attentional',
         celltype_distribution='uniform',

@@ -177,7 +177,7 @@ class GraphUtils(object):
                     if d < distance:
                         pair.append((i,n))
                         n_.append(n)
-                ngh_.append(n_)
+                ngh_.append(len(n_))
                 #search = tree.get_nns_by_item(i, neighborhood_size)
                 #pair = [(i,n) for n in search]
 
@@ -203,10 +203,10 @@ class GraphUtils(object):
         g= dgl.graph((edges[0,:],edges[1,:]),)
         #g = dgl.to_bidirected(g)]
         g.ndata['gene'] = th.tensor(d.toarray(), dtype=th.uint8)#[molecules_id.numpy(),:]
-        nghs = []
-        for n in tqdm(ngh_):
-            nghs.append(th.tensor(g.ndata['gene'][n,:].sum(axis=0),dtype=th.uint8).numpy())
-        nghs = np.stack(nghs)
+        #nghs = []
+        #for n in tqdm(ngh_):
+        #    nghs.append(th.tensor(g.ndata['gene'][n,:].sum(axis=0),dtype=th.uint8).numpy())
+        #nghs = np.array(ngh_,dtype=th.uint8)
         #g.ndata['ngh'] = nghs
 
         if self.smooth:
@@ -239,10 +239,8 @@ class GraphUtils(object):
         g.ndata['ngh'] = g.ndata['zero'] + g.ndata['gene']
         del g.ndata['zero']
         '''
-        print('nghs', nghs.shape)
-        sum_nodes_connected = th.tensor(np.array(nghs.sum(axis=1),dtype=np.uint8))
-        print('sum nodes' , sum_nodes_connected.shape)
-        print('mol', molecules.shape)
+        sum_nodes_connected = th.tensor(np.array(ngh_,dtype=np.uint8))
+        print('sum nodes' , sum_nodes_connected.shape , sum_nodes_connected.max())
         molecules_connected = molecules[sum_nodes_connected >= self.minimum_nodes_connected]
         remove = molecules[sum_nodes_connected < self.minimum_nodes_connected]
         g.remove_nodes(th.tensor(remove))
@@ -464,7 +462,7 @@ class GraphPlotting:
             logging.info('Building neighbor graph for clustering...')
             sc.pp.neighbors(adata, n_neighbors=15)
             logging.info('Running Leiden clustering...')
-            sc.tl.leiden(adata, random_state=42)
+            sc.tl.leiden(adata, random_state=42, resolution=1.2)
             logging.info('Leiden clustering done.')
             clusters= adata.obs['leiden'].values
 
