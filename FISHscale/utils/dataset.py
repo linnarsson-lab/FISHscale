@@ -315,7 +315,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         from dask import dataframe as dd
         import shutil
         from shapely import geometry
-        #from diameter_clustering import QTClustering
+        from diameter_clustering import QTClustering
         
         """
         Run DBscan segmentation on self.data, this will reassign a column on self.data with column_name
