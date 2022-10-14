@@ -315,7 +315,10 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         from dask import dataframe as dd
         import shutil
         from shapely import geometry
+        from scipy.spatial import distance
         from diameter_clustering import QTClustering
+
+        #from diameter_clustering import QTClustering
         
         """
         Run DBscan segmentation on self.data, this will reassign a column on self.data with column_name
@@ -327,14 +330,40 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             cutoff (int,optional): cells with number of dots above this threshold will be removed and -1 passed to background dots
         """        
         def segmentation(partition):
+
             cl_molecules_xy = partition.loc[:,['x','y']].values
             if type(adjust_n_clusters) != type(None):
                 if hasattr(func,'n_clusters'):
                     func.n_clusters = int(cl_molecules_xy.shape[0]/adjust_n_clusters)+1
                 elif hasattr(func,'n_components'):
                     func.n_components = int(cl_molecules_xy.shape[0]/adjust_n_clusters)+1
-            #segmentation = func.fit_predict(cl_molecules_xy)
-            segmentation = QTClustering(max_radius=50, metric='euclidean', min_cluster_size=10, verbose=False).fit_predict(cl_molecules_xy)
+            segmentation = func.fit_predict(cl_molecules_xy)
+            partition['tmp_sement'] = segmentation
+            indexes, resegmentation = [],[]
+            for s, data in partition.groupby('tmp_sement'):
+                #if data.shape[0] > :
+                p = data.loc[:,['x','y']].values
+                A= p.max(axis=0) - p.min(axis=0)
+                if np.max(A) > 75 and s > -1:
+                    indexes += data.index.values.tolist()
+                    segmentation2 = QTClustering(max_radius=50, metric='euclidean', min_cluster_size=10, verbose=False).fit_predict(data.loc[:,['x','y']].values)
+                    resegmentation += segmentation2.tolist()
+
+                elif s == -1:
+                    indexes += data.index.values.tolist()
+                    resegmentation += [-1]*data.shape[0]
+
+                else:
+                    indexes += data.index.values.tolist()
+                    resegmentation += [s]*data.shape[0]
+
+            dic = dict(zip(indexes, resegmentation))
+            segmentation = []
+            for i in partition.index:
+                segmentation.append(dic[i])
+            segmentation = np.array(segmentation)
+                
+            #segmentation = QTClustering(max_radius=50, metric='euclidean', min_cluster_size=10, verbose=False).fit_predict(cl_molecules_xy)
             return segmentation
             
 
