@@ -462,7 +462,7 @@ class GraphPlotting:
             logging.info('Building neighbor graph for clustering...')
             sc.pp.neighbors(adata, n_neighbors=15)
             logging.info('Running Leiden clustering...')
-            sc.tl.leiden(adata, random_state=42, resolution=1.2)
+            sc.tl.leiden(adata, random_state=42, resolution=1.4)
             logging.info('Leiden clustering done.')
             clusters= adata.obs['leiden'].values
 
