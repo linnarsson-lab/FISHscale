@@ -338,30 +338,30 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 elif hasattr(func,'n_components'):
                     func.n_components = int(cl_molecules_xy.shape[0]/adjust_n_clusters)+1
             segmentation = func.fit_predict(cl_molecules_xy)
-            print(segmentation.max())
+            #print(segmentation.max())
             partition['tmp_sement'] = segmentation.astype(np.int64)
             indexes, resegmentation = [],[]
             count = 0
             for s, data in partition.groupby('tmp_sement'):
-                print('label',s)
+                #print('label',s)
                 #if data.shape[0] > :
                 p = data.loc[:,['x','y']].values
                 A= p.max(axis=0) - p.min(axis=0)
                 if np.max(A) > 75 and s > -1:   
                     segmentation2 = QTClustering(max_radius=50, metric='euclidean', min_cluster_size=12, verbose=False).fit_predict(data.loc[:,['x','y']].values).astype(np.float32)
-                    print('QT', segmentation2.max(), segmentation2)
+                    #print('QT', segmentation2.max(), segmentation2)
                 elif s == -1:
                     segmentation2 = np.array([-1]*data.shape[0])
                 else:
 
                     segmentation2 = np.array([count]*data.shape[0])
-                print('s2',segmentation2.max())
+                #print('s2',segmentation2.max())
                 counts = [x+count if x >= 0 else x for x in segmentation2] + [0]
                 segmentation2 += np.max(np.array(counts))
                 resegmentation += segmentation2.tolist()
                 indexes += data.index.values.tolist()
                 count += np.unique(segmentation2).shape[0]+1
-                print('count',count)
+                #print('count',count)
 
             dic = dict(zip(indexes, resegmentation))
             segmentation = []
