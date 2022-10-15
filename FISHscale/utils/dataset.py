@@ -408,8 +408,8 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             partition.to_parquet(path.join(save_to,'Segmentation','{}.parquet'.format(x)))
             
             count +=  labels.max() +1
-
             partition = partition.groupby('Segmentation')
+            
             for part in partition:
                 if part[0] != type(None) and part[0] > -1:
                     cell = part[1]
