@@ -316,7 +316,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         import shutil
         from shapely import geometry
         from scipy.spatial import distance
-        from diameter_clustering import QTClustering
+        from diameter_clustering import QTClustering, MaxDiameterClustering
 
         #from diameter_clustering import QTClustering
         
