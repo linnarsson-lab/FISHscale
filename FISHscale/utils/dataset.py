@@ -340,6 +340,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             segmentation = func.fit_predict(cl_molecules_xy)
             partition['tmp_sement'] = segmentation
             indexes, resegmentation = [],[]
+            min_count = 0
             for s, data in partition.groupby('tmp_sement'):
                 #if data.shape[0] > :
                 p = data.loc[:,['x','y']].values
