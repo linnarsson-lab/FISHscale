@@ -316,7 +316,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         import shutil
         from shapely import geometry
         from scipy.spatial import distance
-        from diameter_clustering import QTClustering
+        from diameter_clustering import QTClustering, MaxDiameterClustering
 
         #from diameter_clustering import QTClustering
         
@@ -340,23 +340,24 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             segmentation = func.fit_predict(cl_molecules_xy)
             partition['tmp_sement'] = segmentation
             indexes, resegmentation = [],[]
-            min_count = 0
+            count = 0
             for s, data in partition.groupby('tmp_sement'):
                 #if data.shape[0] > :
                 p = data.loc[:,['x','y']].values
                 A= p.max(axis=0) - p.min(axis=0)
-                if np.max(A) > 75 and s > -1:
-                    indexes += data.index.values.tolist()
+                if np.max(A) > 75 and s > -1:   
                     segmentation2 = QTClustering(max_radius=50, metric='euclidean', min_cluster_size=10, verbose=False).fit_predict(data.loc[:,['x','y']].values)
-                    resegmentation += segmentation2.tolist()
-
                 elif s == -1:
-                    indexes += data.index.values.tolist()
-                    resegmentation += [-1]*data.shape[0]
-
+                    segmentation2 = np.array([-1]*data.shape[0])
                 else:
-                    indexes += data.index.values.tolist()
-                    resegmentation += [s]*data.shape[0]
+
+                    segmentation2 = np.array([count]*data.shape[0])
+
+                counts = [x+count if x >= 0 else x for x in segmentation2] + [0]
+                segmentation2 += np.max(np.array(counts))
+                resegmentation += segmentation2.tolist()
+                indexes += data.index.values.tolist()
+                count += np.max(segmentation2)+1
 
             dic = dict(zip(indexes, resegmentation))
             segmentation = []
