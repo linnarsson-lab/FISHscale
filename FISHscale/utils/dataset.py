@@ -345,7 +345,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 #if data.shape[0] > :
                 p = data.loc[:,['x','y']].values
                 A= p.max(axis=0) - p.min(axis=0)
-                if np.max(A) > 75 and s > -1:   
+                if np.max(A) > 75 and s > -1:
                     segmentation2 = QTClustering(max_radius=50, metric='euclidean', min_cluster_size=10, verbose=False).fit_predict(data.loc[:,['x','y']].values)
                 elif s == -1:
                     segmentation2 = np.array([-1]*data.shape[0])
@@ -358,7 +358,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 resegmentation += segmentation2.tolist()
                 indexes += data.index.values.tolist()
                 count += np.max(segmentation2)+1
-
+            print('segmentation',segmentation2.max())
             dic = dict(zip(indexes, resegmentation))
             segmentation = []
             for i in partition.index:
