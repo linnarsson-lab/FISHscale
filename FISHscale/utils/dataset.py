@@ -406,7 +406,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             partition['Segmentation'] = labels
             partition.to_parquet(path.join(save_to,'Segmentation','{}.parquet'.format(x)))
             
-            count +=  s.max() +1
+            count +=  labels.max() +1
 
             partition = partition.groupby('Segmentation')
             for part in partition:
