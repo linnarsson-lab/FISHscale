@@ -373,6 +373,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 indexes += data.index.values.tolist()
                 count += np.max(np.array(resegmentation)) + 1
                 #print('count',count)
+                logging.info('{}: max label'.format(count))
 
             dic = dict(zip(indexes, resegmentation))
             segmentation = []
