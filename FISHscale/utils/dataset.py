@@ -366,7 +366,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
 
                 else:
                     print(s,'else')
-                    segmentation2 = np.array([1]*data.shape[0])
+                    segmentation2 = np.array([0]*data.shape[0])
 
                 segmentation2 = np.array([x+count if x >= 0 else -1 for x in segmentation2]) 
                 resegmentation += segmentation2.tolist()
@@ -407,11 +407,10 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             s = segmentation(partition)
             dic = dict(
                         zip(
-                            np.unique(s), 
-                            np.arange(np.unique(s).shape[0]), 
+                            np.unique(np.array([-1]+s.tolist())), 
+                            [-1]+np.arange(np.unique(s).shape[0]).tolist(), 
                             )
                         )
-
             labels = np.array([dic[x]+count if x >= 0 else x for x in s]) #,partition.index.values.compute()
             partition['Segmentation'] = labels
             partition.to_parquet(path.join(save_to,'Segmentation','{}.parquet'.format(x)))
@@ -424,7 +423,8 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                     cell = part[1]
                     dblabel = cell.Segmentation.values[0]
                     mat = get_counts(cell.g.values,dblabel)
-                    if mat.sum() > 10 and mat.sum() < 500 and (mat > 0).sum() > 2: 
+                    max_dist = np.max(np.abs(cell.x.values.max(axis=0) - cell.y.values.min(axis=0)))
+                    if mat.sum() > 10 and mat.sum() < 500 and (mat > 0).sum() > 2 and max_dist <= 75*self.pixel_size.magnitude: 
                         centroid = cell.x.values.mean().astype('float32'),cell.y.values.mean().astype('float32'),
                         cl= cell.Clusters.values[0]
                         try:
