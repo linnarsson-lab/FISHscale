@@ -350,9 +350,8 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 A= p.max(axis=0) - p.min(axis=0)
                 A = np.abs(A)
                 if np.max(A) > 75 and s > -1:   
-                    print('runningQTC')
+                    logging.info(s,'runningQTC')
                     segmentation2 = QTClustering(max_radius=45, metric='euclidean', min_cluster_size=12, verbose=False).fit_predict(data.loc[:,['x','y']].values).astype(np.float32)
-                    
                     segmentation_outlier = DBSCAN(eps=25,min_samples=12).fit_predict(data.loc[:,['x','y']].values).astype(np.float32)
                     new_s = []
                     for s2, outlier in zip(segmentation2,segmentation_outlier):
