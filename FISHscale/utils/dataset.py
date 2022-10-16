@@ -358,11 +358,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                             np.arange(np.unique(segmentation2).shape[0]), 
                             )
                         )
-                    segmentation2 = np.array([dic[x] if x >=0 else -1 for x in segmentation2])
-
-                #elif s == -1 or s == 0:
-                #    segmentation2 = np.array([-1]*data.shape[0])
-                    #print('-1',segmentation2)
+                    segmentation2 = np.array([dic[x] if x >= 0 else -1 for x in segmentation2])
 
                 else:
                     print(s,'else')
@@ -372,7 +368,6 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 resegmentation += segmentation2.tolist()
                 indexes += data.index.values.tolist()
                 count = np.max(np.array(resegmentation)) + 1
-                logging.info('{} {} segmentation2'.format(segmentation2.min(), segmentation2.max()))
 
             dic = dict(zip(indexes, resegmentation))
             segmentation = []
@@ -401,6 +396,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         count = 0
         matrices, labels_list, centroids, polygons, clusters = [], [], [], [], []
         segmentation_results = []
+        labels_segmentation = []
         logging.info('Segmentation V2')
         for x in trange(self.dask_attrs[label_column].npartitions - 1):
             partition = self.dask_attrs[label_column].get_partition(x).compute()
@@ -414,8 +410,8 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             labels = np.array([dic[x]+count if x >= 0 else x for x in s]) #,partition.index.values.compute()
             partition['Segmentation'] = labels
             partition.to_parquet(path.join(save_to,'Segmentation','{}.parquet'.format(x)))
-            
-            count +=  labels.max() +1
+            labels_segmentation += labels.tolist()
+            count =  np.max(np.array(labels_segmentation)) +1
             partition = partition.groupby('Segmentation')
 
             for part in partition:
