@@ -317,7 +317,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         from shapely import geometry
         from scipy.spatial import distance
         from diameter_clustering import QTClustering, MaxDiameterClustering
-        from sklearn.cluster import DBSCAN
+        from sklearn.cluster import DBSCAN, AgglomerativeClustering
 
         #from diameter_clustering import QTClustering
         
@@ -351,15 +351,26 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 A = np.abs(A)
                 if np.max(A) > 75 and s > -1:   
                     logging.info('{}: runningQTC'.format(s))
-                    segmentation2 = QTClustering(max_radius=45, metric='euclidean', min_cluster_size=12, verbose=False).fit_predict(data.loc[:,['x','y']].values).astype(np.float32)
-                    segmentation_outlier = DBSCAN(eps=25,min_samples=12).fit_predict(data.loc[:,['x','y']].values).astype(np.float32)
-                    new_s = []
+                    #segmentation2 = QTClustering(max_radius=45, metric='euclidean', min_cluster_size=12, verbose=False).fit_predict(data.loc[:,['x','y']].values).astype(np.float32)
+                    segmentation2 = AgglomerativeClustering(n_clusters=None,affinity='euclidean',linkage='ward',distance_threshold=70).fit_predict(p)
+                    segmentation2 = np.array([x if (segmentation2 == x).sum() > 10 else -1 for x in segmentation2])
+                    dic = dict(
+                        zip(
+                            np.unique(segmentation2), 
+                            np.arange(np.unique(segmentation2).shape[0]), 
+                            )
+                        )
+                    segmentation2 = np.array([dic[x] for x in segmentation2])
+                    segmentation2 = np.array([x if (segmentation2 == x).sum() > 10 else -1 for x in segmentation2])
+
+                    #segmentation_outlier = DBSCAN(eps=25,min_samples=12).fit_predict(data.loc[:,['x','y']].values).astype(np.float32)
+                    '''new_s = []
                     for s2, outlier in zip(segmentation2,segmentation_outlier):
                         if outlier == -1:
                             new_s.append(-1)
                         else:
                             new_s.append(s2)
-                    segmentation2 = np.array(new_s)
+                    segmentation2 = np.array(new_s)'''
 
                     #print('QT', segmentation2.max(), segmentation2)
                 elif s == -1:
