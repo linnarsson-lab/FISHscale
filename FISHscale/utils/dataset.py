@@ -350,7 +350,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 if np.max(A) > 75 and s > -1:   
                     logging.info('{}: runningQTC'.format(s))
                     #segmentation2 = QTClustering(max_radius=45, metric='euclidean', min_cluster_size=12, verbose=False).fit_predict(data.loc[:,['x','y']].values).astype(np.float32)
-                    segmentation2 = AgglomerativeClustering(n_clusters=None,affinity='euclidean',linkage='ward',distance_threshold=70).fit_predict(p).astype(np.float32)
+                    segmentation2 = AgglomerativeClustering(n_clusters=None,affinity='euclidean',linkage='ward',distance_threshold=70).fit_predict(p).astype(np.int64)
                     segmentation2 = np.array([x if (segmentation2 == x).sum() > 10 and x > -1 else -1 for x in segmentation2])
                     dic = dict(
                         zip(
@@ -358,7 +358,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                             np.arange(np.unique(segmentation2).shape[0]), 
                             )
                         )
-                    segmentation2 = np.array([dic[x] if x >=0 else -1 for x in segmentation2])
+                    segmentation2 = np.array([dic[x] if x >= 0 else -1 for x in segmentation2])
 
                 elif s == -1:
                     segmentation2 = np.array([-1]*data.shape[0])
@@ -380,7 +380,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             for i in partition.index:
                 segmentation.append(dic[i])
             segmentation = np.array(segmentation)
-            
+            logging.info('{} {}: segmentation max min'.format(segmentation.min(),segmentation.max()))
             #segmentation = QTClustering(max_radius=50, metric='euclidean', min_cluster_size=10, verbose=False).fit_predict(cl_molecules_xy)
             return segmentation
             
