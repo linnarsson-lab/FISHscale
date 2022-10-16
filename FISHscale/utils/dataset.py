@@ -344,47 +344,34 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             indexes, resegmentation = [],[]
             count = 0
             for s, data in partition.groupby('tmp_sement'):
-                #print('label',s)
-                #if data.shape[0] > :
                 p = data.loc[:,['x','y']].values
                 A= p.max(axis=0) - p.min(axis=0)
                 A = np.abs(A)
                 if np.max(A) > 75 and s > -1:   
                     logging.info('{}: runningQTC'.format(s))
                     #segmentation2 = QTClustering(max_radius=45, metric='euclidean', min_cluster_size=12, verbose=False).fit_predict(data.loc[:,['x','y']].values).astype(np.float32)
-                    segmentation2 = AgglomerativeClustering(n_clusters=None,affinity='euclidean',linkage='ward',distance_threshold=70).fit_predict(p)
-                    segmentation2 = np.array([x if (segmentation2 == x).sum() > 10 else -1 for x in segmentation2])
+                    segmentation2 = AgglomerativeClustering(n_clusters=None,affinity='euclidean',linkage='ward',distance_threshold=70).fit_predict(p).astype(np.float32)
+                    segmentation2 = np.array([x if (segmentation2 == x).sum() > 10 and x > -1 else -1 for x in segmentation2])
                     dic = dict(
                         zip(
                             np.unique(segmentation2), 
                             np.arange(np.unique(segmentation2).shape[0]), 
                             )
                         )
-                    segmentation2 = np.array([dic[x] for x in segmentation2])
-                    segmentation2 = np.array([x if (segmentation2 == x).sum() > 10 else -1 for x in segmentation2])
+                    segmentation2 = np.array([dic[x] if x >=0 else -1 for x in segmentation2])
 
-                    #segmentation_outlier = DBSCAN(eps=25,min_samples=12).fit_predict(data.loc[:,['x','y']].values).astype(np.float32)
-                    '''new_s = []
-                    for s2, outlier in zip(segmentation2,segmentation_outlier):
-                        if outlier == -1:
-                            new_s.append(-1)
-                        else:
-                            new_s.append(s2)
-                    segmentation2 = np.array(new_s)'''
-
-                    #print('QT', segmentation2.max(), segmentation2)
                 elif s == -1:
                     segmentation2 = np.array([-1]*data.shape[0])
                 else:
                     segmentation2 = np.array([count]*data.shape[0])
 
                 #print('s2',segmentation2.max())
-                counts = [x+count if x >= 0 else x for x in segmentation2] + [0]
-                counts = np.max(np.array(counts))
-                segmentation2 = np.array([x+counts if x >= 0 else x for x in segmentation2]) 
+                #counts = [x+count if x >= 0 else x for x in segmentation2] + [0]
+                #counts = np.max([np.max(segmentation2) ,0])
+                segmentation2 = np.array([x+count if x >= 0 else x for x in segmentation2]) 
                 resegmentation += segmentation2.tolist()
                 indexes += data.index.values.tolist()
-                count += np.max(segmentation2) + 1
+                count += np.max(np.array(resegmentation)) + 1
                 #print('count',count)
 
             dic = dict(zip(indexes, resegmentation))
