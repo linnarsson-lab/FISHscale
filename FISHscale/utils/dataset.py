@@ -347,11 +347,11 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 p = data.loc[:,['x','y']].values
                 A= p.max(axis=0) - p.min(axis=0)
                 A = np.abs(A)
-                if np.max(A) > 75 and s > -1:   
-                    logging.info('{}: runningQTC'.format(s))
+                #print('s',s,np.max(A))
+                if np.max(A) > 50*self.pixel_size.magnitude:  
                     #segmentation2 = QTClustering(max_radius=45, metric='euclidean', min_cluster_size=12, verbose=False).fit_predict(data.loc[:,['x','y']].values).astype(np.float32)
-                    segmentation2 = AgglomerativeClustering(n_clusters=None,affinity='euclidean',linkage='ward',distance_threshold=70).fit_predict(p).astype(np.float32)
-                    segmentation2 = np.array([x if (segmentation2 == x).sum() > 10 and x > -1 else -1 for x in segmentation2])
+                    segmentation2 = AgglomerativeClustering(n_clusters=None,affinity='euclidean',linkage='ward',distance_threshold=50*self.pixel_size.magnitude).fit_predict(p).astype(np.int64)
+                    segmentation2 = np.array([x if (segmentation2 == x).sum() > 10 and x > -1 else -1 for x in segmentation2]).astype(np.int64)
                     dic = dict(
                         zip(
                             np.unique(segmentation2), 
@@ -360,27 +360,26 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                         )
                     segmentation2 = np.array([dic[x] if x >=0 else -1 for x in segmentation2])
 
-                elif s == -1:
-                    segmentation2 = np.array([-1]*data.shape[0])
-                else:
-                    segmentation2 = np.array([count]*data.shape[0])
+                #elif s == -1 or s == 0:
+                #    segmentation2 = np.array([-1]*data.shape[0])
+                    #print('-1',segmentation2)
 
-                #print('s2',segmentation2.max())
-                #counts = [x+count if x >= 0 else x for x in segmentation2] + [0]
-                #counts = np.max([np.max(segmentation2) ,0])
-                segmentation2 = np.array([x+count if x >= 0 else x for x in segmentation2]) 
+                else:
+                    print(s,'else')
+                    segmentation2 = np.array([1]*data.shape[0])
+
+                segmentation2 = np.array([x+count if x >= 0 else -1 for x in segmentation2]) 
                 resegmentation += segmentation2.tolist()
                 indexes += data.index.values.tolist()
-                count += np.max(np.array(resegmentation)) + 1
-                #print('count',count)
+                count = np.max(np.array(resegmentation)) + 1
+                logging.info('{} {} segmentation2'.format(segmentation2.min(), segmentation2.max()))
 
             dic = dict(zip(indexes, resegmentation))
             segmentation = []
             for i in partition.index:
                 segmentation.append(dic[i])
             segmentation = np.array(segmentation)
-            
-            #segmentation = QTClustering(max_radius=50, metric='euclidean', min_cluster_size=10, verbose=False).fit_predict(cl_molecules_xy)
+            logging.info('{} {} seg'.format(segmentation.min(), segmentation.max()))
             return segmentation
             
 
