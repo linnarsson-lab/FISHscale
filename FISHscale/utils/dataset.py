@@ -360,6 +360,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                         )
                     segmentation2 = np.array([dic[x] if x >= 0 else -1 for x in segmentation2])
 
+                    logging.info('{} {}: max min label S2'.format(segmentation2.max(), segmentation2.min()))
                 elif s == -1:
                     segmentation2 = np.array([-1]*data.shape[0])
                 else:
