@@ -497,7 +497,7 @@ class GraphPlotting:
             self.data.add_dask_attribute('Clusters',new_labels.astype('str'),include_genes=True)
 
             from sklearn.cluster import DBSCAN
-            db = DBSCAN(eps=eps,min_samples=min_samples)
+            db = DBSCAN(eps=eps*self.data.pixel_size.magnitude,min_samples=min_samples)
             self.data.segment('Clusters',save_to=os.path.join(self.folder),func=db)
             gc.collect()
 

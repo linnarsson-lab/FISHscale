@@ -347,11 +347,11 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 p = data.loc[:,['x','y']].values
                 A= p.max(axis=0) - p.min(axis=0)
                 A = np.abs(A)
-                if np.max(A) > 75 and s > -1:   
-                    logging.info('{}: runningQTC'.format(s))
+                #print('s',s,np.max(A))
+                if np.max(A) > 50*self.pixel_size.magnitude:  
                     #segmentation2 = QTClustering(max_radius=45, metric='euclidean', min_cluster_size=12, verbose=False).fit_predict(data.loc[:,['x','y']].values).astype(np.float32)
-                    segmentation2 = AgglomerativeClustering(n_clusters=None,affinity='euclidean',linkage='ward',distance_threshold=70).fit_predict(p).astype(np.int64)
-                    segmentation2 = np.array([x if (segmentation2 == x).sum() > 10 and x > -1 else -1 for x in segmentation2])
+                    segmentation2 = AgglomerativeClustering(n_clusters=None,affinity='euclidean',linkage='ward',distance_threshold=50*self.pixel_size.magnitude).fit_predict(p).astype(np.int64)
+                    segmentation2 = np.array([x if (segmentation2 == x).sum() > 10 and x > -1 else -1 for x in segmentation2]).astype(np.int64)
                     dic = dict(
                         zip(
                             np.unique(segmentation2), 
@@ -360,29 +360,21 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                         )
                     segmentation2 = np.array([dic[x] if x >= 0 else -1 for x in segmentation2])
 
-                    logging.info('{} {}: max min label S2'.format(segmentation2.max(), segmentation2.min()))
-                elif s == -1:
-                    segmentation2 = np.array([-1]*data.shape[0])
                 else:
-                    segmentation2 = np.array([count]*data.shape[0])
+                    print(s,'else')
+                    segmentation2 = np.array([0]*data.shape[0])
 
-                #print('s2',segmentation2.max())
-                #counts = [x+count if x >= 0 else x for x in segmentation2] + [0]
-                #counts = np.max([np.max(segmentation2) ,0])
-                segmentation2 = np.array([x+count if x >= 0 else x for x in segmentation2]) 
+                segmentation2 = np.array([x+count if x >= 0 else -1 for x in segmentation2]) 
                 resegmentation += segmentation2.tolist()
                 indexes += data.index.values.tolist()
                 count = np.max(np.array(resegmentation)) + 1
-                #print('count',count)
-                logging.info('{}: max label'.format(count))
 
             dic = dict(zip(indexes, resegmentation))
             segmentation = []
             for i in partition.index:
                 segmentation.append(dic[i])
             segmentation = np.array(segmentation)
-            logging.info('{} {}: segmentation max min'.format(segmentation.min(),segmentation.max()))
-            #segmentation = QTClustering(max_radius=50, metric='euclidean', min_cluster_size=10, verbose=False).fit_predict(cl_molecules_xy)
+            logging.info('{} {} seg'.format(segmentation.min(), segmentation.max()))
             return segmentation
             
 
@@ -411,11 +403,10 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             s = segmentation(partition)
             dic = dict(
                         zip(
-                            np.unique(s), 
-                            np.arange(np.unique(s).shape[0]), 
+                            np.unique(np.array([-1]+s.tolist())), 
+                            [-1]+np.arange(np.unique(s).shape[0]).tolist(), 
                             )
                         )
-
             labels = np.array([dic[x]+count if x >= 0 else x for x in s]) #,partition.index.values.compute()
             partition['Segmentation'] = labels
             partition.to_parquet(path.join(save_to,'Segmentation','{}.parquet'.format(x)))
@@ -428,7 +419,8 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                     cell = part[1]
                     dblabel = cell.Segmentation.values[0]
                     mat = get_counts(cell.g.values,dblabel)
-                    if mat.sum() > 10 and mat.sum() < 500 and (mat > 0).sum() > 2: 
+                    max_dist = np.max(np.abs(cell.x.values.max(axis=0) - cell.y.values.min(axis=0)))
+                    if mat.sum() > 10 and mat.sum() < 500 and (mat > 0).sum() > 2 and max_dist <= 75*self.pixel_size.magnitude: 
                         centroid = cell.x.values.mean().astype('float32'),cell.y.values.mean().astype('float32'),
                         cl= cell.Clusters.values[0]
                         try:
