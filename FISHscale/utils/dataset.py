@@ -384,7 +384,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 segmentation2 = np.array([x+counts if x >= 0 else x for x in segmentation2]) 
                 resegmentation += segmentation2.tolist()
                 indexes += data.index.values.tolist()
-                count += np.unique(segmentation2).shape[0]+1
+                count += np.max(segmentation2) + 1
                 #print('count',count)
 
             dic = dict(zip(indexes, resegmentation))
@@ -392,7 +392,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             for i in partition.index:
                 segmentation.append(dic[i])
             segmentation = np.array(segmentation)
-                
+            
             #segmentation = QTClustering(max_radius=50, metric='euclidean', min_cluster_size=10, verbose=False).fit_predict(cl_molecules_xy)
             return segmentation
             
