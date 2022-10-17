@@ -374,7 +374,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 segmentation2 = np.array([x+count if x >= 0 else -1 for x in segmentation2]) 
                 resegmentation += segmentation2.tolist()
                 indexes += data.index.values.tolist()
-                count = np.max(np.array(resegmentation)) + 1
+                count = np.max(np.array(resegmentation)) + 2
 
             dic = dict(zip(indexes, resegmentation))
             segmentation = []
