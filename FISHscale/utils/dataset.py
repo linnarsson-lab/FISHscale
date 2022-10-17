@@ -330,6 +330,12 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             column_name (str, optional): [description]. Defaults to 'cell'.
             cutoff (int,optional): cells with number of dots above this threshold will be removed and -1 passed to background dots
         """        
+        def _distance(data):
+            p = data.loc[:,['x','y']].values
+            A= p.max(axis=0) - p.min(axis=0)
+            A = np.abs(A)
+            return np.max(A)
+
         def segmentation(partition):
 
             cl_molecules_xy = partition.loc[:,['x','y']].values
@@ -348,15 +354,17 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 A= p.max(axis=0) - p.min(axis=0)
                 A = np.abs(A)
                 #print('s',s,np.max(A))
-                if np.max(A) > 50*self.pixel_size.magnitude:  
+                if np.max(A) > 20*self.pixel_size.magnitude:  
                     #segmentation2 = QTClustering(max_radius=45, metric='euclidean', min_cluster_size=12, verbose=False).fit_predict(data.loc[:,['x','y']].values).astype(np.float32)
-                    segmentation2 = AgglomerativeClustering(n_clusters=None,affinity='euclidean',linkage='ward',distance_threshold=50*self.pixel_size.magnitude).fit_predict(p).astype(np.int64)
+                    segmentation2 = AgglomerativeClustering(n_clusters=None,affinity='euclidean',linkage='ward',distance_threshold=25*self.pixel_size.magnitude).fit_predict(p).astype(np.int64)
                     segmentation_ = []
                     for x in segmentation2:
                         if (segmentation2 == x).sum() > 10 and x > -1:
                             segmentation_.append(x)
+                        elif (segmentation2 == x).sum() <= 10  and x >-1:
+                            segmentation_.append(-1)
                         else:
-                            segmentation.append(-1)
+                            segmentation_.append(-1)
 
                     segmentation2 = np.array(segmentation_).astype(np.int64)
                     '''dic = dict(
