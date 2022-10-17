@@ -354,14 +354,14 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 A= p.max(axis=0) - p.min(axis=0)
                 A = np.abs(A)
                 #print('s',s,np.max(A))
-                if np.max(A) > 20*self.pixel_size.magnitude:  
+                if np.max(A) > 40*self.pixel_size.magnitude:  
                     #segmentation2 = QTClustering(max_radius=45, metric='euclidean', min_cluster_size=12, verbose=False).fit_predict(data.loc[:,['x','y']].values).astype(np.float32)
-                    segmentation2 = AgglomerativeClustering(n_clusters=None,affinity='euclidean',linkage='ward',distance_threshold=25*self.pixel_size.magnitude).fit_predict(p).astype(np.int64)
+                    segmentation2 = AgglomerativeClustering(n_clusters=None,affinity='euclidean',linkage='ward',distance_threshold=40*self.pixel_size.magnitude).fit_predict(p).astype(np.int64)
                     segmentation_ = []
                     for x in segmentation2:
-                        if (segmentation2 == x).sum() > 10 and x > -1:
+                        if (segmentation2 == x).sum() >= 10 and x > -1:
                             segmentation_.append(x)
-                        elif (segmentation2 == x).sum() <= 10  and x >-1:
+                        elif (segmentation2 == x).sum() < 10  and x >=-1:
                             segmentation_.append(-1)
                         else:
                             segmentation_.append(-1)
@@ -435,7 +435,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                     dblabel = cell.Segmentation.values[0]
                     mat = get_counts(cell.g.values,dblabel)
                     max_dist = np.max(np.abs(cell.x.values.max(axis=0) - cell.y.values.min(axis=0)))
-                    if mat.sum() > 10 and mat.sum() < 500 and (mat > 0).sum() > 2 and max_dist <= 75*self.pixel_size.magnitude: 
+                    if mat.sum() > 10 and mat.sum() < 500 and (mat > 0).sum() > 2 and max_dist <= 50*self.pixel_size.magnitude: 
                         centroid = cell.x.values.mean().astype('float32'),cell.y.values.mean().astype('float32'),
                         cl= cell.Clusters.values[0]
                         try:
