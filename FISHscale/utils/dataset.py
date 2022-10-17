@@ -1,6 +1,6 @@
 from multiprocessing import cpu_count
 from os import path, makedirs, environ
-from re import L
+from re import L, X
 environ['NUMEXPR_MAX_THREADS'] = str(cpu_count())
 from typing import Union, Optional
 import pandas as pd
@@ -351,14 +351,21 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 if np.max(A) > 50*self.pixel_size.magnitude:  
                     #segmentation2 = QTClustering(max_radius=45, metric='euclidean', min_cluster_size=12, verbose=False).fit_predict(data.loc[:,['x','y']].values).astype(np.float32)
                     segmentation2 = AgglomerativeClustering(n_clusters=None,affinity='euclidean',linkage='ward',distance_threshold=50*self.pixel_size.magnitude).fit_predict(p).astype(np.int64)
-                    segmentation2 = np.array([x if (segmentation2 == x).sum() > 10 and x > -1 else -1 for x in segmentation2]).astype(np.int64)
-                    dic = dict(
+                    segmentation_ = []
+                    for x in segmentation2:
+                        if (segmentation2 == x).sum() > 10 and x > -1:
+                            segmentation_.append(x)
+                        else:
+                            segmentation.append(-1)
+
+                    segmentation2 = np.array(segmentation_).astype(np.int64)
+                    '''dic = dict(
                         zip(
                             np.unique(segmentation2), 
                             np.arange(np.unique(segmentation2).shape[0]), 
                             )
                         )
-                    segmentation2 = np.array([dic[x] if x >= 0 else -1 for x in segmentation2])
+                    segmentation2 = np.array([dic[x] if x >= 0 else -1 for x in segmentation2])'''
 
                 else:
                     print(s,'else')
