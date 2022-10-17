@@ -416,13 +416,13 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         for x in trange(self.dask_attrs[label_column].npartitions - 1):
             partition = self.dask_attrs[label_column].get_partition(x).compute()
             s = segmentation(partition)
-            dic = dict(
+            '''dic = dict(
                         zip(
                             np.unique(np.array([-1]+s.tolist())), 
                             [-1]+np.arange(np.unique(s).shape[0]).tolist(), 
                             )
-                        )
-            labels = np.array([dic[x]+count if x >= 0 else x for x in s]) #,partition.index.values.compute()
+                        )'''
+            labels = np.array([x+count if x >= 0 else x for x in s]) #,partition.index.values.compute()
             partition['Segmentation'] = labels
             partition.to_parquet(path.join(save_to,'Segmentation','{}.parquet'.format(x)))
             labels_segmentation += labels.tolist()
