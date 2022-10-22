@@ -359,7 +359,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                     segmentation2 = AgglomerativeClustering(n_clusters=None,affinity='euclidean',linkage='ward',distance_threshold=40*self.pixel_size.magnitude).fit_predict(p).astype(np.int64)
                     segmentation_ = []
                     for x in segmentation2:
-                        if (segmentation2 == x).sum() >= 10 and x > -1:
+                        if (segmentation2 == x).sum() >= 10 and x > -1 and _distance(data[segmentation2 ==x]):
                             segmentation_.append(x)
                         elif (segmentation2 == x).sum() < 10  and x >=-1:
                             segmentation_.append(-1)
