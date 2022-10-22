@@ -337,7 +337,6 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             return np.max(A)
 
         def segmentation(partition):
-
             cl_molecules_xy = partition.loc[:,['x','y']].values
             if type(adjust_n_clusters) != type(None):
                 if hasattr(func,'n_clusters'):
@@ -345,30 +344,23 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 elif hasattr(func,'n_components'):
                     func.n_components = int(cl_molecules_xy.shape[0]/adjust_n_clusters)+1
             segmentation = func.fit_predict(cl_molecules_xy)
-            #print(segmentation.max())
             partition['tmp_sement'] = segmentation.astype(np.int64)
             indexes, resegmentation = [],[]
             count = 0
             for s, data in partition.groupby('tmp_sement'):
-                #print('s',s)
                 p = data.loc[:,['x','y']].values
                 A= p.max(axis=0) - p.min(axis=0)
                 A = np.abs(A)
-                #print('s',s,np.max(A))
                 if np.max(A) > 40*self.pixel_size.magnitude:  
-                    #segmentation2 = QTClustering(max_radius=45, metric='euclidean', min_cluster_size=12, verbose=False).fit_predict(data.loc[:,['x','y']].values).astype(np.float32)
                     segmentation2 = AgglomerativeClustering(n_clusters=None,affinity='euclidean',linkage='ward',distance_threshold=40*self.pixel_size.magnitude).fit_predict(p).astype(np.int64)
                     segmentation_ = []
                     for x in segmentation2:
                         if (segmentation2 == x).sum() >= 10 and x > -1:
                             segmentation_.append(x)
                         elif (segmentation2 == x).sum() < 10  and x >=-1:
-                            #print('few',x)
                             segmentation_.append(-1)
                         else:
-
                             segmentation_.append(-1)
-
                     segmentation2 = np.array(segmentation_)#.astype(np.int64)
 
                 else:
@@ -383,11 +375,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                         [-1]+np.arange(np.unique(segmentation2).shape[0]).tolist(), 
                         )
                     )
-                
                 segmentation2 = np.array([dic[x]+count if x >= 0 else -1 for x in segmentation2])
-                
-                #segmentation2 = np.array([x+count if x >= 0 else -1 for x in segmentation2]) 
-                #print(segmentation2)
                 resegmentation += segmentation2.tolist()
                 indexes += data.index.values.tolist()
                 count = np.max(np.array(resegmentation)) + 2
@@ -397,10 +385,8 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             for i in partition.index:
                 segmentation.append(dic[i])
             segmentation = np.array(segmentation)
-            logging.info('{} {} seg'.format(segmentation.min(), segmentation.max()))
             return segmentation
             
-
         #from shapely import geometry
         def get_counts(cell_i_g,dblabel):
             gene, cell =  np.unique(cell_i_g,return_counts=True)
@@ -424,14 +410,15 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         for x in trange(self.dask_attrs[label_column].npartitions - 1):
             partition = self.dask_attrs[label_column].get_partition(x).compute()
             s = segmentation(partition)
-            '''dic = dict(
+            dic = dict(
                         zip(
                             np.unique(np.array([-1]+s.tolist())), 
                             [-1]+np.arange(np.unique(s).shape[0]).tolist(), 
                             )
-                        )'''
+                        )
 
-            labels = np.array([x+count if x >= 0 and (s == x).sum() >= 10 else -1 for x in s]) #,partition.index.values.compute()
+            labels = np.array([dic[x]+count if x >= 0 and (s == x).sum() >= 10 else -1 for x in s]) #,partition.index.values.compute()
+            logging.info('Segmentation of label {}. Min label: {} and max label: {}'.format(labels.min(),labels.max()))
             partition['Segmentation'] = labels
             partition.to_parquet(path.join(save_to,'Segmentation','{}.parquet'.format(x)))
             labels_segmentation += labels.tolist()
