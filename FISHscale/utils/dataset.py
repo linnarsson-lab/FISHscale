@@ -350,6 +350,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             indexes, resegmentation = [],[]
             count = 0
             for s, data in partition.groupby('tmp_sement'):
+                #print('s',s)
                 p = data.loc[:,['x','y']].values
                 A= p.max(axis=0) - p.min(axis=0)
                 A = np.abs(A)
@@ -362,24 +363,31 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                         if (segmentation2 == x).sum() >= 10 and x > -1:
                             segmentation_.append(x)
                         elif (segmentation2 == x).sum() < 10  and x >=-1:
+                            #print('few',x)
                             segmentation_.append(-1)
                         else:
+
                             segmentation_.append(-1)
 
-                    segmentation2 = np.array(segmentation_).astype(np.int64)
-                    '''dic = dict(
-                        zip(
-                            np.unique(segmentation2), 
-                            np.arange(np.unique(segmentation2).shape[0]), 
-                            )
-                        )
-                    segmentation2 = np.array([dic[x] if x >= 0 else -1 for x in segmentation2])'''
+                    segmentation2 = np.array(segmentation_)#.astype(np.int64)
 
                 else:
-                    print(s,'else')
-                    segmentation2 = np.array([0]*data.shape[0])
+                    if data.shape[0] >=10:
+                        segmentation2 = np.array([0]*data.shape[0])
+                    else:
+                        segmentation2 = np.array([-1]*data.shape[0])
 
-                segmentation2 = np.array([x+count if x >= 0 else -1 for x in segmentation2]) 
+                dic = dict(
+                    zip(
+                        np.unique(np.array([-1]+segmentation2.tolist())), 
+                        [-1]+np.arange(np.unique(segmentation2).shape[0]).tolist(), 
+                        )
+                    )
+                
+                segmentation2 = np.array([dic[x]+count if x >= 0 else -1 for x in segmentation2])
+                
+                #segmentation2 = np.array([x+count if x >= 0 else -1 for x in segmentation2]) 
+                #print(segmentation2)
                 resegmentation += segmentation2.tolist()
                 indexes += data.index.values.tolist()
                 count = np.max(np.array(resegmentation)) + 2
@@ -427,7 +435,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             partition['Segmentation'] = labels
             partition.to_parquet(path.join(save_to,'Segmentation','{}.parquet'.format(x)))
             labels_segmentation += labels.tolist()
-            count =  np.max(np.array(labels_segmentation)) +1
+            count =  np.max(np.array(labels_segmentation)) +2
             partition = partition.groupby('Segmentation')
 
             for part in partition:
