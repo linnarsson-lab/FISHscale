@@ -308,7 +308,7 @@ class GraphUtils(object):
 
 
 class GraphPlotting:
-    def analyze(self,random_n=250000, n_clusters=100, eps=20, min_samples=10,pci_file=None):
+    def analyze(self,random_n=250000, n_clusters=100, eps=25, min_samples=10,pci_file=None):
         import umap
         import matplotlib.pyplot as plt
 
@@ -455,7 +455,7 @@ class GraphPlotting:
 
             random_sample_train = np.random.choice(
                                     len(self.latent_unlabelled.detach().numpy()), 
-                                    np.min([len(self.latent_unlabelled),500000]), 
+                                    np.min([len(self.latent_unlabelled),50000]), 
                                     replace=False)
             training_latents =self.latent_unlabelled.detach().numpy()[random_sample_train,:]
             adata = sc.AnnData(X=training_latents)

@@ -356,7 +356,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 A= p.max(axis=0) - p.min(axis=0)
                 A = np.abs(A)
                 if np.max(A) > 75:#*self.pixel_size.magnitud
-                    segmentation2 = AgglomerativeClustering(n_clusters=None,affinity='euclidean',linkage='ward',distance_threshold=50).fit_predict(p).astype(np.int64) #*self.pixel_size.magnitude
+                    segmentation2 = AgglomerativeClustering(n_clusters=None,affinity='euclidean',linkage='single',distance_threshold=50).fit_predict(p).astype(np.int64) #*self.pixel_size.magnitude
                     segmentation_ = []
                     for x in segmentation2:
                         if (segmentation2 == x).sum() >= 10 and x > -1 and _distance(data[segmentation2 ==x]):
