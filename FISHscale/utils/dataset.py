@@ -335,7 +335,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             A= p.max(axis=0) - p.min(axis=0)
             A = np.abs(A)
             max_dist =  np.max(A)
-            if max_dist <= 40*self.pixel_size.magnitude:
+            if max_dist <= 50: #*self.pixel_size.magnitude
                 return True
             else:
                 return False
@@ -355,8 +355,8 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 p = data.loc[:,['x','y']].values
                 A= p.max(axis=0) - p.min(axis=0)
                 A = np.abs(A)
-                if np.max(A) > 40*self.pixel_size.magnitude:  
-                    segmentation2 = AgglomerativeClustering(n_clusters=None,affinity='euclidean',linkage='ward',distance_threshold=40*self.pixel_size.magnitude).fit_predict(p).astype(np.int64)
+                if np.max(A) > 50:#*self.pixel_size.magnitud
+                    segmentation2 = AgglomerativeClustering(n_clusters=None,affinity='euclidean',linkage='ward',distance_threshold=50).fit_predict(p).astype(np.int64) #*self.pixel_size.magnitude
                     segmentation_ = []
                     for x in segmentation2:
                         if (segmentation2 == x).sum() >= 10 and x > -1 and _distance(data[segmentation2 ==x]):
@@ -443,7 +443,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                     dblabel = cell.Segmentation.values[0]
                     mat = get_counts(cell.g.values,dblabel)
                     max_dist = np.max(np.abs(cell.x.values.max(axis=0) - cell.y.values.min(axis=0)))
-                    if mat.sum() > 10 and mat.sum() < 500 and (mat > 0).sum() > 2 and max_dist <= 50*self.pixel_size.magnitude: 
+                    if mat.sum() > 10 and mat.sum() < 500 and (mat > 0).sum() > 2 and max_dist <= 50: #*self.pixel_size.magnitude
                         centroid = cell.x.values.mean().astype('float32'),cell.y.values.mean().astype('float32'),
                         cl= cell.Clusters.values[0]
                         try:
