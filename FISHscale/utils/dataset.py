@@ -334,7 +334,11 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             p = data.loc[:,['x','y']].values
             A= p.max(axis=0) - p.min(axis=0)
             A = np.abs(A)
-            return np.max(A)
+            max_dist =  np.max(A)
+            if max_dist <= 40*self.pixel_size.magnitude:
+                return True
+            else:
+                return False
 
         def segmentation(partition):
             cl_molecules_xy = partition.loc[:,['x','y']].values
