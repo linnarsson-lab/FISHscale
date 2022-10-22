@@ -418,6 +418,14 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                         )
 
             labels = np.array([dic[x]+count if x >= 0 and (s == x).sum() >= 10 else -1 for x in s]) #,partition.index.values.compute()
+            dic = dict(
+                        zip(
+                            np.unique(np.array([-1]+labels.tolist())), 
+                            [-1]+np.arange(np.unique(labels).shape[0]).tolist(), 
+                            )
+                        )
+            labels = np.array([dic[x]+count if x >= 0 and (labels == x).sum() >= 10 else -1 for x in labels]) #,partition.index.values.compute()
+
             logging.info('Segmentation of label {}. Min label: {} and max label: {}'.format(x, labels.min(), labels.max()))
             partition['Segmentation'] = labels
             partition.to_parquet(path.join(save_to,'Segmentation','{}.parquet'.format(x)))
