@@ -356,7 +356,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 p = data.loc[:,['x','y']].values
                 A= p.max(axis=0) - p.min(axis=0)
                 A = np.abs(A)
-                logging.info('s {} {}'.format(s, np.max(A)))
+                #logging.info('s {} {}'.format(s, np.max(A)))
                 if np.max(A) > 75:#*self.pixel_size.magnitud
                     segmentation2 = AgglomerativeClustering(n_clusters=None,affinity='euclidean',linkage='single',distance_threshold=50).fit_predict(p).astype(np.int64) #*self.pixel_size.magnitude
                     segmentation_ = []
