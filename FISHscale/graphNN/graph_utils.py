@@ -455,7 +455,7 @@ class GraphPlotting:
 
             random_sample_train = np.random.choice(
                                     len(self.latent_unlabelled.detach().numpy()), 
-                                    np.min([len(self.latent_unlabelled),50000]), 
+                                    np.min([len(self.latent_unlabelled),500000]), 
                                     replace=False)
             training_latents =self.latent_unlabelled.detach().numpy()[random_sample_train,:]
             adata = sc.AnnData(X=training_latents)
