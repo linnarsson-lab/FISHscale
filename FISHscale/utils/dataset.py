@@ -430,7 +430,6 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                             )
                         )
             labels = np.array([dic[x]+count if x >= 0 and (s == x).sum() >= 10 else -1 for x in s]) #,partition.index.values.compute()
-
             '''
             dic = dict(
                         zip(
