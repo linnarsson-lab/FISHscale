@@ -335,7 +335,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             A= p.max(axis=0) - p.min(axis=0)
             A = np.abs(A)
             max_dist =  np.max(A)
-            if max_dist <= 50: #*self.pixel_size.magnitude
+            if max_dist <= 75: #*self.pixel_size.magnitude
                 return True
             else:
                 return False
@@ -350,11 +350,13 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             segmentation = func.fit_predict(cl_molecules_xy)
             partition['tmp_sement'] = segmentation.astype(np.int64)
             indexes, resegmentation = [],[]
+            resegmentation_data = []
             count = 0
             for s, data in partition.groupby('tmp_sement'):
                 p = data.loc[:,['x','y']].values
                 A= p.max(axis=0) - p.min(axis=0)
                 A = np.abs(A)
+                logging.info('s {} {}'.format(s, np.max(A)))
                 if np.max(A) > 75:#*self.pixel_size.magnitud
                     segmentation2 = AgglomerativeClustering(n_clusters=None,affinity='euclidean',linkage='single',distance_threshold=50).fit_predict(p).astype(np.int64) #*self.pixel_size.magnitude
                     segmentation_ = []
@@ -369,26 +371,32 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
 
                 else:
                     if data.shape[0] >=10:
-                        segmentation2 = np.array([0]*data.shape[0])
+                        segmentation2 = np.array([1]*data.shape[0])
                     else:
                         segmentation2 = np.array([-1]*data.shape[0])
 
+                '''
                 dic = dict(
                     zip(
                         np.unique(np.array([-1]+segmentation2.tolist())), 
                         [-1]+np.arange(np.unique(segmentation2).shape[0]).tolist(), 
                         )
                     )
-                segmentation2 = np.array([dic[x]+count if x >= 0 else -1 for x in segmentation2])
+                '''
+                segmentation2 = np.array([x+count if x >= 0 else -1 for x in segmentation2])
+                data['tmp_segment'] = segmentation2
                 resegmentation += segmentation2.tolist()
-                indexes += data.index.values.tolist()
                 count = np.max(np.array(resegmentation)) + 2
-
-            dic = dict(zip(indexes, resegmentation))
-            segmentation = []
-            for i in partition.index:
-                segmentation.append(dic[i])
-            segmentation = np.array(segmentation)
+                resegmentation_data.append(data)
+                #indexes += data.index.values.tolist()
+                
+            #dic = dict(zip(indexes, resegmentation))
+            #segmentation = []
+            #for i in partition.index:
+            #    segmentation.append(dic[i])
+            #segmentation = np.array(segmentation)
+            segmentation = pd.concat(resegmentation_data)
+            segmentation['Segmentation'] = segmentation['tmp_segment']
             return segmentation
             
         #from shapely import geometry
@@ -413,28 +421,29 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         logging.info('Segmentation V2')
         for x in trange(self.dask_attrs[label_column].npartitions - 1):
             partition = self.dask_attrs[label_column].get_partition(x).compute()
-            s = segmentation(partition)
+            partition = segmentation(partition)
+            s = partition.Segmentation.values
             dic = dict(
                         zip(
                             np.unique(np.array([-1]+s.tolist())), 
                             [-1]+np.arange(np.unique(s).shape[0]).tolist(), 
                             )
                         )
-
             labels = np.array([dic[x]+count if x >= 0 and (s == x).sum() >= 10 else -1 for x in s]) #,partition.index.values.compute()
+
+            '''
             dic = dict(
                         zip(
                             np.unique(np.array([-1]+labels.tolist())), 
                             [-1]+np.arange(np.unique(labels).shape[0]).tolist(), 
                             )
                         )
-            labels = np.array([dic[x]+count if x >= 0 and (labels == x).sum() >= 10 else -1 for x in labels]) #,partition.index.values.compute()
-
+            labels = np.array([dic[x]+count if x >= 0 and (labels == x).sum() >= 10 else -1 for x in labels])''' #,partition.index.values.compute()
             logging.info('Segmentation of label {}. Min label: {} and max label: {}'.format(x, labels.min(), labels.max()))
             partition['Segmentation'] = labels
             partition.to_parquet(path.join(save_to,'Segmentation','{}.parquet'.format(x)))
             labels_segmentation += labels.tolist()
-            count =  np.max(np.array(labels_segmentation)) +2
+            count =  np.max(np.array(labels_segmentation)) +1
             partition = partition.groupby('Segmentation')
 
             for part in partition:
