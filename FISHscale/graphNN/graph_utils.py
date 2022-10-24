@@ -308,7 +308,7 @@ class GraphUtils(object):
 
 
 class GraphPlotting:
-    def analyze(self,random_n=250000, n_clusters=100, eps=25, min_samples=10,pci_file=None):
+    def analyze(self,random_n=250000, n_clusters=100, eps=20, min_samples=10,pci_file=None):
         import umap
         import matplotlib.pyplot as plt
 
@@ -510,6 +510,15 @@ class GraphPlotting:
                 ds.ra['enrichment'] = r
 
                 dic = dict(zip(cell_unique_clusters, np.arange(cell_unique_clusters.shape[0])))
+                
+                '''dic2 = dict(
+                        zip(
+                            np.arange(self.clusters.max()),
+                            np.
+                            
+                        )
+                )'''
+
                 self.clusters = np.array([dic[i] if i in dic else -1 for i in self.clusters])
                 cell_clusters = np.array([dic[i] for i in clusters_])
                 ds.ca['Clusters'] = cell_clusters.astype('str')

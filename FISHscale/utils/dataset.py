@@ -317,7 +317,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         from shapely import geometry
         from scipy.spatial import distance
         from diameter_clustering import QTClustering, MaxDiameterClustering
-        from sklearn.cluster import DBSCAN, AgglomerativeClustering
+        from sklearn.cluster import DBSCAN, AgglomerativeClustering, OPTICS
 
         #from diameter_clustering import QTClustering
         
@@ -356,9 +356,10 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 p = data.loc[:,['x','y']].values
                 A= p.max(axis=0) - p.min(axis=0)
                 A = np.abs(A)
-                #logging.info('s {} {}'.format(s, np.max(A)))
-                if np.max(A) > 75:#*self.pixel_size.magnitud
-                    segmentation2 = AgglomerativeClustering(n_clusters=None,affinity='euclidean',linkage='ward',distance_threshold=50).fit_predict(p).astype(np.int64) #*self.pixel_size.magnitude
+
+                if np.max(A) > 35 and data.shape[0] >= 10:#*self.pixel_size.magnitud
+                    #segmentation2 = AgglomerativeClustering(n_clusters=None,affinity='euclidean',linkage='ward',distance_threshold=50).fit_predict(p).astype(np.int64) #*self.pixel_size.magnitude
+                    segmentation2 = OPTICS(min_samples=10,max_eps=40, metric='euclidean',cluster_method='dbscan',eps=20,n_jobs=-1).fit_predict(p).astype(np.int64) #*self.pixel_size.magnitude
                     segmentation_ = []
                     for x in segmentation2:
                         if (segmentation2 == x).sum() >= 10 and x > -1 and _distance(data[segmentation2 ==x]):
@@ -375,26 +376,12 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                     else:
                         segmentation2 = np.array([-1]*data.shape[0])
 
-                '''
-                dic = dict(
-                    zip(
-                        np.unique(np.array([-1]+segmentation2.tolist())), 
-                        [-1]+np.arange(np.unique(segmentation2).shape[0]).tolist(), 
-                        )
-                    )
-                '''
                 segmentation2 = np.array([x+count if x >= 0 else -1 for x in segmentation2])
                 data['tmp_segment'] = segmentation2
                 resegmentation += segmentation2.tolist()
                 count = np.max(np.array(resegmentation)) + 2
                 resegmentation_data.append(data)
-                #indexes += data.index.values.tolist()
-                
-            #dic = dict(zip(indexes, resegmentation))
-            #segmentation = []
-            #for i in partition.index:
-            #    segmentation.append(dic[i])
-            #segmentation = np.array(segmentation)
+
             segmentation = pd.concat(resegmentation_data)
             segmentation['Segmentation'] = segmentation['tmp_segment']
             return segmentation
