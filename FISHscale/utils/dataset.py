@@ -319,7 +319,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         from diameter_clustering import QTClustering, MaxDiameterClustering
         #from diameter_clustering.dist_matrix import compute_sparse_dist_matrix
         from sklearn.cluster import DBSCAN#, AgglomerativeClustering, OPTICS
-        #from hdbscan import HDBSCAN
+        from hdbscan import HDBSCAN
 
         #from diameter_clustering import QTClustering
         
@@ -368,27 +368,28 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                     segmentation2 = HDBSCAN(min_cluster_size=10,cluster_selection_epsilon=20,max_cluster_size=250,core_dist_n_jobs=1).fit_predict(p).astype(np.int64) #*self.pixel_size.magnitude
                     sub_max = segmentation2.max()
                     segmentation_ = []
-                    for x in segmentation2:
+                    for x in np.unique(segmentation2):
                         if (segmentation2 == x).sum() >= 10 and x > -1 and _distance(data[segmentation2 ==x]):
-                            segmentation_.append(x)
+                            pass
+                            #segmentation_.append(x)
                         
                         elif (segmentation2 == x).sum() >= 10 and x > -1 and _distance(data[segmentation2 ==x]) == False:
                             logging.info('QTClustering was required')
                             p2 = p[segmentation2 ==x,:]
-                            segmentation3= QTClustering(max_radius=22.5,min_cluster_size=10,metric='euclidean',verbose=False).fit_predict(p2).astype(np.int64) #*self.pixel_size.magnitude
+                            #segmentation3= QTClustering(max_radius=22.5,min_cluster_size=10,metric='euclidean',verbose=False).fit_predict(p2).astype(np.int64) #*self.pixel_size.magnitude
+                            segmentation3= MaxDiameterClustering(max_distance=35,metric='euclidean',verbose=False).fit_predict(p2).astype(np.int64) #*self.pixel_size.magnitude
                             segmentation3 = np.array([s3+sub_max if s3 >=0 else -1 for s3 in segmentation3])
                             segmentation2[np.where(segmentation2 == x)] = segmentation3
                             #sub_max = segmentation2.max()+1
 
                         #elif (segmentation2 == x).sum() < 10  and x >=-1:
                         #    segmentation_.append(-1)
-
                         else:
-                            segmentation_.append(-1)
+                            segmentation2[np.where(segmentation2 == x)] = -1
+                            #segmentation_.append(-1)
                         sub_max = segmentation2.max()+1
 
-                    segmentation2 = np.array(segmentation_)#.astype(np.int64)
-
+                    #segmentation2 = np.array(segmentation_)#.astype(np.int64)
                 else:
                     if data.shape[0] >=10:
                         segmentation2 = np.array([1]*data.shape[0])
@@ -436,7 +437,14 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                             [-1]+np.arange(np.unique(s).shape[0]).tolist(), 
                             )
                         )
-            labels = np.array([dic[x]+count if x >= 0 and (s == x).sum() >= 10 else -1 for x in s]) #,partition.index.values.compute()
+            s = np.array([dic[x] if x >= 0 and (s == x).sum() >= 10 else -1 for x in s]) 
+            dic = dict(
+                zip(
+                    np.unique(np.array([-1]+s.tolist())), 
+                    [-1]+np.arange(np.unique(s).shape[0]).tolist(), 
+                    )
+                )
+            labels = np.array([dic[x]+count if x >= 0 and (s == x).sum() >= 10 else -1 for x in s]) 
             logging.info('Segmentation of label {}. Min label: {} and max label: {}'.format(x, labels.min(), labels.max()))
             partition['Segmentation'] = labels
 
