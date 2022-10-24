@@ -445,13 +445,11 @@ class GraphPlotting:
             logging.info('Plots saved.')
 
         else:
-            from sklearn.cluster import MiniBatchKMeans
             import gc
             import scanpy as sc
             from sklearn.linear_model import SGDClassifier
             from sklearn.preprocessing import StandardScaler
             from sklearn.pipeline import make_pipeline
-            #import leidenalg as la
 
             random_sample_train = np.random.choice(
                                     len(self.latent_unlabelled.detach().numpy()), 

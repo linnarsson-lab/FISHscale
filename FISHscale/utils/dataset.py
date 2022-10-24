@@ -317,7 +317,9 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         from shapely import geometry
         from scipy.spatial import distance
         from diameter_clustering import QTClustering, MaxDiameterClustering
-        from sklearn.cluster import DBSCAN, AgglomerativeClustering, OPTICS
+        #from diameter_clustering.dist_matrix import compute_sparse_dist_matrix
+        from sklearn.cluster import DBSCAN#, AgglomerativeClustering, OPTICS
+        #from hdbscan import HDBSCAN
 
         #from diameter_clustering import QTClustering
         
@@ -352,14 +354,18 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             indexes, resegmentation = [],[]
             resegmentation_data = []
             count = 0
+            logging.info('DBSCAN done. Resegmentation started')
             for s, data in partition.groupby('tmp_sement'):
                 p = data.loc[:,['x','y']].values
                 A= p.max(axis=0) - p.min(axis=0)
                 A = np.abs(A)
 
-                if np.max(A) > 35 and data.shape[0] >= 10:#*self.pixel_size.magnitud
+                if np.max(A) > 45 and data.shape[0] >= 10:#*self.pixel_size.magnitud
                     #segmentation2 = AgglomerativeClustering(n_clusters=None,affinity='euclidean',linkage='ward',distance_threshold=50).fit_predict(p).astype(np.int64) #*self.pixel_size.magnitude
-                    segmentation2 = OPTICS(min_samples=10,max_eps=40, metric='euclidean',cluster_method='dbscan',eps=20,n_jobs=-1).fit_predict(p).astype(np.int64) #*self.pixel_size.magnitude
+                    #dist_matrix = compute_sparse_dist_matrix(p, metric='euclidean')
+                    segmentation2= QTClustering(max_radius=22.5,min_cluster_size=10,metric='euclidean',verbose=False).fit_predict(p).astype(np.int64) #*self.pixel_size.magnitude
+                    #segmentation2 = OPTICS(min_samples=10,max_eps=40, metric='euclidean',cluster_method='dbscan',eps=20,n_jobs=-1).fit_predict(p).astype(np.int64) #*self.pixel_size.magnitude
+                    #segmentation2 = HDBSCAN(min_cluster_size=10,cluster_selection_epsilon=20,max_cluster_size=250,core_dist_n_jobs=1).fit_predict(p).astype(np.int64) #*self.pixel_size.magnitude
                     segmentation_ = []
                     for x in segmentation2:
                         if (segmentation2 == x).sum() >= 10 and x > -1 and _distance(data[segmentation2 ==x]):
