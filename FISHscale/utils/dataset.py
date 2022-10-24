@@ -363,17 +363,30 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 if np.max(A) > 45 and data.shape[0] >= 10:#*self.pixel_size.magnitud
                     #segmentation2 = AgglomerativeClustering(n_clusters=None,affinity='euclidean',linkage='ward',distance_threshold=50).fit_predict(p).astype(np.int64) #*self.pixel_size.magnitude
                     #dist_matrix = compute_sparse_dist_matrix(p, metric='euclidean')
-                    segmentation2= QTClustering(max_radius=22.5,min_cluster_size=10,metric='euclidean',verbose=False).fit_predict(p).astype(np.int64) #*self.pixel_size.magnitude
+                    #segmentation2= QTClustering(max_radius=22.5,min_cluster_size=10,metric='euclidean',verbose=False).fit_predict(p).astype(np.int64) #*self.pixel_size.magnitude
                     #segmentation2 = OPTICS(min_samples=10,max_eps=40, metric='euclidean',cluster_method='dbscan',eps=20,n_jobs=-1).fit_predict(p).astype(np.int64) #*self.pixel_size.magnitude
-                    #segmentation2 = HDBSCAN(min_cluster_size=10,cluster_selection_epsilon=20,max_cluster_size=250,core_dist_n_jobs=1).fit_predict(p).astype(np.int64) #*self.pixel_size.magnitude
+                    segmentation2 = HDBSCAN(min_cluster_size=10,cluster_selection_epsilon=20,max_cluster_size=250,core_dist_n_jobs=1).fit_predict(p).astype(np.int64) #*self.pixel_size.magnitude
+                    sub_max = segmentation2.max()
                     segmentation_ = []
                     for x in segmentation2:
                         if (segmentation2 == x).sum() >= 10 and x > -1 and _distance(data[segmentation2 ==x]):
                             segmentation_.append(x)
-                        elif (segmentation2 == x).sum() < 10  and x >=-1:
-                            segmentation_.append(-1)
+                        
+                        elif (segmentation2 == x).sum() >= 10 and x > -1 and _distance(data[segmentation2 ==x]) == False:
+                            logging.info('QTClustering was required')
+                            p2 = p[segmentation2 ==x,:]
+                            segmentation3= QTClustering(max_radius=22.5,min_cluster_size=10,metric='euclidean',verbose=False).fit_predict(p2).astype(np.int64) #*self.pixel_size.magnitude
+                            segmentation3 = np.array([s3+sub_max if s3 >=0 else -1 for s3 in segmentation3])
+                            segmentation2[np.where(segmentation2 == x)] = segmentation3
+                            #sub_max = segmentation2.max()+1
+
+                        #elif (segmentation2 == x).sum() < 10  and x >=-1:
+                        #    segmentation_.append(-1)
+
                         else:
                             segmentation_.append(-1)
+                        sub_max = segmentation2.max()+1
+
                     segmentation2 = np.array(segmentation_)#.astype(np.int64)
 
                 else:
