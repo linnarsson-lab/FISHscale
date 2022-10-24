@@ -510,15 +510,6 @@ class GraphPlotting:
                 ds.ra['enrichment'] = r
 
                 dic = dict(zip(cell_unique_clusters, np.arange(cell_unique_clusters.shape[0])))
-                
-                '''dic2 = dict(
-                        zip(
-                            np.arange(self.clusters.max()),
-                            np.
-                            
-                        )
-                )'''
-
                 self.clusters = np.array([dic[i] if i in dic else -1 for i in self.clusters])
                 cell_clusters = np.array([dic[i] for i in clusters_])
                 ds.ca['Clusters'] = cell_clusters.astype('str')

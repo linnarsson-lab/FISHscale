@@ -402,6 +402,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             makedirs(path.join(save_to,'Segmentation'))
 
         count = 0
+        partition_count = 0
         matrices, labels_list, centroids, polygons, clusters = [], [], [], [], []
         segmentation_results = []
         labels_segmentation = []
@@ -417,39 +418,35 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                             )
                         )
             labels = np.array([dic[x]+count if x >= 0 and (s == x).sum() >= 10 else -1 for x in s]) #,partition.index.values.compute()
-            '''
-            dic = dict(
-                        zip(
-                            np.unique(np.array([-1]+labels.tolist())), 
-                            [-1]+np.arange(np.unique(labels).shape[0]).tolist(), 
-                            )
-                        )
-            labels = np.array([dic[x]+count if x >= 0 and (labels == x).sum() >= 10 else -1 for x in labels])''' #,partition.index.values.compute()
             logging.info('Segmentation of label {}. Min label: {} and max label: {}'.format(x, labels.min(), labels.max()))
             partition['Segmentation'] = labels
-            partition.to_parquet(path.join(save_to,'Segmentation','{}.parquet'.format(x)))
-            labels_segmentation += labels.tolist()
-            count =  np.max(np.array(labels_segmentation)) +1
-            partition = partition.groupby('Segmentation')
 
-            for part in partition:
-                if part[0] != type(None) and part[0] > -1:
-                    cell = part[1]
-                    dblabel = cell.Segmentation.values[0]
-                    mat = get_counts(cell.g.values,dblabel)
-                    max_dist = np.max(np.abs(cell.x.values.max(axis=0) - cell.y.values.min(axis=0)))
-                    if mat.sum() > 10 and mat.sum() < 500 and (mat > 0).sum() > 2 and max_dist <= 75: #*self.pixel_size.magnitude
-                        centroid = cell.x.values.mean().astype('float32'),cell.y.values.mean().astype('float32'),
-                        cl= cell.Clusters.values[0]
-                        try:
-                            pol = np.array(list(geometry.Polygon(geometry.MultiPoint(np.array([cell.x.values,cell.y.values]).T).convex_hull).exterior.coords))
-                        except:
-                            pol = np.array([cell.x.values,cell.y.values])
-                        polygons.append(pol)
-                        matrices.append(mat)
-                        labels_list.append(dblabel)
-                        centroids.append(np.array(centroid))
-                        clusters.append(cl)
+            if labels.max() >= 0:
+                partition[label_column] = np.ones_like(partition['Segmentation'].values)*partition_count
+                partition.to_parquet(path.join(save_to,'Segmentation','{}.parquet'.format(partition_count)))
+                partition_count += 1
+                labels_segmentation += labels.tolist()
+                count =  np.max(np.array(labels_segmentation)) +1
+                partition = partition.groupby('Segmentation')
+
+                for part in partition:
+                    if part[0] != type(None) and part[0] > -1:
+                        cell = part[1]
+                        dblabel = cell.Segmentation.values[0]
+                        mat = get_counts(cell.g.values,dblabel)
+                        max_dist = np.max(np.abs(cell.x.values.max(axis=0) - cell.y.values.min(axis=0)))
+                        if mat.sum() > 10 and mat.sum() < 500 and (mat > 0).sum() > 2 and max_dist <= 75: #*self.pixel_size.magnitude
+                            centroid = cell.x.values.mean().astype('float32'),cell.y.values.mean().astype('float32'),
+                            cl= cell.Clusters.values[0]
+                            try:
+                                pol = np.array(list(geometry.Polygon(geometry.MultiPoint(np.array([cell.x.values,cell.y.values]).T).convex_hull).exterior.coords))
+                            except:
+                                pol = np.array([cell.x.values,cell.y.values])
+                            polygons.append(pol)
+                            matrices.append(mat)
+                            labels_list.append(dblabel)
+                            centroids.append(np.array(centroid))
+                            clusters.append(cl)
 
         matrices = np.concatenate(matrices,axis=1)
         logging.info('Shape of gene X cell matrix: {}'.format(matrices.shape))
