@@ -368,7 +368,10 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                     logging.info('Running DBSCAN on sample size: {}'.format(p.shape[0]))
                     #segmentation2 = HDBSCAN(min_cluster_size=10,cluster_selection_epsilon=20,max_cluster_size=250,core_dist_n_jobs=1).fit_predict(p).astype(np.int64) #*self.pixel_size.magnitude
                     #segmentation2 = DBSCAN(min_samples=12,eps=15).fit_predict(p).astype(np.int64) #*self.pixel_size.magnitude
-                    segmentation2 = MiniBatchKMeans(n_clusters=int(len(p)/400)).fit_predict(p).astype(np.int64)
+                    np = int(len(p)/400)
+                    if np == 0:
+                        np = 1
+                    segmentation2 = MiniBatchKMeans(n_clusters=np).fit_predict(p).astype(np.int64)
                     logging.info('BSCAN Done.')
                     sub_max = segmentation2.max()
                     segmentation_ = []
