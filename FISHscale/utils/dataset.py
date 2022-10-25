@@ -365,7 +365,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                     #dist_matrix = compute_sparse_dist_matrix(p, metric='euclidean')
                     #segmentation2= QTClustering(max_radius=22.5,min_cluster_size=10,metric='euclidean',verbose=False).fit_predict(p).astype(np.int64) #*self.pixel_size.magnitude
                     #segmentation2 = OPTICS(min_samples=10,max_eps=40, metric='euclidean',cluster_method='dbscan',eps=20,n_jobs=-1).fit_predict(p).astype(np.int64) #*self.pixel_size.magnitude
-                    logging.ingo('Running DBSCAN on sample size: {}'.format(p.shape[0]))
+                    logging.info('Running DBSCAN on sample size: {}'.format(p.shape[0]))
                     #segmentation2 = HDBSCAN(min_cluster_size=10,cluster_selection_epsilon=20,max_cluster_size=250,core_dist_n_jobs=1).fit_predict(p).astype(np.int64) #*self.pixel_size.magnitude
                     #segmentation2 = DBSCAN(min_samples=12,eps=15).fit_predict(p).astype(np.int64) #*self.pixel_size.magnitude
                     segmentation2 = MiniBatchKMeans(n_clusters=int(len(p)/400)).fit_predict(p).astype(np.int64)
