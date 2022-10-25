@@ -454,10 +454,10 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 
                 labels_segmentation += labels.tolist()
                 count =  np.max(np.array(labels_segmentation)) +1
-                partition = partition.groupby('Segmentation')
+                partition_grp = partition.groupby('Segmentation')
                 added = 0
 
-                for part in partition:
+                for part in partition_grp:
                     if part[0] != type(None) and part[0] > -1:
                         cell = part[1]
                         dblabel = cell.Segmentation.values[0]
