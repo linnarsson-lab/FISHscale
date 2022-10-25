@@ -318,7 +318,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         from scipy.spatial import distance
         from diameter_clustering import QTClustering, MaxDiameterClustering
         #from diameter_clustering.dist_matrix import compute_sparse_dist_matrix
-        from sklearn.cluster import DBSCAN#, AgglomerativeClustering, OPTICS
+        from sklearn.cluster import DBSCAN, MiniBatchKMeans #, AgglomerativeClustering, OPTICS
         from hdbscan import HDBSCAN
 
         #from diameter_clustering import QTClustering
@@ -337,7 +337,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             A= p.max(axis=0) - p.min(axis=0)
             A = np.abs(A)
             max_dist =  np.max(A)
-            if max_dist <= 75: #*self.pixel_size.magnitude
+            if max_dist <= 50: #*self.pixel_size.magnitude
                 return True
             else:
                 return False
@@ -365,7 +365,11 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                     #dist_matrix = compute_sparse_dist_matrix(p, metric='euclidean')
                     #segmentation2= QTClustering(max_radius=22.5,min_cluster_size=10,metric='euclidean',verbose=False).fit_predict(p).astype(np.int64) #*self.pixel_size.magnitude
                     #segmentation2 = OPTICS(min_samples=10,max_eps=40, metric='euclidean',cluster_method='dbscan',eps=20,n_jobs=-1).fit_predict(p).astype(np.int64) #*self.pixel_size.magnitude
-                    segmentation2 = HDBSCAN(min_cluster_size=10,cluster_selection_epsilon=20,max_cluster_size=250,core_dist_n_jobs=1).fit_predict(p).astype(np.int64) #*self.pixel_size.magnitude
+                    logging.ingo('Running DBSCAN on sample size: {}'.format(p.shape[0]))
+                    #segmentation2 = HDBSCAN(min_cluster_size=10,cluster_selection_epsilon=20,max_cluster_size=250,core_dist_n_jobs=1).fit_predict(p).astype(np.int64) #*self.pixel_size.magnitude
+                    #segmentation2 = DBSCAN(min_samples=12,eps=15).fit_predict(p).astype(np.int64) #*self.pixel_size.magnitude
+                    segmentation2 = MiniBatchKMeans(n_clusters=int(len(p)/400)).fit_predict(p).astype(np.int64)
+                    logging.info('BSCAN Done.')
                     sub_max = segmentation2.max()
                     segmentation_ = []
                     for x in np.unique(segmentation2):
@@ -374,22 +378,18 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                             #segmentation_.append(x)
                         
                         elif (segmentation2 == x).sum() >= 10 and x > -1 and _distance(data[segmentation2 ==x]) == False:
-                            logging.info('QTClustering was required')
                             p2 = p[segmentation2 ==x,:]
-                            #segmentation3= QTClustering(max_radius=22.5,min_cluster_size=10,metric='euclidean',verbose=False).fit_predict(p2).astype(np.int64) #*self.pixel_size.magnitude
-                            segmentation3= MaxDiameterClustering(max_distance=35,metric='euclidean',verbose=False).fit_predict(p2).astype(np.int64) #*self.pixel_size.magnitude
+                            logging.info('QTC was required on sample size: {}'.format(p2.shape))
+                            segmentation3= QTClustering(max_radius=22.5,min_cluster_size=10,metric='euclidean',verbose=False).fit_predict(p2).astype(np.int64) #*self.pixel_size.magnitude
+                            #segmentation3= MaxDiameterClustering(max_distance=35,metric='euclidean',verbose=False).fit_predict(p2).astype(np.int64) #*self.pixel_size.magnitude
+                            #segmentation3 = AgglomerativeClustering(n_clusters=None,affinity='euclidean',linkage='ward',distance_threshold=25).fit_predict(p).astype(np.int64) #*self.pixel_size.magnitude
                             segmentation3 = np.array([s3+sub_max if s3 >=0 else -1 for s3 in segmentation3])
                             segmentation2[np.where(segmentation2 == x)] = segmentation3
-                            #sub_max = segmentation2.max()+1
 
-                        #elif (segmentation2 == x).sum() < 10  and x >=-1:
-                        #    segmentation_.append(-1)
                         else:
                             segmentation2[np.where(segmentation2 == x)] = -1
-                            #segmentation_.append(-1)
                         sub_max = segmentation2.max()+1
 
-                    #segmentation2 = np.array(segmentation_)#.astype(np.int64)
                 else:
                     if data.shape[0] >=10:
                         segmentation2 = np.array([1]*data.shape[0])
@@ -449,12 +449,11 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             partition['Segmentation'] = labels
 
             if labels.max() >= 0:
-                partition[label_column] = np.ones_like(partition['Segmentation'].values)*partition_count
-                partition.to_parquet(path.join(save_to,'Segmentation','{}.parquet'.format(partition_count)))
-                partition_count += 1
+                
                 labels_segmentation += labels.tolist()
                 count =  np.max(np.array(labels_segmentation)) +1
                 partition = partition.groupby('Segmentation')
+                added = 0
 
                 for part in partition:
                     if part[0] != type(None) and part[0] > -1:
@@ -464,7 +463,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                         max_dist = np.max(np.abs(cell.x.values.max(axis=0) - cell.y.values.min(axis=0)))
                         if mat.sum() > 10 and mat.sum() < 500 and (mat > 0).sum() > 2 and max_dist <= 75: #*self.pixel_size.magnitude
                             centroid = cell.x.values.mean().astype('float32'),cell.y.values.mean().astype('float32'),
-                            cl= cell.Clusters.values[0]
+                            cl= partition_count
                             try:
                                 pol = np.array(list(geometry.Polygon(geometry.MultiPoint(np.array([cell.x.values,cell.y.values]).T).convex_hull).exterior.coords))
                             except:
@@ -474,6 +473,12 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                             labels_list.append(dblabel)
                             centroids.append(np.array(centroid))
                             clusters.append(cl)
+                            added += 1
+
+                if added > 0:
+                    partition[label_column] = np.ones_like(partition['Segmentation'].values)*partition_count
+                    partition.to_parquet(path.join(save_to,'Segmentation','{}.parquet'.format(partition_count)))
+                    partition_count += 1
 
         matrices = np.concatenate(matrices,axis=1)
         logging.info('Shape of gene X cell matrix: {}'.format(matrices.shape))
