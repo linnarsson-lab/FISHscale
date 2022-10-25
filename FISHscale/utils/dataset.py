@@ -379,7 +379,6 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                         if (segmentation2 == x).sum() >= 10 and x > -1 and _distance(data[segmentation2 ==x]):
                             pass
                             #segmentation_.append(x)
-                        
                         elif (segmentation2 == x).sum() >= 10 and x > -1 and _distance(data[segmentation2 ==x]) == False:
                             p2 = p[segmentation2 ==x,:]
                             logging.info('QTC was required on sample size: {}'.format(p2.shape))
