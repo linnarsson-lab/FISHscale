@@ -371,7 +371,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                     npoints = int(len(p)/400)
                     if npoints == 0:
                         npoints = 1
-                    segmentation2 = MiniBatchKMeans(n_clusters=np).fit_predict(p).astype(np.int64)
+                    segmentation2 = MiniBatchKMeans(n_clusters=npoints).fit_predict(p).astype(np.int64)
                     logging.info('BSCAN Done.')
                     sub_max = segmentation2.max()
                     segmentation_ = []
