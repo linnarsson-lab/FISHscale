@@ -368,11 +368,11 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                     logging.info('Running DBSCAN on sample size: {}'.format(p.shape[0]))
                     #segmentation2 = HDBSCAN(min_cluster_size=10,cluster_selection_epsilon=20,max_cluster_size=250,core_dist_n_jobs=1).fit_predict(p).astype(np.int64) #*self.pixel_size.magnitude
                     #segmentation2 = DBSCAN(min_samples=12,eps=15).fit_predict(p).astype(np.int64) #*self.pixel_size.magnitude
-                    npoints = int(len(p)/400)
+                    npoints = int(len(p)/800)
                     if npoints == 0:
                         npoints = 1
                     segmentation2 = MiniBatchKMeans(n_clusters=npoints).fit_predict(p).astype(np.int64)
-                    logging.info('BSCAN Done.')
+                    logging.info('MiniBatchKMeans Done.')
                     sub_max = segmentation2.max()
                     segmentation_ = []
                     for x in np.unique(segmentation2):
@@ -454,30 +454,33 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 
                 labels_segmentation += labels.tolist()
                 count =  np.max(np.array(labels_segmentation)) +1
+                logging.info('Groupby partition')
                 partition_grp = partition.groupby('Segmentation')
+                logging.info('Groupby partition done')
                 added = 0
 
-                for part in partition_grp:
+                for part in tqdm(partition_grp):
                     if part[0] != type(None) and part[0] > -1:
                         cell = part[1]
                         dblabel = cell.Segmentation.values[0]
                         mat = get_counts(cell.g.values,dblabel)
-                        max_dist = np.max(np.abs(cell.x.values.max(axis=0) - cell.y.values.min(axis=0)))
-                        if mat.sum() > 10 and mat.sum() < 500 and (mat > 0).sum() > 2 and max_dist <= 75: #*self.pixel_size.magnitude
-                            centroid = cell.x.values.mean().astype('float32'),cell.y.values.mean().astype('float32'),
-                            cl= partition_count
-                            try:
-                                pol = np.array(list(geometry.Polygon(geometry.MultiPoint(np.array([cell.x.values,cell.y.values]).T).convex_hull).exterior.coords))
-                            except:
-                                pol = np.array([cell.x.values,cell.y.values])
-                            polygons.append(pol)
-                            matrices.append(mat)
-                            labels_list.append(dblabel)
-                            centroids.append(np.array(centroid))
-                            clusters.append(cl)
-                            added += 1
+                        #max_dist = np.max(np.abs(cell.x.values.max(axis=0) - cell.y.values.min(axis=0)))
+                        
+                        centroid = cell.x.values.mean().astype('float32'),cell.y.values.mean().astype('float32'),
+                        cl= partition_count
+                        '''try:
+                            pol = np.array(list(geometry.Polygon(geometry.MultiPoint(np.array([cell.x.values,cell.y.values]).T).convex_hull).exterior.coords))
+                        except:
+                            pol = np.array([cell.x.values,cell.y.values])'''
+                        polygons.append(centroid)
+                        matrices.append(mat)
+                        labels_list.append(dblabel)
+                        centroids.append(np.array(centroid))
+                        clusters.append(cl)
+                        added += 1
 
                 if added > 0:
+                    logging.info('GScluster did not produce any cells, removing number {} from the list'.format(x))
                     partition[label_column] = np.ones_like(partition['Segmentation'].values)*partition_count
                     partition.to_parquet(path.join(save_to,'Segmentation','{}.parquet'.format(partition_count)))
                     partition_count += 1
