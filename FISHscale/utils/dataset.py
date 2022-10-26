@@ -459,7 +459,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 logging.info('Groupby partition done')
                 added = 0
 
-                for part in tqdm(partition_grp):
+                for part in partition_grp:
                     if part[0] != type(None) and part[0] > -1:
                         cell = part[1]
                         dblabel = cell.Segmentation.values[0]
