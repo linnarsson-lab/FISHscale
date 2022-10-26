@@ -23,6 +23,7 @@ from pyro.infer import SVI, config_enumerate, Trace_ELBO
 from pyro.infer.autoguide import AutoDiagonalNormal, AutoGuideList, AutoNormal, AutoDelta
 import logging
 
+
 class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting, GraphDecoder):
     """
     Class to prepare the data for GraphSAGE
@@ -484,5 +485,72 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting, GraphDecoder)
                 
 
 
+class MultiGraphData(pl.LightningDataModule, GraphData):
+
+    """
+    Class to prepare multiple Graphs for GraphSAGE
+
+    """    
+    def __init__(self,
+        filepaths:list
+        
+        ):
+        self.filepaths = filepaths
+
+    
+    def load_graphs(self):
+        """
+        load_graphs
+
+        Load graphs from filepaths
+
+        Returns:
+            list: List of graphs
+        """        
+        graphs = []
+        for filepath in self.filepaths:
+
+            #subsample 1M edges from the graph for training:
+            g = dgl.load_graphs(filepath)[0][0]
+            g = g.edge_subgraph(th.randperm(g.num_edges())[:1000000])
+
+            graphs.append(g)
+        self.batch_graph = dgl.batch(graphs)
 
 
+    def train_multi(self,gpus=0, continue_training=False):
+        """
+        train
+
+        Pytorch-Lightning trainer
+
+        Args:
+            max_epochs (int, optional): Maximum epochs. Defaults to 5.
+            gpus (int, optional): Whether to use GPU. Defaults to 0.
+        """        
+        if self.device.type == 'cuda':
+            gpus=1
+        trainer = pl.Trainer(gpus=gpus,
+                            log_every_n_steps=50,
+                            callbacks=[self.checkpoint_callback], 
+                            max_epochs=self.n_epochs,)
+
+        is_trained = 0
+        for File in os.listdir(os.path.join(self.folder, '..')):
+            if File.count('.ckpt'):
+                is_trained = 1
+                break
+
+        if is_trained:
+            logging.info('Pretrained model exists in folder, loading model parameters. If you wish to re-train, delete .ckpt file.')
+            self.model = self.model.load_from_checkpoint(os.path.join(self.save_to, File),
+                                        in_feats=self.model.in_feats,
+                                        n_latent=self.model.n_latent,
+                                        n_classes=self.model.module.n_classes,
+                                        n_layers=self.model.module.n_layers,
+                                        )
+
+        
+        if continue_training or not is_trained:
+            trainer.fit(self.model, train_dataloaders=self.train_dataloader())#,val_dataloaders=self.test_dataloader())
+            
