@@ -713,7 +713,7 @@ class GraphPlotting:
             genes_ = genes[control_remove]
             data = ds[:, :].T 
             data = data[:,control_remove]
-            filter_cells = (data.sum(axis=1) >= 5) & (data.sum(axis=1) < 500) & ((data > 0).sum(axis=1) >= 3)  & ((data >= 2).sum(axis=1) > 0)
+            filter_cells = (data.sum(axis=1) >= 5) & (data.sum(axis=1) < 500) #& ((data >= 2).sum(axis=1) > 0)
             print('Remaining cells: {}'.format(filter_cells.sum()))
 
             genes_spliced = genes_[np.isin(genes_, spliced)]
