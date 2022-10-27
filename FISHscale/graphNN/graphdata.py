@@ -3,7 +3,6 @@ import numpy as np
 import torch
 from tqdm import trange
 import os
-import pytorch_lightning as pl
 from typing import Optional
 from datetime import datetime
 from pytorch_lightning.callbacks import ModelCheckpoint
@@ -484,20 +483,46 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting, GraphDecoder)
         return att1, att2
                 
 
-
-class MultiGraphData(pl.LightningDataModule, GraphData):
-
+class MultiGraphData(pl.LightningDataModule):
     """
     Class to prepare multiple Graphs for GraphSAGE
 
     """    
     def __init__(self,
-        filepaths:list
-        
+        filepaths:list,
+        ngh_sizes:list=[20,10],
+        sample_size_per_graph:int=50000,
+        train_percentage:float=0.65,
+        batch_size:int=1024,
+        num_workers:int=1,
+        analysis_name:str='MultiGraph',
+        n_epochs:int=3,
+        save_to:str =''
         ):
+        
         self.filepaths = filepaths
+        self.ngh_sizes = ngh_sizes
+        self.sample_size_per_graph = sample_size_per_graph
+        self.train_percentage = train_percentage
+        self.batch_size = batch_size
+        self.num_workers = num_workers
+        self.analysis_name = analysis_name
+        self.save_to = save_to
+        self.folder = self.save_to+self.analysis_name+ '_' +datetime.now().strftime("%Y-%m-%d-%H%M%S")
+        self.n_epochs = n_epochs
 
-    
+        os.mkdir(self.folder)
+        self.device = th.device('cuda' if th.cuda.is_available() else 'cpu')
+        self.load_graphs()
+        self.model = SAGELightning(in_feats=self.batch_graph.ndata['gene'].shape[1], 
+                                        n_latent=48,
+                                        n_layers=len(self.ngh_sizes),
+                                        n_classes=2,
+                                        n_hidden=64,
+                                    )
+        self.model.to(self.device)
+        self.setup()
+
     def load_graphs(self):
         """
         load_graphs
@@ -508,17 +533,36 @@ class MultiGraphData(pl.LightningDataModule, GraphData):
             list: List of graphs
         """        
         graphs = []
+
         for filepath in self.filepaths:
 
             #subsample 1M edges from the graph for training:
             g = dgl.load_graphs(filepath)[0][0]
-            g = g.edge_subgraph(th.randperm(g.num_edges())[:1000000])
-
-            graphs.append(g)
+            random_train_nodes = th.randperm(g.nodes().size(0))[:self.sample_size_per_graph]
+            sg = dgl.khop_in_subgraph(g, g.nodes()[random_train_nodes], k=2)[0]
+            graphs.append(sg)
         self.batch_graph = dgl.batch(graphs)
+    
+    def setup(self, stage: Optional[str] = None):
+        #self.d = th.tensor(self.molecules_df(),dtype=th.float32) #works
+        self.sampler = dgl.dataloading.MultiLayerNeighborSampler([int(_) for _ in self.ngh_sizes])
 
+        self.checkpoint_callback = ModelCheckpoint(
+            monitor='train_loss',
+            dirpath=self.save_to,
+            filename=self.analysis_name+'-{epoch:02d}-{train_loss:.2f}',
+            save_top_k=1,
+            mode='min',
+            )
+        self.early_stop_callback = EarlyStopping(
+            monitor='balance',
+            patience=3,
+            verbose=True,
+            mode='min',
+            stopping_threshold=0.35,
+            )
 
-    def train_multi(self,gpus=0, continue_training=False):
+    def train(self,gpus=0, continue_training=False):
         """
         train
 
@@ -544,13 +588,90 @@ class MultiGraphData(pl.LightningDataModule, GraphData):
         if is_trained:
             logging.info('Pretrained model exists in folder, loading model parameters. If you wish to re-train, delete .ckpt file.')
             self.model = self.model.load_from_checkpoint(os.path.join(self.save_to, File),
-                                        in_feats=self.model.in_feats,
-                                        n_latent=self.model.n_latent,
-                                        n_classes=self.model.module.n_classes,
-                                        n_layers=self.model.module.n_layers,
+                                        n_latent=48,
+                                        n_layers=[20,10],
+                                        n_classes=2,
+                                        n_hidden=64,
                                         )
 
         
         if continue_training or not is_trained:
             trainer.fit(self.model, train_dataloaders=self.train_dataloader())#,val_dataloaders=self.test_dataloader())
             
+    def train_dataloader(self):
+        """
+        train_dataloader
+
+        Prepare dataloader
+
+        Returns:
+            dgl.dataloading.EdgeDataLoader: Deep Graph Library dataloader.
+        """        
+        negative_sampler = dgl.dataloading.negative_sampler.Uniform(3)
+        edge_sampler = dgl.dataloading.as_edge_prediction_sampler(
+            dgl.dataloading.NeighborSampler([int(_) for _ in self.ngh_sizes]),
+            negative_sampler=negative_sampler,
+            )
+
+        edges = self.batch_graph.edges()
+        train_p_edges = int(self.batch_graph.num_edges()*self.train_percentage)
+        train_edges = th.randperm(self.batch_graph.num_edges())[:train_p_edges]
+
+        unlab = dgl.dataloading.DataLoader(
+                        self.batch_graph,
+                        train_edges,
+                        edge_sampler,
+                        #negative_sampler=negative_sampler,
+                        device=self.device,
+                        batch_size=self.batch_size,
+                        shuffle=True,
+                        drop_last=True,
+                        num_workers=self.num_workers,
+                        )
+        return unlab
+
+    def get_latents(self):
+        """
+        get_latents: get the new embedding for each molecule
+        
+        Passes the validation data through the model to generatehe neighborhood 
+        embedding. If the model is in supervised version, the model will also
+        output the predicted cell type.
+
+        Args:
+            labelled (bool, optional): [description]. Defaults to True.
+        """        
+        import scanpy as sc
+        from sklearn.linear_model import SGDClassifier
+        from sklearn.preprocessing import StandardScaler
+        from sklearn.pipeline import make_pipeline
+        from joblib import dump, load
+
+        self.model.eval()
+        self.latent_unlabelled, prediction_unlabelled = self.model.module.inference(self.batch_graph,
+                        self.model.device,
+                        10*512,
+                        0)
+        
+        np.save(self.folder+'/latent',self.latent_unlabelled)
+
+        random_sample_train = np.random.choice(
+                                len(self.latent_unlabelled.detach().numpy()), 
+                                np.min([len(self.latent_unlabelled),500000]), 
+                                replace=False)
+        training_latents =self.latent_unlabelled.detach().numpy()[random_sample_train,:]
+        adata = sc.AnnData(X=training_latents)
+        logging.info('Building neighbor graph for clustering...')
+        sc.pp.neighbors(adata, n_neighbors=15)
+        logging.info('Running Leiden clustering...')
+        sc.tl.leiden(adata, random_state=42, resolution=1.4)
+        logging.info('Leiden clustering done.')
+        clusters= adata.obs['leiden'].values
+
+        clf = make_pipeline(StandardScaler(), SGDClassifier(max_iter=1000, tol=1e-3))
+        clf.fit(training_latents, clusters)
+        clusters = clf.predict(self.latent_unlabelled.detach().numpy()).astype('uint16')
+        dump(clf, 'MultiGraphNeighborhoodClassifier.joblib') 
+
+
+
