@@ -483,7 +483,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                     logging.info('GScluster did not produce any cells, removing number {} from the list'.format(x))
                     partition[label_column] = np.ones_like(partition['Segmentation'].values)*partition_count
                     partition.to_parquet(path.join(save_to,'Segmentation','{}.parquet'.format(partition_count)))
-                    partition_count += 1
+                partition_count += 1
 
         matrices = np.concatenate(matrices,axis=1)
         logging.info('Shape of gene X cell matrix: {}'.format(matrices.shape))

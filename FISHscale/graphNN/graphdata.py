@@ -1,7 +1,6 @@
 import torch as th
 import numpy as np
-import torch
-from tqdm import trange
+from tqdm import trange, tqdm
 import os
 from typing import Optional
 from datetime import datetime
@@ -134,7 +133,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting, GraphDecoder)
         self.inference_type = inference_type
         self.n_epochs= n_epochs
 
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.device = th.device('cuda' if th.cuda.is_available() else 'cpu')
         self.prepare_reference()
 
         ### Prepare data
@@ -177,7 +176,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting, GraphDecoder)
             self.model = SAGELightning(in_feats=self.data.unique_genes.shape[0], 
                                         n_latent=48,
                                         n_layers=len(self.ngh_sizes),
-                                        n_classes=self.ref_celltypes.shape[1],
+                                        n_classes=2,
                                         n_hidden=64,
                                         lr=self.lr,
                                         supervised=self.supervised,
@@ -326,7 +325,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting, GraphDecoder)
                         drop_last=True,
                         num_workers=self.num_workers,
                         )
-        return unlab
+        return [unlab]
 
     def test_dataloader(self):
         """
@@ -490,8 +489,8 @@ class MultiGraphData(pl.LightningDataModule):
     """    
     def __init__(self,
         filepaths:list,
+        num_nodes_per_graph:int=500,
         ngh_sizes:list=[20,10],
-        sample_size_per_graph:int=50000,
         train_percentage:float=0.65,
         batch_size:int=1024,
         num_workers:int=1,
@@ -502,7 +501,6 @@ class MultiGraphData(pl.LightningDataModule):
         
         self.filepaths = filepaths
         self.ngh_sizes = ngh_sizes
-        self.sample_size_per_graph = sample_size_per_graph
         self.train_percentage = train_percentage
         self.batch_size = batch_size
         self.num_workers = num_workers
@@ -510,11 +508,12 @@ class MultiGraphData(pl.LightningDataModule):
         self.save_to = save_to
         self.folder = self.save_to+self.analysis_name+ '_' +datetime.now().strftime("%Y-%m-%d-%H%M%S")
         self.n_epochs = n_epochs
+        self.num_nodes_per_graph = num_nodes_per_graph
 
         os.mkdir(self.folder)
         self.device = th.device('cuda' if th.cuda.is_available() else 'cpu')
         self.load_graphs()
-        self.model = SAGELightning(in_feats=self.batch_graph.ndata['gene'].shape[1], 
+        self.model = SAGELightning(in_feats=self.sub_graphs[0].ndata['gene'].shape[1], 
                                         n_latent=48,
                                         n_layers=len(self.ngh_sizes),
                                         n_classes=2,
@@ -532,16 +531,21 @@ class MultiGraphData(pl.LightningDataModule):
         Returns:
             list: List of graphs
         """        
-        graphs = []
+        self.sub_graphs = []
+        self.training_dataloaders = []
+        #self.validation_dataloaders = []
 
         for filepath in self.filepaths:
-
+            logging.info('Subsampling graph from {}'.format(filepath))
             #subsample 1M edges from the graph for training:
             g = dgl.load_graphs(filepath)[0][0]
-            random_train_nodes = th.randperm(g.nodes().size(0))[:self.sample_size_per_graph]
+            random_train_nodes = th.randperm(g.nodes().size(0))[:self.num_nodes_per_graph]
             sg = dgl.khop_in_subgraph(g, g.nodes()[random_train_nodes], k=2)[0]
-            graphs.append(sg)
-        self.batch_graph = dgl.batch(graphs)
+            
+            self.sub_graphs.append(sg)
+            self.training_dataloaders.append(self.wrap_train_dataloader(sg))
+            #self.validation_dataloaders.append(self.validation_dataloader(sg))
+        #self.batch_graph = dgl.batch(graphs)
     
     def setup(self, stage: Optional[str] = None):
         #self.d = th.tensor(self.molecules_df(),dtype=th.float32) #works
@@ -561,6 +565,12 @@ class MultiGraphData(pl.LightningDataModule):
             mode='min',
             stopping_threshold=0.35,
             )
+
+    def train_dataloader(self):
+        return self.training_dataloaders
+
+    #def validation_dataloader(self):
+    #    return self.validation_dataloaders
 
     def train(self,gpus=0, continue_training=False):
         """
@@ -598,7 +608,7 @@ class MultiGraphData(pl.LightningDataModule):
         if continue_training or not is_trained:
             trainer.fit(self.model, train_dataloaders=self.train_dataloader())#,val_dataloaders=self.test_dataloader())
             
-    def train_dataloader(self):
+    def wrap_train_dataloader(self, batch_graph):
         """
         train_dataloader
 
@@ -613,12 +623,13 @@ class MultiGraphData(pl.LightningDataModule):
             negative_sampler=negative_sampler,
             )
 
-        edges = self.batch_graph.edges()
-        train_p_edges = int(self.batch_graph.num_edges()*self.train_percentage)
-        train_edges = th.randperm(self.batch_graph.num_edges())[:train_p_edges]
+        #edges = batch_graph.edges()
+        #train_p_edges = int(batch_graph.num_edges()*self.train_percentage)
+        #train_edges = th.randperm(batch_graph.num_edges())[:train_p_edges]
+        train_edges = self.make_train_test_validation(batch_graph)
 
         unlab = dgl.dataloading.DataLoader(
-                        self.batch_graph,
+                        batch_graph,
                         train_edges,
                         edge_sampler,
                         #negative_sampler=negative_sampler,
@@ -629,6 +640,65 @@ class MultiGraphData(pl.LightningDataModule):
                         num_workers=self.num_workers,
                         )
         return unlab
+    
+    def validation_dataloader(self, graph):
+        """
+        train_dataloader
+
+        Prepare dataloader
+
+        Returns:
+            dgl.dataloading.EdgeDataLoader: Deep Graph Library dataloader.
+        """        
+        
+        validation = dgl.dataloading.NodeDataLoader(
+                        graph,
+                        th.arange(graph.num_nodes(),),
+                        dgl.dataloading.MultiLayerNeighborSampler([-1,-1]),
+                        device=self.device,
+                        batch_size=self.batch_size*1,
+                        shuffle=False,
+                        drop_last=False,
+                        num_workers=self.num_workers,
+                        )
+        return validation
+
+    def make_train_test_validation(self, g):
+        """
+        make_train_test_validation: only self.indices_validation is used.
+
+        Splits the data into train, test and validation. Test data is not used for
+        because at the moment the model performance cannot be checked against labelled
+        data.
+        """        
+        indices_train = []
+        indices_test = []
+
+        random_state = np.random.RandomState(seed=0)
+        for gene in range(g.ndata['gene'].shape[1]):
+            molecules_g = g.ndata['gene'][:,gene] == 1
+
+            #if molecules_g.sum() >= 20:
+            indices_g = g.ndata['indices'][molecules_g]
+            train_size = int(indices_g.shape[0]*self.train_percentage)
+            if train_size == 0:
+                train_size = 1
+            test_size = indices_g.shape[0]-train_size
+            permutation = random_state.permutation(indices_g)
+            test_g = th.tensor(permutation[:test_size])
+            train_g = th.tensor(permutation[test_size:(train_size+test_size)])   
+                
+            indices_train += train_g
+            indices_test += test_g
+        indices_train, indices_test = th.stack(indices_train), th.stack(indices_test)
+        edges_bool_train =  th.isin(g.edges()[0],indices_train) & th.isin(g.edges()[1],indices_train) 
+        edges_bool_test =  th.isin(g.edges()[0],indices_test) & th.isin(g.edges()[1],indices_test)
+
+        edges_train  = np.random.choice(np.arange(edges_bool_train.shape[0])[edges_bool_train],int(edges_bool_train.sum()*(self.train_percentage/10)),replace=False)
+        #self.edges_test  = np.random.choice(np.arange(edges_bool_test.shape[0])[edges_bool_test],int(edges_bool_test.sum()*(self.train_p/self.fraction_edges)),replace=False)
+        logging.info('Training on {} edges.'.format(self.edges_train.shape[0]))
+        #logging.info('Testing on {} edges.'.format(self.edges_test.shape[0]))
+        return edges_train
 
     def get_latents(self):
         """
@@ -648,10 +718,16 @@ class MultiGraphData(pl.LightningDataModule):
         from joblib import dump, load
 
         self.model.eval()
-        self.latent_unlabelled, prediction_unlabelled = self.model.module.inference(self.batch_graph,
-                        self.model.device,
-                        10*512,
-                        0)
+        latent_unlabelled = []
+        for g in tqdm(self.sub_graphs):
+            lu, _ = self.model.module.inference(self.batch_graph,
+                            self.model.device,
+                            10*512,
+                            0)
+            latent_unlabelled.append(lu.detach().cpu().numpy())
+        self.latent_unlabelled = np.stack(latent_unlabelled)
+
+        logging.info('Latent embeddings generated for {} molecules'.format(self.latent_unlabelled.shape[0]))
         
         np.save(self.folder+'/latent',self.latent_unlabelled)
 
@@ -659,6 +735,7 @@ class MultiGraphData(pl.LightningDataModule):
                                 len(self.latent_unlabelled.detach().numpy()), 
                                 np.min([len(self.latent_unlabelled),500000]), 
                                 replace=False)
+
         training_latents =self.latent_unlabelled.detach().numpy()[random_sample_train,:]
         adata = sc.AnnData(X=training_latents)
         logging.info('Building neighbor graph for clustering...')

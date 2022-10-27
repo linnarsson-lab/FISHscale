@@ -104,18 +104,22 @@ class SAGELightning(LightningModule):
     def training_step(self, batch, batch_idx):
 
         self.reference = self.reference.to(self.device)
-        _, pos, neg, mfgs = batch
-        pos_ids = pos.edges()[0]
-        mfgs = [mfg.int() for mfg in mfgs]
-        batch_inputs = mfgs[0].srcdata['gene']
-        zn_loc = self.module.encoder(batch_inputs,mfgs)
-        graph_loss = self.loss_fcn(zn_loc, pos, neg).mean()
-        opt_g = self.optimizers()
-        opt_g.zero_grad()
-        self.manual_backward(graph_loss)
-        opt_g.step()
+        losses = []
+        for sub_batch in batch:
+            _, pos, neg, mfgs = sub_batch
+            pos_ids = pos.edges()[0]
+            mfgs = [mfg.int() for mfg in mfgs]
+            batch_inputs = mfgs[0].srcdata['gene']
+            zn_loc = self.module.encoder(batch_inputs,mfgs)
+            graph_loss = self.loss_fcn(zn_loc, pos, neg).mean()
+            opt_g = self.optimizers()
+            opt_g.zero_grad()
+            self.manual_backward(graph_loss)
+            opt_g.step()
 
-        loss = graph_loss
+            loss = graph_loss
+            losses.append(loss)
+        loss = th.stack(losses).mean()
         self.log('train_loss', 
             loss, prog_bar=True, on_step=True, on_epoch=True,batch_size=zn_loc.shape[0])
         return loss
@@ -176,7 +180,7 @@ class SAGE(nn.Module):
                                 dropout= dropout,
                                 )
 
-    def inference(self, g,device, batch_size, num_workers):
+    def inference(self, g, device, batch_size, num_workers):
             """
             Inference with the GraphSAGE model on full neighbors (i.e. without neighbor sampling).
             g : the entire graph.

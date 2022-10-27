@@ -496,6 +496,12 @@ class DataLoader(DataLoader_base):
             p = path.join(self.FISHscale_data_folder, self.dataset_name)
             ug = self._exclude_genes(unique_genes, exclude_genes)
             filter_filelist = [f'{p}_{g}.parquet' for g in ug]
+            #make sure the files exist otherwise keep unique_genes but do not load non-existing files
+            #filter_filelist = [f for f in filter_filelist if path.isfile(f)]
+            #for f in filter_filelist:
+            #    if path.isfile(f) == False:
+            #        pd.DataFrame(columns=['x','y','g']).to_parquet(path.join(self.FISHscale_data_folder, f'{self.dataset_name}_{f}.parquet'))
+                    #self._dump_to_parquet(pd.DataFrame(columns=['x','y','g']), self.dataset_name, self.FISHscale_data_folder)
 
             #Load selected genes        
             self.df = dd.read_parquet(filter_filelist)
