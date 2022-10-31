@@ -502,7 +502,7 @@ class MultiGraphData(pl.LightningDataModule):
         analysis_name:str='MultiGraph',
         n_epochs:int=3,
         save_to:str ='',
-        lr = 1e-4,
+        lr = 1e-3,
         ):
         
         self.filepaths = filepaths
@@ -535,10 +535,10 @@ class MultiGraphData(pl.LightningDataModule):
         for sg in self.sub_graphs:
             logging.info('Number of genes in graph: {}'.format(sg.ndata['gene'].shape[1]))
             #self.training_dataloaders.append(self.wrap_train_dataloader(sg))
-        self.batch_graph = dgl.batch(self.sub_graphs)
+        self.sub_graphs = dgl.batch(self.sub_graphs)
+        self.training_dataloaders.append(self.wrap_train_dataloader_batch())
 
-
-        self.model = SAGELightning(in_feats=self.sub_graphs[0].ndata['gene'].shape[1], 
+        self.model = SAGELightning(in_feats=self.sub_graphs.ndata['gene'].shape[1], 
                                         n_latent=48,
                                         n_layers=len(self.ngh_sizes),
                                         n_classes=2,
@@ -565,6 +565,9 @@ class MultiGraphData(pl.LightningDataModule):
             logging.info('Subsampling graph from {}.'.format(filepath))
             #subsample 1M edges from the graph for training:
             g = dgl.load_graphs(filepath)[0][0]
+            to_delete = [x for x in g.ndata.keys() if x != 'gene']
+            for x in to_delete:
+                del g.ndata[x]
             random_train_nodes = th.randperm(g.nodes().size(0))[:self.num_nodes_per_graph]
             sg = dgl.khop_in_subgraph(g, g.nodes()[random_train_nodes], k=2)[0]
             logging.info('Training sample with {} nodes and {} edges.'.format(sg.num_nodes(), sg.num_edges()))
@@ -629,7 +632,7 @@ class MultiGraphData(pl.LightningDataModule):
         if is_trained:
             logging.info('Pretrained model exists in folder {}, loading model parameters. If you wish to re-train, delete .ckpt file.'.format(model_path))
             self.model = self.model.load_from_checkpoint(model_path,
-                                        in_feats=self.sub_graphs[0].ndata['gene'].shape[1],
+                                        in_feats=self.sub_graphs.ndata['gene'].shape[1],
                                         n_latent=48,
                                         n_layers=2,
                                         n_classes=2,
@@ -690,12 +693,12 @@ class MultiGraphData(pl.LightningDataModule):
             )
 
         #edges = batch_graph.edges()
-        train_p_edges = int(self.batch_graph.num_edges()*(self.train_percentage/10))
-        train_edges = th.randperm(self.batch_graph.num_edges())[:train_p_edges]
+        train_p_edges = int(self.sub_graphs.num_edges()*(self.train_percentage/10))
+        train_edges = th.randperm(self.sub_graphs.num_edges())[:train_p_edges]
         #train_edges = self.make_train_test_validation(batch_graph)
 
         unlab = dgl.dataloading.DataLoader(
-                        self.batch_graph,
+                        self.sub_graphs,
                         train_edges,
                         edge_sampler,
                         #negative_sampler=negative_sampler,
@@ -786,6 +789,8 @@ class MultiGraphData(pl.LightningDataModule):
 
         self.model.eval()
         latent_unlabelled = []
+
+        self.sub_graphs = dgl.unbatch(self.subgraphs)
         for g in tqdm(self.sub_graphs):
             lu, _ = self.model.module.inference(g,
                             self.model.device,
