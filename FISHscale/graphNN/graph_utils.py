@@ -308,7 +308,15 @@ class GraphUtils(object):
 
 
 class GraphPlotting:
-    def analyze(self,random_n=250000, n_clusters=100, eps=20, min_samples=10,pci_file=None):
+    def analyze(
+                self,
+                random_n=250000, 
+                n_clusters=100, 
+                eps=20, 
+                min_samples=10,
+                multigraph_classifier=None, #file to classifier
+                pci_file=None,
+                ):
         import umap
         import matplotlib.pyplot as plt
 
@@ -451,46 +459,63 @@ class GraphPlotting:
             from sklearn.preprocessing import StandardScaler
             from sklearn.pipeline import make_pipeline
 
-            random_sample_train = np.random.choice(
-                                    len(self.latent_unlabelled.detach().numpy()), 
-                                    np.min([len(self.latent_unlabelled),500000]), 
-                                    replace=False)
-            training_latents =self.latent_unlabelled.detach().numpy()[random_sample_train,:]
-            adata = sc.AnnData(X=training_latents)
-            logging.info('Building neighbor graph for clustering...')
-            sc.pp.neighbors(adata, n_neighbors=15)
-            logging.info('Running Leiden clustering...')
-            sc.tl.leiden(adata, random_state=42, resolution=1.4)
-            logging.info('Leiden clustering done.')
-            clusters= adata.obs['leiden'].values
+            if type(multigraph_classifier) == type(None):
+                random_sample_train = np.random.choice(
+                                        len(self.latent_unlabelled.detach().numpy()), 
+                                        np.min([len(self.latent_unlabelled),500000]), 
+                                        replace=False)
+                training_latents =self.latent_unlabelled.detach().numpy()[random_sample_train,:]
+                adata = sc.AnnData(X=training_latents)
+                logging.info('Building neighbor graph for clustering...')
+                sc.pp.neighbors(adata, n_neighbors=15)
+                logging.info('Running Leiden clustering...')
+                sc.tl.leiden(adata, random_state=42, resolution=1.4)
+                logging.info('Leiden clustering done.')
+                clusters= adata.obs['leiden'].values
 
-            clf = make_pipeline(StandardScaler(), SGDClassifier(max_iter=1000, tol=1e-3))
-            clf.fit(training_latents, clusters)
-            clusters = clf.predict(self.latent_unlabelled.detach().numpy()).astype('uint16')
+                clf = make_pipeline(StandardScaler(), SGDClassifier(max_iter=1000, tol=1e-3))
+                clf.fit(training_latents, clusters)
+                clusters = clf.predict(self.latent_unlabelled.detach().numpy()).astype('uint16')
 
-            unique_clusters = np.unique(clusters)
-            dic = dict(zip(unique_clusters, np.arange(unique_clusters.shape[0])))
-            clusters = np.array([dic[i] for i in clusters])
-            molecules_id = self.g.ndata['indices']
-            import gc
-            gc.collect()
+                unique_clusters = np.unique(clusters)
+                dic = dict(zip(unique_clusters, np.arange(unique_clusters.shape[0])))
+                clusters = np.array([dic[i] for i in clusters])
 
-            if not os.path.isdir(os.path.join(self.folder,'Clusters')):
-                os.mkdir('{}/Clusters'.format(self.folder))
+                molecules_id = self.g.ndata['indices']
+                import gc
+                gc.collect()
+                if not os.path.isdir(os.path.join(self.folder,'Clusters')):
+                    os.mkdir('{}/Clusters'.format(self.folder))
 
-            merged_clusters= ClusterCleaner(
-                genes=self.data.unique_genes[np.where(self.g.ndata['gene'].numpy())[1]],
-                clusters=clusters
-                ).merge()
+                merged_clusters= ClusterCleaner(
+                    genes=self.data.unique_genes[np.where(self.g.ndata['gene'].numpy())[1]],
+                    clusters=clusters
+                    ).merge()
 
-            unique_clusters = np.unique(merged_clusters)
-            dic = dict(zip(unique_clusters, np.arange(unique_clusters.shape[0])))
-            merged_clusters = np.array([dic[i] for i in merged_clusters])
+                unique_clusters = np.unique(merged_clusters)
+                dic = dict(zip(unique_clusters, np.arange(unique_clusters.shape[0])))
+                merged_clusters = np.array([dic[i] for i in merged_clusters])
 
-            self.clusters = np.array(merged_clusters)
-            new_labels = np.zeros(self.data.shape[0]) -1
-            for i,l in zip(molecules_id, self.clusters):
-                new_labels[i] = l
+                self.clusters = np.array(merged_clusters)
+                new_labels = np.zeros(self.data.shape[0]) -1
+                for i,l in zip(molecules_id, self.clusters):
+                    new_labels[i] = l
+
+            else:
+                from joblib import load
+                clf = load(multigraph_classifier)
+                clusters = clf.predict(self.latent_unlabelled.detach().numpy()).astype('uint16')
+
+                molecules_id = self.g.ndata['indices']
+                import gc
+                gc.collect()
+                if not os.path.isdir(os.path.join(self.folder,'Clusters')):
+                    os.mkdir('{}/Clusters'.format(self.folder))
+
+                self.clusters = np.array(clusters)
+                new_labels = np.zeros(self.data.shape[0]) -1
+                for i,l in zip(molecules_id, self.clusters):
+                    new_labels[i] = l
 
             self.data.add_dask_attribute('Clusters',new_labels.astype('str'),include_genes=True)
 
@@ -509,7 +534,7 @@ class GraphPlotting:
 
                 dic = dict(zip(cell_unique_clusters, np.arange(cell_unique_clusters.shape[0])))
                 self.clusters = np.array([i if i in dic else -1 for i in self.clusters])
-                cell_clusters = np.array([dic[i] for i in clusters_])
+                cell_clusters = clusters_#np.array([dic[i] for i in clusters_])
                 ds.ca['Clusters'] = cell_clusters.astype('str')
                 self.cell_unique_clusters = np.unique(cell_clusters)
 

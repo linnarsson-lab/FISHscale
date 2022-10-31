@@ -360,7 +360,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 A= p.max(axis=0) - p.min(axis=0)
                 A = np.abs(A)
 
-                if np.max(A) > 45 and data.shape[0] >= 10:#*self.pixel_size.magnitud
+                if np.max(A) > 50 and data.shape[0] >= 10:#*self.pixel_size.magnitud
                     #segmentation2 = AgglomerativeClustering(n_clusters=None,affinity='euclidean',linkage='ward',distance_threshold=50).fit_predict(p).astype(np.int64) #*self.pixel_size.magnitude
                     #dist_matrix = compute_sparse_dist_matrix(p, metric='euclidean')
                     #segmentation2= QTClustering(max_radius=22.5,min_cluster_size=10,metric='euclidean',verbose=False).fit_predict(p).astype(np.int64) #*self.pixel_size.magnitude
@@ -416,6 +416,24 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             data = pd.concat([g,d],join='outer',axis=1).fillna(0)
             return data.values.astype('int16')
 
+        def cell_extract(part):
+            if part[0] != type(None) and part[0] > -1:
+                cell = part[1]
+                dblabel = cell.Segmentation.values[0]
+                mat = get_counts(cell.g.values,dblabel)
+                centroid = cell.x.values.mean().astype('float32'),cell.y.values.mean().astype('float32'),
+                cl= partition_count
+
+                return mat, centroid, cl, dblabel
+            else:
+                return None, None, None, None
+                #polygons.append(centroid)
+                #matrices.append(mat)
+                #labels_list.append(dblabel)
+                #centroids.append(np.array(centroid))
+                #clusters.append(cl)
+
+
         logging.info('Running segmentation by: {}'.format(label_column))
         if path.exists(path.join(save_to,'Segmentation')):
             shutil.rmtree(path.join(save_to,'Segmentation'))
@@ -451,7 +469,6 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             partition['Segmentation'] = labels
 
             if labels.max() >= 0:
-                
                 labels_segmentation += labels.tolist()
                 count =  np.max(np.array(labels_segmentation)) +1
                 logging.info('Groupby partition')
@@ -459,19 +476,15 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 logging.info('Groupby partition done')
                 added = 0
 
-                for part in partition_grp:
+                for part in tqdm(partition_grp):
                     if part[0] != type(None) and part[0] > -1:
                         cell = part[1]
                         dblabel = cell.Segmentation.values[0]
                         mat = get_counts(cell.g.values,dblabel)
-                        #max_dist = np.max(np.abs(cell.x.values.max(axis=0) - cell.y.values.min(axis=0)))
-                        
+ 
                         centroid = cell.x.values.mean().astype('float32'),cell.y.values.mean().astype('float32'),
                         cl= partition_count
-                        '''try:
-                            pol = np.array(list(geometry.Polygon(geometry.MultiPoint(np.array([cell.x.values,cell.y.values]).T).convex_hull).exterior.coords))
-                        except:
-                            pol = np.array([cell.x.values,cell.y.values])'''
+
                         polygons.append(centroid)
                         matrices.append(mat)
                         labels_list.append(dblabel)
@@ -481,7 +494,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
 
                 if added > 0:
                     logging.info('GScluster did not produce any cells, removing number {} from the list'.format(x))
-                    partition[label_column] = np.ones_like(partition['Segmentation'].values)*partition_count
+                    #partition[label_column] = np.ones_like(partition['Segmentation'].values)*partition_count
                     partition.to_parquet(path.join(save_to,'Segmentation','{}.parquet'.format(partition_count)))
                 partition_count += 1
 

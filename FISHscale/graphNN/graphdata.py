@@ -1,3 +1,4 @@
+from pyexpat import model
 import torch as th
 import numpy as np
 from tqdm import trange, tqdm
@@ -158,7 +159,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting, GraphDecoder)
             logging.info('Loading model.')
             glist, _ = dgl.data.utils.load_graphs(dgluns) # glist will be [g1, g2]
             self.g = glist[0]
-            logging.info('Model loaded.')
+            logging.info('Graph data loaded.')
         
         if self.aggregator == 'attentional':
             # Remove all self loops because data will be saved, otherwise the 
@@ -374,7 +375,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting, GraphDecoder)
                         )
         return validation
 
-    def train(self,gpus=0, continue_training=False):
+    def train(self,gpus=0, model_file=None, continue_training=False):
         """
         train
 
@@ -395,11 +396,16 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting, GraphDecoder)
         for File in os.listdir(os.path.join(self.folder, '..')):
             if File.count('.ckpt'):
                 is_trained = 1
+                model_path = os.path.join(self.save_to, File)
                 break
+        
+        if type(model_file) != type(None):
+            is_trained = 1
+            model_path = model_file
 
         if is_trained:
-            logging.info('Pretrained model exists in folder, loading model parameters. If you wish to re-train, delete .ckpt file.')
-            self.model = self.model.load_from_checkpoint(os.path.join(self.save_to, File),
+            logging.info('Pretrained model exists in folder {}, loading model parameters. If you wish to re-train, delete .ckpt file.'.format(model_path))
+            self.model = self.model.load_from_checkpoint(model_path,
                                         in_feats=self.model.in_feats,
                                         n_latent=self.model.n_latent,
                                         n_classes=self.model.module.n_classes,
@@ -410,7 +416,6 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting, GraphDecoder)
         if continue_training or not is_trained:
             trainer.fit(self.model, train_dataloaders=self.train_dataloader())#,val_dataloaders=self.test_dataloader())
             
-    #### plotting and latent factors #####
 
     def get_latents(self):
         """
@@ -491,7 +496,7 @@ class MultiGraphData(pl.LightningDataModule):
         filepaths:list,
         num_nodes_per_graph:int=500,
         ngh_sizes:list=[20,10],
-        train_percentage:float=0.65,
+        train_percentage:float=0.75,
         batch_size:int=1024,
         num_workers:int=1,
         analysis_name:str='MultiGraph',
@@ -512,7 +517,24 @@ class MultiGraphData(pl.LightningDataModule):
 
         os.mkdir(self.folder)
         self.device = th.device('cuda' if th.cuda.is_available() else 'cpu')
-        self.load_graphs()
+
+        batchgraph_filename = os.path.join(self.save_to, '{}BatchGraph.graph'.format(len(self.filepaths)))
+
+        if not os.path.isfile(batchgraph_filename):
+            self.load_graphs()
+
+            graph_labels = {"Multigraph": th.arange(len(self.filepaths))}
+            logging.info('Saving model...')
+            dgl.data.utils.save_graphs(batchgraph_filename, self.sub_graphs, graph_labels)
+        else:
+            logging.info('Loading model...')
+            self.sub_graphs, graph_labels = dgl.data.utils.load_graphs(batchgraph_filename)
+
+        self.training_dataloaders = []
+        for sg in self.sub_graphs:
+            logging.info('Number of genes in graph: {}'.format(sg.ndata['gene'].shape[1]))
+            self.training_dataloaders.append(self.wrap_train_dataloader(sg))
+
         self.model = SAGELightning(in_feats=self.sub_graphs[0].ndata['gene'].shape[1], 
                                         n_latent=48,
                                         n_layers=len(self.ngh_sizes),
@@ -536,14 +558,14 @@ class MultiGraphData(pl.LightningDataModule):
         #self.validation_dataloaders = []
 
         for filepath in self.filepaths:
-            logging.info('Subsampling graph from {}'.format(filepath))
+            logging.info('Subsampling graph from {}.'.format(filepath))
             #subsample 1M edges from the graph for training:
             g = dgl.load_graphs(filepath)[0][0]
             random_train_nodes = th.randperm(g.nodes().size(0))[:self.num_nodes_per_graph]
             sg = dgl.khop_in_subgraph(g, g.nodes()[random_train_nodes], k=2)[0]
+            logging.info('Training sample with {} nodes and {} edges.'.format(sg.num_nodes(), sg.num_edges()))
             
             self.sub_graphs.append(sg)
-            self.training_dataloaders.append(self.wrap_train_dataloader(sg))
             #self.validation_dataloaders.append(self.validation_dataloader(sg))
         #self.batch_graph = dgl.batch(graphs)
     
@@ -572,7 +594,7 @@ class MultiGraphData(pl.LightningDataModule):
     #def validation_dataloader(self):
     #    return self.validation_dataloaders
 
-    def train(self,gpus=0, continue_training=False):
+    def train(self,gpus=0, model_file=None, continue_training=False):
         """
         train
 
@@ -593,13 +615,19 @@ class MultiGraphData(pl.LightningDataModule):
         for File in os.listdir(os.path.join(self.folder, '..')):
             if File.count('.ckpt'):
                 is_trained = 1
+                model_path = os.path.join(self.save_to, File)
                 break
+        
+        if type(model_file) != type(None):
+            is_trained = 1
+            model_path = model_file
 
         if is_trained:
-            logging.info('Pretrained model exists in folder, loading model parameters. If you wish to re-train, delete .ckpt file.')
-            self.model = self.model.load_from_checkpoint(os.path.join(self.save_to, File),
+            logging.info('Pretrained model exists in folder {}, loading model parameters. If you wish to re-train, delete .ckpt file.'.format(model_path))
+            self.model = self.model.load_from_checkpoint(model_path,
+                                        in_feats=self.sub_graphs[0].ndata['gene'].shape[1],
                                         n_latent=48,
-                                        n_layers=[20,10],
+                                        n_layers=2,
                                         n_classes=2,
                                         n_hidden=64,
                                         )
@@ -624,9 +652,9 @@ class MultiGraphData(pl.LightningDataModule):
             )
 
         #edges = batch_graph.edges()
-        #train_p_edges = int(batch_graph.num_edges()*self.train_percentage)
-        #train_edges = th.randperm(batch_graph.num_edges())[:train_p_edges]
-        train_edges = self.make_train_test_validation(batch_graph)
+        train_p_edges = int(batch_graph.num_edges()*(self.train_percentage/5))
+        train_edges = th.randperm(batch_graph.num_edges())[:train_p_edges]
+        #train_edges = self.make_train_test_validation(batch_graph)
 
         unlab = dgl.dataloading.DataLoader(
                         batch_graph,
@@ -634,6 +662,7 @@ class MultiGraphData(pl.LightningDataModule):
                         edge_sampler,
                         #negative_sampler=negative_sampler,
                         device=self.device,
+                        use_uva=True,
                         batch_size=self.batch_size,
                         shuffle=True,
                         drop_last=True,
@@ -694,9 +723,9 @@ class MultiGraphData(pl.LightningDataModule):
         edges_bool_train =  th.isin(g.edges()[0],indices_train) & th.isin(g.edges()[1],indices_train) 
         edges_bool_test =  th.isin(g.edges()[0],indices_test) & th.isin(g.edges()[1],indices_test)
 
-        edges_train  = np.random.choice(np.arange(edges_bool_train.shape[0])[edges_bool_train],int(edges_bool_train.sum()*(self.train_percentage/10)),replace=False)
+        edges_train = np.random.choice(np.arange(edges_bool_train.shape[0])[edges_bool_train],int(edges_bool_train.sum()*(self.train_percentage/1)),replace=False)
         #self.edges_test  = np.random.choice(np.arange(edges_bool_test.shape[0])[edges_bool_test],int(edges_bool_test.sum()*(self.train_p/self.fraction_edges)),replace=False)
-        logging.info('Training on {} edges.'.format(self.edges_train.shape[0]))
+        logging.info('Training sample on {} edges.'.format(edges_train.shape[0]))
         #logging.info('Testing on {} edges.'.format(self.edges_test.shape[0]))
         return edges_train
 
@@ -720,34 +749,36 @@ class MultiGraphData(pl.LightningDataModule):
         self.model.eval()
         latent_unlabelled = []
         for g in tqdm(self.sub_graphs):
-            lu, _ = self.model.module.inference(self.batch_graph,
+            lu, _ = self.model.module.inference(g,
                             self.model.device,
                             10*512,
                             0)
+
+            print(lu.shape)
             latent_unlabelled.append(lu.detach().cpu().numpy())
-        self.latent_unlabelled = np.stack(latent_unlabelled)
+        self.latent_unlabelled = np.concatenate(latent_unlabelled)
 
         logging.info('Latent embeddings generated for {} molecules'.format(self.latent_unlabelled.shape[0]))
         
         np.save(self.folder+'/latent',self.latent_unlabelled)
 
         random_sample_train = np.random.choice(
-                                len(self.latent_unlabelled.detach().numpy()), 
+                                len(self.latent_unlabelled), 
                                 np.min([len(self.latent_unlabelled),500000]), 
                                 replace=False)
 
-        training_latents =self.latent_unlabelled.detach().numpy()[random_sample_train,:]
+        training_latents =self.latent_unlabelled[random_sample_train,:]
         adata = sc.AnnData(X=training_latents)
         logging.info('Building neighbor graph for clustering...')
         sc.pp.neighbors(adata, n_neighbors=15)
         logging.info('Running Leiden clustering...')
-        sc.tl.leiden(adata, random_state=42, resolution=1.4)
+        sc.tl.leiden(adata, random_state=42, resolution=1.6)
         logging.info('Leiden clustering done.')
         clusters= adata.obs['leiden'].values
-
+        logging.info('Total of {} found'.format(len(np.unique(clusters))))
         clf = make_pipeline(StandardScaler(), SGDClassifier(max_iter=1000, tol=1e-3))
         clf.fit(training_latents, clusters)
-        clusters = clf.predict(self.latent_unlabelled.detach().numpy()).astype('uint16')
+        clusters = clf.predict(self.latent_unlabelled).astype('uint16')
         dump(clf, 'MultiGraphNeighborhoodClassifier.joblib') 
 
 
