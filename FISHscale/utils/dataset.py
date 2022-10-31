@@ -319,7 +319,8 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         from diameter_clustering import QTClustering, MaxDiameterClustering
         #from diameter_clustering.dist_matrix import compute_sparse_dist_matrix
         from sklearn.cluster import DBSCAN, MiniBatchKMeans #, AgglomerativeClustering, OPTICS
-        from hdbscan import HDBSCAN
+        #from hdbscan import HDBSCAN
+        #from multiprocesspandas import applyparallel
 
         #from diameter_clustering import QTClustering
         
@@ -408,7 +409,10 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             segmentation['Segmentation'] = segmentation['tmp_segment']
             return segmentation
             
+        from joblib import Parallel, delayed, wrap_non_picklable_objects
+        import multiprocessing
         #from shapely import geometry
+        @wrap_non_picklable_objects
         def get_counts(cell_i_g,dblabel):
             gene, cell =  np.unique(cell_i_g,return_counts=True)
             d = pd.DataFrame({dblabel:cell},index=gene)
@@ -416,22 +420,13 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             data = pd.concat([g,d],join='outer',axis=1).fillna(0)
             return data.values.astype('int16')
 
-        def cell_extract(part):
-            if part[0] != type(None) and part[0] > -1:
-                cell = part[1]
-                dblabel = cell.Segmentation.values[0]
-                mat = get_counts(cell.g.values,dblabel)
-                centroid = cell.x.values.mean().astype('float32'),cell.y.values.mean().astype('float32'),
-                cl= partition_count
-
-                return mat, centroid, cl, dblabel
-            else:
-                return None, None, None, None
-                #polygons.append(centroid)
-                #matrices.append(mat)
-                #labels_list.append(dblabel)
-                #centroids.append(np.array(centroid))
-                #clusters.append(cl)
+        @wrap_non_picklable_objects
+        def cell_extract(cell):
+            dblabel = cell['Segmentation'][0]
+            mat = get_counts(cell['g'],dblabel)
+            centroid = cell['x'],cell['y']
+            centroid = sum(centroid[0])/len(centroid[0]), sum(centroid[1])/len(centroid[1])
+            return dblabel, centroid, mat
 
 
         logging.info('Running segmentation by: {}'.format(label_column))
@@ -442,13 +437,13 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             makedirs(path.join(save_to,'Segmentation'))
 
         count = 0
-        partition_count = 0
+        #partition_count = 0
         matrices, labels_list, centroids, polygons, clusters = [], [], [], [], []
         segmentation_results = []
         labels_segmentation = []
         logging.info('Segmentation V2')
-        for x in trange(self.dask_attrs[label_column].npartitions - 1):
-            partition = self.dask_attrs[label_column].get_partition(x).compute()
+        for nx in trange(self.dask_attrs[label_column].npartitions - 1):
+            partition = self.dask_attrs[label_column].get_partition(nx).compute()
             partition = segmentation(partition)
             s = partition.Segmentation.values
             dic = dict(
@@ -472,31 +467,21 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 labels_segmentation += labels.tolist()
                 count =  np.max(np.array(labels_segmentation)) +1
                 logging.info('Groupby partition')
-                partition_grp = partition.groupby('Segmentation')
-                logging.info('Groupby partition done')
-                added = 0
+                #partition_grp = partition.groupby('Segmentation')
 
-                for part in tqdm(partition_grp):
-                    if part[0] != type(None) and part[0] > -1:
-                        cell = part[1]
-                        dblabel = cell.Segmentation.values[0]
-                        mat = get_counts(cell.g.values,dblabel)
- 
-                        centroid = cell.x.values.mean().astype('float32'),cell.y.values.mean().astype('float32'),
-                        cl= partition_count
-
-                        polygons.append(centroid)
-                        matrices.append(mat)
-                        labels_list.append(dblabel)
-                        centroids.append(np.array(centroid))
-                        clusters.append(cl)
-                        added += 1
-
-                if added > 0:
-                    logging.info('GScluster did not produce any cells, removing number {} from the list'.format(x))
-                    #partition[label_column] = np.ones_like(partition['Segmentation'].values)*partition_count
-                    partition.to_parquet(path.join(save_to,'Segmentation','{}.parquet'.format(partition_count)))
-                partition_count += 1
+                partition.to_parquet(path.join(save_to,'Segmentation','{}.parquet'.format(nx)))
+                partition_filt = partition[partition.Segmentation != -1]
+                result_grp = Parallel(n_jobs=multiprocessing.cpu_count(), backend='threading')(delayed(cell_extract)(part.to_dict('list')) for _, part in partition_filt.groupby('Segmentation'))
+                for dbl, centroid, mat in result_grp:
+                    labels_list.append(dbl)
+                    centroids.append(centroid)
+                    matrices.append(mat)
+                    clusters.append(nx)
+                    polygons.append(centroid)
+                
+                partition[label_column] = np.ones_like(partition['Segmentation'].values)*nx
+            else:
+                logging.info('GScluster did not produce any cells, removing number {} from the list'.format(nx))
 
         matrices = np.concatenate(matrices,axis=1)
         logging.info('Shape of gene X cell matrix: {}'.format(matrices.shape))
