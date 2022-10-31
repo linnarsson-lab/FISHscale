@@ -772,7 +772,7 @@ class MultiGraphData(pl.LightningDataModule):
         logging.info('Building neighbor graph for clustering...')
         sc.pp.neighbors(adata, n_neighbors=15)
         logging.info('Running Leiden clustering...')
-        sc.tl.leiden(adata, random_state=42, resolution=1.6)
+        sc.tl.leiden(adata, random_state=42, resolution=1.8)
         logging.info('Leiden clustering done.')
         clusters= adata.obs['leiden'].values
         logging.info('Total of {} found'.format(len(np.unique(clusters))))
