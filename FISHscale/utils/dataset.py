@@ -460,7 +460,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                     )
                 )
             labels = np.array([dic[x]+count if x >= 0 and (s == x).sum() >= 10 else -1 for x in s]) 
-            logging.info('Segmentation of label {}. Min label: {} and max label: {}'.format(x, labels.min(), labels.max()))
+            logging.info('Segmentation of label {}. Min label: {} and max label: {}'.format(nx, labels.min(), labels.max()))
             partition['Segmentation'] = labels
 
             if labels.max() >= 0:
