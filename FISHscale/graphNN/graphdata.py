@@ -534,7 +534,9 @@ class MultiGraphData(pl.LightningDataModule):
         self.training_dataloaders = []
         for sg in self.sub_graphs:
             logging.info('Number of genes in graph: {}'.format(sg.ndata['gene'].shape[1]))
-            self.training_dataloaders.append(self.wrap_train_dataloader(sg))
+            #self.training_dataloaders.append(self.wrap_train_dataloader(sg))
+        self.batch_graph = dgl.batch(self.sub_graphs)
+
 
         self.model = SAGELightning(in_feats=self.sub_graphs[0].ndata['gene'].shape[1], 
                                         n_latent=48,
@@ -660,6 +662,40 @@ class MultiGraphData(pl.LightningDataModule):
 
         unlab = dgl.dataloading.DataLoader(
                         batch_graph,
+                        train_edges,
+                        edge_sampler,
+                        #negative_sampler=negative_sampler,
+                        device=self.device,
+                        use_uva=True,
+                        batch_size=self.batch_size,
+                        shuffle=True,
+                        drop_last=True,
+                        num_workers=self.num_workers,
+                        )
+        return unlab
+
+    def wrap_train_dataloader_batch(self):
+        """
+        train_dataloader
+
+        Prepare dataloader
+
+        Returns:
+            dgl.dataloading.EdgeDataLoader: Deep Graph Library dataloader.
+        """        
+        negative_sampler = dgl.dataloading.negative_sampler.Uniform(3)
+        edge_sampler = dgl.dataloading.as_edge_prediction_sampler(
+            dgl.dataloading.NeighborSampler([int(_) for _ in self.ngh_sizes]),
+            negative_sampler=negative_sampler,
+            )
+
+        #edges = batch_graph.edges()
+        train_p_edges = int(self.batch_graph.num_edges()*(self.train_percentage/10))
+        train_edges = th.randperm(self.batch_graph.num_edges())[:train_p_edges]
+        #train_edges = self.make_train_test_validation(batch_graph)
+
+        unlab = dgl.dataloading.DataLoader(
+                        self.batch_graph,
                         train_edges,
                         edge_sampler,
                         #negative_sampler=negative_sampler,
