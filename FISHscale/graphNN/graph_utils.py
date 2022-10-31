@@ -513,6 +513,7 @@ class GraphPlotting:
                     os.mkdir('{}/Clusters'.format(self.folder))
 
                 self.clusters = np.array(clusters)
+                logging.info('Clusters {}'.format(np.unique(self.clusters)))
                 new_labels = np.zeros(self.data.shape[0]) -1
                 for i,l in zip(molecules_id, self.clusters):
                     new_labels[i] = l
