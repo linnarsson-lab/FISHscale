@@ -467,8 +467,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 labels_segmentation += labels.tolist()
                 count =  np.max(np.array(labels_segmentation)) +1
                 logging.info('Groupby partition')
-                #partition_grp = partition.groupby('Segmentation')
-
+                #partition_grp = partition.groupby('Segmentation'
                 partition.to_parquet(path.join(save_to,'Segmentation','{}.parquet'.format(nx)))
                 partition_filt = partition[partition.Segmentation != -1]
                 result_grp = Parallel(n_jobs=multiprocessing.cpu_count(), backend='threading')(delayed(cell_extract)(part.to_dict('list')) for _, part in partition_filt.groupby('Segmentation'))
