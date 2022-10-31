@@ -471,13 +471,18 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 clusterN = partition[label_column].values[0]
                 partition.to_parquet(path.join(save_to,'Segmentation','{}.parquet'.format(clusterN)))
                 partition_filt = partition[partition.Segmentation != -1]
-                result_grp = Parallel(n_jobs=multiprocessing.cpu_count(), backend='threading')(delayed(cell_extract)(part.to_dict('list')) for _, part in partition_filt.groupby('Segmentation'))
-                for dbl, centroid, mat in result_grp:
+                dbl, centroid, mat = Parallel(n_jobs=multiprocessing.cpu_count(), backend='threading')(delayed(cell_extract)(part.to_dict('list')) for _, part in partition_filt.groupby('Segmentation'))
+                labels_list += dbl
+                centroids += centroid
+                matrices += mat
+                clusters += [clusterN]*len(mat)
+                polygons += centroid
+                '''for dbl, centroid, mat in result_grp:
                     labels_list.append(dbl)
                     centroids.append(centroid)
                     matrices.append(mat)
                     clusters.append(clusterN)
-                    polygons.append(centroid)
+                    polygons.append(centroid)'''
                 
                 #partition[label_column] = np.ones_like(partition['Segmentation'].values)*nx
             else:
