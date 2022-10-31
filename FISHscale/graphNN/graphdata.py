@@ -501,7 +501,8 @@ class MultiGraphData(pl.LightningDataModule):
         num_workers:int=1,
         analysis_name:str='MultiGraph',
         n_epochs:int=3,
-        save_to:str =''
+        save_to:str ='',
+        lr = 1e-4,
         ):
         
         self.filepaths = filepaths
@@ -514,7 +515,7 @@ class MultiGraphData(pl.LightningDataModule):
         self.folder = self.save_to+self.analysis_name+ '_' +datetime.now().strftime("%Y-%m-%d-%H%M%S")
         self.n_epochs = n_epochs
         self.num_nodes_per_graph = num_nodes_per_graph
-
+        self.lr = lr
         os.mkdir(self.folder)
         self.device = th.device('cuda' if th.cuda.is_available() else 'cpu')
 
@@ -540,6 +541,7 @@ class MultiGraphData(pl.LightningDataModule):
                                         n_layers=len(self.ngh_sizes),
                                         n_classes=2,
                                         n_hidden=64,
+                                        lr=self.lr,
                                     )
         self.model.to(self.device)
         self.setup()
