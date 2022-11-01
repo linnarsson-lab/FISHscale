@@ -44,8 +44,9 @@ except ModuleNotFoundError as e:
 from tqdm import tqdm
 from difflib import get_close_matches
 import logging
-
-from FISHscale.utils.segmentation_utils import segmentation_dots, resegmentation_dots
+from joblib import Parallel, delayed
+import multiprocessing
+from FISHscale.utils.segmentation_utils import _segmentation_dots, _resegmentation_dots, _cell_extract
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s',stream=sys.stdout, level=logging.INFO,force=True,)
 
 
@@ -342,7 +343,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         for nx in trange(self.dask_attrs[label_column].npartitions - 1):
             partition = self.dask_attrs[label_column].get_partition(nx).compute()
             logging.info('Initiation segmentation of cluster: {}'.format(nx))
-            partition = segmentation_dots(partition, segmentation_function, resegmentation_dots)
+            partition = _segmentation_dots(partition, segmentation_function, _resegmentation_dots)
             logging.info('Segmentation done.')
             s = partition.Segmentation.values
             dic = dict(
@@ -371,7 +372,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 partition.to_parquet(path.join(save_to,'Segmentation','{}.parquet'.format(clusterN)))
                 partition_filt = partition[partition.Segmentation != -1]
                 result_grp = Parallel(
-                    n_jobs=multiprocessing.cpu_count(), backend='multiprocessing')(delayed(cell_extract)(part.to_dict('list'), self.unique_genes) for _, part in partition_filt.groupby('Segmentation'))
+                    n_jobs=multiprocessing.cpu_count(), backend='loky')(delayed(_cell_extract)(part.to_dict('list'), self.unique_genes) for _, part in partition_filt.groupby('Segmentation'))
                 for dbl, centroid, mat in result_grp:
                     labels_list.append(dbl)
                     centroids.append(centroid)

@@ -8,16 +8,16 @@ from sklearn.cluster import DBSCAN, MiniBatchKMeans , AgglomerativeClustering#, 
 from scipy.spatial import distance
 import logging
 
-def get_counts(cell_i_g,dblabel, unique_genes):
+def _get_counts(cell_i_g,dblabel, unique_genes):
     gene, cell = np.unique(cell_i_g,return_counts=True)
     d = pd.DataFrame({dblabel:cell},index=gene)
     g= pd.DataFrame(index=unique_genes)
     data = pd.concat([g,d],join='outer',axis=1).fillna(0)
     return data.values.astype('int16')
 
-def cell_extract(cell, unique_genes):
+def _cell_extract(cell, unique_genes):
     dblabel = cell['Segmentation'][0]
-    mat = get_counts(cell['g'],dblabel, unique_genes)
+    mat = _get_counts(cell['g'],dblabel, unique_genes)
     centroid = cell['x'],cell['y']
     centroid = sum(centroid[0])/len(centroid[0]), sum(centroid[1])/len(centroid[1])
     return dblabel, centroid, mat
@@ -32,7 +32,7 @@ def _distance(data, dist):
     else:
         return False
 
-def resegmentation_dots(data):
+def _resegmentation_dots(data):
     p = data.loc[:,['x','y']].values
     A= p.max(axis=0) - p.min(axis=0)
     A = np.abs(A)
@@ -78,23 +78,23 @@ def resegmentation_dots(data):
     #resegmentation_data.append(data)
     return data
 
-def segmentation_dots(partition, func, resegmentation_function):
-            cl_molecules_xy = partition.loc[:,['x','y']].values
-            segmentation = func.fit_predict(cl_molecules_xy)
-            partition['tmp_sement'] = segmentation.astype(np.int64)
-            indexes, resegmentation = [],[]
-            resegmentation_data = []
-            count = 0
-            logging.info('DBSCAN done. Resegmentation started')
-            #for _, data in partition.groupby('tmp_sement'):
-            #    data
-            results_resegmentation = Parallel(n_jobs=multiprocessing.cpu_count(), backend='multiprocessing')(delayed(resegmentation_function)(part) for _, part in partition.groupby('tmp_sement'))
-            resegmentation = []
-            count = 0
-            for i in results_resegmentation:
-                resegmentation += i['tmp_segment'].tolist()
-                segmentation2 = np.array([x+count if x >= 0 else -1 for x in i.tmp_sement])
-                count = np.max(np.array(resegmentation)) + 2
-            segmentation = pd.concat(results_resegmentation)
-            segmentation['Segmentation'] = segmentation['tmp_segment']
-            return segmentation
+def _segmentation_dots(partition, func, resegmentation_function):
+    cl_molecules_xy = partition.loc[:,['x','y']].values
+    segmentation = func.fit_predict(cl_molecules_xy)
+    partition['tmp_sement'] = segmentation.astype(np.int64)
+    indexes, resegmentation = [],[]
+    resegmentation_data = []
+    count = 0
+    logging.info('DBSCAN done. Resegmentation started')
+    #for _, data in partition.groupby('tmp_sement'):
+    #    data
+    results_resegmentation = Parallel(n_jobs=multiprocessing.cpu_count(), backend='multiprocessing')(delayed(resegmentation_function)(part) for _, part in partition.groupby('tmp_sement'))
+    resegmentation = []
+    count = 0
+    for i in results_resegmentation:
+        resegmentation += i['tmp_segment'].tolist()
+        segmentation2 = np.array([x+count if x >= 0 else -1 for x in i.tmp_sement])
+        count = np.max(np.array(resegmentation)) + 2
+    segmentation = pd.concat(results_resegmentation)
+    segmentation['Segmentation'] = segmentation['tmp_segment']
+    return segmentation
