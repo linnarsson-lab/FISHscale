@@ -473,10 +473,10 @@ class GraphPlotting:
                 from joblib import load
                 clf = load(multigraph_classifier)
                 clusters = clf.predict(self.latent_unlabelled.detach().numpy())
-                #cluster_probs = clf.predict_proba(self.latent_unlabelled.detach().numpy())
-                #max_clusters = np.max(clusters)
-                #probability_th =1/max_clusters
-                #clusters = np.array([lab if x[lab] >= probability_th else -1  for x,lab in zip(cluster_probs,clusters)])
+                cluster_probs = clf.predict_proba(self.latent_unlabelled.detach().numpy())
+                max_clusters = np.max(clusters)
+                probability_th =1/max_clusters
+                clusters = np.array([lab if x[lab] >= probability_th else -1  for x,lab in zip(cluster_probs,clusters)])
 
                 molecules_id = self.g.ndata['indices']
                 import gc
