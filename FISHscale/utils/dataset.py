@@ -394,22 +394,16 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         self.set_working_selection(level = None)
         
     def segment(self,
-                    label_column,
-                    save_to=None,
-                    segmentation_function=None,
-                    ):
+                label_column,
+                save_to=None,
+                segmentation_function=None,
+                ):
                     
         from tqdm import trange
         from scipy import sparse
         from dask.diagnostics import ProgressBar
         from dask import dataframe as dd
         import shutil
-        #from shapely import geometry
-
-        #from hdbscan import HDBSCAN
-        #from multiprocesspandas import applyparallel
-
-        #from diameter_clustering import QTClustering
         
         """
         Run DBscan segmentation on self.data, this will reassign a column on self.data with column_name
