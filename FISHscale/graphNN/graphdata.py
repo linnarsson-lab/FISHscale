@@ -819,7 +819,7 @@ class MultiGraphData(pl.LightningDataModule):
         logging.info('Leiden clustering done.')
         clusters= adata.obs['leiden'].values
         logging.info('Total of {} found'.format(len(np.unique(clusters))))
-        clf = make_pipeline(StandardScaler(), SGDClassifier(max_iter=1000, tol=1e-3))
+        clf = make_pipeline(StandardScaler(), SGDClassifier(loss='log_loss',class_weight='balanced', max_iter=1000, tol=1e-3))
         clf.fit(training_latents, clusters)
         clusters = clf.predict(self.latent_unlabelled).astype('uint16')
         dump(clf, 'MultiGraphNeighborhoodClassifier.joblib') 
