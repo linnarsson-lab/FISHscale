@@ -509,7 +509,7 @@ class GraphPlotting:
                 ds.ra['enrichment'] = r
 
                 dic = dict(zip(cell_unique_clusters, np.arange(cell_unique_clusters.shape[0])))
-                self.clusters = np.array([i if i in dic else -1 for i in self.clusters], dtype=np.uint8)
+                self.clusters = np.array([i if i in dic else -1 for i in self.clusters], dtype=np.int8)
                 cell_clusters = clusters_#np.array([dic[i] for i in clusters_])
                 ds.ca['Clusters'] = cell_clusters.astype('str')
                 self.cell_unique_clusters = np.unique(cell_clusters)
@@ -595,7 +595,9 @@ class GraphPlotting:
             
             colors = colorize(np.arange(np.max(clf.classes_.astype('int8'))+1))
             color_dic = {}
+            logging.info('Clusters max {}'.format(np.max(self.clusters)))
             for x in np.unique(self.clusters):
+                logging.info('cluster {}'.format(x))
                 c = colors[x,:].tolist()
                 color_dic[x] = (c[0],c[1],c[2])
             logging.info(color_dic)
