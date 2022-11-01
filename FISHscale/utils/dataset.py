@@ -46,7 +46,10 @@ from difflib import get_close_matches
 import logging
 from joblib import Parallel, delayed
 import multiprocessing
-
+from diameter_clustering import QTClustering, MaxDiameterClustering
+#from diameter_clustering.dist_matrix import compute_sparse_dist_matrix
+from sklearn.cluster import DBSCAN, MiniBatchKMeans , AgglomerativeClustering#, OPTICS
+from scipy.spatial import distance
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s',stream=sys.stdout, level=logging.INFO,force=True,)
 
 def get_counts(cell_i_g,dblabel, unique_genes):
@@ -63,12 +66,12 @@ def cell_extract(cell, unique_genes):
     centroid = sum(centroid[0])/len(centroid[0]), sum(centroid[1])/len(centroid[1])
     return dblabel, centroid, mat
 
-def _distance(data):
+def _distance(data, dist):
     p = data.loc[:,['x','y']].values
     A= p.max(axis=0) - p.min(axis=0)
     A = np.abs(A)
     max_dist =  np.max(A)
-    if max_dist <= 65: #*self.pixel_size.magnitude
+    if max_dist <= dist: #*self.pixel_size.magnitude
         return True
     else:
         return False
@@ -102,10 +105,11 @@ def segmentation(partition, func):
                     sub_max = segmentation2.max()
                     segmentation_ = []
                     for x in np.unique(segmentation2):
-                        if (segmentation2 == x).sum() >= 10 and x > -1 and _distance(data[segmentation2 ==x]):
+                        distd = data[segmentation2 ==x]
+                        if (segmentation2 == x).sum() >= 10 and x > -1 and _distance(distd, 65):
                             pass
                             #segmentation_.append(x)
-                        elif (segmentation2 == x).sum() >= 10 and x > -1 and _distance(data[segmentation2 ==x]) == False:
+                        elif (segmentation2 == x).sum() >= 10 and x > -1 and _distance(distd, 65) == False:
                             p2 = p[segmentation2 ==x,:]
                             #logging.info('QTC was required on sample size: {}'.format(p2.shape))
                             segmentation3= QTClustering(max_radius=25,min_cluster_size=12,metric='euclidean',verbose=False).fit_predict(p2).astype(np.int64) #*self.pixel_size.magnitude
@@ -393,7 +397,6 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                     label_column,
                     save_to=None,
                     segmentation_function=None,
-                    adjust_n_clusters=None,
                     ):
                     
         from tqdm import trange
@@ -401,11 +404,8 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         from dask.diagnostics import ProgressBar
         from dask import dataframe as dd
         import shutil
-        from shapely import geometry
-        from scipy.spatial import distance
-        from diameter_clustering import QTClustering, MaxDiameterClustering
-        #from diameter_clustering.dist_matrix import compute_sparse_dist_matrix
-        from sklearn.cluster import DBSCAN, MiniBatchKMeans , AgglomerativeClustering#, OPTICS
+        #from shapely import geometry
+
         #from hdbscan import HDBSCAN
         #from multiprocesspandas import applyparallel
 
