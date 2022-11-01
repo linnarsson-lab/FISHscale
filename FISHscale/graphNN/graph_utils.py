@@ -534,7 +534,7 @@ class GraphPlotting:
                 ds.ra['enrichment'] = r
 
                 dic = dict(zip(cell_unique_clusters, np.arange(cell_unique_clusters.shape[0])))
-                self.clusters = np.array([i if i in dic else -1 for i in self.clusters])
+                self.clusters = np.array([i if i in dic else -1 for i in self.clusters], dtype=np.uint8)
                 cell_clusters = clusters_#np.array([dic[i] for i in clusters_])
                 ds.ca['Clusters'] = cell_clusters.astype('str')
                 self.cell_unique_clusters = np.unique(cell_clusters)
@@ -548,7 +548,7 @@ class GraphPlotting:
             for c in range(np.unique(clusters_).shape[0]):
                 en_genes = enrichment[:,c][:10]
                 enriched_genes[c] = self.data.unique_genes[en_genes]
-            self.g.ndata['GSclusters'] = th.tensor(self.clusters,dtype=th.int64)
+            self.g.ndata['GSclusters'] = th.tensor(self.clusters,dtype=th.uint64)
             np.save(self.folder+'/clusters',self.clusters)
 
             ### Add data to shoji ###
