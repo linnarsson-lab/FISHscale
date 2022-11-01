@@ -84,7 +84,7 @@ def _segmentation_dots(partition, func, resegmentation_function):
     partition['tmp_sement'] = segmentation.astype(np.int64)
     indexes, resegmentation = [],[]
     resegmentation_data = []
-    results_resegmentation = Parallel(n_jobs=1, temp_folder='/wsfish/tmp/',mmap_mode='w+')(delayed(resegmentation_function)(part) for _, part in partition.groupby('tmp_sement'))
+    results_resegmentation = Parallel(n_jobs=multiprocessing.cpu_count(), temp_folder='/wsfish/tmp/',mmap_mode='w+')(delayed(resegmentation_function)(part) for _, part in partition.groupby('tmp_sement'))
     resegmentation = []
     new_results_resegmentation = []
     count = 0

@@ -372,7 +372,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 partition.to_parquet(path.join(save_to,'Segmentation','{}.parquet'.format(clusterN)))
                 partition_filt = partition[partition.Segmentation != -1]
                 result_grp = Parallel(
-                    n_jobs=1, temp_folder='/wsfish/tmp/', mmap_mode='w+')(delayed(_cell_extract)(part.to_dict('list'), self.unique_genes) for _, part in partition_filt.groupby('Segmentation'))
+                    n_jobs=multiprocessing.cpu_count(), temp_folder='/wsfish/tmp/', mmap_mode='w+')(delayed(_cell_extract)(part.to_dict('list'), self.unique_genes) for _, part in partition_filt.groupby('Segmentation'))
                 for dbl, centroid, mat in result_grp:
                     labels_list.append(dbl)
                     centroids.append(centroid)
