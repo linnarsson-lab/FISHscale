@@ -46,6 +46,22 @@ from difflib import get_close_matches
 import logging
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s',stream=sys.stdout, level=logging.INFO,force=True,)
 
+#@staticmethod
+def get_counts(cell_i_g,dblabel, unique_genes):
+    gene, cell = np.unique(cell_i_g,return_counts=True)
+    d = pd.DataFrame({dblabel:cell},index=gene)
+    g= pd.DataFrame(index=unique_genes)
+    data = pd.concat([g,d],join='outer',axis=1).fillna(0)
+    return data.values.astype('int16')
+
+#@wrap_non_picklable_objects
+#@staticmethod
+def cell_extract(cell, unique_genes):
+    dblabel = cell['Segmentation'][0]
+    mat = get_counts(cell['g'],dblabel, unique_genes)
+    centroid = cell['x'],cell['y']
+    centroid = sum(centroid[0])/len(centroid[0]), sum(centroid[1])/len(centroid[1])
+    return dblabel, centroid, mat
 
 class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, AttributeScatter, SpatialMetrics, DataLoader, Normalization, 
               Density1D, BoneFight, Decomposition, Boundaries, Gene_order, Cellpose, 
@@ -412,22 +428,6 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         from joblib import Parallel, delayed, wrap_non_picklable_objects
         import multiprocessing
         #from shapely import geometry
-        @wrap_non_picklable_objects
-        def get_counts(cell_i_g,dblabel):
-            gene, cell =  np.unique(cell_i_g,return_counts=True)
-            d = pd.DataFrame({dblabel:cell},index=gene)
-            g= pd.DataFrame(index=self.unique_genes)
-            data = pd.concat([g,d],join='outer',axis=1).fillna(0)
-            return data.values.astype('int16')
-
-        @wrap_non_picklable_objects
-        def cell_extract(cell):
-            dblabel = cell['Segmentation'][0]
-            mat = get_counts(cell['g'],dblabel)
-            centroid = cell['x'],cell['y']
-            centroid = sum(centroid[0])/len(centroid[0]), sum(centroid[1])/len(centroid[1])
-            return dblabel, centroid, mat
-
 
         logging.info('Running segmentation by: {}'.format(label_column))
         if path.exists(path.join(save_to,'Segmentation')):
@@ -473,7 +473,8 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 clusterN = partition[label_column].values[0]
                 partition.to_parquet(path.join(save_to,'Segmentation','{}.parquet'.format(clusterN)))
                 partition_filt = partition[partition.Segmentation != -1]
-                result_grp = Parallel(n_jobs=multiprocessing.cpu_count(), backend='threading')(delayed(cell_extract)(part.to_dict('list')) for _, part in partition_filt.groupby('Segmentation'))
+                result_grp = Parallel(
+                    n_jobs=multiprocessing.cpu_count(), backend='multiprocessing')(delayed(cell_extract)(part.to_dict('list'), self.unique_genes) for _, part in partition_filt.groupby('Segmentation'))
                 for dbl, centroid, mat in result_grp:
                     labels_list.append(dbl)
                     centroids.append(centroid)
