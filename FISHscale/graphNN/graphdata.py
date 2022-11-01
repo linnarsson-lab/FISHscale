@@ -790,7 +790,7 @@ class MultiGraphData(pl.LightningDataModule):
         self.model.eval()
         latent_unlabelled = []
 
-        self.sub_graphs = dgl.unbatch(self.subgraphs)
+        self.sub_graphs = dgl.unbatch(self.sub_graphs)
         for g in tqdm(self.sub_graphs):
             lu, _ = self.model.module.inference(g,
                             self.model.device,
