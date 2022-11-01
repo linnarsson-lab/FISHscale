@@ -593,7 +593,7 @@ class GraphPlotting:
             logging.info('Generating umap embedding...')
             gc.collect()
             
-            colors = colorize(np.arange(clf.classes_.max()+1))
+            colors = colorize(np.arange(np.max(clf.classes_.astype('int8'))+1))
             color_dic = {}
             for x in np.unique(self.clusters):
                 c = colors[x,:].tolist()
