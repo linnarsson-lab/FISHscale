@@ -203,42 +203,10 @@ class GraphUtils(object):
         g= dgl.graph((edges[0,:],edges[1,:]),)
         #g = dgl.to_bidirected(g)]
         g.ndata['gene'] = th.tensor(d.toarray(), dtype=th.uint8)#[molecules_id.numpy(),:]
-        #nghs = []
-        #for n in tqdm(ngh_):
-        #    nghs.append(th.tensor(g.ndata['gene'][n,:].sum(axis=0),dtype=th.uint8).numpy())
-        #nghs = np.array(ngh_,dtype=th.uint8)
-        #g.ndata['ngh'] = nghs
 
         if self.smooth:
-            #self.g.ndata['zero'] = th.zeros_like(self.g.ndata['gene'])
-            #self.g.update_all(fn.u_add_v('gene','zero','e'),fn.sum('e','zero'))
-            #self.g.ndata['gene'] = self.g.ndata['zero'] + self.g.ndata['gene']
-            #del self.g.ndata['zero']
             g.ndata['gene'] = nghs
 
-        '''sampler = dgl.dataloading.MultiLayerFullNeighborSampler(1)
-        dataloader = dgl.dataloading.NodeDataLoader(
-            g,
-            th.arange(g.num_nodes()),#.to(g.device),
-            sampler,
-            batch_size=1,
-            shuffle=False,
-            drop_last=False,
-            num_workers=0)
-
-        ngh_ = []
-        for _, _, blocks in tqdm(dataloader):
-            ngh_.append(blocks[0].srcdata['gene'].sum(axis=0))
-        ngh_ = th.stack(ngh_)
-        g.ndata['ngh'] = ngh_'''
-        # Finding fastest algorithm
-        '''
-        g.ndata['zero'] = th.zeros_like(g.ndata['gene'])
-        g.update_all(fn.u_add_v('gene','zero','e'),fn.sum('e','zero'))
-        g.ndata['gene'] = g.ndata['gene']
-        g.ndata['ngh'] = g.ndata['zero'] + g.ndata['gene']
-        del g.ndata['zero']
-        '''
         sum_nodes_connected = th.tensor(np.array(ngh_,dtype=np.uint8))
         print('sum nodes' , sum_nodes_connected.shape , sum_nodes_connected.max())
         molecules_connected = molecules[sum_nodes_connected >= self.minimum_nodes_connected]
@@ -462,7 +430,7 @@ class GraphPlotting:
             if type(multigraph_classifier) == type(None):
                 random_sample_train = np.random.choice(
                                         len(self.latent_unlabelled.detach().numpy()), 
-                                        np.min([len(self.latent_unlabelled),5000]), 
+                                        np.min([len(self.latent_unlabelled),500000]), 
                                         replace=False)
                 training_latents =self.latent_unlabelled.detach().numpy()[random_sample_train,:]
                 adata = sc.AnnData(X=training_latents)
@@ -504,7 +472,11 @@ class GraphPlotting:
             else:
                 from joblib import load
                 clf = load(multigraph_classifier)
-                clusters = clf.predict(self.latent_unlabelled.detach().numpy()).astype('uint16')
+                clusters = clf.predict(self.latent_unlabelled.detach().numpy())
+                cluster_probs = clf.predict_proba(self.latent_unlabelled.detach().numpy())
+                max_clusters = np.max(clusters)
+                probability_th =1/max_clusters
+                clusters = np.array([lab if x[lab] >= probability_th else -1  for x,lab in zip(cluster_probs,clusters)])
 
                 molecules_id = self.g.ndata['indices']
                 import gc
@@ -513,6 +485,7 @@ class GraphPlotting:
                     os.mkdir('{}/Clusters'.format(self.folder))
 
                 self.clusters = np.array(clusters)
+
                 logging.info('Clusters {}'.format(np.unique(self.clusters)))
                 new_labels = np.zeros(self.data.shape[0]) -1
                 for i,l in zip(molecules_id, self.clusters):
@@ -548,7 +521,7 @@ class GraphPlotting:
             for c in range(np.unique(clusters_).shape[0]):
                 en_genes = enrichment[:,c][:10]
                 enriched_genes[c] = self.data.unique_genes[en_genes]
-            self.g.ndata['GSclusters'] = th.tensor(self.clusters,dtype=th.uint64)
+            self.g.ndata['GSclusters'] = th.tensor(self.clusters)
             np.save(self.folder+'/clusters',self.clusters)
 
             ### Add data to shoji ###
