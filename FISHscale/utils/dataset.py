@@ -44,6 +44,9 @@ except ModuleNotFoundError as e:
 from tqdm import tqdm
 from difflib import get_close_matches
 import logging
+from joblib import Parallel, delayed
+import multiprocessing
+
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s',stream=sys.stdout, level=logging.INFO,force=True,)
 
 #@staticmethod
@@ -425,10 +428,6 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             segmentation['Segmentation'] = segmentation['tmp_segment']
             return segmentation
             
-        from joblib import Parallel, delayed, wrap_non_picklable_objects
-        import multiprocessing
-        #from shapely import geometry
-
         logging.info('Running segmentation by: {}'.format(label_column))
         if path.exists(path.join(save_to,'Segmentation')):
             shutil.rmtree(path.join(save_to,'Segmentation'))
