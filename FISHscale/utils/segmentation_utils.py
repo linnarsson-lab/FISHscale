@@ -7,6 +7,7 @@ from diameter_clustering import QTClustering, MaxDiameterClustering
 from sklearn.cluster import DBSCAN, MiniBatchKMeans , AgglomerativeClustering#, OPTICS
 from scipy.spatial import distance
 import logging
+from dask import dataframe as dd
 
 def _get_counts(cell_i_g,dblabel, unique_genes):
     gene, cell = np.unique(cell_i_g,return_counts=True)
@@ -86,10 +87,13 @@ def _resegmentation_dots(data):
 def _segmentation_dots(partition, func, resegmentation_function):
     cl_molecules_xy = partition.loc[:,['x','y']].values
     segmentation = func.fit_predict(cl_molecules_xy)
-    partition['tmp_sement'] = segmentation.astype(np.int64)
+    partition['tmp_segment'] = segmentation.astype(np.int64)
     indexes, resegmentation = [],[]
     resegmentation_data = []
-    results_resegmentation = Parallel(n_jobs=multiprocessing.cpu_count(),backend="multiprocessing")(delayed(resegmentation_function)(part) for _, part in partition.groupby('tmp_sement'))
+
+    partition = dd.from_pandas(partition, npartitions=len(partition.tmp_segment.unique()))         
+    result_grp = partition.groupby('tmp_segment').apply(resegmentation_function).compute(scheduler='processes')
+    #results_resegmentation = Parallel(n_jobs=multiprocessing.cpu_count(),backend="multiprocessing")(delayed(resegmentation_function)(part) for _, part in partition.groupby('tmp_sement'))
     resegmentation = []
     new_results_resegmentation = []
     count = 0
