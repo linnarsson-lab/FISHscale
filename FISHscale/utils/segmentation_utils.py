@@ -16,6 +16,8 @@ def _get_counts(cell_i_g,dblabel, unique_genes):
     return data.values.astype('int16')
 
 def _cell_extract(cell, unique_genes):
+    cell =cell.to_dict('list')
+    print(cell)
     dblabel = cell['Segmentation'][0]
     mat = _get_counts(cell['g'],dblabel, unique_genes)
     centroid = cell['x'],cell['y']
