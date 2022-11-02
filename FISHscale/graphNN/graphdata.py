@@ -978,28 +978,6 @@ class MultiGraphDataPredictor(pl.LightningDataModule):
                         num_workers=self.num_workers,
                         )
         return unlab
-    
-    def validation_dataloader(self, graph):
-        """
-        train_dataloader
-
-        Prepare dataloader
-
-        Returns:
-            dgl.dataloading.EdgeDataLoader: Deep Graph Library dataloader.
-        """        
-        
-        validation = dgl.dataloading.NodeDataLoader(
-                        graph,
-                        th.arange(graph.num_nodes(),),
-                        dgl.dataloading.MultiLayerNeighborSampler([-1,-1]),
-                        device=self.device,
-                        batch_size=self.batch_size*1,
-                        shuffle=False,
-                        drop_last=False,
-                        num_workers=self.num_workers,
-                        )
-        return validation
 
     def make_train_test_validation(self, g):
         """
