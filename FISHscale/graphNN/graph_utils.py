@@ -473,12 +473,13 @@ class GraphPlotting:
                 from joblib import load
                 clf = load(multigraph_classifier)
                 clusters = clf.predict(self.latent_unlabelled.detach().numpy()).astype('int8')
-                cluster_probs = clf.predict_proba(self.latent_unlabelled.detach().numpy())
+                cluster_probs = clf.predict_proba(self.latent_unlabelled.detach().numpy()).astype('float32')
                 
+                logging.info('Number of clusters with probability > 0.5: {}'.format(np.sum(cluster_probs.max(axis=1)>0.5)))
                 logging.info('Clusters {}'.format(clusters[:50]))
-                max_clusters = np.max(clusters)
-                probability_th = 1/max_clusters
-                clusters = np.array([lab if x[lab] >= probability_th else -1  for x,lab in zip(cluster_probs,clusters)])
+                #max_clusters = np.max(clusters)
+                #probability_th = 1/max_clusters
+                #clusters = np.array([lab if x[lab] >= probability_th else -1  for x,lab in zip(cluster_probs,clusters)])
 
                 molecules_id = self.g.ndata['indices']
                 import gc
@@ -520,9 +521,12 @@ class GraphPlotting:
             self.enrichment = r
             logging.info('Enrichment shape: {}'.format(self.enrichment.shape))
             enrichment = r.argsort(axis=0)[::-1]
-            for c in range(np.unique(clusters_).shape[0]):
+            self.clusters_agg = []
+            for c in np.unique(clusters_):
                 en_genes = enrichment[:,c][:10]
                 enriched_genes[c] = self.data.unique_genes[en_genes]
+                self.clusters_agg.append(c)
+            self.clusters_agg = np.array(self.clusters_agg)
             self.g.ndata['GSclusters'] = th.tensor(self.clusters)
             np.save(self.folder+'/clusters',self.clusters)
 
@@ -639,7 +643,9 @@ class GraphPlotting:
             allm = 0
             logging.info('Generating plots for cluster assigned to molecules...')
             lay = []
+            logging.info('Clusters print {}'.format(np.unique(self.clusters)))
             for cl in np.unique(self.clusters):
+                logging.info('Printing cluster {}'.format(cl))
                 try:
                     x, y = molecules_x[self.clusters == cl], molecules_y[self.clusters == cl]
                     allm += x.shape[0]
@@ -664,8 +670,6 @@ class GraphPlotting:
             hmap = hv.HoloMap(kdims=['Enrichment - Cluster'])
             for k in nd_dic:
                 hmap[str(k) + ' {}'.format(enriched_genes[float(k)])] = nd_dic[k].opts(bgcolor='black',width=1000,data_aspect=1,size=1,color=color_dic[k])
-                #hmap = hmap.opts(opts.Scatter(bgcolor='black',width=1000,data_aspect=1,size=1))
-
 
             hv.save(hmap, "{}/Clusters.html".format(self.folder),fmt='html')
             self.save_graph()
@@ -937,7 +941,7 @@ class GraphPlotting:
             )#, edge_cmap='viridis', edge_color='Attention')
 
         df = graph.nodes.data
-        enrichment =  self.enrichment[:,cluster]
+        enrichment =  self.enrichment[:,(self.clusters_agg==cluster)]
         enrichmentQ = np.quantile(enrichment,0.5)
         enriched_genes = self.data.unique_genes[enrichment > enrichmentQ]
 

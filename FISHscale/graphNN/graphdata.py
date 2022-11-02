@@ -277,6 +277,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting, GraphDecoder)
         import torch as th
 
         random_state = np.random.RandomState(seed=0)
+
         for gene in range(self.g.ndata['gene'].shape[1]):
             molecules_g = self.g.ndata['gene'][:,gene] == 1
 
@@ -693,9 +694,9 @@ class MultiGraphData(pl.LightningDataModule):
             )
 
         #edges = batch_graph.edges()
-        train_p_edges = int(self.sub_graphs.num_edges()*(self.train_percentage/10))
-        train_edges = th.randperm(self.sub_graphs.num_edges())[:train_p_edges]
-        #train_edges = self.make_train_test_validation(batch_graph)
+        #train_p_edges = int(self.sub_graphs.num_edges()*(self.train_percentage/10))
+        #train_edges = th.randperm(self.sub_graphs.num_edges())[:train_p_edges]
+        train_edges = self.make_train_test_validation(self.sub_graphs)
 
         unlab = dgl.dataloading.DataLoader(
                         self.sub_graphs,
@@ -743,13 +744,14 @@ class MultiGraphData(pl.LightningDataModule):
         """        
         indices_train = []
         indices_test = []
-
         random_state = np.random.RandomState(seed=0)
+        nodes = th.arange(g.num_nodes())
+
         for gene in range(g.ndata['gene'].shape[1]):
             molecules_g = g.ndata['gene'][:,gene] == 1
 
             #if molecules_g.sum() >= 20:
-            indices_g = g.ndata['indices'][molecules_g]
+            indices_g = nodes[molecules_g]
             train_size = int(indices_g.shape[0]*self.train_percentage)
             if train_size == 0:
                 train_size = 1
@@ -762,9 +764,7 @@ class MultiGraphData(pl.LightningDataModule):
             indices_test += test_g
         indices_train, indices_test = th.stack(indices_train), th.stack(indices_test)
         edges_bool_train =  th.isin(g.edges()[0],indices_train) & th.isin(g.edges()[1],indices_train) 
-        edges_bool_test =  th.isin(g.edges()[0],indices_test) & th.isin(g.edges()[1],indices_test)
-
-        edges_train = np.random.choice(np.arange(edges_bool_train.shape[0])[edges_bool_train],int(edges_bool_train.sum()*(self.train_percentage/1)),replace=False)
+        edges_train = np.random.choice(np.arange(edges_bool_train.shape[0])[edges_bool_train],int(edges_bool_train.sum()*(self.train_percentage/10)),replace=False)
         #self.edges_test  = np.random.choice(np.arange(edges_bool_test.shape[0])[edges_bool_test],int(edges_bool_test.sum()*(self.train_p/self.fraction_edges)),replace=False)
         logging.info('Training sample on {} edges.'.format(edges_train.shape[0]))
         #logging.info('Testing on {} edges.'.format(self.edges_test.shape[0]))
@@ -790,17 +790,17 @@ class MultiGraphData(pl.LightningDataModule):
         self.model.eval()
         latent_unlabelled = []
 
-        self.sub_graphs = dgl.unbatch(self.sub_graphs)
-        for g in tqdm(self.sub_graphs):
-            lu, _ = self.model.module.inference(g,
-                            self.model.device,
-                            10*512,
-                            0)
+        #self.sub_graphs = dgl.unbatch(self.sub_graphs)
+        #for g in tqdm(self.sub_graphs):
+        lu, _ = self.model.module.inference(
+                                self.sub_graphs,
+                                self.model.device,
+                                10*512,
+                                0)
 
-            print(lu.shape)
-            latent_unlabelled.append(lu.detach().cpu().numpy())
+        print(lu.shape)
+        latent_unlabelled = lu.detach().cpu().numpy()
         self.latent_unlabelled = np.concatenate(latent_unlabelled)
-
         logging.info('Latent embeddings generated for {} molecules'.format(self.latent_unlabelled.shape[0]))
         
         np.save(self.folder+'/latent',self.latent_unlabelled)
@@ -819,10 +819,13 @@ class MultiGraphData(pl.LightningDataModule):
         logging.info('Leiden clustering done.')
         clusters= adata.obs['leiden'].values
         logging.info('Total of {} found'.format(len(np.unique(clusters))))
-        clf = make_pipeline(StandardScaler(), SGDClassifier(loss='log_loss',class_weight='balanced', max_iter=1000, tol=1e-3))
+        clf = make_pipeline(StandardScaler(), SGDClassifier(loss='log_loss', max_iter=1000, tol=1e-3))
         clf.fit(training_latents, clusters)
-        clusters = clf.predict(self.latent_unlabelled).astype('uint16')
-        dump(clf, 'MultiGraphNeighborhoodClassifier.joblib') 
+        clusters = clf.predict(self.latent_unlabelled).astype('int8')
 
+        clf_total = make_pipeline(StandardScaler(), SGDClassifier(loss='log_loss', max_iter=1000, tol=1e-3))
+        clf_total.fit(self.latent_unlabelled, clusters)
+        clusters = clf.predict(self.latent_unlabelled).astype('int8')
+        dump(clf, 'miniMultiGraphNeighborhoodClassifier.joblib') 
 
 
