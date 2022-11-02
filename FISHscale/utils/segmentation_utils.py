@@ -22,7 +22,7 @@ def _cell_extract(cell, unique_genes):
         dblabel = cell.Segmentation.values[0]
         mat = _get_counts(cell.g.values,dblabel,unique_genes)
         #mat = _get_counts(cell['g'],dblabel, unique_genes)
-        centroid = cell['x'],cell['y']
+        centroid = cell['x'].mean().values,cell['y'].mean().values
         #centroid = sum(centroid[0])/len(centroid[0]), sum(centroid[1])/len(centroid[1])
         return dblabel, centroid, mat
     except:
@@ -96,7 +96,7 @@ def _segmentation_dots(partition, func, resegmentation_function):
     #partition = dd.from_pandas(partition, npartitions=len(partition.tmp_segment.unique()))         
     #results_resegmentation = partition.groupby('tmp_segment').apply(resegmentation_function, meta={'x': 'f8', 'y': 'f8','Clusters':'', 'g', 'tmp_segment', 'z'}).compute(scheduler='processes').values
     #print('results', results_resegmentation)
-    results_resegmentation = Parallel(n_jobs=multiprocessing.cpu_count(),backend="theading")(delayed(resegmentation_function)(part) for _, part in partition.groupby('tmp_segment'))
+    results_resegmentation = Parallel(n_jobs=multiprocessing.cpu_count(),backend="threading")(delayed(resegmentation_function)(part) for _, part in partition.groupby('tmp_segment'))
     resegmentation = []
     new_results_resegmentation = []
     count = 0
