@@ -16,13 +16,16 @@ def _get_counts(cell_i_g,dblabel, unique_genes):
     return data.values.astype('int16')
 
 def _cell_extract(cell, unique_genes):
-    cell =cell.to_dict('list')
-    print(cell)
-    dblabel = cell['Segmentation'][0]
-    mat = _get_counts(cell['g'],dblabel, unique_genes)
-    centroid = cell['x'],cell['y']
-    centroid = sum(centroid[0])/len(centroid[0]), sum(centroid[1])/len(centroid[1])
-    return dblabel, centroid, mat
+    #dblabel = cell['Segmentation'][0]
+    try:
+        dblabel = cell.Segmentation.values[0]
+        mat = _get_counts(cell.g.values,dblabel,unique_genes)
+        #mat = _get_counts(cell['g'],dblabel, unique_genes)
+        centroid = cell['x'],cell['y']
+        #centroid = sum(centroid[0])/len(centroid[0]), sum(centroid[1])/len(centroid[1])
+        return dblabel, centroid, mat
+    except:
+        return None, None, None
 
 def _distance(data, dist):
     p = data.loc[:,['x','y']].values

@@ -316,6 +316,10 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         from dask.diagnostics import ProgressBar
         from dask import dataframe as dd
         import shutil
+
+        from dask.distributed import Client, LocalCluster
+        cluster = LocalCluster(processes=True)
+        client = Client(cluster)
         
         """
         Run DBscan segmentation on self.data, this will reassign a column on self.data with column_name
@@ -376,11 +380,12 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 #result_grp = Parallel(
                 #    n_jobs=multiprocessing.cpu_count(), backend='threading')(delayed(_cell_extract)(part.to_dict('list'), self.unique_genes) for _, part in partition_filt.groupby('Segmentation'))
                 for dbl, centroid, mat in result_grp:
-                    labels_list.append(dbl)
-                    centroids.append(centroid)
-                    matrices.append(mat)
-                    clusters.append(clusterN)
-                    polygons.append(centroid)
+                    if type(mat) != type(None):
+                        labels_list.append(dbl)
+                        centroids.append(centroid)
+                        matrices.append(mat)
+                        clusters.append(clusterN)
+                        polygons.append(centroid)
                 
                 #partition[label_column] = np.ones_like(partition['Segmentation'].values)*nx
             else:
