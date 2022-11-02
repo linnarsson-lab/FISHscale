@@ -379,8 +379,13 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 partition_filt = partition[partition.Segmentation != -1]
                 #partition_filt = dd.from_pandas(partition_filt, npartitions=len(partition_filt.Segmentation.unique()))
                 #result_grp = partition_filt.groupby('Segmentation').apply(_cell_extract, self.unique_genes).compute().values
-                result_grp = Parallel(
-                    n_jobs=multiprocessing.cpu_count(), backend='multiprocessing')(delayed(_cell_extract)(part, self.unique_genes) for _, part in partition_filt.groupby('Segmentation'))
+                #result_grp = Parallel(
+                #    n_jobs=multiprocessing.cpu_count(), backend='multiprocessing')(delayed(_cell_extract)(part, self.unique_genes) for _, part in partition_filt.groupby('Segmentation'))
+
+                with multiprocessing.Pool(multiprocessing.cpu_count()) as pool:
+                    queue = multiprocessing.Manager().Queue()
+                    result_grp = pool.map(_cell_extract, [(part, self.unique_genes) for _, part in partition_filt.groupby('Segmentation')])
+
                 for dbl, centroid, mat in result_grp:
                     if type(mat) != type(None):
                         labels_list.append(dbl)
@@ -495,7 +500,13 @@ def _segmentation_dots(partition, func):
     #partition = dd.from_pandas(partition, npartitions=len(partition.tmp_segment.unique()))         
     #results_resegmentation = partition.groupby('tmp_segment').apply(resegmentation_function, meta={'x': 'f8', 'y': 'f8','Clusters':'', 'g', 'tmp_segment', 'z'}).compute(scheduler='processes').values
     #print('results', results_resegmentation)
-    results_resegmentation = Parallel(n_jobs=multiprocessing.cpu_count(),backend="multiprocessing")(delayed(_resegmentation_dots)(part) for _, part in partition.groupby('tmp_segment'))
+    #results_resegmentation = Parallel(n_jobs=multiprocessing.cpu_count(),backend="multiprocessing")(delayed(resegmentation_function)(part) for _, part in partition.groupby('tmp_segment'))
+
+    with multiprocessing.Pool(multiprocessing.cpu_count()) as pool:
+        queue = multiprocessing.Manager().Queue()
+        results_resegmentation = pool.map(_resegmentation_dots, [(part ) for _, part in partition.groupby('tmp_segment')])
+        #results_resegmentation = results_resegmentation.get()
+
     resegmentation = []
     new_results_resegmentation = []
     count = 0
