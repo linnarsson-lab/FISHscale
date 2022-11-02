@@ -96,7 +96,7 @@ def _segmentation_dots(partition, func, resegmentation_function):
     #partition = dd.from_pandas(partition, npartitions=len(partition.tmp_segment.unique()))         
     #results_resegmentation = partition.groupby('tmp_segment').apply(resegmentation_function, meta={'x': 'f8', 'y': 'f8','Clusters':'', 'g', 'tmp_segment', 'z'}).compute(scheduler='processes').values
     #print('results', results_resegmentation)
-    results_resegmentation = Parallel(n_jobs=multiprocessing.cpu_count(),backend="multiprocessing")(delayed(resegmentation_function)(part) for _, part in partition.groupby('tmp_segment'))
+    results_resegmentation = Parallel(n_jobs=multiprocessing.cpu_count(),backend="theading")(delayed(resegmentation_function)(part) for _, part in partition.groupby('tmp_segment'))
     resegmentation = []
     new_results_resegmentation = []
     count = 0
