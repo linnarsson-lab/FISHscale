@@ -343,7 +343,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         for nx in trange(self.dask_attrs[label_column].npartitions - 1):
             partition = self.dask_attrs[label_column].get_partition(nx).compute()
             logging.info('Initiation segmentation of cluster: {}'.format(nx))
-            partition = _segmentation_dots(partition, segmentation_function, _resegmentation_dots)
+            partition = _segmentation_dots(partition, segmentation_function)
             logging.info('Segmentation done.')
             s = partition.Segmentation.values
             dic = dict(
