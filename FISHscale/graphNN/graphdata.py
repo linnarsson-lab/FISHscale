@@ -827,6 +827,7 @@ class MultiGraphData(pl.LightningDataModule):
         clf_total.fit(self.latent_unlabelled, clusters)
         clusters = clf.predict(self.latent_unlabelled).astype('int8')
         dump(clf, 'miniMultiGraphNeighborhoodClassifier.joblib') 
+        self.sub_graphs.ndata['label'] = th.tensor(clusters)
 
 
 class MultiGraphDataPredictor(pl.LightningDataModule):
