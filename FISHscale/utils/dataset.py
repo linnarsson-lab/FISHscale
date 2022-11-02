@@ -420,8 +420,9 @@ def _get_counts(cell_i_g,dblabel, unique_genes):
     data = pd.concat([g,d],join='outer',axis=1).fillna(0)
     return data.values.astype('int16')
 
+@numba.njit(parallel=True)
 def _cell_extract(cell_unique_genes):
-    cell, cell_unique_genes = cell_unique_genes
+    cell, unique_genes = cell_unique_genes
     #dblabel = cell['Segmentation'][0]
     try:
         dblabel = cell.Segmentation.values[0]
