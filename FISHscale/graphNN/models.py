@@ -116,6 +116,7 @@ class SAGELightning(LightningModule):
             if self.loss_type == 'unsupervised':
                 graph_loss = self.loss_fcn(zn_loc, pos, neg).mean()
             else:
+                #loss_fcn = nn.CrossEntropyLoss()
                 graph_loss = F.cross_entropy(zn_loc, mfgs[-1].dstdata['label'])
             opt_g = self.optimizers()
             opt_g.zero_grad()
