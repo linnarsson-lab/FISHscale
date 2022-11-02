@@ -383,9 +383,9 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 #result_grp = Parallel(
                 #    n_jobs=multiprocessing.cpu_count(), backend='multiprocessing')(delayed(_cell_extract)(part, self.unique_genes) for _, part in partition_filt.groupby('Segmentation'))
 
-                with multiprocessing.Pool(multiprocessing.cpu_count()) as pool:
-                    queue = multiprocessing.Manager().Queue()
-                    result_grp = pool.map(_cell_extract, [(part, self.unique_genes) for _, part in partition_filt.groupby('Segmentation')])
+                with multiprocessing.Pool(processes=12) as pool:
+                    #queue = multiprocessing.Manager().Queue()
+                    result_grp = pool.map_async(_cell_extract, [(part, self.unique_genes) for _, part in partition_filt.groupby('Segmentation')])
 
                 for dbl, centroid, mat in result_grp:
                     if type(mat) != type(None):
@@ -509,9 +509,9 @@ def _segmentation_dots(partition, func):
     #print('results', results_resegmentation)
     #results_resegmentation = Parallel(n_jobs=multiprocessing.cpu_count(),backend="multiprocessing")(delayed(resegmentation_function)(part) for _, part in partition.groupby('tmp_segment'))
 
-    with multiprocessing.Pool(multiprocessing.cpu_count()) as pool:
-        queue = multiprocessing.Manager().Queue()
-        results_resegmentation = pool.map(_resegmentation_dots, [(part ) for _, part in partition.groupby('tmp_segment')])
+    with multiprocessing.Pool(processes=12) as pool:
+        #queue = multiprocessing.Manager().Queue()
+        results_resegmentation = pool.map_async(_resegmentation_dots, [(part ) for _, part in partition.groupby('tmp_segment')])
         #results_resegmentation = results_resegmentation.get()
 
     resegmentation = []
