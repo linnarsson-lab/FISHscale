@@ -38,6 +38,7 @@ def _distance(data, dist):
         return False
 
 def _resegmentation_dots(data):
+    print('data', data)
     p = data.loc[:,['x','y']].values
     A= p.max(axis=0) - p.min(axis=0)
     A = np.abs(A)
@@ -86,16 +87,17 @@ def _resegmentation_dots(data):
 def _segmentation_dots(partition, func, resegmentation_function):
     cl_molecules_xy = partition.loc[:,['x','y']].values
     segmentation = func.fit_predict(cl_molecules_xy)
-    partition['tmp_sement'] = segmentation.astype(np.int64)
+    partition['tmp_segment'] = segmentation.astype(np.int64)
     indexes, resegmentation = [],[]
     resegmentation_data = []
-    results_resegmentation = Parallel(n_jobs=multiprocessing.cpu_count(),backend="multiprocessing")(delayed(resegmentation_function)(part) for _, part in partition.groupby('tmp_sement'))
+    results_resegmentation = Parallel(n_jobs=multiprocessing.cpu_count(),backend="multiprocessing")(delayed(resegmentation_function)(part) for _, part in partition.groupby('tmp_segment'))
     resegmentation = []
     new_results_resegmentation = []
     count = 0
     for i in results_resegmentation:
-        resegmentation += i['tmp_segment'].tolist()
-        segmentation2 = np.array([x+count if x >= 0 else -1 for x in i.tmp_sement])
+        #resegmentation += i['tmp_segment'].tolist()
+        segmentation2 = np.array([x+count if x >= 0 else -1 for x in i.tmp_segment])
+        resegmentation += segmentation2.tolist()
         i['tmp_segment'] = segmentation2
         new_results_resegmentation.append(i)
         count = np.max(np.array(resegmentation)) + 2
