@@ -829,3 +829,342 @@ class MultiGraphData(pl.LightningDataModule):
         dump(clf, 'miniMultiGraphNeighborhoodClassifier.joblib') 
 
 
+class MultiGraphDataPredictor(pl.LightningDataModule):
+    """
+    Class to prepare multiple Graphs for GraphSAGE
+
+    """    
+    def __init__(self,
+        filepaths:list,
+        num_nodes_per_graph:int=500,
+        ngh_sizes:list=[20,10],
+        train_percentage:float=0.75,
+        batch_size:int=1024,
+        num_workers:int=1,
+        analysis_name:str='MultiGraph',
+        n_epochs:int=3,
+        save_to:str ='',
+        lr = 1e-3,
+        ):
+        
+        self.filepaths = filepaths
+        self.ngh_sizes = ngh_sizes
+        self.train_percentage = train_percentage
+        self.batch_size = batch_size
+        self.num_workers = num_workers
+        self.analysis_name = analysis_name
+        self.save_to = save_to
+        self.folder = self.save_to+self.analysis_name+ '_' +datetime.now().strftime("%Y-%m-%d-%H%M%S")
+        self.n_epochs = n_epochs
+        self.num_nodes_per_graph = num_nodes_per_graph
+        self.lr = lr
+        os.mkdir(self.folder)
+        self.device = th.device('cuda' if th.cuda.is_available() else 'cpu')
+
+        batchgraph_filename = os.path.join(self.save_to, '{}BatchGraph.graph'.format(len(self.filepaths)))
+
+        if not os.path.isfile(batchgraph_filename):
+            self.load_graphs()
+
+            graph_labels = {"Multigraph": th.arange(len(self.filepaths))}
+            logging.info('Saving model...')
+            dgl.data.utils.save_graphs(batchgraph_filename, self.sub_graphs, graph_labels)
+        else:
+            logging.info('Loading model...')
+            self.sub_graphs, graph_labels = dgl.data.utils.load_graphs(batchgraph_filename)
+
+        self.training_dataloaders = []
+        for sg in self.sub_graphs:
+            logging.info('Number of genes in graph: {}'.format(sg.ndata['gene'].shape[1]))
+            #self.training_dataloaders.append(self.wrap_train_dataloader(sg))
+        self.sub_graphs = dgl.batch(self.sub_graphs)
+        self.training_dataloaders.append(self.wrap_train_dataloader_batch())
+
+        self.model = SAGELightning(in_feats=self.sub_graphs.ndata['gene'].shape[1], 
+                                        n_latent=48,
+                                        n_layers=len(self.ngh_sizes),
+                                        n_classes=2,
+                                        n_hidden=64,
+                                        lr=self.lr,
+                                    )
+        self.model.to(self.device)
+        self.setup()
+
+    def load_graphs(self):
+        """
+        load_graphs
+
+        Load graphs from filepaths
+
+        Returns:
+            list: List of graphs
+        """        
+        self.sub_graphs = []
+        self.training_dataloaders = []
+        #self.validation_dataloaders = []
+
+        for filepath in self.filepaths:
+            logging.info('Subsampling graph from {}.'.format(filepath))
+            #subsample 1M edges from the graph for training:
+            g = dgl.load_graphs(filepath)[0][0]
+            to_delete = [x for x in g.ndata.keys() if x != 'gene']
+            for x in to_delete:
+                del g.ndata[x]
+            random_train_nodes = th.randperm(g.nodes().size(0))[:self.num_nodes_per_graph]
+            sg = dgl.khop_in_subgraph(g, g.nodes()[random_train_nodes], k=2)[0]
+            logging.info('Training sample with {} nodes and {} edges.'.format(sg.num_nodes(), sg.num_edges()))
+            
+            self.sub_graphs.append(sg)
+            #self.validation_dataloaders.append(self.validation_dataloader(sg))
+        #self.batch_graph = dgl.batch(graphs)
+    
+    def setup(self, stage: Optional[str] = None):
+        #self.d = th.tensor(self.molecules_df(),dtype=th.float32) #works
+        self.sampler = dgl.dataloading.MultiLayerNeighborSampler([int(_) for _ in self.ngh_sizes])
+
+        self.checkpoint_callback = ModelCheckpoint(
+            monitor='train_loss',
+            dirpath=self.save_to,
+            filename=self.analysis_name+'-{epoch:02d}-{train_loss:.2f}',
+            save_top_k=1,
+            mode='min',
+            )
+        self.early_stop_callback = EarlyStopping(
+            monitor='balance',
+            patience=3,
+            verbose=True,
+            mode='min',
+            stopping_threshold=0.35,
+            )
+
+    def train_dataloader(self):
+        return self.training_dataloaders
+
+    #def validation_dataloader(self):
+    #    return self.validation_dataloaders
+
+    def train(self,gpus=0, model_file=None, continue_training=False):
+        """
+        train
+
+        Pytorch-Lightning trainer
+
+        Args:
+            max_epochs (int, optional): Maximum epochs. Defaults to 5.
+            gpus (int, optional): Whether to use GPU. Defaults to 0.
+        """        
+        if self.device.type == 'cuda':
+            gpus=1
+        trainer = pl.Trainer(gpus=gpus,
+                            log_every_n_steps=50,
+                            callbacks=[self.checkpoint_callback], 
+                            max_epochs=self.n_epochs,)
+
+        is_trained = 0
+        for File in os.listdir(os.path.join(self.folder, '..')):
+            if File.count('.ckpt'):
+                is_trained = 1
+                model_path = os.path.join(self.save_to, File)
+                break
+        
+        if type(model_file) != type(None):
+            is_trained = 1
+            model_path = model_file
+
+        if is_trained:
+            logging.info('Pretrained model exists in folder {}, loading model parameters. If you wish to re-train, delete .ckpt file.'.format(model_path))
+            self.model = self.model.load_from_checkpoint(model_path,
+                                        in_feats=self.sub_graphs.ndata['gene'].shape[1],
+                                        n_latent=48,
+                                        n_layers=2,
+                                        n_classes=2,
+                                        n_hidden=64,
+                                        )
+
+        
+        if continue_training or not is_trained:
+            trainer.fit(self.model, train_dataloaders=self.train_dataloader())#,val_dataloaders=self.test_dataloader())
+            
+    def wrap_train_dataloader(self, batch_graph):
+        """
+        train_dataloader
+
+        Prepare dataloader
+
+        Returns:
+            dgl.dataloading.EdgeDataLoader: Deep Graph Library dataloader.
+        """        
+        negative_sampler = dgl.dataloading.negative_sampler.Uniform(3)
+        edge_sampler = dgl.dataloading.as_edge_prediction_sampler(
+            dgl.dataloading.NeighborSampler([int(_) for _ in self.ngh_sizes]),
+            negative_sampler=negative_sampler,
+            )
+
+        #edges = batch_graph.edges()
+        train_p_edges = int(batch_graph.num_edges()*(self.train_percentage/5))
+        train_edges = th.randperm(batch_graph.num_edges())[:train_p_edges]
+        #train_edges = self.make_train_test_validation(batch_graph)
+
+        unlab = dgl.dataloading.DataLoader(
+                        batch_graph,
+                        train_edges,
+                        edge_sampler,
+                        #negative_sampler=negative_sampler,
+                        device=self.device,
+                        use_uva=True,
+                        batch_size=self.batch_size,
+                        shuffle=True,
+                        drop_last=True,
+                        num_workers=self.num_workers,
+                        )
+        return unlab
+
+    def wrap_train_dataloader_batch(self):
+        """
+        train_dataloader
+
+        Prepare dataloader
+
+        Returns:
+            dgl.dataloading.EdgeDataLoader: Deep Graph Library dataloader.
+        """        
+        negative_sampler = dgl.dataloading.negative_sampler.Uniform(3)
+        edge_sampler = dgl.dataloading.as_edge_prediction_sampler(
+            dgl.dataloading.NeighborSampler([int(_) for _ in self.ngh_sizes]),
+            negative_sampler=negative_sampler,
+            )
+
+        #edges = batch_graph.edges()
+        #train_p_edges = int(self.sub_graphs.num_edges()*(self.train_percentage/10))
+        #train_edges = th.randperm(self.sub_graphs.num_edges())[:train_p_edges]
+        train_edges = self.make_train_test_validation(self.sub_graphs)
+
+        unlab = dgl.dataloading.DataLoader(
+                        self.sub_graphs,
+                        train_edges,
+                        edge_sampler,
+                        #negative_sampler=negative_sampler,
+                        device=self.device,
+                        use_uva=True,
+                        batch_size=self.batch_size,
+                        shuffle=True,
+                        drop_last=True,
+                        num_workers=self.num_workers,
+                        )
+        return unlab
+    
+    def validation_dataloader(self, graph):
+        """
+        train_dataloader
+
+        Prepare dataloader
+
+        Returns:
+            dgl.dataloading.EdgeDataLoader: Deep Graph Library dataloader.
+        """        
+        
+        validation = dgl.dataloading.NodeDataLoader(
+                        graph,
+                        th.arange(graph.num_nodes(),),
+                        dgl.dataloading.MultiLayerNeighborSampler([-1,-1]),
+                        device=self.device,
+                        batch_size=self.batch_size*1,
+                        shuffle=False,
+                        drop_last=False,
+                        num_workers=self.num_workers,
+                        )
+        return validation
+
+    def make_train_test_validation(self, g):
+        """
+        make_train_test_validation: only self.indices_validation is used.
+
+        Splits the data into train, test and validation. Test data is not used for
+        because at the moment the model performance cannot be checked against labelled
+        data.
+        """        
+        indices_train = []
+        indices_test = []
+        random_state = np.random.RandomState(seed=0)
+        nodes = th.arange(g.num_nodes())
+
+        for gene in range(g.ndata['gene'].shape[1]):
+            molecules_g = g.ndata['gene'][:,gene] == 1
+
+            #if molecules_g.sum() >= 20:
+            indices_g = nodes[molecules_g]
+            train_size = int(indices_g.shape[0]*self.train_percentage)
+            if train_size == 0:
+                train_size = 1
+            test_size = indices_g.shape[0]-train_size
+            permutation = random_state.permutation(indices_g)
+            test_g = th.tensor(permutation[:test_size])
+            train_g = th.tensor(permutation[test_size:(train_size+test_size)])   
+                
+            indices_train += train_g
+            indices_test += test_g
+        indices_train, indices_test = th.stack(indices_train), th.stack(indices_test)
+        edges_bool_train =  th.isin(g.edges()[0],indices_train) & th.isin(g.edges()[1],indices_train) 
+        edges_train = np.random.choice(np.arange(edges_bool_train.shape[0])[edges_bool_train],int(edges_bool_train.sum()*(self.train_percentage/10)),replace=False)
+        #self.edges_test  = np.random.choice(np.arange(edges_bool_test.shape[0])[edges_bool_test],int(edges_bool_test.sum()*(self.train_p/self.fraction_edges)),replace=False)
+        logging.info('Training sample on {} edges.'.format(edges_train.shape[0]))
+        #logging.info('Testing on {} edges.'.format(self.edges_test.shape[0]))
+        return edges_train
+
+    def get_latents(self):
+        """
+        get_latents: get the new embedding for each molecule
+        
+        Passes the validation data through the model to generatehe neighborhood 
+        embedding. If the model is in supervised version, the model will also
+        output the predicted cell type.
+
+        Args:
+            labelled (bool, optional): [description]. Defaults to True.
+        """        
+        import scanpy as sc
+        from sklearn.linear_model import SGDClassifier
+        from sklearn.preprocessing import StandardScaler
+        from sklearn.pipeline import make_pipeline
+        from joblib import dump, load
+
+        self.model.eval()
+        latent_unlabelled = []
+
+        #self.sub_graphs = dgl.unbatch(self.sub_graphs)
+        #for g in tqdm(self.sub_graphs):
+        lu, _ = self.model.module.inference(
+                                self.sub_graphs,
+                                self.model.device,
+                                10*512,
+                                0)
+
+        print(lu.shape)
+        latent_unlabelled = lu.detach().cpu().numpy()
+        self.latent_unlabelled = np.concatenate(latent_unlabelled)
+        logging.info('Latent embeddings generated for {} molecules'.format(self.latent_unlabelled.shape[0]))
+        
+        np.save(self.folder+'/latent',self.latent_unlabelled)
+
+        random_sample_train = np.random.choice(
+                                len(self.latent_unlabelled), 
+                                np.min([len(self.latent_unlabelled),500000]), 
+                                replace=False)
+
+        training_latents =self.latent_unlabelled[random_sample_train,:]
+        adata = sc.AnnData(X=training_latents)
+        logging.info('Building neighbor graph for clustering...')
+        sc.pp.neighbors(adata, n_neighbors=15)
+        logging.info('Running Leiden clustering...')
+        sc.tl.leiden(adata, random_state=42, resolution=1.8)
+        logging.info('Leiden clustering done.')
+        clusters= adata.obs['leiden'].values
+        logging.info('Total of {} found'.format(len(np.unique(clusters))))
+        clf = make_pipeline(StandardScaler(), SGDClassifier(loss='log_loss', max_iter=1000, tol=1e-3))
+        clf.fit(training_latents, clusters)
+        clusters = clf.predict(self.latent_unlabelled).astype('int8')
+
+        clf_total = make_pipeline(StandardScaler(), SGDClassifier(loss='log_loss', max_iter=1000, tol=1e-3))
+        clf_total.fit(self.latent_unlabelled, clusters)
+        clusters = clf.predict(self.latent_unlabelled).astype('int8')
+        dump(clf, 'miniMultiGraphNeighborhoodClassifier.joblib') 
