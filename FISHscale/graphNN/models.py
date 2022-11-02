@@ -58,6 +58,7 @@ class SAGELightning(LightningModule):
                  l_scale = None,
                  scale_factor = 1,
                  warmup_factor = 1,
+                 loss_type='unsupervised',#or supervised
                  ):
         super().__init__()
 
@@ -80,6 +81,7 @@ class SAGELightning(LightningModule):
         self.n_hidden = n_hidden
         self.n_latent = n_latent
         self.inference_type = inference_type
+        self.loss_type = loss_type
 
         if self.inference_type == 'VI':
             self.automatic_optimization = False
@@ -111,7 +113,10 @@ class SAGELightning(LightningModule):
             mfgs = [mfg.int() for mfg in mfgs]
             batch_inputs = mfgs[0].srcdata['gene']
             zn_loc = self.module.encoder(batch_inputs,mfgs)
-            graph_loss = self.loss_fcn(zn_loc, pos, neg).mean()
+            if self.loss_type == 'unsupervised':
+                graph_loss = self.loss_fcn(zn_loc, pos, neg).mean()
+            else:
+                graph_loss = F.cross_entropy(zn_loc, mfgs[-1].dstdata['label'])
             opt_g = self.optimizers()
             opt_g.zero_grad()
             self.manual_backward(graph_loss)

@@ -873,7 +873,7 @@ class MultiGraphDataPredictor(pl.LightningDataModule):
         self.training_dataloaders.append(self.wrap_train_dataloader_batch())
 
         self.model = SAGELightning(in_feats=self.sub_graphs.ndata['gene'].shape[1], 
-                                        n_latent=48,
+                                        n_latent=len(self.sub_graphs.ndata['label'].unique()),
                                         n_layers=len(self.ngh_sizes),
                                         n_classes=len(self.sub_graphs.ndata['label'].unique()),
                                         n_hidden=64,
