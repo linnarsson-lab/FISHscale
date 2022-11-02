@@ -414,6 +414,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         loompy.create(file,matrices,row_attrs,col_attrs)
         logging.info('Number of cells found: {}. Loompy written.'.format(count))
 
+#@numba.njit(parallel=True)
 def _get_counts(cell_i_g,dblabel, unique_genes):
     gene, cell = np.unique(cell_i_g,return_counts=True)
     d = pd.DataFrame({dblabel:cell},index=gene)
@@ -421,7 +422,7 @@ def _get_counts(cell_i_g,dblabel, unique_genes):
     data = pd.concat([g,d],join='outer',axis=1).fillna(0)
     return data.values.astype('int16')
 
-@numba.njit(parallel=True)
+#@numba.njit(parallel=True)
 def _cell_extract(cell_unique_genes):
     cell, unique_genes = cell_unique_genes
     #dblabel = cell['Segmentation'][0]
@@ -435,6 +436,7 @@ def _cell_extract(cell_unique_genes):
     except:
         return None, None, None
 
+#@numba.njit(parallel=True)
 def _distance(data, dist):
     p = data.loc[:,['x','y']].values
     A= p.max(axis=0) - p.min(axis=0)
@@ -445,6 +447,7 @@ def _distance(data, dist):
     else:
         return False
 
+#@numba.njit(parallel=True)
 def _resegmentation_dots(data):
     if len(data) == 0:
         return None
@@ -493,6 +496,7 @@ def _resegmentation_dots(data):
     #resegmentation_data.append(data)
     return data
 
+#@numba.njit(parallel=True)
 def _segmentation_dots(partition, func):
     cl_molecules_xy = partition.loc[:,['x','y']].values
     segmentation = func.fit_predict(cl_molecules_xy)
