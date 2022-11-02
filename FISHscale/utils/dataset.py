@@ -374,7 +374,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 #partition_filt = dd.from_pandas(partition_filt, npartitions=len(partition_filt.Segmentation.unique()))
                 #result_grp = partition_filt.groupby('Segmentation').apply(_cell_extract, self.unique_genes).compute().values
                 result_grp = Parallel(
-                    n_jobs=multiprocessing.cpu_count(), backend='multiprocessing')(delayed(_cell_extract)(part, self.unique_genes) for _, part in partition_filt.groupby('Segmentation'))
+                    n_jobs=multiprocessing.cpu_count(), backend='threading')(delayed(_cell_extract)(part, self.unique_genes) for _, part in partition_filt.groupby('Segmentation'))
                 for dbl, centroid, mat in result_grp:
                     if type(mat) != type(None):
                         labels_list.append(dbl)
