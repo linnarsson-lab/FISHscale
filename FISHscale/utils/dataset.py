@@ -316,10 +316,6 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         from dask.diagnostics import ProgressBar
         from dask import dataframe as dd
         import shutil
-
-        from dask.distributed import Client, LocalCluster
-        cluster = LocalCluster(processes=True)
-        client = Client(cluster)
         
         """
         Run DBscan segmentation on self.data, this will reassign a column on self.data with column_name
