@@ -39,6 +39,8 @@ def _distance(data, dist):
         return False
 
 def _resegmentation_dots(data):
+    if len(data) == 0:
+        return None
     p = data.loc[:,['x','y']].values
     A= p.max(axis=0) - p.min(axis=0)
     A = np.abs(A)
@@ -91,18 +93,21 @@ def _segmentation_dots(partition, func, resegmentation_function):
     indexes, resegmentation = [],[]
     resegmentation_data = []
 
-    partition = dd.from_pandas(partition, npartitions=len(partition.tmp_segment.unique()))         
-    result_grp = partition.groupby('tmp_segment').apply(resegmentation_function).compute(scheduler='processes')
-    #results_resegmentation = Parallel(n_jobs=multiprocessing.cpu_count(),backend="multiprocessing")(delayed(resegmentation_function)(part) for _, part in partition.groupby('tmp_sement'))
+    #partition = dd.from_pandas(partition, npartitions=len(partition.tmp_segment.unique()))         
+    #results_resegmentation = partition.groupby('tmp_segment').apply(resegmentation_function, meta={'x': 'f8', 'y': 'f8','Clusters':'', 'g', 'tmp_segment', 'z'}).compute(scheduler='processes').values
+    #print('results', results_resegmentation)
+    results_resegmentation = Parallel(n_jobs=multiprocessing.cpu_count(),backend="threading")(delayed(resegmentation_function)(part) for _, part in partition.groupby('tmp_segment'))
     resegmentation = []
     new_results_resegmentation = []
     count = 0
     for i in results_resegmentation:
-        resegmentation += i['tmp_segment'].tolist()
-        segmentation2 = np.array([x+count if x >= 0 else -1 for x in i.tmp_sement])
-        i['tmp_segment'] = segmentation2
-        new_results_resegmentation.append(i)
-        count = np.max(np.array(resegmentation)) + 2
+        if i is not None:
+
+            segmentation2 = np.array([x+count if x >= 0 else -1 for x in i.tmp_segment])
+            resegmentation += segmentation2.tolist()
+            i['tmp_segment'] = segmentation2
+            new_results_resegmentation.append(i)
+            count = np.max(np.array(resegmentation)) + 2
     segmentation = pd.concat(new_results_resegmentation)
     segmentation['Segmentation'] = segmentation['tmp_segment']
     return segmentation

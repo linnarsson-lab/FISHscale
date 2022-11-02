@@ -371,11 +371,10 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 clusterN = partition[label_column].values[0]
                 partition.to_parquet(path.join(save_to,'Segmentation','{}.parquet'.format(clusterN)))
                 partition_filt = partition[partition.Segmentation != -1]
-                partition_filt = dd.from_pandas(partition_filt, npartitions=len(partition_filt.Segmentation.unique()))
-                
-                result_grp = partition_filt.groupby('Segmentation').apply(_cell_extract, self.unique_genes).compute()
-                #result_grp = Parallel(
-                #    n_jobs=multiprocessing.cpu_count(), backend='threading')(delayed(_cell_extract)(part.to_dict('list'), self.unique_genes) for _, part in partition_filt.groupby('Segmentation'))
+                #partition_filt = dd.from_pandas(partition_filt, npartitions=len(partition_filt.Segmentation.unique()))
+                #result_grp = partition_filt.groupby('Segmentation').apply(_cell_extract, self.unique_genes).compute().values
+                result_grp = Parallel(
+                    n_jobs=multiprocessing.cpu_count(), backend='threading')(delayed(_cell_extract)(part.to_dict('list'), self.unique_genes) for _, part in partition_filt.groupby('Segmentation'))
                 for dbl, centroid, mat in result_grp:
                     if type(mat) != type(None):
                         labels_list.append(dbl)
