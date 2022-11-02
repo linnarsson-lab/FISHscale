@@ -51,6 +51,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting, GraphDecoder)
         aggregator='attentional',
         celltype_distribution='uniform',
         inference_type='deterministic',
+        model_type='unsupervised',#'supervised'
         n_epochs=5,
         ):
         """
@@ -133,6 +134,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting, GraphDecoder)
         self.celltype_distribution = celltype_distribution
         self.inference_type = inference_type
         self.n_epochs= n_epochs
+        self.model_type = model_type
 
         self.device = th.device('cuda' if th.cuda.is_available() else 'cpu')
         self.prepare_reference()
