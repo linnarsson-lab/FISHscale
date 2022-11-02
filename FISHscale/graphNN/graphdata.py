@@ -861,17 +861,8 @@ class MultiGraphDataPredictor(pl.LightningDataModule):
         os.mkdir(self.folder)
         self.device = th.device('cuda' if th.cuda.is_available() else 'cpu')
 
-        batchgraph_filename = os.path.join(self.save_to, '{}BatchGraph.graph'.format(len(self.filepaths)))
-
-        if not os.path.isfile(batchgraph_filename):
-            self.load_graphs()
-
-            graph_labels = {"Multigraph": th.arange(len(self.filepaths))}
-            logging.info('Saving model...')
-            dgl.data.utils.save_graphs(batchgraph_filename, self.sub_graphs, graph_labels)
-        else:
-            logging.info('Loading model...')
-            self.sub_graphs, graph_labels = dgl.data.utils.load_graphs(batchgraph_filename)
+        batchgraph_filename = os.path.join(self.save_to, '{}BatchGraphLabelled.graph'.format(len(self.filepaths)))
+        self.sub_graphs, graph_labels = dgl.data.utils.load_graphs(batchgraph_filename)
 
         self.training_dataloaders = []
         for sg in self.sub_graphs:
@@ -883,40 +874,12 @@ class MultiGraphDataPredictor(pl.LightningDataModule):
         self.model = SAGELightning(in_feats=self.sub_graphs.ndata['gene'].shape[1], 
                                         n_latent=48,
                                         n_layers=len(self.ngh_sizes),
-                                        n_classes=2,
+                                        n_classes=len(self.sub_graphs.ndata['label'].unique()),
                                         n_hidden=64,
                                         lr=self.lr,
                                     )
         self.model.to(self.device)
         self.setup()
-
-    def load_graphs(self):
-        """
-        load_graphs
-
-        Load graphs from filepaths
-
-        Returns:
-            list: List of graphs
-        """        
-        self.sub_graphs = []
-        self.training_dataloaders = []
-        #self.validation_dataloaders = []
-
-        for filepath in self.filepaths:
-            logging.info('Subsampling graph from {}.'.format(filepath))
-            #subsample 1M edges from the graph for training:
-            g = dgl.load_graphs(filepath)[0][0]
-            to_delete = [x for x in g.ndata.keys() if x != 'gene']
-            for x in to_delete:
-                del g.ndata[x]
-            random_train_nodes = th.randperm(g.nodes().size(0))[:self.num_nodes_per_graph]
-            sg = dgl.khop_in_subgraph(g, g.nodes()[random_train_nodes], k=2)[0]
-            logging.info('Training sample with {} nodes and {} edges.'.format(sg.num_nodes(), sg.num_edges()))
-            
-            self.sub_graphs.append(sg)
-            #self.validation_dataloaders.append(self.validation_dataloader(sg))
-        #self.batch_graph = dgl.batch(graphs)
     
     def setup(self, stage: Optional[str] = None):
         #self.d = th.tensor(self.molecules_df(),dtype=th.float32) #works
@@ -925,7 +888,7 @@ class MultiGraphDataPredictor(pl.LightningDataModule):
         self.checkpoint_callback = ModelCheckpoint(
             monitor='train_loss',
             dirpath=self.save_to,
-            filename=self.analysis_name+'-{epoch:02d}-{train_loss:.2f}',
+            filename=self.analysis_name+'-{epoch:02d}-{train_loss:.2f}-labelprediction',
             save_top_k=1,
             mode='min',
             )
@@ -939,9 +902,6 @@ class MultiGraphDataPredictor(pl.LightningDataModule):
 
     def train_dataloader(self):
         return self.training_dataloaders
-
-    #def validation_dataloader(self):
-    #    return self.validation_dataloaders
 
     def train(self,gpus=0, model_file=None, continue_training=False):
         """
@@ -962,7 +922,7 @@ class MultiGraphDataPredictor(pl.LightningDataModule):
 
         is_trained = 0
         for File in os.listdir(os.path.join(self.folder, '..')):
-            if File.count('.ckpt'):
+            if File.count('labelprediction.ckpt'):
                 is_trained = 1
                 model_path = os.path.join(self.save_to, File)
                 break
@@ -985,40 +945,6 @@ class MultiGraphDataPredictor(pl.LightningDataModule):
         if continue_training or not is_trained:
             trainer.fit(self.model, train_dataloaders=self.train_dataloader())#,val_dataloaders=self.test_dataloader())
             
-    def wrap_train_dataloader(self, batch_graph):
-        """
-        train_dataloader
-
-        Prepare dataloader
-
-        Returns:
-            dgl.dataloading.EdgeDataLoader: Deep Graph Library dataloader.
-        """        
-        negative_sampler = dgl.dataloading.negative_sampler.Uniform(3)
-        edge_sampler = dgl.dataloading.as_edge_prediction_sampler(
-            dgl.dataloading.NeighborSampler([int(_) for _ in self.ngh_sizes]),
-            negative_sampler=negative_sampler,
-            )
-
-        #edges = batch_graph.edges()
-        train_p_edges = int(batch_graph.num_edges()*(self.train_percentage/5))
-        train_edges = th.randperm(batch_graph.num_edges())[:train_p_edges]
-        #train_edges = self.make_train_test_validation(batch_graph)
-
-        unlab = dgl.dataloading.DataLoader(
-                        batch_graph,
-                        train_edges,
-                        edge_sampler,
-                        #negative_sampler=negative_sampler,
-                        device=self.device,
-                        use_uva=True,
-                        batch_size=self.batch_size,
-                        shuffle=True,
-                        drop_last=True,
-                        num_workers=self.num_workers,
-                        )
-        return unlab
-
     def wrap_train_dataloader_batch(self):
         """
         train_dataloader
