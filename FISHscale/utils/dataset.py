@@ -53,6 +53,7 @@ from diameter_clustering import QTClustering, MaxDiameterClustering
 #from diameter_clustering.dist_matrix import compute_sparse_dist_matrix
 from sklearn.cluster import DBSCAN, MiniBatchKMeans , AgglomerativeClustering#, OPTICS
 from scipy.spatial import distance
+import numba
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s',stream=sys.stdout, level=logging.INFO,force=True,)
 
 
