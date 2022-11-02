@@ -1064,33 +1064,3 @@ class MultiGraphDataPredictor(pl.LightningDataModule):
                                 self.model.device,
                                 10*512,
                                 0)
-
-        print(lu.shape)
-        latent_unlabelled = lu.detach().cpu().numpy()
-        self.latent_unlabelled = np.concatenate(latent_unlabelled)
-        logging.info('Latent embeddings generated for {} molecules'.format(self.latent_unlabelled.shape[0]))
-        
-        np.save(self.folder+'/latent',self.latent_unlabelled)
-
-        random_sample_train = np.random.choice(
-                                len(self.latent_unlabelled), 
-                                np.min([len(self.latent_unlabelled),500000]), 
-                                replace=False)
-
-        training_latents =self.latent_unlabelled[random_sample_train,:]
-        adata = sc.AnnData(X=training_latents)
-        logging.info('Building neighbor graph for clustering...')
-        sc.pp.neighbors(adata, n_neighbors=15)
-        logging.info('Running Leiden clustering...')
-        sc.tl.leiden(adata, random_state=42, resolution=1.8)
-        logging.info('Leiden clustering done.')
-        clusters= adata.obs['leiden'].values
-        logging.info('Total of {} found'.format(len(np.unique(clusters))))
-        clf = make_pipeline(StandardScaler(), SGDClassifier(loss='log_loss', max_iter=1000, tol=1e-3))
-        clf.fit(training_latents, clusters)
-        clusters = clf.predict(self.latent_unlabelled).astype('int8')
-
-        clf_total = make_pipeline(StandardScaler(), SGDClassifier(loss='log_loss', max_iter=1000, tol=1e-3))
-        clf_total.fit(self.latent_unlabelled, clusters)
-        clusters = clf.predict(self.latent_unlabelled).astype('int8')
-        dump(clf, 'miniMultiGraphNeighborhoodClassifier.joblib') 
