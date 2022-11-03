@@ -513,7 +513,8 @@ class GraphPlotting:
 
                 #dic = dict(zip(self.cell_unique_clusters, np.arange(self.cell_unique_clusters.shape[0])))
                 logging.info('GSclusters type {} and Cell Clusters type {}'.format(self.clusters.dtype, self.cell_unique_clusters.dtype))
-                self.clusters = np.array([i if i in self.cell_unique_clusters.astype('int') else -1 for i in self.clusters], dtype=np.int8)
+                tmp_cell_unique_clusters = self.cell_unique_clusters.astype(float).astype(int)
+                self.clusters = np.array([i if i in tmp_cell_unique_clusters else -1 for i in self.clusters], dtype=np.int8)
 
             self.cell_clusters = self.clusters[self.clusters != -1]
 
