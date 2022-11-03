@@ -384,7 +384,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
 
                 partition_filt.groupby('Segmentation').apply(lambda x: x.to_parquet(path.join(save_to,'Segmentation',str(nx),'{}_s.parquet'.format(x.name))))
                 partition_filt = dd.read_parquet(path.join(save_to,'Segmentation',str(nx),'*_s.parquet'), engine='pyarrow')
-                result_grp = partition_filt.map_partitions(_cell_extract, self.unique_genes).compute(processes=True).values
+                result_grp = partition_filt.map_partitions(_cell_extract, self.unique_genes).compute().values
 
                 for dbl, centroid, mat in result_grp:
                     if type(mat) != type(None):
@@ -503,7 +503,7 @@ def _segmentation_dots(partition, func, save_tmp):
     #    results_resegmentation = results_resegmentation.get()
     partition.groupby('tmp_segment').apply(lambda x: x.to_parquet(path.join(save_tmp,'{}_sub.parquet'.format(x.name))))
     partition = dd.read_parquet(path.join(save_tmp,'*_sub.parquet'), engine='pyarrow')
-    results_resegmentation = partition.map_partitions(_resegmentation_dots).compute(processes=True)
+    results_resegmentation = partition.map_partitions(_resegmentation_dots).compute()
     shutil.rmtree(save_tmp)
 
     resegmentation = []
