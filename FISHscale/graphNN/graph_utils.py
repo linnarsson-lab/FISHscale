@@ -606,7 +606,8 @@ class GraphPlotting:
                 color_dic[x] = (c[0],c[1],c[2])
             logging.info(color_dic)
             clusters_colors = np.array([color_dic[x] for x in self.clusters])
-
+            self.g.ndata['clusters_colors'] = th.tensor(clusters_colors)
+            '''
             some = np.random.choice(np.arange(self.latent_unlabelled.shape[0]),np.min([random_n, self.latent_unlabelled.shape[0]]),replace=False)
             umap_embedding = reducer.fit_transform(self.latent_unlabelled[some])
             #embedding = umap_embedding.transform(self.latent_unlabelled)
@@ -633,7 +634,7 @@ class GraphPlotting:
             plt.yticks(fontsize=2)
             plt.axis('scaled')
             plt.savefig("{}/spatial_umap_embedding.png".format(self.folder), bbox_inches='tight', dpi=5000)
-
+            '''
             import holoviews as hv
             from holoviews import opts
             hv.extension('matplotlib')
@@ -646,23 +647,25 @@ class GraphPlotting:
             logging.info('Clusters print {}'.format(np.unique(self.clusters)))
             for cl in np.unique(self.clusters):
                 logging.info('Printing cluster {}'.format(cl))
-                try:
-                    x, y = molecules_x[self.clusters == cl], molecules_y[self.clusters == cl]
-                    allm += x.shape[0]
+                #try:
+                x, y = molecules_x[self.clusters == cl], molecules_y[self.clusters == cl]
+                allm += x.shape[0]
 
-                    scatter =  hv.Scatter(np.array([x,y]).T).opts(
-                        bgcolor='black',
-                        aspect='equal',
-                        fig_inches=50,
-                        s=1,
-                        title=str(cl),
-                        color=color_dic[cl])
-                    nd_dic[cl] = scatter.opts(title=' - '.join(enriched_genes[cl]), fontsize={'title':24})
-                    lay.append(nd_dic[cl])
-                    hv.save(scatter,"{}/Clusters/{}.png".format(self.folder,str(cl)), )   
+                scatter =  hv.Scatter(np.array([x,y]).T).opts(
+                    bgcolor='black',
+                    aspect='equal',
+                    fig_inches=50,
+                    s=1,
+                    title=str(cl),
+                    color=color_dic[cl])
+                
+                enriched_genes_cl = " - ".join([x[0] for x in enriched_genes[cl].tolist()])
+                nd_dic[cl] = scatter.opts(title=enriched_genes_cl, fontsize={'title':24})
+                lay.append(nd_dic[cl])
+                hv.save(scatter,"{}/Clusters/{}.png".format(self.folder,str(cl)), )   
                     
-                except:
-                    logging.info('Could not get cluster {}'.format(cl))   
+                #except:
+                #    logging.info('Could not get cluster {}'.format(cl))   
 
             layout = hv.Layout(lay).cols(5).opts(opts.Scatter(s=0.1,fontsize={'title':8}))
             hv.save(layout,"{}/molecule_prediction.png".format(self.folder))
@@ -670,7 +673,8 @@ class GraphPlotting:
             hv.notebook_extension('bokeh')
             hmap = hv.HoloMap(kdims=['Enrichment - Cluster'])
             for k in nd_dic:
-                hmap[str(k) + ' {}'.format(enriched_genes[k])] = nd_dic[k].opts(bgcolor='black',width=1000,data_aspect=1,size=1,color=color_dic[k])
+                enriched_genes_cl = " - ".join([x[0] for x in enriched_genes[k].tolist()])
+                hmap[str(k) + ' {}'.format(enriched_genes_cl)] = nd_dic[k].opts(bgcolor='black',width=1000,data_aspect=1,size=1,color=color_dic[k])
 
             hv.save(hmap, "{}/Clusters.html".format(self.folder),fmt='html')
             self.save_graph()
