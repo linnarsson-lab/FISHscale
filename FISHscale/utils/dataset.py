@@ -46,14 +46,9 @@ from difflib import get_close_matches
 import logging
 from joblib import Parallel, delayed
 import multiprocessing
-#from FISHscale.utils.segmentation_utils import _segmentation_dots, _resegmentation_dots, _cell_extract
-from joblib import Parallel, delayed
-import multiprocessing
-from diameter_clustering import QTClustering, MaxDiameterClustering
-#from diameter_clustering.dist_matrix import compute_sparse_dist_matrix
-from sklearn.cluster import DBSCAN, MiniBatchKMeans , AgglomerativeClustering#, OPTICS
+from diameter_clustering import QTClustering #, MaxDiameterClustering
+from sklearn.cluster import DBSCAN, MiniBatchKMeans #, AgglomerativeClustering#, OPTICS
 from scipy.spatial import distance
-import numba
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s',stream=sys.stdout, level=logging.INFO,force=True,)
 
 
