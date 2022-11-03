@@ -381,7 +381,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 #partition_filt = dd.from_pandas(partition_filt, npartitions=len(partition_filt.Segmentation.unique()))
                 #result_grp = partition_filt.groupby('Segmentation').apply(_cell_extract, self.unique_genes).compute().values
                 result_grp = Parallel(
-                    n_jobs=multiprocessing.cpu_count(), backend='multiprocessing')(delayed(_cell_extract)(part, self.unique_genes) for _, part in partition_filt.groupby('Segmentation'))
+                    n_jobs=multiprocessing.cpu_count(), backend='threading')(delayed(_cell_extract)([part, self.unique_genes]) for _, part in partition_filt.groupby('Segmentation'))
 
                 #with multiprocessing.Pool(processes=12) as pool:
                     #queue = multiprocessing.Manager().Queue()
@@ -511,7 +511,7 @@ def _segmentation_dots(partition, func):
     #partition = dd.from_pandas(partition, npartitions=len(partition.tmp_segment.unique()))         
     #results_resegmentation = partition.groupby('tmp_segment').apply(resegmentation_function, meta={'x': 'f8', 'y': 'f8','Clusters':'', 'g', 'tmp_segment', 'z'}).compute(scheduler='processes').values
     #print('results', results_resegmentation)
-    results_resegmentation = Parallel(n_jobs=multiprocessing.cpu_count(),backend="multiprocessing")(delayed(_resegmentation_dots)(part) for _, part in partition.groupby('tmp_segment'))
+    results_resegmentation = Parallel(n_jobs=multiprocessing.cpu_count(),backend="threading")(delayed(_resegmentation_dots)(part) for _, part in partition.groupby('tmp_segment'))
 
     #with multiprocessing.Pool(processes=12) as pool:
         #queue = multiprocessing.Manager().Queue()
