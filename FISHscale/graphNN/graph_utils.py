@@ -512,9 +512,9 @@ class GraphPlotting:
 
                 dic = dict(zip(cell_unique_clusters, np.arange(cell_unique_clusters.shape[0])))
                 self.clusters = np.array([i if i in dic else -1 for i in self.clusters], dtype=np.int8)
-                cell_clusters = clusters_#np.array([dic[i] for i in clusters_])
+
                 ds.ca['Clusters'] = cell_clusters.astype('str')
-                self.cell_unique_clusters = np.unique(cell_clusters)
+                self.cell_unique_clusters = np.unique(clusters_)
 
             self.cell_clusters = self.clusters[self.clusters != -1]
 
@@ -524,7 +524,8 @@ class GraphPlotting:
             enrichment = r.argsort(axis=0)[::-1]
             self.clusters_agg = []
             for c in np.unique(clusters_):
-                en_genes = enrichment[:,c][:10]
+                c = int(c)
+                en_genes = enrichment[:,[c]][:10]
                 enriched_genes[c] = self.data.unique_genes[en_genes]
                 self.clusters_agg.append(c)
             self.clusters_agg = np.array(self.clusters_agg)
