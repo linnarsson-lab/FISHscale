@@ -430,7 +430,7 @@ def _cell_extract(cell_unique_genes):
     #try:
     dblabel = cell.Segmentation.values[0]
     #mat = _get_counts(cell.g.values,dblabel,unique_genes)
-    gene, cell = np.unique(cell,return_counts=True)
+    gene, cell = np.unique(cell.g.values,return_counts=True)
     data = np.zeros(len(unique_genes))
     data[np.where(np.isin(unique_genes, gene))[0]] = cell
     mat = data.reshape([len(data),1])
