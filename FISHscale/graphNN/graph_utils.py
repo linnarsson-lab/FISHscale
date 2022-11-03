@@ -505,16 +505,15 @@ class GraphPlotting:
             with loompy.connect(os.path.join(self.folder,self.data.filename.split('.')[0]+'_cells.loom'),'r+') as ds:
                 enrich = enrich_(labels_attr = ds.ca.Clusters)
                 sparse_tmp = ds.sparse().tocsr()
-                clusters_ = ds.ca['Clusters'].astype(float)
-                cell_unique_clusters = np.unique(clusters_)
+                cell_clusters = ds.ca['Clusters']#.astype(float)
                 r = enrich._fit(sparse_tmp,permute=False)
                 ds.ra['enrichment'] = r
+                ds.ca['Clusters'] = clusters_.astype('str')
+                self.cell_unique_clusters = np.unique(cell_clusters)
 
-                dic = dict(zip(cell_unique_clusters, np.arange(cell_unique_clusters.shape[0])))
+                dic = dict(zip(self.cell_unique_clusters, np.arange(self.cell_unique_clusters.shape[0])))
                 self.clusters = np.array([i if i in dic else -1 for i in self.clusters], dtype=np.int8)
 
-                ds.ca['Clusters'] = cell_clusters.astype('str')
-                self.cell_unique_clusters = np.unique(clusters_)
 
             self.cell_clusters = self.clusters[self.clusters != -1]
 
@@ -523,10 +522,9 @@ class GraphPlotting:
             logging.info('Enrichment shape: {}'.format(self.enrichment.shape))
             enrichment = r.argsort(axis=0)[::-1]
             self.clusters_agg = []
-            for c in np.unique(clusters_):
-                c = int(c)
-                en_genes = enrichment[:,[c]][:10]
-                enriched_genes[c] = self.data.unique_genes[en_genes]
+            for cluster_name, idx in zip(self.cell_unique_clusters, range(self.enrichment.shape[1])):
+                en_genes = enrichment[:,[idx]][:10]
+                enriched_genes[cluster_name] = self.data.unique_genes[en_genes]
                 self.clusters_agg.append(c)
             self.clusters_agg = np.array(self.clusters_agg)
             self.g.ndata['GSclusters'] = th.tensor(self.clusters)
