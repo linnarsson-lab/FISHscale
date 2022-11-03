@@ -506,12 +506,11 @@ class GraphPlotting:
                 cell_clusters = ds.ca['Clusters'].astype(float).astype(int)
                 ds.ca['Clusters'] = cell_clusters
                 enrich = enrich_(labels_attr = cell_clusters)
-                r = enrich._fit(sparse_tmp,permute=False)
                 sparse_tmp = ds.sparse().tocsr()
+                r = enrich._fit(sparse_tmp,permute=False)
 
                 ds.ra['enrichment'] = r
                 self.cell_unique_clusters = np.unique(cell_clusters)
-
                 #dic = dict(zip(self.cell_unique_clusters, np.arange(self.cell_unique_clusters.shape[0])))
                 logging.info('GSclusters type {} and Cell Clusters type {}'.format(self.clusters.dtype, self.cell_unique_clusters.dtype))
                 self.clusters = np.array([i if i in self.cell_unique_clusters else -1 for i in self.clusters], dtype=np.int8)
