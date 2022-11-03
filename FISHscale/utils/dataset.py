@@ -430,9 +430,9 @@ def _cell_extract(cell_unique_genes):
     #try:
     dblabel = cell.Segmentation.values[0]
     #mat = _get_counts(cell.g.values,dblabel,unique_genes)
-    gene, cell = np.unique(cell.g.values,return_counts=True)
+    gene, cell_counts = np.unique(cell.g.values,return_counts=True)
     data = np.zeros(len(unique_genes))
-    data[np.where(np.isin(unique_genes, gene))[0]] = cell
+    data[np.where(np.isin(unique_genes, gene))[0]] = cell_counts
     mat = data.reshape([len(data),1])
     #mat = _get_counts(cell['g'],dblabel, unique_genes)
     centroid = cell.x.values.mean(),cell.y.values.mean()
