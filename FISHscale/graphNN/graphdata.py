@@ -418,7 +418,14 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting, GraphDecoder)
         
         if continue_training or not is_trained:
             trainer.fit(self.model, train_dataloaders=self.train_dataloader())#,val_dataloaders=self.test_dataloader())
-            
+
+    def get_saved_latents(self):
+        if type(self.g.ndata['h']) != type(None):
+            logging.info('Latents already computed. Loading...')
+            self.latent_unlabelled = self.g.ndata['h']
+        else:
+            self.get_latents()
+
 
     def get_latents(self):
         """
@@ -432,6 +439,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting, GraphDecoder)
             labelled (bool, optional): [description]. Defaults to True.
         """        
         self.model.eval()
+
         self.latent_unlabelled, prediction_unlabelled = self.model.module.inference(self.g,
                         self.model.device,
                         10*512,
