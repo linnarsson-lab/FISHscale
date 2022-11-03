@@ -23,6 +23,7 @@ from FISHscale.segmentation.cellpose import Cellpose
 from FISHscale.utils.regionalization_gradient import Regionalization_Gradient, Regionalization_Gradient_Multi
 from FISHscale.utils.volume_align import Volume_Align
 import sys
+import shutil
 from datetime import datetime
 import pandas as pd
 from tqdm import tqdm
@@ -322,7 +323,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         from scipy import sparse
         from dask.diagnostics import ProgressBar
         from dask import dataframe as dd
-        import shutil
+
         
         """
         Run DBscan segmentation on self.data, this will reassign a column on self.data with column_name
@@ -350,7 +351,10 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         for nx in trange(self.dask_attrs[label_column].npartitions - 1):
             partition = self.dask_attrs[label_column].get_partition(nx).compute()
             logging.info('Initiation segmentation of cluster: {}'.format(nx))
-            partition = _segmentation_dots(partition, segmentation_function)
+            makedirs(path.join(save_to,'Segmentation',str(nx)), exist_ok=True)
+            tmp_folder = path.join(save_to,'Segmentation',str(nx), 'tmp')
+            makedirs(tmp_folder, exist_ok=True)
+            partition = _segmentation_dots(partition, segmentation_function, tmp_folder)
             logging.info('Segmentation done.')
             s = partition.Segmentation.values
             dic = dict(
@@ -374,19 +378,14 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 labels_segmentation += labels.tolist()
                 count =  np.max(np.array(labels_segmentation)) +1
                 logging.info('Groupby partition')
-                #partition_grp = partition.groupby('Segmentation'
                 clusterN = partition[label_column].values[0]
                 partition.to_parquet(path.join(save_to,'Segmentation','{}.parquet'.format(clusterN)))
                 partition_filt = partition[partition.Segmentation != -1]
-                #partition_filt = dd.from_pandas(partition_filt, npartitions=len(partition_filt.Segmentation.unique()))
-                #result_grp = partition_filt.groupby('Segmentation').apply(_cell_extract, self.unique_genes).compute().values
-                #result_grp = Parallel(
-                #    n_jobs=multiprocessing.cpu_count(), backend='multiprocessing')(delayed(_cell_extract)(part, self.unique_genes) for _, part in partition_filt.groupby('Segmentation'))
 
-                with multiprocessing.Pool(processes=12) as pool:
-                    #queue = multiprocessing.Manager().Queue()
-                    result_grp = pool.map_async(_cell_extract, [(part, self.unique_genes) for _, part in partition_filt.groupby('Segmentation')])
-                    result_grp = result_grp.get()
+                partition_filt.groupby('Segmentation').apply(lambda x: x.to_parquet(path.join(save_to,'Segmentation',str(nx),'{}_s.parquet'.format(x.name))))
+                partition_filt = dd.read_parquet(path.join(save_to,'Segmentation',str(nx),'*_s.parquet'), engine='pyarrow')
+                result_grp = partition_filt.map_partitions(_cell_extract, self.unique_genes).compute(processes=True).values
+
                 for dbl, centroid, mat in result_grp:
                     if type(mat) != type(None):
                         labels_list.append(dbl)
@@ -415,30 +414,14 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         logging.info('Number of cells found: {}. Loompy written.'.format(count))
 
 #@numba.njit(parallel=True)
-def _get_counts(cell_i_g,dblabel, unique_genes):
-    gene, cell = np.unique(cell_i_g,return_counts=True)
-    d = pd.DataFrame({dblabel:cell},index=gene)
-    g= pd.DataFrame(index=unique_genes)
-    data = pd.concat([g,d],join='outer',axis=1).fillna(0)
-    return data.values.astype('int16')
-
-#@numba.njit(parallel=True)
-def _cell_extract(cell_unique_genes):
-    cell, unique_genes = cell_unique_genes
-    #dblabel = cell['Segmentation'][0]
-    #try:
+def _cell_extract(cell , unique_genes):
     dblabel = cell.Segmentation.values[0]
-    #mat = _get_counts(cell.g.values,dblabel,unique_genes)
     gene, cell_counts = np.unique(cell.g.values,return_counts=True)
     data = np.zeros(len(unique_genes))
     data[np.where(np.isin(unique_genes, gene))[0]] = cell_counts
     mat = data.reshape([len(data),1])
-    #mat = _get_counts(cell['g'],dblabel, unique_genes)
     centroid = cell.x.values.mean(),cell.y.values.mean()
-    #centroid = sum(centroid[0])/len(centroid[0]), sum(centroid[1])/len(centroid[1])
     return dblabel, centroid, mat
-    #except:
-    #    return None, None, None
 
 #@numba.njit(parallel=True)
 def _distance(data, dist):
@@ -501,7 +484,7 @@ def _resegmentation_dots(data):
     return data
 
 #@numba.njit(parallel=True)
-def _segmentation_dots(partition, func):
+def _segmentation_dots(partition, func, save_tmp):
     cl_molecules_xy = partition.loc[:,['x','y']].values
     segmentation = func.fit_predict(cl_molecules_xy)
     partition['tmp_segment'] = segmentation.astype(np.int64)
@@ -513,11 +496,15 @@ def _segmentation_dots(partition, func):
     #print('results', results_resegmentation)
     #results_resegmentation = Parallel(n_jobs=multiprocessing.cpu_count(),backend="multiprocessing")(delayed(resegmentation_function)(part) for _, part in partition.groupby('tmp_segment'))
 
-    with multiprocessing.Pool(processes=12) as pool:
-        #queue = multiprocessing.Manager().Queue()
-        results_resegmentation = pool.map_async(_resegmentation_dots, [(part ) for _, part in partition.groupby('tmp_segment')])
-        results_resegmentation = results_resegmentation.get()
-        #results_resegmentation = results_resegmentation.get()
+    #with multiprocessing.Pool(processes=12) as pool:
+    #    queue = multiprocessing.Manager().Queue()
+    #    results_resegmentation = pool.map_async(_resegmentation_dots, [(part ) for _, part in partition.groupby('tmp_segment')])
+    #    results_resegmentation = results_resegmentation.get()
+    #    results_resegmentation = results_resegmentation.get()
+    partition.groupby('tmp_segment').apply(lambda x: x.to_parquet(path.join(save_tmp,'{}_sub.parquet'.format(x.name))))
+    partition_filt = dd.read_parquet(path.join(save_tmp,'*_sub.parquet'), engine='pyarrow')
+    results_resegmentation = partition_filt.map_partitions(_resegmentation_dots).compute(processes=True).values
+    shutil.rmtree(save_tmp)
 
     resegmentation = []
     new_results_resegmentation = []
