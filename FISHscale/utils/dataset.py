@@ -389,7 +389,6 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                     result_grp = result_grp.get()
                 for dbl, centroid, mat in result_grp:
                     if type(mat) != type(None):
-                        print(mat)
                         labels_list.append(dbl)
                         centroids.append(centroid)
                         matrices.append(mat)
