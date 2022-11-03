@@ -776,7 +776,7 @@ class GraphPlotting:
             ws.OverallTotalUMIs = shoji.Tensor("uint64", (), inits=data.sum().astype("uint64"))
             ws.X = shoji.Tensor("float32", ("cells",), inits=ds.ca.Centroid[:,0][filter_cells].astype('float32')) # Load the spatial X and Y coordinates 
             ws.Y = shoji.Tensor("float32", ("cells",), inits=ds.ca.Centroid[:,1][filter_cells].astype('float32'))
-            ws.GraphCluster = shoji.Tensor("int16", ("cells",), inits=ds.ca.Clusters[filter_cells].astype(float).astype('int16'))
+            ws.GraphCluster = shoji.Tensor("int8", ("cells",), inits=ds.ca.Clusters[filter_cells].astype(float).astype('int8'))
             #ws.NucleusArea_um = shoji.Tensor("float32", ("cells",), inits=ds.ca.Nucelus_area_um2[:].astype('float32')) # Load the spatial X and Y coordinates 
             #ws.NucleusArea_px = shoji.Tensor("float32", ("cells",), inits=ds.ca.Nucleus_area_px[:][filter_cells].astype('float32'))
 
