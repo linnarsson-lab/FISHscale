@@ -822,7 +822,7 @@ class MultiGraphData(pl.LightningDataModule):
         clf = make_pipeline(StandardScaler(), SGDClassifier(loss='log_loss', max_iter=1000, tol=1e-3))
         clf.fit(training_latents, clusters)
         clusters = clf.predict(self.latent_unlabelled).astype('int8')
-        dump(clf_total, 'miniMultiGraphClassifier.joblib') 
+        dump(clf, 'miniMultiGraphClassifier.joblib') 
         clf_total = make_pipeline(StandardScaler(), SGDClassifier(loss='log_loss', max_iter=1000, tol=1e-3))
         clf_total.fit(self.latent_unlabelled, clusters)
         clusters = clf.predict(self.latent_unlabelled).astype('int8')
