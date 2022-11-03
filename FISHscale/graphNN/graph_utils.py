@@ -509,7 +509,7 @@ class GraphPlotting:
                 sparse_tmp = ds.sparse().tocsr()
                 r = enrich._fit(sparse_tmp,permute=False)
                 ds.ra['enrichment'] = r
-                
+
                 self.cell_unique_clusters = np.unique(cell_clusters)
                 #dic = dict(zip(self.cell_unique_clusters, np.arange(self.cell_unique_clusters.shape[0])))
                 logging.info('GSclusters type {} and Cell Clusters type {}'.format(self.clusters.dtype, self.cell_unique_clusters.dtype))
@@ -776,7 +776,7 @@ class GraphPlotting:
             ws.OverallTotalUMIs = shoji.Tensor("uint64", (), inits=data.sum().astype("uint64"))
             ws.X = shoji.Tensor("float32", ("cells",), inits=ds.ca.Centroid[:,0][filter_cells].astype('float32')) # Load the spatial X and Y coordinates 
             ws.Y = shoji.Tensor("float32", ("cells",), inits=ds.ca.Centroid[:,1][filter_cells].astype('float32'))
-            ws.GraphCluster = shoji.Tensor("uint16", ("cells",), inits=ds.ca.Clusters[filter_cells].astype(float).astype('uint16'))
+            ws.GraphCluster = shoji.Tensor("int16", ("cells",), inits=ds.ca.Clusters[filter_cells].astype(float).astype('int16'))
             #ws.NucleusArea_um = shoji.Tensor("float32", ("cells",), inits=ds.ca.Nucelus_area_um2[:].astype('float32')) # Load the spatial X and Y coordinates 
             #ws.NucleusArea_px = shoji.Tensor("float32", ("cells",), inits=ds.ca.Nucleus_area_px[:][filter_cells].astype('float32'))
 
