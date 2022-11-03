@@ -503,12 +503,14 @@ class GraphPlotting:
             gc.collect()
 
             with loompy.connect(os.path.join(self.folder,self.data.filename.split('.')[0]+'_cells.loom'),'r+') as ds:
-                enrich = enrich_(labels_attr = ds.ca.Clusters)
-                sparse_tmp = ds.sparse().tocsr()
-                cell_clusters = ds.ca['Clusters']#.astype(float)
+                cell_clusters = ds.ca['Clusters'].astype(float).astype(int)
+                ds.ca['Clusters'] = cell_clusters
+                
                 r = enrich._fit(sparse_tmp,permute=False)
+                enrich = enrich_(labels_attr = cell_clusters)
+                sparse_tmp = ds.sparse().tocsr()
+
                 ds.ra['enrichment'] = r
-                ds.ca['Clusters'] = cell_clusters.astype(float).astype(int)
                 self.cell_unique_clusters = np.unique(cell_clusters)
 
                 #dic = dict(zip(self.cell_unique_clusters, np.arange(self.cell_unique_clusters.shape[0])))
