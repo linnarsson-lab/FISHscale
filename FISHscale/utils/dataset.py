@@ -505,7 +505,6 @@ def _segmentation_dots(partition, func, save_tmp):
     partition_filt = dd.read_parquet(path.join(save_tmp,'*_sub.parquet'), engine='pyarrow')
     results_resegmentation = partition_filt.map_partitions(_resegmentation_dots).compute(processes=True).values
     #shutil.rmtree(save_tmp)
-    print(results_resegmentation)
 
     resegmentation = []
     new_results_resegmentation = []
