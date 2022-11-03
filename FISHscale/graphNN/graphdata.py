@@ -790,8 +790,6 @@ class MultiGraphData(pl.LightningDataModule):
         from joblib import dump, load
 
         self.model.eval()
-        latent_unlabelled = []
-
         #self.sub_graphs = dgl.unbatch(self.sub_graphs)
         #for g in tqdm(self.sub_graphs):
         lu, _ = self.model.module.inference(
@@ -801,8 +799,8 @@ class MultiGraphData(pl.LightningDataModule):
                                 0)
 
         print(lu.shape)
-        latent_unlabelled = lu.detach().cpu().numpy()
-        self.latent_unlabelled = np.concatenate(latent_unlabelled)
+        self.latent_unlabelled = lu.detach().cpu().numpy()
+        #self.latent_unlabelled = np.concatenate(latent_unlabelled)
         logging.info('Latent embeddings generated for {} molecules'.format(self.latent_unlabelled.shape[0]))
         
         np.save(self.folder+'/latent',self.latent_unlabelled)
