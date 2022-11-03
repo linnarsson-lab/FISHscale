@@ -526,7 +526,7 @@ class GraphPlotting:
             for cluster_name, idx in zip(self.cell_unique_clusters, range(self.enrichment.shape[1])):
                 en_genes = enrichment[:,[idx]][:10]
                 enriched_genes[cluster_name] = self.data.unique_genes[en_genes]
-                self.clusters_agg.append(c)
+                self.clusters_agg.append(cluster_name)
             self.clusters_agg = np.array(self.clusters_agg)
             self.g.ndata['GSclusters'] = th.tensor(self.clusters)
             np.save(self.folder+'/clusters',self.clusters)
