@@ -457,6 +457,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting, GraphDecoder)
             self.prediction_unlabelled = prediction_unlabelled.softmax(dim=-1).detach().numpy()
             np.save(self.folder+'/labels',self.prediction_unlabelled)
             np.save(self.folder+'/probabilities',prediction_unlabelled)
+        self.save_graph()
 
     def get_attention(self):
         """

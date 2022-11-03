@@ -477,7 +477,7 @@ class GraphPlotting:
                 
                 logging.info('Number of clusters with probability > 0.5: {}'.format(np.sum(cluster_probs.max(axis=1)>0.5)))
                 logging.info('Molecules per cluster: {}'.format(np.unique(clusters, return_counts=True)[1]))
-                logging.info('Clusters {}'.format(clusters[:50]))
+                #logging.info('Clusters {}'.format(clusters[:50]))
                 #max_clusters = np.max(clusters)
                 #probability_th = 1/max_clusters
                 #clusters = np.array([lab if x[lab] >= probability_th else -1  for x,lab in zip(cluster_probs,clusters)])
