@@ -658,7 +658,7 @@ class GraphPlotting:
                     s=1,
                     title=str(cl),
                     color=color_dic[cl])
-                nd_dic[cl] = scatter.opts(title=' - '.join(enriched_genes[float(cl)]), fontsize={'title':24})
+                nd_dic[cl] = scatter.opts(title=' - '.join(enriched_genes[str(float(cl))]), fontsize={'title':24})
                 lay.append(nd_dic[cl])
                 hv.save(scatter,"{}/Clusters/{}.png".format(self.folder,str(cl)), )   
                 #except:
@@ -670,7 +670,7 @@ class GraphPlotting:
             hv.notebook_extension('bokeh')
             hmap = hv.HoloMap(kdims=['Enrichment - Cluster'])
             for k in nd_dic:
-                hmap[str(k) + ' {}'.format(enriched_genes[float(k)])] = nd_dic[k].opts(bgcolor='black',width=1000,data_aspect=1,size=1,color=color_dic[k])
+                hmap[str(k) + ' {}'.format(enriched_genes[str(float(k))])] = nd_dic[k].opts(bgcolor='black',width=1000,data_aspect=1,size=1,color=color_dic[k])
 
             hv.save(hmap, "{}/Clusters.html".format(self.folder),fmt='html')
             self.save_graph()
