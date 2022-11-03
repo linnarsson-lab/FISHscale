@@ -476,7 +476,7 @@ def _resegmentation_dots(data):
 
     #segmentation2 = np.array([x+count if x >= 0 else -1 for x in segmentation2])
     segmentation2 = np.array([x if x >= 0 else -1 for x in segmentation2])
-    data['tmp_segment'] = segmentation2
+    data['tmp_segment2'] = segmentation2
 
     #resegmentation += segmentation2.tolist()
     #count = np.max(np.array(resegmentation)) + 2
@@ -502,17 +502,17 @@ def _segmentation_dots(partition, func, save_tmp):
     #    results_resegmentation = results_resegmentation.get()
     #    results_resegmentation = results_resegmentation.get()
     partition.groupby('tmp_segment').apply(lambda x: x.to_parquet(path.join(save_tmp,'{}_sub.parquet'.format(x.name))))
-    partition_filt = dd.read_parquet(path.join(save_tmp,'*_sub.parquet'), engine='pyarrow')
-    results_resegmentation = partition_filt.map_partitions(_resegmentation_dots).compute(processes=True).values
+    partition = dd.read_parquet(path.join(save_tmp,'*_sub.parquet'), engine='pyarrow')
+    results_resegmentation = partition.map_partitions(_resegmentation_dots).compute()
     #shutil.rmtree(save_tmp)
 
     resegmentation = []
     new_results_resegmentation = []
     count = 0
-    for i in results_resegmentation:
+    for idx,i in results_resegmentation.groupby('tmp_segment'):
         if i is not None:
 
-            segmentation2 = np.array([x+count if x >= 0 else -1 for x in i.tmp_segment])
+            segmentation2 = np.array([x+count if x >= 0 else -1 for x in i.tmp_segment2])
             resegmentation += segmentation2.tolist()
             i['tmp_segment'] = segmentation2
             new_results_resegmentation.append(i)
