@@ -503,18 +503,19 @@ class GraphPlotting:
             gc.collect()
 
             with loompy.connect(os.path.join(self.folder,self.data.filename.split('.')[0]+'_cells.loom'),'r+') as ds:
-                enrich = enrich_(labels_attr = ds.ca.Clusters)
-                sparse_tmp = ds.sparse().tocsr()
-                cell_clusters = ds.ca['Clusters']#.astype(float)
+                cell_clusters = ds.ca['Clusters'].astype(float).astype(int)
+                ds.ca['Clusters'] = cell_clusters
+                
                 r = enrich._fit(sparse_tmp,permute=False)
+                enrich = enrich_(labels_attr = cell_clusters)
+                sparse_tmp = ds.sparse().tocsr()
+
                 ds.ra['enrichment'] = r
-                ds.ca['Clusters'] = cell_clusters.astype('str')
                 self.cell_unique_clusters = np.unique(cell_clusters)
 
                 #dic = dict(zip(self.cell_unique_clusters, np.arange(self.cell_unique_clusters.shape[0])))
                 logging.info('GSclusters type {} and Cell Clusters type {}'.format(self.clusters.dtype, self.cell_unique_clusters.dtype))
-                tmp_cell_unique_clusters = self.cell_unique_clusters.astype(float).astype(int)
-                self.clusters = np.array([i if i in tmp_cell_unique_clusters  else -1 for i in self.clusters], dtype=np.int8)
+                self.clusters = np.array([i if i in self.cell_unique_clusters else -1 for i in self.clusters], dtype=np.int8)
 
             self.cell_clusters = self.clusters[self.clusters != -1]
 
