@@ -647,25 +647,24 @@ class GraphPlotting:
             logging.info('Clusters print {}'.format(np.unique(self.clusters)))
             for cl in np.unique(self.clusters):
                 logging.info('Printing cluster {}'.format(cl))
-                #try:
-                x, y = molecules_x[self.clusters == cl], molecules_y[self.clusters == cl]
-                allm += x.shape[0]
+                try:
+                    x, y = molecules_x[self.clusters == cl], molecules_y[self.clusters == cl]
+                    allm += x.shape[0]
 
-                scatter =  hv.Scatter(np.array([x,y]).T).opts(
-                    bgcolor='black',
-                    aspect='equal',
-                    fig_inches=50,
-                    s=1,
-                    title=str(cl),
-                    color=color_dic[cl])
-                
-                enriched_genes_cl = " - ".join([x[0] for x in enriched_genes[cl].tolist()])
-                nd_dic[cl] = scatter.opts(title=enriched_genes_cl, fontsize={'title':24})
-                lay.append(nd_dic[cl])
-                hv.save(scatter,"{}/Clusters/{}.png".format(self.folder,str(cl)), )   
+                    scatter =  hv.Scatter(np.array([x,y]).T).opts(
+                        bgcolor='black',
+                        aspect='equal',
+                        fig_inches=50,
+                        s=1,
+                        title=str(cl),
+                        color=color_dic[cl])
                     
-                #except:
-                #    logging.info('Could not get cluster {}'.format(cl))   
+                    enriched_genes_cl = " - ".join([x[0] for x in enriched_genes[cl].tolist()])
+                    nd_dic[cl] = scatter.opts(title=enriched_genes_cl, fontsize={'title':24})
+                    lay.append(nd_dic[cl])
+                    hv.save(scatter,"{}/Clusters/{}.png".format(self.folder,str(cl)), )   
+                except:
+                    logging.info('Could not get cluster {}'.format(cl))   
 
             layout = hv.Layout(lay).cols(5).opts(opts.Scatter(s=0.1,fontsize={'title':8}))
             hv.save(layout,"{}/molecule_prediction.png".format(self.folder))
