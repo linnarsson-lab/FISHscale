@@ -426,11 +426,16 @@ def _get_counts(cell_i_g,dblabel, unique_genes):
 #@numba.njit(parallel=True)
 def _cell_extract(cell_unique_genes):
     cell, unique_genes = cell_unique_genes
+    #dblabel = cell['Segmentation'][0]
     #try:
     dblabel = cell.Segmentation.values[0]
-    mat = _get_counts(cell.g.values,dblabel,unique_genes)
+    #mat = _get_counts(cell.g.values,dblabel,unique_genes)
+    gene, cell = np.unique(cell,return_counts=True)
+    data = np.zeros(len(unique_genes))
+    data[np.where(np.isin(unique_genes, gene))[0]] = cell
+    mat = data.reshape([len(data),1])
     #mat = _get_counts(cell['g'],dblabel, unique_genes)
-    centroid = cell['x'].mean().values,cell['y'].mean().values
+    centroid = cell.x.values.mean(),cell.y.values.mean()
     #centroid = sum(centroid[0])/len(centroid[0]), sum(centroid[1])/len(centroid[1])
     return dblabel, centroid, mat
     #except:
