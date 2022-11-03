@@ -376,7 +376,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 #partition_filt = dd.from_pandas(partition_filt, npartitions=len(partition_filt.Segmentation.unique()))
                 #result_grp = partition_filt.groupby('Segmentation').apply(_cell_extract, self.unique_genes).compute().values
                 result_grp = Parallel(
-                    n_jobs=multiprocessing.cpu_count(), backend='loky')(delayed(_cell_extract)([part, self.unique_genes]) for _, part in partition_filt.groupby('Segmentation'))
+                    n_jobs=multiprocessing.cpu_count(), backend='loky',max_nbytes=None)(delayed(_cell_extract)([part, self.unique_genes]) for _, part in partition_filt.groupby('Segmentation'))
 
                 #with multiprocessing.Pool(processes=12) as pool:
                     #queue = multiprocessing.Manager().Queue()
@@ -498,7 +498,7 @@ def _segmentation_dots(partition, func):
     indexes, resegmentation = [],[]
     resegmentation_data = []
 
-    results_resegmentation = Parallel(n_jobs=multiprocessing.cpu_count(),backend="loky")(delayed(_resegmentation_dots)(part) for _, part in partition.groupby('tmp_segment'))
+    results_resegmentation = Parallel(n_jobs=multiprocessing.cpu_count(),backend="loky",max_nbytes=None)(delayed(_resegmentation_dots)(part) for _, part in partition.groupby('tmp_segment'))
 
     resegmentation = []
     new_results_resegmentation = []

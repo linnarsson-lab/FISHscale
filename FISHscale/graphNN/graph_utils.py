@@ -505,9 +505,8 @@ class GraphPlotting:
             with loompy.connect(os.path.join(self.folder,self.data.filename.split('.')[0]+'_cells.loom'),'r+') as ds:
                 cell_clusters = ds.ca['Clusters'].astype(float).astype(int)
                 ds.ca['Clusters'] = cell_clusters
-                
-                r = enrich._fit(sparse_tmp,permute=False)
                 enrich = enrich_(labels_attr = cell_clusters)
+                r = enrich._fit(sparse_tmp,permute=False)
                 sparse_tmp = ds.sparse().tocsr()
 
                 ds.ra['enrichment'] = r
