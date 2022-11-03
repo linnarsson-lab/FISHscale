@@ -607,7 +607,7 @@ class GraphPlotting:
             logging.info(color_dic)
             clusters_colors = np.array([color_dic[x] for x in self.clusters])
             self.g.ndata['clusters_colors'] = th.tensor(clusters_colors)
-            '''
+
             some = np.random.choice(np.arange(self.latent_unlabelled.shape[0]),np.min([random_n, self.latent_unlabelled.shape[0]]),replace=False)
             umap_embedding = reducer.fit_transform(self.latent_unlabelled[some])
             #embedding = umap_embedding.transform(self.latent_unlabelled)
@@ -634,7 +634,7 @@ class GraphPlotting:
             plt.yticks(fontsize=2)
             plt.axis('scaled')
             plt.savefig("{}/spatial_umap_embedding.png".format(self.folder), bbox_inches='tight', dpi=5000)
-            '''
+
             import holoviews as hv
             from holoviews import opts
             hv.extension('matplotlib')
