@@ -381,7 +381,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 #partition_filt = dd.from_pandas(partition_filt, npartitions=len(partition_filt.Segmentation.unique()))
                 #result_grp = partition_filt.groupby('Segmentation').apply(_cell_extract, self.unique_genes).compute().values
                 result_grp = Parallel(
-                    n_jobs=multiprocessing.cpu_count()*4, backend='threading')(delayed(_cell_extract)([part, self.unique_genes]) for _, part in partition_filt.groupby('Segmentation'))
+                    n_jobs=multiprocessing.cpu_count(), backend='loky')(delayed(_cell_extract)([part, self.unique_genes]) for _, part in partition_filt.groupby('Segmentation'))
 
                 #with multiprocessing.Pool(processes=12) as pool:
                     #queue = multiprocessing.Manager().Queue()
@@ -491,13 +491,8 @@ def _resegmentation_dots(data):
         else:
             segmentation2 = np.array([-1]*data.shape[0])
 
-    #segmentation2 = np.array([x+count if x >= 0 else -1 for x in segmentation2])
     segmentation2 = np.array([x if x >= 0 else -1 for x in segmentation2])
     data['tmp_segment'] = segmentation2
-
-    #resegmentation += segmentation2.tolist()
-    #count = np.max(np.array(resegmentation)) + 2
-    #resegmentation_data.append(data)
     return data
 
 #@numba.njit(parallel=True)
@@ -508,16 +503,7 @@ def _segmentation_dots(partition, func):
     indexes, resegmentation = [],[]
     resegmentation_data = []
 
-    #partition = dd.from_pandas(partition, npartitions=len(partition.tmp_segment.unique()))         
-    #results_resegmentation = partition.groupby('tmp_segment').apply(resegmentation_function, meta={'x': 'f8', 'y': 'f8','Clusters':'', 'g', 'tmp_segment', 'z'}).compute(scheduler='processes').values
-    #print('results', results_resegmentation)
-    results_resegmentation = Parallel(n_jobs=multiprocessing.cpu_count()*4,backend="threading")(delayed(_resegmentation_dots)(part) for _, part in partition.groupby('tmp_segment'))
-
-    #with multiprocessing.Pool(processes=12) as pool:
-        #queue = multiprocessing.Manager().Queue()
-    #    results_resegmentation = pool.map_async(_resegmentation_dots, [(part ) for _, part in partition.groupby('tmp_segment')])
-    #    results_resegmentation = results_resegmentation.get()
-        #results_resegmentation = results_resegmentation.get()
+    results_resegmentation = Parallel(n_jobs=multiprocessing.cpu_count(),backend="loky")(delayed(_resegmentation_dots)(part) for _, part in partition.groupby('tmp_segment'))
 
     resegmentation = []
     new_results_resegmentation = []
