@@ -601,12 +601,12 @@ class GraphPlotting:
             color_dic = {}
             logging.info('Clusters max {}'.format(np.max(self.clusters)))
             for x in np.unique(self.clusters):
-                logging.info('cluster {}'.format(x))
+                #logging.info('cluster {}'.format(x))
                 c = colors[x,:].tolist()
                 color_dic[x] = (c[0],c[1],c[2])
             logging.info(color_dic)
             clusters_colors = np.array([color_dic[x] for x in self.clusters])
-            self.g.ndata['clusters_colors'] = th.tensor(clusters_colors)
+            #self.g.ndata['clusters_colors'] = th.tensor(clusters_colors)
 
             some = np.random.choice(np.arange(self.latent_unlabelled.shape[0]),np.min([random_n, self.latent_unlabelled.shape[0]]),replace=False)
             umap_embedding = reducer.fit_transform(self.latent_unlabelled[some])
