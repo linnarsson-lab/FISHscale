@@ -969,7 +969,26 @@ class GraphPlotting:
         df.loc[:,'Frequency'] = node_freq
         df.loc[:,'Enrichment'] = node_enrich
 
-        graph = hv.Graph(((graph_edges1,graph_edges2, graph_weights),df),vdims='Attention').opts(
+        dic_enrichment = dict(zip(df['index'].values,node_enrich))
+
+        df3 = pd.DataFrame({'source':graph_edges1,'target':graph_edges2, 'value':graph_weights})
+        data_chord = pd.DataFrame({'s':graph_edges1,'t':graph_edges2})
+        hvdata = hv.Dataset(data_chord)
+        chord = hv.Chord((df3,hvdata),['source', 'target'], ['value'])
+        chord.nodes.data['enrichment'] = [dic_enrichment[i] for i in chord.nodes.data.index]
+        chord = chord.select(s=data_chord.s.values.tolist(), selection_mode='nodes')
+        chord.opts(
+            hv.opts.Chord(
+                width=1000,
+                height=1000,
+                cmap='glasbey_light',
+                edge_color=hv.dim('source').str(),
+                node_color=hv.dim('t').str(),
+                labels='t',
+            )
+        )
+
+        '''graph = hv.Graph(((graph_edges1,graph_edges2, graph_weights),df),vdims='Attention').opts(
             opts.Graph(
                 edge_cmap='viridis', edge_color='Attention',node_color='Frequency',
                 cmap='plasma', edge_line_width=hv.dim('Attention')*20,node_size=hv.dim('Enrichment')*5,
@@ -979,13 +998,8 @@ class GraphPlotting:
         labels = hv.Labels(graph.nodes, ['x', 'y'],'index')
         #graph = graph #* labels.opts(text_font_size='8pt', text_color='white', bgcolor='grey')
         graph = graph*labels.opts(text_font_size='5pt', text_color='white', bgcolor='grey')
-        '''graph = datashade(graph, normalization='linear', width=1000, height=1000).opts(
-            opts.Graph(
-                    edge_cmap='viridis', edge_color='Attention',node_color='Frequency',
-                    cmap='plasma', edge_line_width=hv.dim('Attention')*10,
-                    edge_nonselection_alpha=0, width=2000,height=2000)
-            )'''
-        return graph, bg, counts_cluster
+        '''
+        return chord, bg, counts_cluster
 
     def _intercluster_df(self, dic):
         intercluster_network = []
@@ -1026,7 +1040,26 @@ class GraphPlotting:
         graph_edges2 = np.array(graph_edges2)
         graph_weights = np.array(graph_weights)
 
-        graph = hv.Graph(((graph_edges1,graph_edges2, graph_weights),),vdims='Attention').opts(
+        #data = pd.DataFrame({'s':df2.index.values,'t':df2.index.values})
+        df3 = pd.DataFrame({'source':graph_edges1,'target':graph_edges2, 'attention':graph_weights})
+        data_chord = pd.DataFrame({'s':graph_edges1,'t':graph_edges2})
+        hvdata = hv.Dataset(data_chord)
+        chord = hv.Chord((df3,hvdata),['source', 'target'], ['attention'])
+
+        chord = chord.select(s=data_chord.s.values.tolist(), selection_mode='nodes')
+        chord.opts(
+            hv.opts.Chord(
+                width=1000,
+                height=1000,
+                cmap='glasbey_light',
+                edge_color=hv.dim('source').str(),
+                node_color=hv.dim('t').str(),
+                labels='t',
+            )
+        )
+        
+
+        '''graph = hv.Graph(((graph_edges1,graph_edges2, graph_weights),),vdims='Attention').opts(
             opts.Graph(edge_cmap='viridis', edge_color='Attention'),
             )
 
@@ -1042,8 +1075,8 @@ class GraphPlotting:
 
         labels = hv.Labels(graph.nodes, ['x', 'y'],'index')
         #graph = graph #* labels.opts(text_font_size='8pt', text_color='white', bgcolor='grey')
-        inter_graph = graph*labels.opts(text_font_size='5pt', text_color='white', bgcolor='grey')
-        return inter_graph, df
+        inter_graph = graph*labels.opts(text_font_size='5pt', text_color='white', bgcolor='grey')'''
+        return chord, df
 
         
 
