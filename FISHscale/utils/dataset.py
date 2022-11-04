@@ -368,20 +368,18 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             if labels.max() >= 0:
                 labels_segmentation += labels.tolist()
                 count =  np.max(np.array(labels_segmentation)) +1
-                logging.info('Groupby partition')
+                logging.info('Saving partition')
                 #partition_grp = partition.groupby('Segmentation'
                 clusterN = partition[label_column].values[0]
                 partition.to_parquet(path.join(save_to,'Segmentation','{}.parquet'.format(clusterN)))
+                logging.info('Filter -1 out of partition')
                 partition_filt = partition[partition.Segmentation != -1]
                 #partition_filt = dd.from_pandas(partition_filt, npartitions=len(partition_filt.Segmentation.unique()))
                 #result_grp = partition_filt.groupby('Segmentation').apply(_cell_extract, self.unique_genes).compute().values
-                result_grp = Parallel(
-                    n_jobs=multiprocessing.cpu_count(), backend='loky',max_nbytes=None)(delayed(_cell_extract)([part, self.unique_genes]) for _, part in partition_filt.groupby('Segmentation'))
 
-                #with multiprocessing.Pool(processes=12) as pool:
-                    #queue = multiprocessing.Manager().Queue()
-                #    result_grp = pool.map_async(_cell_extract, [(part, self.unique_genes) for _, part in partition_filt.groupby('Segmentation')])
-                #    result_grp = result_grp.get()
+                result_grp = Parallel(
+                    n_jobs=multiprocessing.cpu_count(), backend='threading',max_nbytes=None)(delayed(_cell_extract)([part, self.unique_genes]) for _, part in partition_filt.groupby('Segmentation'))
+
                 for dbl, centroid, mat in result_grp:
                     if type(mat) != type(None):
                         labels_list.append(dbl)
@@ -498,7 +496,7 @@ def _segmentation_dots(partition, func):
     indexes, resegmentation = [],[]
     resegmentation_data = []
 
-    results_resegmentation = Parallel(n_jobs=multiprocessing.cpu_count(),backend="loky",max_nbytes=None)(delayed(_resegmentation_dots)(part) for _, part in partition.groupby('tmp_segment'))
+    results_resegmentation = Parallel(n_jobs=multiprocessing.cpu_count(),backend="threading",max_nbytes=None)(delayed(_resegmentation_dots)(part) for _, part in partition.groupby('tmp_segment'))
 
     resegmentation = []
     new_results_resegmentation = []
