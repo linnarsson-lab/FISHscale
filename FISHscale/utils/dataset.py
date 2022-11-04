@@ -3,7 +3,10 @@ from os import path, makedirs, environ
 from re import L, X
 environ['NUMEXPR_MAX_THREADS'] = str(cpu_count())
 from typing import Union, Optional
-import pandas as pd
+try:
+    import modin.pandas as pd
+except:
+    import pandas as pd
 from FISHscale.utils.inside_polygon import close_polygon 
 from FISHscale.utils.hex_regionalization import Regionalize
 from FISHscale.utils.fast_iteration import Iteration, MultiIteration
@@ -24,7 +27,6 @@ from FISHscale.utils.regionalization_gradient import Regionalization_Gradient, R
 from FISHscale.utils.volume_align import Volume_Align
 import sys
 from datetime import datetime
-import pandas as pd
 from tqdm import tqdm
 from collections import Counter
 import numpy as np
@@ -319,7 +321,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         from dask.diagnostics import ProgressBar
         from dask import dataframe as dd
         import shutil
-        import modin.pandas as pd
+
 
         
         """
