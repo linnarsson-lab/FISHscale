@@ -49,6 +49,7 @@ import multiprocessing
 from diameter_clustering import QTClustering #, MaxDiameterClustering
 from sklearn.cluster import DBSCAN, MiniBatchKMeans #, AgglomerativeClustering#, OPTICS
 from scipy.spatial import distance
+from concurrent.futures import ProcessPoolExecutor
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s',stream=sys.stdout, level=logging.INFO,force=True,)
 
 
@@ -318,6 +319,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         from dask.diagnostics import ProgressBar
         from dask import dataframe as dd
         import shutil
+
         
         """
         Run DBscan segmentation on self.data, this will reassign a column on self.data with column_name
@@ -496,19 +498,23 @@ def _segmentation_dots(partition, func):
     indexes, resegmentation = [],[]
     resegmentation_data = []
 
-    results_resegmentation = Parallel(n_jobs=multiprocessing.cpu_count(),backend="threading",max_nbytes=None)(delayed(_resegmentation_dots)(part) for _, part in partition.groupby('tmp_segment'))
+    #results_resegmentation = Parallel(n_jobs=multiprocessing.cpu_count(),backend="loky",max_nbytes=None)(delayed(_resegmentation_dots)(part) for _, part in partition.groupby('tmp_segment'))
 
     resegmentation = []
     new_results_resegmentation = []
     count = 0
-    for i in results_resegmentation:
-        if i is not None:
 
-            segmentation2 = np.array([x+count if x >= 0 else -1 for x in i.tmp_segment])
-            resegmentation += segmentation2.tolist()
-            i['tmp_segment'] = segmentation2
-            new_results_resegmentation.append(i)
-            count = np.max(np.array(resegmentation)) + 2
+    with ProcessPoolExecutor(max_workers=12) as executor:
+        results_resegmentation = executor.map(_resegmentation_dots, [part for _, part in partition.groupby('tmp_segment')])
+
+        for i in results_resegmentation:
+            if i is not None:
+
+                segmentation2 = np.array([x+count if x >= 0 else -1 for x in i.tmp_segment])
+                resegmentation += segmentation2.tolist()
+                i['tmp_segment'] = segmentation2
+                new_results_resegmentation.append(i)
+                count = np.max(np.array(resegmentation)) + 2
     segmentation = pd.concat(new_results_resegmentation)
     segmentation['Segmentation'] = segmentation['tmp_segment']
     return segmentation
