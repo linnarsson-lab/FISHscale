@@ -1049,6 +1049,7 @@ class GraphPlotting:
 
         #data = pd.DataFrame({'s':df2.index.values,'t':df2.index.values})
         df3 = pd.DataFrame({'source':graph_edges1,'target':graph_edges2, 'attention':graph_weights})
+        df3 = df3.fillna(0)
         data_chord = pd.DataFrame({'s':graph_edges1,'t':graph_edges2})
         hvdata = hv.Dataset(data_chord)
         chord = hv.Chord((df3,hvdata),['source', 'target'], ['attention'])
