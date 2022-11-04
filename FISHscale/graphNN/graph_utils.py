@@ -971,20 +971,27 @@ class GraphPlotting:
 
         dic_enrichment = dict(zip(df['index'].values,node_enrich))
 
-        df3 = pd.DataFrame({'source':graph_edges1,'target':graph_edges2, 'value':graph_weights})
-        data_chord = pd.DataFrame({'s':graph_edges1,'t':graph_edges2})
+        df3 = pd.DataFrame({'source':graph_edges1,'target':graph_edges2, 'attention':graph_weights})
+        #norm_e = np.array([dic_enrichment[i] for i in df3['target']])
+        #norm_e = (norm_e -norm_e.min())/(norm_e.max()-norm_e.min())
+        #df3['enrichment'] = norm_e + 1e-3
+
+        data_chord = pd.DataFrame({'Source node':graph_edges1,'Target node':graph_edges2})
         hvdata = hv.Dataset(data_chord)
-        chord = hv.Chord((df3,hvdata),['source', 'target'], ['value'])
-        chord.nodes.data['enrichment'] = [dic_enrichment[i] for i in chord.nodes.data.index]
-        chord = chord.select(s=data_chord.s.values.tolist(), selection_mode='nodes')
+        chord = hv.Chord((df3,hvdata),['source', 'target'], ['attention'])
+        #print(chord.nodes.data.head())
+        
+        chord = chord.select(s=data_chord['Source node'].values.tolist(), selection_mode='nodes')
         chord.opts(
             hv.opts.Chord(
                 width=1000,
                 height=1000,
                 cmap='glasbey_light',
-                edge_color=hv.dim('source').str(),
-                node_color=hv.dim('t').str(),
-                labels='t',
+                edge_cmap='magma',
+                #node_size=hv.dim('enrichment')*100,
+                edge_color=hv.dim('attention'),#.str(),
+                node_color=hv.dim('Target node').str(),
+                labels='Target node',
             )
         )
 
