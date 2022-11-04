@@ -5,6 +5,8 @@ from re import L, X
 from typing import Union, Optional
 try:
     import modin.pandas as pd
+    import ray
+    ray.init(_temp_dir='/wsfish/tmp/')
 except:
     import pandas as pd
 from FISHscale.utils.inside_polygon import close_polygon 
