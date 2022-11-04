@@ -3,12 +3,8 @@ from os import path, makedirs, environ
 from re import L, X
 #environ['NUMEXPR_MAX_THREADS'] = str(cpu_count())
 from typing import Union, Optional
-try:
-    import modin.pandas as pd
-    import ray
-    ray.init(_temp_dir='/wsfish/tmp/')
-except:
-    import pandas as pd
+
+import pandas as pd
 from FISHscale.utils.inside_polygon import close_polygon 
 from FISHscale.utils.hex_regionalization import Regionalize
 from FISHscale.utils.fast_iteration import Iteration, MultiIteration
@@ -323,6 +319,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         from dask.diagnostics import ProgressBar
         from dask import dataframe as dd
         import shutil
+        import modin.pandas as pd
 
 
         
@@ -355,20 +352,25 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             partition = _segmentation_dots(partition, segmentation_function)
             logging.info('Segmentation done.')
             s = partition.Segmentation.values
+            
+            unique_counts, vals = np.unique(np.array([-1]+s.tolist()), return_counts=True)
+            dic_vals = dict(zip(unique_counts, vals))
             dic = dict(
                         zip(
-                            np.unique(np.array([-1]+s.tolist())), 
-                            [-1]+np.arange(np.unique(s).shape[0]).tolist(), 
+                            unique_counts,
+                            [-1]+np.arange(unique_counts.shape[0]).tolist(), 
                             )
                         )
-            s = np.array([dic[x] if x >= 0 and (s == x).sum() >= 10 else -1 for x in s]) 
+            s = np.array([dic[x] if x >= 0 and dic_vals[x] >= 10  else -1 for x in s]) 
+            unique_counts, vals = np.unique(np.array([-1]+s.tolist()), return_counts=True)
+            dic_vals = dict(zip(unique_counts, vals))
             dic = dict(
-                zip(
-                    np.unique(np.array([-1]+s.tolist())), 
-                    [-1]+np.arange(np.unique(s).shape[0]).tolist(), 
-                    )
-                )
-            labels = np.array([dic[x]+count if x >= 0 and (s == x).sum() >= 10 else -1 for x in s]) 
+                        zip(
+                            unique_counts,
+                            [-1]+np.arange(unique_counts.shape[0]).tolist(), 
+                            )
+                        )
+            labels = np.array([dic[x] if x >= 0 and dic_vals[x] >= 10  else -1 for x in s]) 
             logging.info('Segmentation of label {}. Min label: {} and max label: {}'.format(nx, labels.min(), labels.max()))
             partition['Segmentation'] = labels
 
