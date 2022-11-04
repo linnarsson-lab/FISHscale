@@ -507,7 +507,7 @@ def _segmentation_dots(partition, func):
     new_results_resegmentation = []
     count = 0
 
-    with ThreadPoolExecutor(max_workers=4) as executor:
+    with ThreadPoolExecutor(max_workers=250) as executor:
         task = [part for _, part in partition.groupby('tmp_segment')]
         results_resegmentation = executor.map(_resegmentation_dots, task)
 
