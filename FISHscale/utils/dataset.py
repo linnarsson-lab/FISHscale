@@ -1,7 +1,7 @@
 from multiprocessing import cpu_count
 from os import path, makedirs, environ
 from re import L, X
-environ['NUMEXPR_MAX_THREADS'] = str(cpu_count())
+#environ['NUMEXPR_MAX_THREADS'] = str(cpu_count())
 from typing import Union, Optional
 import pandas as pd
 from FISHscale.utils.inside_polygon import close_polygon 
