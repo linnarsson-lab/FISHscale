@@ -3,7 +3,6 @@ from os import path, makedirs, environ
 from re import L, X
 #environ['NUMEXPR_MAX_THREADS'] = str(cpu_count())
 from typing import Union, Optional
-
 import pandas as pd
 from FISHscale.utils.inside_polygon import close_polygon 
 from FISHscale.utils.hex_regionalization import Regionalize
@@ -319,7 +318,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         from dask.diagnostics import ProgressBar
         from dask import dataframe as dd
         import shutil
-        import modin.pandas as pd
+        #import modin.pandas as pd
 
 
         
