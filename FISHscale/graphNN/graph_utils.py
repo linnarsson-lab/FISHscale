@@ -945,7 +945,7 @@ class GraphPlotting:
             )#, edge_cmap='viridis', edge_color='Attention')
 
         df = graph.nodes.data
-        enrichment =  self.enrichment[:,(self.clusters_agg==cluster)]
+        enrichment =  self.enrichment[:,(self.clusters_agg==cluster)][:,0]
         enrichmentQ = np.quantile(enrichment,0.5)
 
         logging.info('EnrichmentQ: {}'.format(enrichmentQ.shape))
