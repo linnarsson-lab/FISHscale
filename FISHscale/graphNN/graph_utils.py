@@ -1054,6 +1054,7 @@ class GraphPlotting:
         hvdata = hv.Dataset(data_chord)
         chord = hv.Chord((df3,hvdata),['source', 'target'], ['attention'])
 
+
         chord = chord.select(s=data_chord.s.values.tolist(), selection_mode='nodes')
         chord.opts(
             hv.opts.Chord(
