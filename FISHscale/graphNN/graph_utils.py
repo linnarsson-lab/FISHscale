@@ -947,6 +947,9 @@ class GraphPlotting:
         df = graph.nodes.data
         enrichment =  self.enrichment[:,(self.clusters_agg==cluster)]
         enrichmentQ = np.quantile(enrichment,0.5)
+
+        logging.info('EnrichmentQ: {}'.format(enrichmentQ.shape))
+        logging.info('Enrichment: {}'.format(enrichment.shape))
         enriched_genes = self.data.unique_genes[enrichment > enrichmentQ]
 
         
