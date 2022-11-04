@@ -512,9 +512,9 @@ def _segmentation_dots(partition, func):
     count = 0
 
     with ThreadPoolExecutor(max_workers=multiprocessing.cpu_count()) as executor:
-        logging.info('Starting resegmentation, gouping by tmp_segment...')
+        logging.info('Starting resegmentation, grouping by tmp_segment...')
         task = [part for _, part in partition.groupby('tmp_segment')]
-        logging.info('Starting resegmentation, gouping done.')
+        logging.info('Starting resegmentation, grouping done.')
         results_resegmentation = executor.map(_resegmentation_dots, task)
 
         for i in results_resegmentation:
