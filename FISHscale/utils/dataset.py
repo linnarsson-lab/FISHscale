@@ -320,8 +320,6 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         import shutil
         #import modin.pandas as pd
 
-
-        
         """
         Run DBscan segmentation on self.data, this will reassign a column on self.data with column_name
 
