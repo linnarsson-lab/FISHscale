@@ -379,16 +379,19 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 #partition_filt = dd.from_pandas(partition_filt, npartitions=len(partition_filt.Segmentation.unique()))
                 #result_grp = partition_filt.groupby('Segmentation').apply(_cell_extract, self.unique_genes).compute().values
 
-                result_grp = Parallel(
-                    n_jobs=multiprocessing.cpu_count(), backend='threading',max_nbytes=None)(delayed(_cell_extract)([part, self.unique_genes]) for _, part in partition_filt.groupby('Segmentation'))
+                #result_grp = Parallel(
+                #    n_jobs=multiprocessing.cpu_count(), backend='threading',max_nbytes=None)(delayed(_cell_extract)([part, self.unique_genes]) for _, part in partition_filt.groupby('Segmentation'))
+                with ThreadPoolExecutor(max_workers=250) as executor:
+                    task = [(part, self.unique_genes) for _, part in partition_filt.groupby('Segmentation')]
+                    results_grp = executor.map(_cell_extract, task)
 
-                for dbl, centroid, mat in result_grp:
-                    if type(mat) != type(None):
-                        labels_list.append(dbl)
-                        centroids.append(centroid)
-                        matrices.append(mat)
-                        clusters.append(clusterN)
-                        polygons.append(centroid)
+                    for dbl, centroid, mat in results_grp:
+                        if type(mat) != type(None):
+                            labels_list.append(dbl)
+                            centroids.append(centroid)
+                            matrices.append(mat)
+                            clusters.append(clusterN)
+                            polygons.append(centroid)
                 
                 #partition[label_column] = np.ones_like(partition['Segmentation'].values)*nx
             else:
@@ -504,8 +507,9 @@ def _segmentation_dots(partition, func):
     new_results_resegmentation = []
     count = 0
 
-    with ThreadPoolExecutor(max_workers=12) as executor:
-        results_resegmentation = executor.map(_resegmentation_dots, [part for _, part in partition.groupby('tmp_segment')])
+    with ThreadPoolExecutor(max_workers=250) as executor:
+        task = [part for _, part in partition.groupby('tmp_segment')]
+        results_resegmentation = executor.map(_resegmentation_dots, task)
 
         for i in results_resegmentation:
             if i is not None:
