@@ -49,7 +49,7 @@ import multiprocessing
 from diameter_clustering import QTClustering #, MaxDiameterClustering
 from sklearn.cluster import DBSCAN, MiniBatchKMeans #, AgglomerativeClustering#, OPTICS
 from scipy.spatial import distance
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s',stream=sys.stdout, level=logging.INFO,force=True,)
 
 
@@ -504,7 +504,7 @@ def _segmentation_dots(partition, func):
     new_results_resegmentation = []
     count = 0
 
-    with ProcessPoolExecutor(max_workers=12) as executor:
+    with ThreadPoolExecutor(max_workers=12) as executor:
         results_resegmentation = executor.map(_resegmentation_dots, [part for _, part in partition.groupby('tmp_segment')])
 
         for i in results_resegmentation:
