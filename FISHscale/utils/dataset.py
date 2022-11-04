@@ -319,6 +319,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         from dask.diagnostics import ProgressBar
         from dask import dataframe as dd
         import shutil
+        import modin.pandas as pd
 
         
         """
@@ -381,7 +382,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
 
                 #result_grp = Parallel(
                 #    n_jobs=multiprocessing.cpu_count(), backend='threading',max_nbytes=None)(delayed(_cell_extract)([part, self.unique_genes]) for _, part in partition_filt.groupby('Segmentation'))
-                with ThreadPoolExecutor(max_workers=250) as executor:
+                with ThreadPoolExecutor(max_workers=12) as executor:
                     task = [(part, self.unique_genes) for _, part in partition_filt.groupby('Segmentation')]
                     results_grp = executor.map(_cell_extract, task)
 
@@ -507,7 +508,7 @@ def _segmentation_dots(partition, func):
     new_results_resegmentation = []
     count = 0
 
-    with ThreadPoolExecutor(max_workers=250) as executor:
+    with ThreadPoolExecutor(max_workers=12) as executor:
         logging.info('Starting resegmentation, gouping by tmp_segment...')
         task = [part for _, part in partition.groupby('tmp_segment')]
         logging.info('Starting resegmentation, gouping done.')
