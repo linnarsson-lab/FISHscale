@@ -947,9 +947,6 @@ class GraphPlotting:
         df = graph.nodes.data
         enrichment =  self.enrichment[:,(self.clusters_agg==cluster)][:,0]
         enrichmentQ = np.quantile(enrichment,0.5)
-
-        logging.info('EnrichmentQ: {}'.format(enrichmentQ.shape))
-        logging.info('Enrichment: {}'.format(enrichment.shape))
         enriched_genes = self.data.unique_genes[enrichment > enrichmentQ]
 
         
@@ -1030,8 +1027,8 @@ class GraphPlotting:
     def plot_intercluster(self, dic):
         import itertools
         df = self._intercluster_df(dic)
-        node_frequency = df.sum(axis=1)
-        df = (df.T/df.sum(axis=1)).T
+        #node_frequency = df.sum(axis=1)+1e-3
+        #df = (df.T/node_frequency).T
 
         a = itertools.combinations(np.arange(len(df)),2)
         graph_edges1 = []
@@ -1049,11 +1046,11 @@ class GraphPlotting:
 
         #data = pd.DataFrame({'s':df2.index.values,'t':df2.index.values})
         df3 = pd.DataFrame({'source':graph_edges1,'target':graph_edges2, 'attention':graph_weights})
-        df3 = df3.fillna(0)
+        df3 = df3.fillna(1e-3)
+        print(df3.head())
         data_chord = pd.DataFrame({'s':graph_edges1,'t':graph_edges2})
         hvdata = hv.Dataset(data_chord)
         chord = hv.Chord((df3,hvdata),['source', 'target'], ['attention'])
-
 
         chord = chord.select(s=data_chord.s.values.tolist(), selection_mode='nodes')
         chord.opts(
@@ -1066,7 +1063,6 @@ class GraphPlotting:
                 labels='t',
             )
         )
-        
 
         '''graph = hv.Graph(((graph_edges1,graph_edges2, graph_weights),),vdims='Attention').opts(
             opts.Graph(edge_cmap='viridis', edge_color='Attention'),
