@@ -812,7 +812,7 @@ class MultiGraphData(pl.LightningDataModule):
 
         if 'h' in self.sub_graphs.ndata.keys():
             logging.info('Latents already computed. Loading...')
-            self.latent_unlabelled = self.g.ndata['h'].detach().cpu().numpy()
+            self.latent_unlabelled = self.sub_graphs.ndata['h'].detach().cpu().numpy()
         else:
             lu, _ = self.model.module.inference(
                                     self.sub_graphs,
