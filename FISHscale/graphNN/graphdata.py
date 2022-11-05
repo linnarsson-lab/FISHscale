@@ -807,6 +807,7 @@ class MultiGraphData(pl.LightningDataModule):
         from sklearn.pipeline import make_pipeline
         from joblib import dump, load
         import leidenalg as la
+        from sklearn.cluster import MiniBatchKMeans
 
         self.model.eval()
 
@@ -835,24 +836,29 @@ class MultiGraphData(pl.LightningDataModule):
                                 replace=False)
 
         training_latents =self.latent_unlabelled[random_sample_train,:]
-        adata = sc.AnnData(X=training_latents)
+        clusters = MiniBatchKMeans(n_clusters=50).fit_predict(training_latents)
+        #adata = sc.AnnData(X=training_latents)
         logging.info('Building neighbor graph for clustering...')
-        sc.pp.neighbors(adata, n_neighbors=15)
-        logging.info('Running Leiden clustering...')
-        sc.tl.leiden(adata, random_state=42, resolution=2.5)
-        #sc.tl.leiden(adata, random_state=42, resolution=None, partition_type=la.ModularityVertexPartition)
+        #sc.pp.neighbors(adata, n_neighbors=15)
+        #logging.info('Running Leiden clustering...')
+        #sc.tl.leiden(adata, random_state=42, resolution=1.8)
+        #sc.tl.leiden(adata, random_state=42, resolution=1e-4, partition_type=la.CPMVertexPartition)
+        
+        #sc.tl.leiden(adata, random_state=42, resolution=2.5, partition_type=la.RBERVertexPartition)
+        
 
         logging.info('Leiden clustering done.')
-        clusters= adata.obs['leiden'].values
+        #clusters= adata.obs['leiden'].values
+
         logging.info('Total of {} found'.format(len(np.unique(clusters))))
         clf = make_pipeline(StandardScaler(), SGDClassifier(loss='log_loss', max_iter=1000, tol=1e-3))
         clf.fit(training_latents, clusters)
         clusters = clf.predict(self.latent_unlabelled).astype('int8')
-        dump(clf, 'miniMultiGraphSurpriseClassifier.joblib') 
+        dump(clf, 'miniMultiGraphRBERClassifier.joblib') 
         clf_total = make_pipeline(StandardScaler(), SGDClassifier(loss='log_loss', max_iter=1000, tol=1e-3))
         clf_total.fit(self.latent_unlabelled, clusters)
         clusters = clf.predict(self.latent_unlabelled).astype('int8')
-        dump(clf_total, 'totalMultiGraphSurpriseClassifier.joblib') 
+        dump(clf_total, 'totalMultiGraphRBERClassifier.joblib') 
         self.sub_graphs.ndata['label'] = th.tensor(clusters)
         self.save_graph()
 
