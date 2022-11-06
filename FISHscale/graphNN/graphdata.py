@@ -543,10 +543,11 @@ class MultiGraphData(pl.LightningDataModule):
             logging.info('Loading graph...')
             self.sub_graphs, graph_labels = dgl.data.utils.load_graphs(self.batchgraph_filename)
             self.sub_graphs = self.sub_graphs[0]
+            logging.info('Graph loaded')
 
         self.training_dataloaders = []
 
-        self.training_dataloaders.append(self.wrap_train_dataloader_batch())
+        #self.training_dataloaders.append(self.wrap_train_dataloader_batch())
 
         self.model = SAGELightning(in_feats=self.sub_graphs.ndata['gene'].shape[1], 
                                         n_latent=48,
@@ -588,6 +589,7 @@ class MultiGraphData(pl.LightningDataModule):
             logging.info('Number of genes in graph: {}'.format(sg.ndata['gene'].shape[1]))
             #self.training_dataloaders.append(self.wrap_train_dataloader(sg))
         self.sub_graphs = dgl.batch(self.sub_graphs)
+        
 
     def save_graph(self):
         """
@@ -662,6 +664,7 @@ class MultiGraphData(pl.LightningDataModule):
 
         
         if continue_training or not is_trained:
+            self.training_dataloaders.append(self.wrap_train_dataloader_batch())
             trainer.fit(self.model, train_dataloaders=self.train_dataloader())#,val_dataloaders=self.test_dataloader())
             
     def wrap_train_dataloader(self, batch_graph):
@@ -810,6 +813,7 @@ class MultiGraphData(pl.LightningDataModule):
         from sklearn.cluster import MiniBatchKMeans
 
         self.model.eval()
+        logging.info('Device is in {}'.format(self.model.device))
 
         if 'h' in self.sub_graphs.ndata.keys():
             logging.info('Latents already computed. Loading...')
@@ -818,7 +822,7 @@ class MultiGraphData(pl.LightningDataModule):
             lu, _ = self.model.module.inference(
                                     self.sub_graphs,
                                     self.model.device,
-                                    10*512,
+                                    2*512,
                                     0)
 
             print(lu.shape)
