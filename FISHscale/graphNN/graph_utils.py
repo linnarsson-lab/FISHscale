@@ -990,6 +990,7 @@ class GraphPlotting:
                 edge_color=hv.dim('attention'),#.str(),
                 node_color=hv.dim('Target node').str(),
                 labels='Target node',
+                edge_nonselection_alpha=0,
             )
         )
 
@@ -1062,6 +1063,8 @@ class GraphPlotting:
                 edge_color=hv.dim('source').str(),
                 node_color=hv.dim('t').str(),
                 labels='t',
+                edge_nonselection_alpha=0,
+
             )
         )
 
