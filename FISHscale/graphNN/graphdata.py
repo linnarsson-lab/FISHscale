@@ -767,7 +767,7 @@ class MultiGraphData(pl.LightningDataModule):
         logging.info('Filtering central nodes...')
         edges_bool_train2 = th.isin(g.edges()[0], core_nodes) | th.isin(g.edges()[1], core_nodes)
         edges_bool_train = edges_bool_train & edges_bool_train2
-        edges_train = np.random.choice(np.arange(edges_bool_train.shape[0])[edges_bool_train],int(edges_bool_train.sum()*(self.train_percentage/5)),replace=False)
+        edges_train = np.random.choice(np.arange(edges_bool_train.shape[0])[edges_bool_train],int(edges_bool_train.sum()*(self.train_percentage)),replace=False)
         #self.edges_test  = np.random.choice(np.arange(edges_bool_test.shape[0])[edges_bool_test],int(edges_bool_test.sum()*(self.train_p/self.fraction_edges)),replace=False)
         logging.info('Training sample on {} edges.'.format(edges_train.shape[0]))
         #logging.info('Testing on {} edges.'.format(self.edges_test.shape[0]))
