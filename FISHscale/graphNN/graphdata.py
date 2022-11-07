@@ -638,7 +638,7 @@ class MultiGraphData(pl.LightningDataModule):
             gpus (int, optional): Whether to use GPU. Defaults to 0.
         """        
         if self.device.type == 'cuda':
-            gpus=1
+            gpus=4
         trainer = pl.Trainer(gpus=gpus,
                             log_every_n_steps=50,
                             callbacks=[self.checkpoint_callback], 
