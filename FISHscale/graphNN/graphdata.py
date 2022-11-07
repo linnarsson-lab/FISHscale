@@ -549,13 +549,14 @@ class MultiGraphData(pl.LightningDataModule):
 
         #self.training_dataloaders.append(self.wrap_train_dataloader_batch())
 
-        self.model = SAGELightning(in_feats=self.sub_graphs.ndata['gene'].shape[1], 
-                                        n_latent=48,
-                                        n_layers=len(self.ngh_sizes),
-                                        n_classes=2,
-                                        n_hidden=64,
-                                        lr=self.lr,
-                                    )
+        self.model = SAGELightning(
+                                    in_feats=888, 
+                                    n_latent=48,
+                                    n_layers=len(self.ngh_sizes),
+                                    n_classes=2,
+                                    n_hidden=64,
+                                    lr=self.lr,
+                                  )
         self.model.to(self.device)
         self.setup()
 
@@ -582,14 +583,18 @@ class MultiGraphData(pl.LightningDataModule):
             random_train_nodes = th.randperm(g.nodes().size(0))[:self.num_nodes_per_graph]
             
             sg = dgl.khop_in_subgraph(g, g.nodes()[random_train_nodes], k=2)[0]
+            logging.info('Number of genes in graph: {}'.format(sg.ndata['gene'].shape[1]))
+            #idx = th.where(sg.ndata['gene'])[1]
+            #del sg.ndata['gene']
+            #sg.ndata['gene'] = idx
+
             core_nodes = th.isin(sg.ndata['_ID'], random_train_nodes)
             sg.ndata['core'] = core_nodes
             logging.info('Training sample with {} nodes and {} edges.'.format(sg.num_nodes(), sg.num_edges()))
             
             self.sub_graphs.append(sg)
     
-        for sg in self.sub_graphs:
-            logging.info('Number of genes in graph: {}'.format(sg.ndata['gene'].shape[1]))
+        #for sg in self.sub_graphs:
             #self.training_dataloaders.append(self.wrap_train_dataloader(sg))
         self.sub_graphs = dgl.batch(self.sub_graphs)
         
@@ -638,7 +643,7 @@ class MultiGraphData(pl.LightningDataModule):
             gpus (int, optional): Whether to use GPU. Defaults to 0.
         """        
         if self.device.type == 'cuda':
-            gpus=4
+            gpus=1
         trainer = pl.Trainer(gpus=gpus,
                             log_every_n_steps=50,
                             callbacks=[self.checkpoint_callback], 
@@ -658,7 +663,7 @@ class MultiGraphData(pl.LightningDataModule):
         if is_trained:
             logging.info('Pretrained model exists in folder {}, loading model parameters. If you wish to re-train, delete .ckpt file.'.format(model_path))
             self.model = self.model.load_from_checkpoint(model_path,
-                                        in_feats=self.sub_graphs.ndata['gene'].shape[1],
+                                        in_feats=888,#self.sub_graphs.ndata['gene'].shape[1],
                                         n_latent=48,
                                         n_layers=2,
                                         n_classes=2,
@@ -762,7 +767,7 @@ class MultiGraphData(pl.LightningDataModule):
         logging.info('Filtering central nodes...')
         edges_bool_train2 = th.isin(g.edges()[0], core_nodes) | th.isin(g.edges()[1], core_nodes)
         edges_bool_train = edges_bool_train & edges_bool_train2
-        edges_train = np.random.choice(np.arange(edges_bool_train.shape[0])[edges_bool_train],int(edges_bool_train.sum()*(self.train_percentage/1)),replace=False)
+        edges_train = np.random.choice(np.arange(edges_bool_train.shape[0])[edges_bool_train],int(edges_bool_train.sum()*(self.train_percentage/5)),replace=False)
         #self.edges_test  = np.random.choice(np.arange(edges_bool_test.shape[0])[edges_bool_test],int(edges_bool_test.sum()*(self.train_p/self.fraction_edges)),replace=False)
         logging.info('Training sample on {} edges.'.format(edges_train.shape[0]))
         #logging.info('Testing on {} edges.'.format(self.edges_test.shape[0]))
@@ -829,6 +834,9 @@ class MultiGraphData(pl.LightningDataModule):
         lus = []
         for _, id, mfgs in self.validation_dataloader():
             mfgs = [mfg.int() for mfg in mfgs]
+            #batch_inputsfull = th.zeros([batch_inputs.shape[0], 888], device=self.device)
+            #batch_inputsfull[:, batch_inputs] = 1
+            #batch_inputs = batch_inputsfull
             batch_inputs = mfgs[0].srcdata['gene']
             h = self.model.module.encoder(batch_inputs,mfgs)
             lus.append(h)

@@ -112,6 +112,8 @@ class SAGELightning(LightningModule):
             pos_ids = pos.edges()[0]
             mfgs = [mfg.int() for mfg in mfgs]
             batch_inputs = mfgs[0].srcdata['gene']
+            #print(batch_inputs.shape)
+
             zn_loc = self.module.encoder(batch_inputs,mfgs)
             if self.loss_type == 'unsupervised':
                 graph_loss = self.loss_fcn(zn_loc, pos, neg).mean()
