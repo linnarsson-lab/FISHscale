@@ -931,9 +931,10 @@ class GraphPlotting:
         graph_edges2 = np.array(graph_edges2)
         graph_weights = np.array(graph_weights)
 
-        graph_edges1 = graph_edges1[graph_weights > np.quantile(graph_weights,0.5)]
-        graph_edges2 = graph_edges2[graph_weights > np.quantile(graph_weights,0.5)]
-        graph_weights = graph_weights[graph_weights > np.quantile(graph_weights,0.5)]
+        Q75 = np.quantile(graph_weights,0.75)
+        graph_edges1 = graph_edges1[graph_weights > Q75]
+        graph_edges2 = graph_edges2[graph_weights > Q75]
+        graph_weights = graph_weights[graph_weights > Q75]
         graph_weights = np.array(graph_weights)/graph_weights.sum(axis=0)
         
         node_frequency = np.unique(np.array([graph_edges1,graph_edges2]),return_counts=True)
@@ -946,7 +947,7 @@ class GraphPlotting:
 
         df = graph.nodes.data
         enrichment =  self.enrichment[:,(self.clusters_agg==cluster)][:,0]
-        enrichmentQ = np.quantile(enrichment,0.5)
+        enrichmentQ = np.quantile(enrichment,0.75)
         enriched_genes = self.data.unique_genes[enrichment > enrichmentQ]
 
         
@@ -981,8 +982,8 @@ class GraphPlotting:
         chord = chord.select(s=data_chord['Source node'].values.tolist(), selection_mode='nodes')
         chord.opts(
             hv.opts.Chord(
-                width=1000,
-                height=1000,
+                width=2000,
+                height=2000,
                 cmap='glasbey_light',
                 edge_cmap='magma',
                 #node_size=hv.dim('enrichment')*100,
