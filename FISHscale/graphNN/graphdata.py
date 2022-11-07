@@ -755,11 +755,14 @@ class MultiGraphData(pl.LightningDataModule):
                 
             indices_train += train_g
             indices_test += test_g
+
+        logging.info('Edges found per genes')
         indices_train, indices_test = th.stack(indices_train), th.stack(indices_test)
         edges_bool_train =  th.isin(g.edges()[0],indices_train) & th.isin(g.edges()[1],indices_train) 
+        logging.info('Filtering central nodes...')
         edges_bool_train2 = th.isin(g.edges()[0], core_nodes) | th.isin(g.edges()[1], core_nodes)
         edges_bool_train = edges_bool_train & edges_bool_train2
-        edges_train = np.random.choice(np.arange(edges_bool_train.shape[0])[edges_bool_train],int(edges_bool_train.sum()*(self.train_percentage/10)),replace=False)
+        edges_train = np.random.choice(np.arange(edges_bool_train.shape[0])[edges_bool_train],int(edges_bool_train.sum()*(self.train_percentage/1)),replace=False)
         #self.edges_test  = np.random.choice(np.arange(edges_bool_test.shape[0])[edges_bool_test],int(edges_bool_test.sum()*(self.train_p/self.fraction_edges)),replace=False)
         logging.info('Training sample on {} edges.'.format(edges_train.shape[0]))
         #logging.info('Testing on {} edges.'.format(self.edges_test.shape[0]))
