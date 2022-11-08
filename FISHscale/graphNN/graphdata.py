@@ -820,7 +820,7 @@ class MultiGraphData(pl.LightningDataModule):
             lu, _ = self.model.module.inference(
                                     sg,
                                     self.model.device,
-                                    256,
+                                    512,
                                     0)
             lu = lu[self.ndata['core'] == True,]
             lus.append(lu)
