@@ -807,24 +807,23 @@ class MultiGraphData(pl.LightningDataModule):
         self.sub_graphs = dgl.unbatch(self.sub_graphs)
         lus = []
         for sg in self.sub_graphs:
-            '''mlus = []
+            mlus = []
             for _, id, mfgs in self.validation_dataloader(sg):
                 mfgs = [mfg.int() for mfg in mfgs]
-
                 batch_inputs = mfgs[0].srcdata['gene']
                 if len(batch_inputs.shape) == 1:
                     batch_inputs = th.nn.functional.one_hot(batch_inputs, num_classes=self.n_genes)
                 h = self.model.module.encoder(batch_inputs,mfgs)
                 lus.append(h)
                 mlus.append(h)
-            lus.appendth'''
-            lu, _ = self.model.module.inference(
+            lus.append(th.cat(mlus))
+            '''lu, _ = self.model.module.inference(
                                     sg,
                                     self.model.device,
                                     2*512,
                                     0)
             lu = lu[self.ndata['core'] == True,]
-            lus.append(lu)
+            lus.append(lu)'''
         self.latent_unlabelled = th.cat(lus).cpu().detach().numpy()
 
         logging.info('Latent embeddings generated for {} molecules'.format(self.latent_unlabelled.shape[0]))
