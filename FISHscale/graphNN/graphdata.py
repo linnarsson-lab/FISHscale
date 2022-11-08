@@ -842,7 +842,7 @@ class MultiGraphData(pl.LightningDataModule):
         
 
         logging.info('Leiden clustering done.')
-        #clusters= adata.obs['leiden'].values
+        clusters= adata.obs['leiden'].values
 
         logging.info('Total of {} found'.format(len(np.unique(clusters))))
         clf = make_pipeline(StandardScaler(), SGDClassifier(loss='log_loss', max_iter=1000, tol=1e-3))
