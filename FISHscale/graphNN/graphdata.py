@@ -765,7 +765,7 @@ class MultiGraphData(pl.LightningDataModule):
                         self.sub_graphs,
                         val_nodes,
                         dgl.dataloading.MultiLayerNeighborSampler([-1,-1],prefetch_node_feats=['gene']),
-                        device=self.model.device,
+                        #device=self.model.device,
                         batch_size=128,
                         shuffle=False,
                         drop_last=False,
@@ -793,7 +793,7 @@ class MultiGraphData(pl.LightningDataModule):
         from sklearn.cluster import MiniBatchKMeans
 
         #logging('self.device', self.device)
-        self.model.to(self.device)
+        #self.model.to(self.device)
         self.model.eval()
         logging.info('Device is in {}'.format(self.model.device))
 
@@ -821,6 +821,7 @@ class MultiGraphData(pl.LightningDataModule):
             h = self.model.module.encoder(batch_inputs,mfgs)
             lus.append(h)
         lus = th.cat(lus)
+
         self.latent_unlabelled = lus.detach().cpu().numpy()
 
         logging.info('Latent embeddings generated for {} molecules'.format(self.latent_unlabelled.shape[0]))
