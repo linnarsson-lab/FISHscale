@@ -538,18 +538,16 @@ class MultiGraphData(pl.LightningDataModule):
         if not os.path.isfile(self.batchgraph_filename):
             self.load_graphs()
 
-            graph_labels = {"Multigraph": th.tensor([0])}
+            graph_labels = {"Multigraph": th.arange(len(self.sub_graphs))}
             logging.info('Saving graph...')
             dgl.data.utils.save_graphs(self.batchgraph_filename, self.sub_graphs, graph_labels)
         else:
             logging.info('Loading graph...')
             self.sub_graphs, graph_labels = dgl.data.utils.load_graphs(self.batchgraph_filename)
-            self.sub_graphs = self.sub_graphs[0]
             logging.info('Graph loaded')
 
         self.training_dataloaders = []
-
-        #self.training_dataloaders.append(self.wrap_train_dataloader_batch())
+        self.sub_graphs = dgl.batch(self.sub_graphs)
 
         self.model = SAGELightning(
                                     in_feats=self.n_genes, 
@@ -598,8 +596,8 @@ class MultiGraphData(pl.LightningDataModule):
     
         #for sg in self.sub_graphs:
             #self.training_dataloaders.append(self.wrap_train_dataloader(sg))
-        self.sub_graphs = dgl.batch(self.sub_graphs)
-        logging.info('Gene condensed to shape: {}'.format(self.sub_graphs.ndata['gene'].shape))
+        
+        #logging.info('Gene condensed to shape: {}'.format(self.sub_graphs.ndata['gene'].shape))
         
 
     def save_graph(self):
@@ -805,6 +803,7 @@ class MultiGraphData(pl.LightningDataModule):
         logging.info('Dataloader created removing graph to free space.')
 
         self.sub_graphs = dgl.unbatch(self.sub_graphs)
+        logging.info('Graph unbatched. Total {} graphs'.format(len(self.sub_graphs)))
         lus = []
         for sg in tqdm(self.sub_graphs):
             '''mlus = []
