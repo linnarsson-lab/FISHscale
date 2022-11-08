@@ -597,6 +597,7 @@ class MultiGraphData(pl.LightningDataModule):
         #for sg in self.sub_graphs:
             #self.training_dataloaders.append(self.wrap_train_dataloader(sg))
         self.sub_graphs = dgl.batch(self.sub_graphs)
+        logging.info('Gene condensed to shape: {}'.format(self.sub_graphs.ndata['gene'].shape))
         
 
     def save_graph(self):
