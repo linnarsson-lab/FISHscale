@@ -201,14 +201,20 @@ class SAGE(nn.Module):
             self.eval()
             if len(g.ndata['gene'].shape) == 1:
                 g.ndata['h'] = th.log(F.one_hot(g.ndata['gene'], num_classes=self.in_feats)+1)
+                sampler = dgl.dataloading.MultiLayerFullNeighborSampler(1, prefetch_node_feats=['h'])
+                core_nodes = th.arange(g.num_nodes())[g.ndata['core'] == 1]
+                dataloader = dgl.dataloading.NodeDataLoader(
+                        g, core_nodes.to(g.device), sampler, device=device,
+                        batch_size=batch_size, shuffle=False, drop_last=False, num_workers=num_workers,
+                        persistent_workers=(num_workers > 0))
 
             else:
                 g.ndata['h'] = th.log(g.ndata['gene']+1)
-            sampler = dgl.dataloading.MultiLayerFullNeighborSampler(1, prefetch_node_feats=['h'])
-            dataloader = dgl.dataloading.NodeDataLoader(
-                    g, th.arange(g.num_nodes()).to(g.device), sampler, device=device,
-                    batch_size=batch_size, shuffle=False, drop_last=False, num_workers=num_workers,
-                    persistent_workers=(num_workers > 0))
+                sampler = dgl.dataloading.MultiLayerFullNeighborSampler(1, prefetch_node_feats=['h'])
+                dataloader = dgl.dataloading.NodeDataLoader(
+                        g, th.arange(g.num_nodes()).to(g.device), sampler, device=device,
+                        batch_size=batch_size, shuffle=False, drop_last=False, num_workers=num_workers,
+                        persistent_workers=(num_workers > 0))
             
             for l, layer in enumerate(self.encoder.encoder_dict['GS']):
                 if l == self.n_layers - 1:
