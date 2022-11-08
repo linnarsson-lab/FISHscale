@@ -708,28 +708,6 @@ class MultiGraphData(pl.LightningDataModule):
                         num_workers=self.num_workers,
                         )
         return unlab
-    
-    def validation_dataloader(self, graph):
-        """
-        train_dataloader
-
-        Prepare dataloader
-
-        Returns:
-            dgl.dataloading.EdgeDataLoader: Deep Graph Library dataloader.
-        """        
-        
-        validation = dgl.dataloading.NodeDataLoader(
-                        graph,
-                        th.arange(graph.num_nodes(),),
-                        dgl.dataloading.MultiLayerNeighborSampler([-1,-1]),
-                        device=self.device,
-                        batch_size=self.batch_size*1,
-                        shuffle=False,
-                        drop_last=False,
-                        num_workers=self.num_workers,
-                        )
-        return validation
 
     def make_train_test_validation(self, g):
         """
@@ -773,7 +751,7 @@ class MultiGraphData(pl.LightningDataModule):
         #logging.info('Testing on {} edges.'.format(self.edges_test.shape[0]))
         return edges_train
 
-    def validation_dataloader(self, graph):
+    def validation_dataloader(self):
         """
         train_dataloader
 
@@ -782,13 +760,13 @@ class MultiGraphData(pl.LightningDataModule):
         Returns:
             dgl.dataloading.EdgeDataLoader: Deep Graph Library dataloader.
         """        
-        val_nodes = th.arange(graph.num_nodes())[self.ndata['core'] == True]
+        val_nodes = th.arange(self.sub_graphs.num_nodes())[self.sub_graphs.ndata['core'] == True]
         validation = dgl.dataloading.NodeDataLoader(
-                        graph,
+                        self.sub_graphs,
                         val_nodes,
-                        dgl.dataloading.MultiLayerNeighborSampler([-1,-1]),
-                        device=self.device,
-                        batch_size=self.batch_size*5,
+                        dgl.dataloading.MultiLayerNeighborSampler([-1,-1],prefetch_node_feats=['gene']),
+                        device=self.model.device,
+                        batch_size=128,
                         shuffle=False,
                         drop_last=False,
                         num_workers=self.num_workers,
@@ -814,6 +792,8 @@ class MultiGraphData(pl.LightningDataModule):
         import leidenalg as la
         from sklearn.cluster import MiniBatchKMeans
 
+        #logging('self.device', self.device)
+        self.model.to(self.device)
         self.model.eval()
         logging.info('Device is in {}'.format(self.model.device))
 
@@ -840,7 +820,7 @@ class MultiGraphData(pl.LightningDataModule):
             batch_inputs = mfgs[0].srcdata['gene']
             h = self.model.module.encoder(batch_inputs,mfgs)
             lus.append(h)
-        lus = th.stack(lus)
+        lus = th.cat(lus)
         self.latent_unlabelled = lus.detach().cpu().numpy()
 
         logging.info('Latent embeddings generated for {} molecules'.format(self.latent_unlabelled.shape[0]))
