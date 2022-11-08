@@ -769,7 +769,7 @@ class MultiGraphData(pl.LightningDataModule):
                         val_nodes,
                         dgl.dataloading.MultiLayerFullNeighborSampler(2),
                         device=self.device,
-                        batch_size=64,
+                        batch_size=512,
                         shuffle=False,
                         drop_last=False,
                         num_workers=self.num_workers,
@@ -799,14 +799,14 @@ class MultiGraphData(pl.LightningDataModule):
         gc.collect()
         th.cuda.empty_cache()
 
-        #self.model.to(self.device)
+        self.model.to(self.device)
         self.model.eval()
         logging.info('Device is in {}'.format(self.model.device))
         logging.info('Dataloader created removing graph to free space.')
 
         self.sub_graphs = dgl.unbatch(self.sub_graphs)
         lus = []
-        for sg in self.sub_graphs:
+        for sg in tqdm(self.sub_graphs):
             mlus = []
             for _, id, mfgs in self.validation_dataloader(sg):
                 mfgs = [mfg.int() for mfg in mfgs]
