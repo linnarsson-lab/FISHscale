@@ -112,6 +112,8 @@ class SAGELightning(LightningModule):
             pos_ids = pos.edges()[0]
             mfgs = [mfg.int() for mfg in mfgs]
             batch_inputs = mfgs[0].srcdata['gene']
+            if len(batch_inputs.shape) == 1:
+                batch_inputs = F.one_hot(batch_inputs, num_classes=self.in_feats)
             #print(batch_inputs.shape)
 
             zn_loc = self.module.encoder(batch_inputs,mfgs)
