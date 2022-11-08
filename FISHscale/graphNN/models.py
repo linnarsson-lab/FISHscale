@@ -180,6 +180,7 @@ class SAGE(nn.Module):
         self.n_classes = n_classes
         self.supervised = supervised
         self.aggregator = aggregator
+        self.in_feats = in_feats
 
         self.encoder = Encoder(in_feats=in_feats,
                                 n_hidden=n_hidden,
@@ -198,8 +199,11 @@ class SAGE(nn.Module):
             layers.
             """
             self.eval()
+            if len(g.ndata['gene'].shape) == 1:
+                g.ndata['h'] = th.log(F.one_hot(g.ndata['gene'], num_classes=self.in_feats)+1)
 
-            g.ndata['h'] = th.log(g.ndata['gene']+1)
+            else:
+                g.ndata['h'] = th.log(g.ndata['gene']+1)
             sampler = dgl.dataloading.MultiLayerFullNeighborSampler(1, prefetch_node_feats=['h'])
             dataloader = dgl.dataloading.NodeDataLoader(
                     g, th.arange(g.num_nodes()).to(g.device), sampler, device=device,

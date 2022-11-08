@@ -506,6 +506,7 @@ class MultiGraphData(pl.LightningDataModule):
     """    
     def __init__(self,
         filepaths:list,
+        n_genes:int,
         num_nodes_per_graph:int=20000,
         ngh_sizes:list=[20,10],
         train_percentage:float=0.75,
@@ -530,6 +531,7 @@ class MultiGraphData(pl.LightningDataModule):
         self.lr = lr
         os.mkdir(self.folder)
         self.device = th.device('cuda' if th.cuda.is_available() else 'cpu')
+        self.n_genes= n_genes
 
         self.batchgraph_filename = os.path.join(self.save_to, '{}BatchGraph.graph'.format(len(self.filepaths)))
 
@@ -550,7 +552,7 @@ class MultiGraphData(pl.LightningDataModule):
         #self.training_dataloaders.append(self.wrap_train_dataloader_batch())
 
         self.model = SAGELightning(
-                                    in_feats=888, 
+                                    in_feats=self.n_genes, 
                                     n_latent=48,
                                     n_layers=len(self.ngh_sizes),
                                     n_classes=2,
@@ -664,7 +666,7 @@ class MultiGraphData(pl.LightningDataModule):
         if is_trained:
             logging.info('Pretrained model exists in folder {}, loading model parameters. If you wish to re-train, delete .ckpt file.'.format(model_path))
             self.model = self.model.load_from_checkpoint(model_path,
-                                        in_feats=888,#self.sub_graphs.ndata['gene'].shape[1],
+                                        in_feats=self.n_genes,#self.sub_graphs.ndata['gene'].shape[1],
                                         n_latent=48,
                                         n_layers=2,
                                         n_classes=2,
@@ -752,7 +754,7 @@ class MultiGraphData(pl.LightningDataModule):
         #logging.info('Testing on {} edges.'.format(self.edges_test.shape[0]))
         return edges_train
 
-    def validation_dataloader(self):
+    def validation_dataloader(self, graph):
         """
         train_dataloader
 
@@ -761,16 +763,17 @@ class MultiGraphData(pl.LightningDataModule):
         Returns:
             dgl.dataloading.EdgeDataLoader: Deep Graph Library dataloader.
         """        
-        val_nodes = th.arange(self.sub_graphs.num_nodes())[self.sub_graphs.ndata['core'] == True]
-        validation = dgl.dataloading.NodeDataLoader(
-                        self.sub_graphs,
+        val_nodes = th.arange(graph.num_nodes())[graph.ndata['core'] == True]
+        validation = dgl.dataloading.DataLoader(
+                        graph,
                         val_nodes,
-                        dgl.dataloading.MultiLayerNeighborSampler([-1,-1],prefetch_node_feats=['gene']),
-                        #device=self.model.device,
-                        batch_size=128,
+                        dgl.dataloading.MultiLayerFullNeighborSampler(2),
+                        device=self.device,
+                        batch_size=512*10,
                         shuffle=False,
                         drop_last=False,
                         num_workers=self.num_workers,
+                        persistent_workers=(self.num_workers > 0)
                         )
         return validation
 
@@ -793,39 +796,34 @@ class MultiGraphData(pl.LightningDataModule):
         import leidenalg as la
         from sklearn.cluster import MiniBatchKMeans
 
-        #logging('self.device', self.device)
-        #self.model.to(self.device)
+        self.model.to(self.device)
         self.model.eval()
         logging.info('Device is in {}'.format(self.model.device))
 
-        '''if 'h' in self.sub_graphs.ndata.keys():
-            logging.info('Latents already computed. Loading...')
-            self.latent_unlabelled = self.sub_graphs.ndata['h'].detach().cpu().numpy()
-        else:
+        logging.info('Dataloader created removing graph to free space.')
+
+        self.sub_graphs = dgl.unbatch(self.sub_graphs)
+        lus = []
+        for sg in self.sub_graphs:
+            '''mlus = []
+            for _, id, mfgs in self.validation_dataloader(sg):
+                mfgs = [mfg.int() for mfg in mfgs]
+
+                batch_inputs = mfgs[0].srcdata['gene']
+                if len(batch_inputs.shape) == 1:
+                    batch_inputs = th.nn.functional.one_hot(batch_inputs, num_classes=self.n_genes)
+                h = self.model.module.encoder(batch_inputs,mfgs)
+                lus.append(h)
+                mlus.append(h)
+            lus.appendth'''
             lu, _ = self.model.module.inference(
-                                    self.sub_graphs,
+                                    sg,
                                     self.model.device,
                                     2*512,
                                     0)
             lu = lu[self.ndata['core'] == True,]
-
-            print(lu.shape)
-            self.save_graph()
-            self.latent_unlabelled = lu.detach().cpu().numpy()'''
-        lus = []
-        for _, id, mfgs in self.validation_dataloader():
-            mfgs = [mfg.int() for mfg in mfgs]
-            #batch_inputsfull = th.zeros([batch_inputs.shape[0], 888], device=self.device)
-            #batch_inputsfull[:, batch_inputs] = 1
-            #batch_inputs = batch_inputsfull
-            batch_inputs = mfgs[0].srcdata['gene']
-            if len(batch_inputs.shape) == 1:
-                batch_inputs = th.nn.functional.one_hot(batch_inputs, num_classes=self.in_feats)
-            h = self.model.module.encoder(batch_inputs,mfgs)
-            lus.append(h)
-        lus = th.cat(lus)
-
-        self.latent_unlabelled = lus.detach().cpu().numpy()
+            lus.append(lu)
+        self.latent_unlabelled = th.cat(lus).cpu().detach().numpy()
 
         logging.info('Latent embeddings generated for {} molecules'.format(self.latent_unlabelled.shape[0]))
         
@@ -837,12 +835,12 @@ class MultiGraphData(pl.LightningDataModule):
                                 replace=False)
 
         training_latents =self.latent_unlabelled[random_sample_train,:]
-        clusters = MiniBatchKMeans(n_clusters=50).fit_predict(training_latents)
-        #adata = sc.AnnData(X=training_latents)
+        #clusters = MiniBatchKMeans(n_clusters=50).fit_predict(training_latents)
+        adata = sc.AnnData(X=training_latents)
         logging.info('Building neighbor graph for clustering...')
-        #sc.pp.neighbors(adata, n_neighbors=15)
-        #logging.info('Running Leiden clustering...')
-        #sc.tl.leiden(adata, random_state=42, resolution=1.8)
+        sc.pp.neighbors(adata, n_neighbors=15)
+        logging.info('Running Leiden clustering...')
+        sc.tl.leiden(adata, random_state=42, resolution=1.8)
         #sc.tl.leiden(adata, random_state=42, resolution=1e-4, partition_type=la.CPMVertexPartition)
         
         #sc.tl.leiden(adata, random_state=42, resolution=2.5, partition_type=la.RBERVertexPartition)
@@ -855,10 +853,10 @@ class MultiGraphData(pl.LightningDataModule):
         clf = make_pipeline(StandardScaler(), SGDClassifier(loss='log_loss', max_iter=1000, tol=1e-3))
         clf.fit(training_latents, clusters)
         clusters = clf.predict(self.latent_unlabelled).astype('int8')
-        dump(clf, 'miniMultiGraphMKMClassifier.joblib') 
+        dump(clf, 'miniMultiGraphLeidenClassifier.joblib') 
         clf_total = make_pipeline(StandardScaler(), SGDClassifier(loss='log_loss', max_iter=1000, tol=1e-3))
         clf_total.fit(self.latent_unlabelled, clusters)
         clusters = clf.predict(self.latent_unlabelled).astype('int8')
-        dump(clf_total, 'totalMultiGraphMKMClassifier.joblib') 
-        self.sub_graphs.ndata['label'] = th.tensor(clusters)
-        self.save_graph()
+        dump(clf_total, 'totalMultiGraphLeidenlassifier.joblib') 
+        #self.sub_graphs.ndata['label'] = th.tensor(clusters)
+        #self.save_graph()
