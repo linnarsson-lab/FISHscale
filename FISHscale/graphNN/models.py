@@ -246,6 +246,8 @@ class SAGE(nn.Module):
             return y, p_class
     
 
+    
+
     def inference_attention(self, g, device, batch_size, num_workers, nodes=None,buffer_device=None):
         # The difference between this inference function and the one in the official
         # example is that the intermediate results can also benefit from prefetching.

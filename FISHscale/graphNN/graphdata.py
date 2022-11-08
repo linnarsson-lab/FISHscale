@@ -795,7 +795,7 @@ class MultiGraphData(pl.LightningDataModule):
         gc.collect()
         th.cuda.empty_cache()
 
-        #self.model.to(self.device)
+        self.model.to(self.device)
         self.model.eval()
         logging.info('Device is in {}'.format(self.model.device))
         logging.info('Dataloader created removing graph to free space.')
