@@ -723,8 +723,8 @@ class MultiGraphData(pl.LightningDataModule):
         nodes = th.arange(g.num_nodes())
         core_nodes = nodes[g.ndata['core'] == True]
 
-        for gene in range(g.ndata['gene'].shape[1]):
-            molecules_g = g.ndata['gene'][:,gene] == 1
+        for gene in th.unique(g.ndata['gene']):
+            molecules_g = g.ndata['gene'] == gene
 
             #if molecules_g.sum() >= 20:
             indices_g = nodes[molecules_g]
