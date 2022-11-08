@@ -815,7 +815,7 @@ class MultiGraphData(pl.LightningDataModule):
                                     self.model.device,
                                     512,
                                     0)
-            lu = lu[self.ndata['core'] == True,]
+            lu = lu[sg.ndata['core'] == True,:]
             del sg.ndata['h']
             lus.append(lu)
         self.latent_unlabelled = th.cat(lus).cpu().detach().numpy()
