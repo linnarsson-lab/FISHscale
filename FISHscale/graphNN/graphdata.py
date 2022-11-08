@@ -769,7 +769,7 @@ class MultiGraphData(pl.LightningDataModule):
                         val_nodes,
                         dgl.dataloading.MultiLayerFullNeighborSampler(2),
                         device=self.device,
-                        batch_size=512*10,
+                        batch_size=64,
                         shuffle=False,
                         drop_last=False,
                         num_workers=self.num_workers,
@@ -795,6 +795,7 @@ class MultiGraphData(pl.LightningDataModule):
         from joblib import dump, load
         import leidenalg as la
         from sklearn.cluster import MiniBatchKMeans
+        th.cuda.empty_cache()
 
         self.model.to(self.device)
         self.model.eval()
