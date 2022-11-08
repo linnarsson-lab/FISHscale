@@ -794,7 +794,6 @@ class MultiGraphData(pl.LightningDataModule):
         import gc
         gc.collect()
 
-        #logging('self.device', self.device)
         self.model.to(self.device)
         self.model.eval()
         logging.info('Device is in {}'.format(self.model.device))
