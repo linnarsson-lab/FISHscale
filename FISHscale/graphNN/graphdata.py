@@ -815,8 +815,9 @@ class MultiGraphData(pl.LightningDataModule):
                                     self.model.device,
                                     512,
                                     0)
-            lu = lu[sg.ndata['core'] == True,:]
             lu_noncore = lu[sg.ndata['core'] == False,:]
+            lu = lu[sg.ndata['core'] == True,:]
+            
             lu_noncore = lu_noncore[th.randperm(lu_noncore.shape[0])[:lu.shape[0]]]
             lus.append(lu_noncore)
             del sg.ndata['h']
@@ -838,11 +839,9 @@ class MultiGraphData(pl.LightningDataModule):
         logging.info('Building neighbor graph for clustering...')
         sc.pp.neighbors(adata, n_neighbors=15)
         logging.info('Running Leiden clustering...')
-        sc.tl.leiden(adata, random_state=42, resolution=1.8)
-        #sc.tl.leiden(adata, random_state=42, resolution=1e-4, partition_type=la.CPMVertexPartition)
-        
-        #sc.tl.leiden(adata, random_state=42, resolution=2.5, partition_type=la.RBERVertexPartition)
-        
+        sc.tl.leiden(adata, random_state=42, resolution=1)
+        #sc.tl.leiden(adata, random_state=42, resolution=None, partition_type=la.ModularityVertexPartition)
+
 
         logging.info('Leiden clustering done.')
         clusters= adata.obs['leiden'].values
