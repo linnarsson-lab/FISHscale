@@ -475,7 +475,7 @@ class GraphPlotting:
                 clusters = clf.predict(self.latent_unlabelled.detach().numpy()).astype('int8')
                 cluster_probs = clf.predict_proba(self.latent_unlabelled.detach().numpy()).astype('float32')
                 
-                logging.info('Number of clusters with probability > 0.5: {}'.format(np.sum(cluster_probs.max(axis=1)>0.5)))
+                logging.info('Number of clusters with probability > 0.2: {}'.format(np.sum(cluster_probs.max(axis=1)>0.2)))
                 logging.info('Molecules per cluster: {}'.format(np.unique(clusters, return_counts=True)[1]))
                 #logging.info('Clusters {}'.format(clusters[:50]))
                 #max_clusters = np.max(clusters)
