@@ -582,13 +582,18 @@ class MultiGraphData(pl.LightningDataModule):
             random_train_nodes = th.randperm(g.nodes().size(0))[:self.num_nodes_per_graph]
             
             sg = dgl.khop_in_subgraph(g, g.nodes()[random_train_nodes], k=2)[0]
+
+            sg = dgl.subgraph(sg.ndata['_ID'])
             logging.info('Number of genes in graph: {}'.format(sg.ndata['gene'].shape[1]))
             idx = th.where(sg.ndata['gene'])[1]
-            del sg.ndata['gene']
+
             sg.ndata['gene'] = idx
 
             core_nodes = th.isin(sg.ndata['_ID'], random_train_nodes)
             sg.ndata['core'] = core_nodes
+            del sg.ndata['gene']
+            del sg.edata['_ID']
+            del sg.ndata['_ID']
             logging.info('Training sample with {} nodes and {} edges.'.format(sg.num_nodes(), sg.num_edges()))
             
             self.sub_graphs.append(sg)
