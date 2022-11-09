@@ -816,6 +816,9 @@ class MultiGraphData(pl.LightningDataModule):
                                     512,
                                     0)
             lu = lu[sg.ndata['core'] == True,:]
+            lu_noncore = lu[sg.ndata['core'] == False,:]
+            lu_noncore = lu_noncore[th.randperm(lu_noncore.shape[0])[:lu.shape[0]]]
+            lus.append(lu_noncore)
             del sg.ndata['h']
             lus.append(lu)
         self.latent_unlabelled = th.cat(lus).cpu().detach().numpy()
@@ -848,10 +851,10 @@ class MultiGraphData(pl.LightningDataModule):
         clf = make_pipeline(StandardScaler(), SGDClassifier(loss='log_loss', max_iter=1000, tol=1e-3))
         clf.fit(training_latents, clusters)
         clusters = clf.predict(self.latent_unlabelled).astype('int8')
-        dump(clf, 'miniMultiGraphLeidenClassifier.joblib') 
+        dump(clf, 'miniMultiGraphLeidenCoreNonCoreClassifier.joblib') 
         clf_total = make_pipeline(StandardScaler(), SGDClassifier(loss='log_loss', max_iter=1000, tol=1e-3))
         clf_total.fit(self.latent_unlabelled, clusters)
         clusters = clf.predict(self.latent_unlabelled).astype('int8')
-        dump(clf_total, 'totalMultiGraphLeidenlassifier.joblib') 
+        dump(clf_total, 'totalMultiGraphLeidenCoreNonCorelassifier.joblib') 
         #self.sub_graphs.ndata['label'] = th.tensor(clusters)
         #self.save_graph()
