@@ -586,7 +586,7 @@ class MultiGraphData(pl.LightningDataModule):
             sg = g.subgraph(sg.ndata['_ID'])
             logging.info('Number of genes in graph: {}'.format(sg.ndata['gene'].shape[1]))
             idx = th.where(sg.ndata['gene'])[1]
-
+            del sg.ndata['gene']
             sg.ndata['gene'] = idx
 
             core_nodes = th.isin(sg.ndata['_ID'], random_train_nodes)
