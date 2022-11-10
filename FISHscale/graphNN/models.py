@@ -244,7 +244,6 @@ class SAGE(nn.Module):
                     y[output_nodes] = h.cpu().detach()#.numpy()
                 g.ndata['h'] = y
             return y, p_class
-
     
 
     def inference_attention(self, g, device, batch_size, num_workers, nodes=None,buffer_device=None):
