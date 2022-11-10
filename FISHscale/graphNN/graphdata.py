@@ -819,14 +819,16 @@ class MultiGraphData(pl.LightningDataModule):
             noncore_nodes = th.arange(sg.num_nodes())[sg.ndata['core'] == False]
             rnd = np.random.choice(np.arange(len(noncore_nodes)), core_nodes.shape[0], replace=False)
             noncore_nodes = noncore_nodes[rnd]
+            sampling_nodes = th.cat([core_nodes, noncore_nodes])
+            logging.info('Sampling nodes {}'.format(sampling_nodes.shape))
 
             lu, _ = self.model.module.inference(
                                     sg,
                                     self.model.device,
                                     512,
-                                    0)
-            lu_noncore = lu[noncore_nodes]
-            lu = lu[core_nodes]
+                                    0,
+                                    sampling_nodes)
+            lu = lu[sampling_nodes]
             
             del sg.ndata['h']
             lus.append(lu)
