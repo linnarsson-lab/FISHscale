@@ -844,26 +844,25 @@ class MultiGraphData(pl.LightningDataModule):
                                 replace=False)
 
         training_latents =self.latent_unlabelled[random_sample_train,:]
-        clusters = MiniBatchKMeans(n_clusters=75).fit_predict(training_latents)
-        #adata = sc.AnnData(X=training_latents)
-        #logging.info('Building neighbor graph for clustering...')
-        #sc.pp.neighbors(adata, n_neighbors=25)
-        #logging.info('Running Leiden clustering...')
-        #sc.tl.leiden(adata, random_state=42, resolution=1)
+        #clusters = MiniBatchKMeans(n_clusters=75).fit_predict(training_latents)
+        adata = sc.AnnData(X=training_latents)
+        logging.info('Building neighbor graph for clustering...')
+        sc.pp.neighbors(adata, n_neighbors=25)
+        logging.info('Running Leiden clustering...')
+        sc.tl.leiden(adata, random_state=42, resolution=3)
         #sc.tl.leiden(adata, random_state=42, resolution=None, partition_type=la.ModularityVertexPartition)
 
-
         logging.info('Leiden clustering done.')
-        #clusters= adata.obs['leiden'].values
+        clusters= adata.obs['leiden'].values
 
         logging.info('Total of {} found'.format(len(np.unique(clusters))))
         clf = make_pipeline(StandardScaler(), SGDClassifier(loss='log_loss', max_iter=1000, tol=1e-3))
         clf.fit(training_latents, clusters)
         clusters = clf.predict(self.latent_unlabelled).astype('int8')
-        dump(clf, 'miniMultiGraphMKM{}Classifier.joblib'.format(clusters.max())) 
+        dump(clf, 'miniMultiGraphLeiden{}Classifier.joblib'.format(clusters.astype(int).max())) 
         clf_total = make_pipeline(StandardScaler(), SGDClassifier(loss='log_loss', max_iter=1000, tol=1e-3))
         clf_total.fit(self.latent_unlabelled, clusters)
         clusters = clf.predict(self.latent_unlabelled).astype('int8')
-        dump(clf_total, 'totalMultiGraphMKM{}Classifier.joblib'.format(clusters.max())) 
+        dump(clf_total, 'totalMultiGraphLeiden{}Classifier.joblib'.format(clusters.astype(int).max())) 
         #self.sub_graphs.ndata['label'] = th.tensor(clusters)
         #self.save_graph()
