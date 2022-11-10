@@ -814,16 +814,20 @@ class MultiGraphData(pl.LightningDataModule):
                 lus.append(h)
                 mlus.append(h)
             lus.append(th.cat(mlus))'''
+
+            core_nodes = th.arange(sg.num_nodes())[sg.ndata['core'] == True]
+            noncore_nodes = th.arange(sg.num_nodes())[sg.ndata['core'] == False]
+            rnd = np.random.choice(np.arange(len(noncore_nodes)), core_nodes.shape[0], replace=False)
+            noncore_nodes = noncore_nodes[rnd]
+
             lu, _ = self.model.module.inference(
                                     sg,
                                     self.model.device,
                                     512,
                                     0)
-            lu_noncore = lu[sg.ndata['core'] == False,:]
-            lu = lu[sg.ndata['core'] == True,:]
+            lu_noncore = lu[noncore_nodes]
+            lu = lu[core_nodes]
             
-            lu_noncore = lu_noncore[th.randperm(lu_noncore.shape[0])[:lu.shape[0]]]
-            lus.append(lu_noncore)
             del sg.ndata['h']
             lus.append(lu)
         self.latent_unlabelled = th.cat(lus).cpu().detach().numpy()
