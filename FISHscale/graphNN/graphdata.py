@@ -690,9 +690,9 @@ class MultiGraphData(pl.LightningDataModule):
             )
 
         #edges = batch_graph.edges()
-        #train_p_edges = int(self.sub_graphs.num_edges()*(self.train_percentage/10))
-        #train_edges = th.randperm(self.sub_graphs.num_edges())[:train_p_edges]
-        train_edges = self.make_train_test_validation(self.sub_graphs)
+        train_p_edges = int(self.sub_graphs.num_edges()*(self.train_percentage/50))
+        train_edges = th.randperm(self.sub_graphs.num_edges())[:train_p_edges]
+        #train_edges = self.make_train_test_validation(self.sub_graphs)
 
         unlab = dgl.dataloading.DataLoader(
                         self.sub_graphs,
@@ -804,20 +804,9 @@ class MultiGraphData(pl.LightningDataModule):
         logging.info('Graph unbatched. Total {} graphs'.format(len(self.sub_graphs)))
         lus = []
         for sg in tqdm(self.sub_graphs):
-            '''mlus = []
-            for _, id, mfgs in self.validation_dataloader(sg):
-                mfgs = [mfg.int() for mfg in mfgs]
-                batch_inputs = mfgs[0].srcdata['gene']
-                if len(batch_inputs.shape) == 1:
-                    batch_inputs = th.nn.functional.one_hot(batch_inputs, num_classes=self.n_genes)
-                h = self.model.module.encoder(batch_inputs,mfgs)
-                lus.append(h)
-                mlus.append(h)
-            lus.append(th.cat(mlus))'''
-
             core_nodes = th.arange(sg.num_nodes())[sg.ndata['core'] == True]
             noncore_nodes = th.arange(sg.num_nodes())[sg.ndata['core'] == False]
-            rnd = np.random.choice(np.arange(len(noncore_nodes)), core_nodes.shape[0], replace=False)
+            rnd = np.random.choice(np.arange(len(noncore_nodes)), min(noncore_nodes.shape[0],2000000), replace=False)
             noncore_nodes = noncore_nodes[rnd]
             sampling_nodes = th.cat([core_nodes, noncore_nodes])
             logging.info('Sampling nodes {}'.format(sampling_nodes.shape))
