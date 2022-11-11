@@ -955,7 +955,7 @@ class GraphPlotting:
         genes2 = graph_edges2[np.isin(graph_edges1,enriched_genes)| np.isin(graph_edges2,enriched_genes)]
         enriched_genes_connected= np.unique(np.array([genes1,genes2]))
 
-        filter_enrichment = np.isin(graph_edges1,enriched_genes)| np.isin(graph_edges2,enriched_genes)
+        filter_enrichment = np.isin(graph_edges1,enriched_genes) & np.isin(graph_edges2,enriched_genes)
         graph_edges1 = graph_edges1[filter_enrichment]
         graph_edges2 = graph_edges2[filter_enrichment]
         graph_weights = graph_weights[filter_enrichment]
