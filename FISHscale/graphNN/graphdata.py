@@ -158,7 +158,7 @@ class GraphData(pl.LightningDataModule, GraphUtils, GraphPlotting, GraphDecoder)
             dgl.data.utils.save_graphs(dgluns, [self.g], graph_labels)
             logging.info('Graph saved.')
         else:
-            logging.info('Loading model.')
+            logging.info('Loading graph.')
             glist, _ = dgl.data.utils.load_graphs(dgluns) # glist will be [g1, g2]
             self.g = glist[0]
             logging.info('Graph data loaded.')
@@ -838,7 +838,7 @@ class MultiGraphData(pl.LightningDataModule):
         logging.info('Building neighbor graph for clustering...')
         sc.pp.neighbors(adata, n_neighbors=25)
         logging.info('Running Leiden clustering...')
-        sc.tl.leiden(adata, random_state=42, resolution=3)
+        sc.tl.leiden(adata, random_state=42, resolution=4)
         #sc.tl.leiden(adata, random_state=42, resolution=None, partition_type=la.ModularityVertexPartition)
 
         logging.info('Leiden clustering done.')
