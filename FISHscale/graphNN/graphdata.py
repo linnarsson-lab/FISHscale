@@ -829,7 +829,7 @@ class MultiGraphData(pl.LightningDataModule):
 
         random_sample_train = np.random.choice(
                                 len(self.latent_unlabelled), 
-                                np.min([len(self.latent_unlabelled),500000]), 
+                                np.min([len(self.latent_unlabelled),1000000]), 
                                 replace=False)
 
         training_latents =self.latent_unlabelled[random_sample_train,:]
