@@ -806,7 +806,7 @@ class MultiGraphData(pl.LightningDataModule):
         for sg in tqdm(self.sub_graphs):
             core_nodes = th.arange(sg.num_nodes())[sg.ndata['core'] == True]
             noncore_nodes = th.arange(sg.num_nodes())[sg.ndata['core'] == False]
-            rnd = np.random.choice(np.arange(len(noncore_nodes)), min(noncore_nodes.shape[0],2000000), replace=False)
+            rnd = np.random.choice(np.arange(len(noncore_nodes)), min(noncore_nodes.shape[0],4000000), replace=False)
             noncore_nodes = noncore_nodes[rnd]
             sampling_nodes = th.cat([core_nodes, noncore_nodes])
             logging.info('Sampling nodes {}'.format(sampling_nodes.shape))
@@ -838,7 +838,7 @@ class MultiGraphData(pl.LightningDataModule):
         logging.info('Building neighbor graph for clustering...')
         sc.pp.neighbors(adata, n_neighbors=25)
         logging.info('Running Leiden clustering...')
-        sc.tl.leiden(adata, random_state=42, resolution=4)
+        sc.tl.leiden(adata, random_state=42, resolution=5)
         #sc.tl.leiden(adata, random_state=42, resolution=None, partition_type=la.ModularityVertexPartition)
 
         logging.info('Leiden clustering done.')
