@@ -807,7 +807,11 @@ class MultiGraphData(pl.LightningDataModule):
         for sg in tqdm(self.sub_graphs):
             core_nodes = th.arange(sg.num_nodes())[sg.ndata['core'] == True]
             noncore_nodes = th.arange(sg.num_nodes())[sg.ndata['core'] == False]
+<<<<<<< HEAD
             rnd = np.random.choice(np.arange(len(noncore_nodes)), min(noncore_nodes.shape[0],5000000), replace=False)
+=======
+            rnd = np.random.choice(np.arange(len(noncore_nodes)), min(noncore_nodes.shape[0],4000000), replace=False)
+>>>>>>> 44c7240 (m)
             noncore_nodes = noncore_nodes[rnd]
             sampling_nodes = th.cat([core_nodes, noncore_nodes])
             logging.info('Sampling nodes {}'.format(sampling_nodes.shape))
