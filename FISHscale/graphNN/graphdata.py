@@ -791,9 +791,11 @@ class MultiGraphData(pl.LightningDataModule):
         from joblib import dump, load
         import leidenalg as la
         from sklearn.cluster import MiniBatchKMeans
+        import gc
+        gc.collect()
 
         #logging('self.device', self.device)
-        #self.model.to(self.device)
+        self.model.to(self.device)
         self.model.eval()
         logging.info('Device is in {}'.format(self.model.device))
 
