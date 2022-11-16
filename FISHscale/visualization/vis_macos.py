@@ -167,7 +167,6 @@ class Visualizer:
 
         self.material = rendering.MaterialRecord()
         self.material.base_color = [0.9, 0.9, 0.9, 1.0]
-        self.genes_points_materials = {}
         self.vis_init()
 
     
@@ -287,14 +286,7 @@ class Visualizer:
         self.visM.add_child(self._settings_panel) 
 
     def _on_point_size(self, size):
-        
         self.point_size = size
-        #mat = rendering.MaterialRecord()
-        #mat.shader = "defaultLit"
-        #mat.point_size = int(self.point_size)
-        #mat.base_color = [[1, 0.5, 0.5, 1],[0,0.5,0.5,1]]
-        #self._scene.scene.update_material(mat)
-
         self._resize()
 
     def _on_voxel_down(self, down):
@@ -334,7 +326,6 @@ class Visualizer:
     def _on_gene_pressed(self):
         self.previous_selection = self.selected
         self.selected = []
-
         self.section = 'g'
         for g in self.gene_w:
             if g.is_on:
@@ -344,7 +335,6 @@ class Visualizer:
                 c = self.color_dic[g.text]
                 g.background_color = gui.Color(c[0],c[1],c[2],0.9)
             elif not g.is_on:
-                #print('turn off',g.text)
                 c = self.color_dic[g.text]
                 g.background_color = gui.Color(c[0],c[1],c[2],0.1)
                 self._remove_geometry(g.text)
@@ -384,9 +374,7 @@ class Visualizer:
         
         self._text_edit_cell.placeholder_text = ' '.join(self.selected)
         self._text_edit_cell.text_value = ' '.join(self.selected)
-        #self._selection_changed()
-        self.genes_points_materials = {}
-        self._scene.scene.clear_geometry()
+        self._selection_changed()
 
     def _text_changed(self, path):
         t = path
