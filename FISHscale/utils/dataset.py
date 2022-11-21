@@ -282,6 +282,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                         x_alt=x,
                         y_alt=y,
                         c_alt=c)
+        
         gui.Application.instance.run()
             
     def set_working_selection(self, level: Union[None, str] = None):
