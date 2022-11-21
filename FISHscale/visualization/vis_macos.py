@@ -308,7 +308,6 @@ class Visualizer:
             new_point = self.point_size + dist
             print(new_point)
 
-
     def kevent(self,e):
         if e.key == gui.KeyName.UP and e.type == gui.KeyEvent.UP:
             idx = self.gene_list.index(self.button_selection)
