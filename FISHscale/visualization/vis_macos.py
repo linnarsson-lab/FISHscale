@@ -383,6 +383,7 @@ class Visualizer:
     def _text_changed(self, path):
         t = path
         t_list = sorted(t.split(' '))
+        #print('tchange')
 
         self.selected = np.unique(np.array(t_list)).tolist()
         #print(self.selected)
