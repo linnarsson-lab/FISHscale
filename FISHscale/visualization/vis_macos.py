@@ -300,7 +300,6 @@ class Visualizer:
             if self.file_w[f].checked:
                 self.tissue_selected.append(f)
 
-
     def _get_zoom(self):
         while True:
             time.sleep(5)
