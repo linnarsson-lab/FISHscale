@@ -164,6 +164,7 @@ class Visualizer:
         self.width = width
         self.x_alt, self.y_alt, self.alt = x_alt, y_alt, alt
         self.search_genes = []
+        self.genes_points_materials = {}
 
         self.material = rendering.MaterialRecord()
         self.material.base_color = [0.9, 0.9, 0.9, 1.0]
@@ -374,14 +375,15 @@ class Visualizer:
         
         self._text_edit_cell.placeholder_text = ' '.join(self.selected)
         self._text_edit_cell.text_value = ' '.join(self.selected)
+        self._scene.scene.clear_geometry()
+        self.genes_points_materials = {}
         self._selection_changed()
+        
 
     def _text_changed(self, path):
         t = path
         t_list = sorted(t.split(' '))
-        #print('tchange')
 
-        #t_list += self.selected
         self.selected = np.unique(np.array(t_list)).tolist()
         #print(self.selected)
         
