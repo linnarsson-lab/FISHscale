@@ -331,16 +331,21 @@ class Visualizer:
                 #print('turn off',g.text)
                 c = self.color_dic[g.text]
                 g.background_color = gui.Color(c[0],c[1],c[2],0.1)
-                self._scene.scene.remove_geometry(g.text)
-                try:
-                    del self.genes_points_materials[g.text]
-                except:
-                    pass
-
+                self._remove_geometry(g.text)
 
         self._text_edit_cell.text_value = ' '.join(self.selected)
         self._text_edit_cell.placeholder_text =  ' '.join(self.selected)#' '.join(self.data[0].unique_genes.tolist())
         self._selection_changed()
+
+    def _remove_geometry(self, remove_gene):
+        remove = []
+        for g in self.genes_points_materials:
+            t, gene_name = g.split('_')
+            if gene_name == remove_gene:
+                remove.append(g)
+        for r in remove:
+            self._scene.scene.remove_geometry(r)
+            del self.genes_points_materials[r]
 
     def _plot_all(self):
         self.selected = []
@@ -370,12 +375,15 @@ class Visualizer:
     def _text_changed(self, path):
         t = path
         t_list = sorted(t.split(' '))
+        #print('tchange')
 
         #t_list += self.selected
         self.selected = np.unique(np.array(t_list)).tolist()
+        #print(self.selected)
+        
         self.section = 'g'
         for g in self.gene_w:
-            if t.count(g.text):
+            if t_list.count(g.text):
                 g.is_on = True
                 c = self.color_dic[g.text]
                 g.background_color = gui.Color(c[0],c[1],c[2],0.9)
@@ -384,6 +392,8 @@ class Visualizer:
                 g.is_on = False
                 c = self.color_dic[g.text]
                 g.background_color = gui.Color(c[0],c[1],c[2],0.1)
+                self._remove_geometry(g.text)
+                
         self.selected = [e for e in self.selected if e!= '' and e in self.gene_list]
         self._text_edit_cell.placeholder_text = ' '.join(self.selected)
         self._text_edit_cell.text_value = ' '.join(self.selected)
@@ -428,7 +438,7 @@ class Visualizer:
          
     def _selection_changed(self,extra=None):
         points,colors = [],[]
-        print('sel',self.selected)
+        add_new = []
         for d in self.data:
             if d.filename in self.tissue_selected:
                 if self.section == 'g':
@@ -438,9 +448,12 @@ class Visualizer:
                             g= str(g)
                             ps = d.get_gene_sample(g, include_z=True, frac=self.voxel_down)
                             points.append(ps.values)
+                            idx_tissue = self.dic_pointclouds['File'].index(d.filename)
+                            tissue_gene = str(idx_tissue) +'_'+g
+                            add_new.append(tissue_gene)
                             colors.append(self.color_dic[g])
 
-                elif self.section in self.alt:
+                '''elif self.section in self.alt:
                     ps = np.array([self.x_alt, self.y_alt, np.zeros_like(self.x_alt)]).T
                     #cs = np.array([d.color_dict[str(x)] for x in selected_features])
                     cs = self.alt[self.section]
@@ -453,7 +466,7 @@ class Visualizer:
                     ps =  selected.loc[:,['x','y','z']].values
                     cs = np.array([x for x in selected[self.section].apply(lambda x: d.color_dict[str(x)])])
                     points.append(ps)
-                    colors.append(cs)
+                    colors.append(cs)'''
 
         #self._scene.scene.clear_geometry()
         self.previous_selection = {}
@@ -461,22 +474,33 @@ class Visualizer:
         mat = rendering.MaterialRecord()
         mat.shader = "defaultLit"
 
-        sel = self.selected * len(self.tissue_selected)
+        #sel = self.selected #* len(self.tissue_selected)
+
         added = [g for g in self.genes_points_materials]
-        print('added',added)
 
-        for g, ps, cs in zip(sel, points, colors):
+        for g, ps, cs in zip(add_new, points, colors):
             if g in added:
-                print('not added ' ,g)
                 continue
-            else:
-            #g = g+'_'+str(f)
 
-                pcd.points = o3d.utility.Vector3dVector(ps)
-                pcd.voxel_down_sample(voxel_size=self.voxel_down)
-                mat.base_color = [cs[0],cs[1],cs[2], 1.0]
-                mat.point_size = int(self.point_size)
-                #self.previous_selection[g] = [ps, cs]
-                print('adding',g, ps.shape)
-                self._scene.scene.add_geometry(g, pcd, mat)
-                self.genes_points_materials[g] = (pcd, mat)
+            pcd.points = o3d.utility.Vector3dVector(ps)
+            pcd.voxel_down_sample(voxel_size=self.voxel_down)
+            mat.base_color = [cs[0],cs[1],cs[2], 1.0]
+            mat.point_size = int(self.point_size)
+
+            self._scene.scene.add_geometry(g, pcd, mat)
+            self.genes_points_materials[g] = (pcd, mat)
+            
+        
+        #added = []
+        #for g, ps, cs in zip(sel, points, colors):
+        #    added.append(g)
+        #    f = added.count(g)
+        #    g = g+'_'+str(f)
+        #    pcd.points = o3d.utility.Vector3dVector(ps)
+        #    pcd.voxel_down_sample(voxel_size=self.voxel_down)
+        #    mat.base_color = [cs[0],cs[1],cs[2], 1.0]
+        #    mat.point_size = int(self.point_size)
+        #    #self.previous_selection[g] = [ps, cs]
+        #    self._scene.scene.add_geometry(g, pcd, mat)
+        
+        #print(self._scene.scene.camera.get_view_matrix())
