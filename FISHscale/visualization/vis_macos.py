@@ -166,6 +166,7 @@ class Visualizer:
         self.material.base_color = [0.9, 0.9, 0.9, 1.0]
         self.genes_points_materials = {}
         self.vis_init()
+
     
     def vis_init(self):
         self.visM = gui.Application.instance.create_window(
@@ -177,12 +178,14 @@ class Visualizer:
         self._scene = gui.SceneWidget()
         self._scene.scene = rendering.Open3DScene(self.visM.renderer)
         self._scene.scene.set_background([0, 0, 0, 1])
+        self._scene.scene.downsample_threshold = 10000000
 
         em = self.visM.theme.font_size
         self._settings_panel = gui.Vert(
             0, gui.Margins(0.25 * em, 0.25 * em, 0.25 * em, 0.25 * em))
 
-        
+        self.depth = self._scene.scene.camera.get_view_matrix()[2,:]
+
         self._voxel_down = gui.Slider(gui.Slider.INT)#gui.NumberEdit(gui.NumberEdit.Type(50))
         self._voxel_down.set_limits(1, 100)
         self._voxel_down.int_value = 100
@@ -301,6 +304,16 @@ class Visualizer:
             if self.file_w[f].checked:
                 self.tissue_selected.append(f)
 
+
+    def _get_zoom(self):
+        while True:
+            time.sleep(5)
+            new_depth = self._scene.scene.camera.get_view_matrix()[2,:]
+            dist = np.linalg.norm(new_depth-self.depth)/5
+            new_point = self.point_size + dist
+            print(new_point)
+
+
     def kevent(self,e):
         if e.key == gui.KeyName.UP and e.type == gui.KeyEvent.UP:
             idx = self.gene_list.index(self.button_selection)
@@ -406,21 +419,13 @@ class Visualizer:
         a= self._scene.scene.camera.get_field_of_view()
         self._scene.scene.clear_geometry()
         
-        '''pcd = o3d.geometry.PointCloud()
-        mat = rendering.MaterialRecord()
-        mat.shader = "defaultLit"'''
         self._scene.scene.clear_geometry()
+        #print([y[0].points for y in self.genes_points_materials.values()])
         for g in self.genes_points_materials:
-            pcd,m = self.genes_points_materials[g]#[1]
+            pcd,m = self.genes_points_materials[g]
             m.point_size = int(self.point_size)
             self._scene.scene.add_geometry(g, pcd, m)
-        
-        '''for g in self.previous_selection:
-            ps, cs= self.previous_selection[g][0], self.previous_selection[g][1]
-            pcd.points = o3d.utility.Vector3dVector(ps)
-            mat.point_size = int(self.point_size)
-            mat.base_color = [cs[0],cs[1],cs[2], 1.0]
-            self._scene.scene.add_geometry(g, pcd, mat)'''
+            self.genes_points_materials[g] = (pcd,m)
 
     def _on_layout(self, layout_context):
         # The on_layout callback should set the frame (position + size) of every
@@ -468,29 +473,25 @@ class Visualizer:
                     points.append(ps)
                     colors.append(cs)'''
 
-        #self._scene.scene.clear_geometry()
         self.previous_selection = {}
-        pcd = o3d.geometry.PointCloud()
-        mat = rendering.MaterialRecord()
-        mat.shader = "defaultLit"
-
-        #sel = self.selected #* len(self.tissue_selected)
-
         added = [g for g in self.genes_points_materials]
 
         for g, ps, cs in zip(add_new, points, colors):
             if g in added:
                 continue
+            else:
+                pcd = o3d.geometry.PointCloud()
+                mat = rendering.MaterialRecord()
+                mat.shader = "defaultLit"
+                pcd.points = o3d.utility.Vector3dVector(ps)
+                pcd.voxel_down_sample(voxel_size=self.voxel_down)
+                mat.base_color = [cs[0],cs[1],cs[2], 1.0]
+                mat.point_size = int(self.point_size)
 
-            pcd.points = o3d.utility.Vector3dVector(ps)
-            pcd.voxel_down_sample(voxel_size=self.voxel_down)
-            mat.base_color = [cs[0],cs[1],cs[2], 1.0]
-            mat.point_size = int(self.point_size)
+                self._scene.scene.add_geometry(g, pcd, mat)
+                self.genes_points_materials[g] = (pcd, mat)
 
-            self._scene.scene.add_geometry(g, pcd, mat)
-            self.genes_points_materials[g] = (pcd, mat)
             
-        
         #added = []
         #for g, ps, cs in zip(sel, points, colors):
         #    added.append(g)
