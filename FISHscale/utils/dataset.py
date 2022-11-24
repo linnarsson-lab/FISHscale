@@ -849,6 +849,7 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
         
         #Open the files with the option to do this in paralell.
         lazy_result = []
+
         for f, zz, pxs, xo, yo, zo, pol in tqdm(zip(files, z, pixel_size, x_offset, y_offset, z_offset, polygon)):
             lr = dask.delayed(Dataset) (f, x_label, y_label, gene_label, other_columns, self.unique_genes, exclude_genes, 
                                         zz, pxs, xo, yo, zo, pol, select_valid, reparse, color_input, verbose = self.verbose, 

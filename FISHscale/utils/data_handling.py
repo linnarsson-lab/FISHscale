@@ -226,7 +226,9 @@ class DataLoader_base():
                 is present and contains at least one ".parquet" file. And the
                 number of files found.
         """
+        print(folder,'check')
         if path.exists(folder):
+
             fn = path.join(folder, '*.parquet')
             len_file_list = len(glob(fn))
             if len_file_list > 0:
@@ -402,11 +404,12 @@ class DataLoader(DataLoader_base):
         new_parse = False
         #Check if data has already been parsed
         already_parsed = self._check_parsed(filename.split('.')[0] + '_FISHscale_Data') 
+
         if not already_parsed[0] or reparse:
             if already_parsed[0] and not reparse:
                 self.vp(f'Found {already_parsed[1]} already parsed files. Skipping parsing.')
             new_parse = True
-            
+            #print(new_parse, 'new parse')
             #Data parsing
             if filename.endswith(('.parquet', '.csv')):
                 
