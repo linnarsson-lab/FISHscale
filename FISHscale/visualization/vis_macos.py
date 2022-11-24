@@ -84,8 +84,8 @@ class Window:
         self.vis = Visualizer(self.dataset,
                                 self.dic_pointclouds, 
                                 color_dic=self.color_dic,
-                                width=1024, 
-                                height=768, 
+                                width=2024, 
+                                height=1536, 
                                 x_alt=self.x_alt,
                                 y_alt=self.y_alt,
                                 alt=self.c_alt,
@@ -129,7 +129,7 @@ class Visualizer:
                 dic_pointclouds,
                 color_dic,
                 width=2000,
-                height=2000,
+                height=1000,
                 show_axis=False,
                 x_alt=None,
                 y_alt=None,
@@ -151,7 +151,7 @@ class Visualizer:
     
     def vis_init(self):
         self.visM = gui.Application.instance.create_window(
-            "Open3D", self.width, self.height)
+            "EEL Library", self.width, self.height)
         self.point_size = 2
         self.selected = []
         self.tissue_selected = [x for x in self.dic_pointclouds['File']]
