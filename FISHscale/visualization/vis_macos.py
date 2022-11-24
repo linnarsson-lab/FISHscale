@@ -1,30 +1,6 @@
-
-
-
 from re import search
 import sys
 import logging
-from PyQt5.QtWidgets import (QPushButton, QDialog, QTreeWidget,
-                            QTreeWidgetItem, QVBoxLayout,
-                            QHBoxLayout, QFrame, QLabel,
-                            QApplication,QListWidget,QScrollBar)
-
-from PyQt5.QtWidgets import * 
-from PyQt5 import QtWidgets
-from PyQt5 import QtCore, QtGui 
-from PyQt5.QtGui import * 
-from PyQt5.QtCore import * 
-
-from PyQt5.QtWidgets import (QPushButton, QDialog, QTreeWidget,
-                            QTreeWidgetItem, QVBoxLayout,
-                            QHBoxLayout, QFrame, QLabel,
-                            QApplication,QListWidget,QScrollBar)
-
-from PyQt5.QtWidgets import * 
-from PyQt5 import QtWidgets
-from PyQt5 import QtCore, QtGui 
-from PyQt5.QtGui import * 
-from PyQt5.QtCore import * 
 
 import sys
 import os
