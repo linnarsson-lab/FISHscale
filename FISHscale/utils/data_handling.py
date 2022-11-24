@@ -226,7 +226,6 @@ class DataLoader_base():
                 is present and contains at least one ".parquet" file. And the
                 number of files found.
         """
-        print(folder,'check')
         if path.exists(folder):
 
             fn = path.join(folder, '*.parquet')
