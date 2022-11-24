@@ -187,6 +187,9 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         self.pixel_area = self.pixel_size ** 2
         self.unit_scale = self.ureg('1 micrometer')
         self.area_scale = self.unit_scale ** 2
+        self.x_offsets = [x_offset]
+        self.y_offsets = [y_offset]
+        self.z_offsets = [z_offset]
         
         #Load data
         self.load_data(self.filename, x_label, y_label, gene_label, self.other_columns, x_offset, y_offset, z_offset, 
@@ -808,14 +811,16 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
             z = [z] * n_files
         if not isinstance(x_offset, (list, np.ndarray)):
             x_offset = [x_offset*c for row in range(ceil(n_files/self.columns_layout)) for c in range(self.columns_layout)]
-
+            self.x_offsets = x_offset
         if not isinstance(y_offset, (list, np.ndarray)):
             y_offset_tmp = [y_offset for c in range(self.columns_layout)]
             y_offset = [np.array(y_offset_tmp)+(y*y_offset) for y in range(ceil(n_files/self.columns_layout))]
             y_offset = np.concatenate(y_offset).tolist()
+            self.y_offsets = y_offset
             #y_offset = [y_offset] * n_files
         if not isinstance(z_offset, (list, np.ndarray)):
             z_offset = [z_offset] * n_files
+            self.z_offsets = z_offset
         if not isinstance(pixel_size, (list, np.ndarray)):
             pixel_size = [pixel_size] * n_files
         if not isinstance(polygon, list):

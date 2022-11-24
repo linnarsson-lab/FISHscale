@@ -88,6 +88,7 @@ class Window:
             self.dataset = [dataset]
             self.dic_pointclouds ={'g':self.unique_genes}
             self.dic_pointclouds['File'] = []
+            
             for x in self.dataset:
                 self.dic_pointclouds['File'].append(str(x.filename))
             self.pass_multi_data()
@@ -95,9 +96,11 @@ class Window:
         #elif str(self.dataset.__class__) == str(FISHscale.utils.dataset.MultiDataset):
         elif isinstance(self.dataset, FISHscale.utils.dataset.MultiDataset):
             logging.info('MultiDataset')
+            
             self.dataset = dataset
             self.dic_pointclouds ={'g':self.dataset.unique_genes}
             self.dic_pointclouds['File'] = []
+            #self.dataset[0].datasets_names = [self.dataset[0].dataset_name]
             for x in self.dataset:
                 self.dic_pointclouds['File'].append(str(x.filename))
             self.pass_multi_data()
@@ -165,7 +168,6 @@ class Visualizer:
         self.x_alt, self.y_alt, self.alt = x_alt, y_alt, alt
         self.search_genes = []
         self.genes_points_materials = {}
-
         self.material = rendering.MaterialRecord()
         self.material.base_color = [0.9, 0.9, 0.9, 1.0]
         self.vis_init()
@@ -282,9 +284,26 @@ class Visualizer:
         bbox = o3d.geometry.AxisAlignedBoundingBox([minx, miny, -100],
                                                    [maxx, maxy, 100])
         self._scene.setup_camera(60, bbox, [0, 0, 0]) 
+
         self.visM.set_on_layout(self._on_layout)
         self.visM.add_child(self._scene)  
         self.visM.add_child(self._settings_panel) 
+
+        datasets_names = [d.dataset_name for d in self.data]
+
+        for d, label in zip(self.data, datasets_names):
+            x = d.x_min + 100
+            y = d.y_min - 50
+            z = 0
+
+            try:
+                label = label.split('_EEL_')[-1]
+                label = label.split('_S')[0]
+            except:
+                pass
+            l = self._scene.add_3d_label([x,y,z], label)
+            l.color = gui.Color(1,1,1,1)
+            #l.scale = 100000
 
     def _on_point_size(self, size):
         self.point_size = size
@@ -309,13 +328,13 @@ class Visualizer:
             print(new_point)
 
     def kevent(self,e):
-        if e.key == gui.KeyName.UP and e.type == gui.KeyEvent.UP:
-            idx = self.gene_list.index(self.button_selection)
+        idx = self.gene_list.index(self.button_selection)
+        if e.key == gui.KeyName.UP and e.type == gui.KeyEvent.UP and idx < len(self.gene_w)-1 and idx >= 0:
             self.gene_w[idx -1].is_on = True
             self.gene_w[idx].is_on = False
             self._on_gene_pressed()
-        elif e.key == gui.KeyName.DOWN and e.type == gui.KeyEvent.DOWN:
-            idx = self.gene_list.index(self.button_selection)
+        elif e.key == gui.KeyName.DOWN and e.type == gui.KeyEvent.DOWN and idx < len(self.gene_w)-1 and idx >= 0:
+            #idx = self.gene_list.index(self.button_selection)
             self.gene_w[idx + 1].is_on = True
             self.gene_w[idx].is_on = False
             self._on_gene_pressed()
