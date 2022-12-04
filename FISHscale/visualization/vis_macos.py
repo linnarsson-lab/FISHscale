@@ -304,18 +304,21 @@ class Visualizer:
             print(new_point)
 
     def kevent(self,e):
-        idx = self.gene_list.index(self.button_selection)
-        if e.key == gui.KeyName.UP and e.type == gui.KeyEvent.UP and idx < len(self.gene_w)-1 and idx >= 0:
-            self.gene_w[idx -1].is_on = True
-            self.gene_w[idx].is_on = False
-            self._on_gene_pressed()
-        elif e.key == gui.KeyName.DOWN and e.type == gui.KeyEvent.DOWN and idx < len(self.gene_w)-1 and idx >= 0:
-            #idx = self.gene_list.index(self.button_selection)
-            self.gene_w[idx + 1].is_on = True
-            self.gene_w[idx].is_on = False
-            self._on_gene_pressed()
+        try:
+            idx = self.gene_list.index(self.button_selection)
+            if e.key == gui.KeyName.UP and e.type == gui.KeyEvent.UP and idx < len(self.gene_w)-1 and idx >= 0:
+                self.gene_w[idx -1].is_on = True
+                self.gene_w[idx].is_on = False
+                self._on_gene_pressed()
+            elif e.key == gui.KeyName.DOWN and e.type == gui.KeyEvent.DOWN and idx < len(self.gene_w)-1 and idx >= 0:
+                #idx = self.gene_list.index(self.button_selection)
+                self.gene_w[idx + 1].is_on = True
+                self.gene_w[idx].is_on = False
+                self._on_gene_pressed()
 
-        return gui.Widget.EventCallbackResult.IGNORED
+            return gui.Widget.EventCallbackResult.IGNORED
+        except:
+            pass
     
     def _on_gene_pressed(self):
         self.previous_selection = self.selected
