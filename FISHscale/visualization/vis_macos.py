@@ -316,6 +316,7 @@ class Visualizer:
             self._on_gene_pressed()
 
         return gui.Widget.EventCallbackResult.IGNORED
+
     
     def _on_gene_pressed(self):
         self.previous_selection = self.selected
@@ -387,6 +388,7 @@ class Visualizer:
                 g.is_on = True
                 c = self.color_dic[g.text]
                 g.background_color = gui.Color(c[0],c[1],c[2],0.9)
+                self.button_selection = g.text
 
             else:
                 g.is_on = False
