@@ -38,6 +38,7 @@ setup(
 		'dask[distributed]',
 		'pyro-ppl',
 		'scvi-tools',
+		'diameter-clustering'
 	],
 
 	author="Linnarsson Lab",

@@ -19,6 +19,24 @@ class Normalization:
         """
         return np.log(df + 1)
     
+    def log_scale(self, df, level=None):
+        """Scale to total count and Log2 normalize pandas dataframe.
+        Formula: log(X + 1)
+
+        Args:
+            df ([pd.DataFrame]): Pandas dataframe with features as rows and 
+                samples as columns.
+            level (int): level to center to. If None defaults to the median
+                of the dataset. 
+
+        Returns:
+            [pd.DataFrame]: Log normalized Pandas dataframe.
+        """
+        totals = df.sum(axis=0)
+        if level == None:
+            level = np.median(totals)
+        return np.log2(self.div0(df, totals) * level + 1)
+    
     def sqrt_norm(self, df):
         """Square root normalize pandas dataframe.
         
@@ -110,13 +128,15 @@ class Normalization:
             data (np.ndarray, pd.DataFrame): Array or data frame with data.
                 Features in rows and samples in columns.
             mode (str, optional): Normalization method. Choose from: "log",
-                "sqrt",  "z", "APR" or None. for log +1 transform, square root 
-                transform, z scores or Analytic Pearson residuals respectively.
+                "log_scale", "sqrt",  "z", "APR" or None. for log10 +1 
+                transform, median scaled log2 + 1, square root transform, 
+                z scores or Analytic Pearson residuals respectively.
                 When the mode is None, no normalization will be performed and
                 the input is the output. Defaults to 'log'.
                 
         Kwargs:
-            Will be passed to the APR() normalization function.
+            Will be passed to the APR() and log_scale() normalization 
+            functions.
 
         Raises:
             Exception: If mode is not properly defined
@@ -127,6 +147,8 @@ class Normalization:
 
         if mode == 'log':
             result = self.log_norm(data)
+        elif mode == 'log_scale':
+            result = self.log_scale(data, **kwargs)
         elif mode == 'sqrt':
             result = self.sqrt_norm(data)
         elif mode == 'z':

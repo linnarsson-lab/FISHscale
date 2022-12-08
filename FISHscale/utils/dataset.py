@@ -1032,6 +1032,26 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
                 z_offset = 0
             d.offset_data_temp(x_offset, y_offset, z_offset)
         
+    def set_working_selection(self, level: Union[None, str] = None):
+        """Set the working selection on which to work.
+        
+        If your dataset contains columns with boolean filters for certain 
+        subsets of the data, you can select on which sub-selection you work 
+        by setting the working_selection. This can for instance be different
+        anatomical regions in your dataset.
+        Setting the level to "None" resets the working selection. 
+
+        Args:
+            level (Union[None, str], optional): _description_. Defaults to None.
+        """
+        for d in self.datasets:
+            d.set_working_selection(level)
+            
+    def reset_working_selection(self):
+        """Reset the working selection to include all datapoints.
+        """
+        for d in self.datasets:
+            self.set_working_selection(level = None)
 
     def visualize(
                 self,
