@@ -122,7 +122,7 @@ def make_CBC_matrix(radius, gene_coord, gene_KDTree, workers=-1):
 
     #Iterate through all combinations of genes and fill the correlation matrix
     for i, (geneA, geneB) in enumerate(combinations):
-        logging.info(f'Radius {radius}: {i}/{combinations.shape[0]}             ', end='\r')
+        logging.info(f'Radius {radius}: {i}/{combinations.shape[0]}             ',)
         #Get the spearman r for gene A versos gene B and gene B versus gene A
         cor_AB, cor_BA = CBC(geneA, geneB, radius, gene_coord, gene_KDTree, plot=False, workers=workers)
         #Place in matrix
