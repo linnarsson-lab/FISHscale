@@ -220,10 +220,10 @@ class Boundaries:
             results.append(y)
 
         #Compute
-        logging.info('Computation 1 / 2: ', end='\r') 
+        logging.info('Computation 1 / 2: ') 
         with ProgressBar():
             results = dask.compute(*results, scheduler='processes', n_workers=n_jobs)
-        logging.info('Computation 2 / 2: ', end='\r') 
+        logging.info('Computation 2 / 2: ') 
 
         #Identify grid points without molecules
         count_matrix = np.array([i[1] for i in results])
