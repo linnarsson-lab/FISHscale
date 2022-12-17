@@ -690,9 +690,9 @@ class MultiGraphData(pl.LightningDataModule):
             )
 
         #edges = batch_graph.edges()
-        train_p_edges = int(self.sub_graphs.num_edges()*(self.train_percentage/50))
-        train_edges = th.randperm(self.sub_graphs.num_edges())[:train_p_edges]
-        #train_edges = self.make_train_test_validation(self.sub_graphs)
+        #train_p_edges = int(self.sub_graphs.num_edges()*(self.train_percentage/50))
+        #train_edges = th.randperm(self.sub_graphs.num_edges())[:train_p_edges]
+        train_edges = self.make_train_test_validation(self.sub_graphs)
 
         unlab = dgl.dataloading.DataLoader(
                         self.sub_graphs,
