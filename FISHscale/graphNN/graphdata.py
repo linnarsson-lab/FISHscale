@@ -690,9 +690,9 @@ class MultiGraphData(pl.LightningDataModule):
             )
 
         #edges = batch_graph.edges()
-        #train_p_edges = int(self.sub_graphs.num_edges()*(self.train_percentage/50))
-        #train_edges = th.randperm(self.sub_graphs.num_edges())[:train_p_edges]
-        train_edges = self.make_train_test_validation(self.sub_graphs)
+        train_p_edges = int(self.sub_graphs.num_edges()*(self.train_percentage))
+        train_edges = th.randperm(self.sub_graphs.num_edges())[:train_p_edges]
+        #train_edges = self.make_train_test_validation(self.sub_graphs)
 
         unlab = dgl.dataloading.DataLoader(
                         self.sub_graphs,
@@ -840,16 +840,16 @@ class MultiGraphData(pl.LightningDataModule):
 
         training_latents = latent_unlabelled_core[random_sample_train,:]
         #clusters = MiniBatchKMeans(n_clusters=75).fit_predict(training_latents)
-        #adata = sc.AnnData(X=training_latents)
+        adata = sc.AnnData(X=training_latents)
         logging.info('Building neighbor graph for clustering...')
-        #sc.pp.neighbors(adata, n_neighbors=25)
+        sc.pp.neighbors(adata, n_neighbors=25)
         logging.info('Running Leiden clustering...')
-        #sc.tl.leiden(adata, random_state=42, resolution=5)
+        sc.tl.leiden(adata, random_state=42, resolution=5)
         #sc.tl.leiden(adata, random_state=42, resolution=None, partition_type=la.ModularityVertexPartition)
 
         logging.info('Leiden clustering done.')
-        #clusters= adata.obs['leiden'].values
-        clusters = MiniBatchKMeans(n_clusters=80).fit_predict(training_latents)
+        clusters= adata.obs['leiden'].values
+        #clusters = MiniBatchKMeans(n_clusters=80).fit_predict(training_latents)
 
         logging.info('Total of {} found'.format(len(np.unique(clusters))))
         clf = make_pipeline(StandardScaler(), SGDClassifier(loss='log_loss', max_iter=1000, tol=1e-3))
