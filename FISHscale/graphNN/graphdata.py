@@ -840,16 +840,16 @@ class MultiGraphData(pl.LightningDataModule):
 
         training_latents = latent_unlabelled_core[random_sample_train,:]
         #clusters = MiniBatchKMeans(n_clusters=75).fit_predict(training_latents)
-        adata = sc.AnnData(X=training_latents)
+        #adata = sc.AnnData(X=training_latents)
         logging.info('Building neighbor graph for clustering...')
-        sc.pp.neighbors(adata, n_neighbors=25)
+        #sc.pp.neighbors(adata, n_neighbors=25)
         logging.info('Running Leiden clustering...')
-        sc.tl.leiden(adata, random_state=42, resolution=2)
+        #sc.tl.leiden(adata, random_state=42, resolution=2)
         #sc.tl.leiden(adata, random_state=42, resolution=None, partition_type=la.ModularityVertexPartition)
 
         logging.info('Leiden clustering done.')
-        clusters= adata.obs['leiden'].values
-        #clusters = MiniBatchKMeans(n_clusters=80).fit_predict(training_latents)
+        #clusters= adata.obs['leiden'].values
+        clusters = MiniBatchKMeans(n_clusters=80).fit_predict(training_latents)
 
         logging.info('Total of {} found'.format(len(np.unique(clusters))))
         clf = make_pipeline(StandardScaler(), SGDClassifier(loss='log_loss', max_iter=1000, tol=1e-3))
