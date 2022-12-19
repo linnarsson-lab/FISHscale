@@ -690,7 +690,7 @@ class MultiGraphData(pl.LightningDataModule):
             )
 
         #edges = batch_graph.edges()
-        train_p_edges = int(self.sub_graphs.num_edges()*(self.train_percentage))
+        train_p_edges = int(self.sub_graphs.num_edges()*(self.train_percentage/25))
         train_edges = th.randperm(self.sub_graphs.num_edges())[:train_p_edges]
         #train_edges = self.make_train_test_validation(self.sub_graphs)
 
@@ -844,7 +844,7 @@ class MultiGraphData(pl.LightningDataModule):
         logging.info('Building neighbor graph for clustering...')
         sc.pp.neighbors(adata, n_neighbors=25)
         logging.info('Running Leiden clustering...')
-        sc.tl.leiden(adata, random_state=42, resolution=5)
+        sc.tl.leiden(adata, random_state=42, resolution=2)
         #sc.tl.leiden(adata, random_state=42, resolution=None, partition_type=la.ModularityVertexPartition)
 
         logging.info('Leiden clustering done.')
