@@ -27,6 +27,7 @@ from sklearn.manifold import TSNE, SpectralEmbedding
 import dask
 import colorsys
 from dask.diagnostics import ProgressBar
+import itertools
 
 from collections import Counter
 import logging
@@ -296,41 +297,31 @@ class RegionalizeMulti(Decomposition):
             names = [str(i) for i in range(len(data))]
         else:
             names = self.datasets_names
-        
+            
+        df_all = []
+        samples = []
         for i, (df_next, name) in tqdm(enumerate(zip(data, names))):
-            if i == 0:
-                df_all = df_next
-                samples = [name for j in df_all.columns]
-                if norm:
-                    df_next_norm = self.normalize(df_next, mode=mode, **kwargs)
-                    df_norm = df_next_norm
-                
-            else:
-                df_all = pd.concat([df_all, df_next], axis=1, sort=False)
-                for j in df_next.columns:
-                    samples.append(name)
-                if norm:
-                    df_next_norm = self.normalize(df_next, mode=mode, **kwargs)
-                    df_norm = pd.concat([df_norm, df_next_norm], axis=1, sort=False)
+            samples.append([name] * df_next.shape[1])
+            if norm: 
+                 df_next = self.normalize(df_next, mode=mode, **kwargs)
+            df_all.append(df_next)
             
             if plot:    
                 ax = axes[int(i/2), i%2]
-                if norm:
-                    ax.hist(df_next_norm.sum(), bins=100)
-                    ax.set_title(f'{name} normalized')
-                else:
-                    ax.hist(df_next.sum(), bins=100)
-                    ax.set_title(name)
+                ax.hist(df_next.sum(), bins=100)
+                title = name
+                if norm: 
+                    title += ' normalized'
+                ax.set_title(title)
                 ax.set_ylabel('Frequency')
                 ax.set_xlabel('Sum molecule count')
-        
+                
         if plot:
             plt.tight_layout()
-        
-        if norm:
-            return df_norm, np.array(samples)
-        else:
-            return df_all, np.array(samples)
+                
+        df_all = pd.concat(df_all, axis=1, sort=False)
+        samples = np.array(itertools.chain.from_iterable(samples))
+        return df_all, samples
     
     def cluster_mean(self, data: Any, labels: np.ndarray) -> Any:
         """Calculate cluster mean.
