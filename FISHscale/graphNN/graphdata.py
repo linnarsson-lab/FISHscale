@@ -690,7 +690,7 @@ class MultiGraphData(pl.LightningDataModule):
             )
 
         #edges = batch_graph.edges()
-        train_p_edges = int(self.sub_graphs.num_edges()*(self.train_percentage/50))
+        train_p_edges = int(self.sub_graphs.num_edges()*(self.train_percentage/25))
         train_edges = th.randperm(self.sub_graphs.num_edges())[:train_p_edges]
         #train_edges = self.make_train_test_validation(self.sub_graphs)
 
@@ -744,7 +744,7 @@ class MultiGraphData(pl.LightningDataModule):
         logging.info('Filtering central nodes...')
         #edges_bool_train2 = th.isin(g.edges()[0], core_nodes) | th.isin(g.edges()[1], core_nodes)
         edges_bool_train = edges_bool_train #& edges_bool_train2
-        edges_train = np.random.choice(np.arange(edges_bool_train.shape[0])[edges_bool_train],int(edges_bool_train.sum()*(self.train_percentage/25)),replace=False)
+        edges_train = np.random.choice(np.arange(edges_bool_train.shape[0])[edges_bool_train],int(edges_bool_train.sum()*(self.train_percentage/10)),replace=False)
         #self.edges_test  = np.random.choice(np.arange(edges_bool_test.shape[0])[edges_bool_test],int(edges_bool_test.sum()*(self.train_p/self.fraction_edges)),replace=False)
         logging.info('Training sample on {} edges.'.format(edges_train.shape[0]))
         #logging.info('Testing on {} edges.'.format(self.edges_test.shape[0]))
@@ -840,25 +840,25 @@ class MultiGraphData(pl.LightningDataModule):
 
         training_latents = latent_unlabelled_core[random_sample_train,:]
         #clusters = MiniBatchKMeans(n_clusters=75).fit_predict(training_latents)
-        #adata = sc.AnnData(X=training_latents)
+        adata = sc.AnnData(X=training_latents)
         logging.info('Building neighbor graph for clustering...')
-        #sc.pp.neighbors(adata, n_neighbors=25)
+        sc.pp.neighbors(adata, n_neighbors=15)
         logging.info('Running Leiden clustering...')
-        #sc.tl.leiden(adata, random_state=42, resolution=5)
+        sc.tl.leiden(adata, random_state=42, resolution=2)
         #sc.tl.leiden(adata, random_state=42, resolution=None, partition_type=la.ModularityVertexPartition)
 
         logging.info('Leiden clustering done.')
-        #clusters= adata.obs['leiden'].values
-        clusters = MiniBatchKMeans(n_clusters=80).fit_predict(training_latents)
+        clusters= adata.obs['leiden'].values
+        #clusters = MiniBatchKMeans(n_clusters=80).fit_predict(training_latents)
 
         logging.info('Total of {} found'.format(len(np.unique(clusters))))
         clf = make_pipeline(StandardScaler(), SGDClassifier(loss='log_loss', max_iter=1000, tol=1e-3))
         clf.fit(training_latents, clusters)
         clusters = clf.predict(self.latent_unlabelled).astype('int8')
-        dump(clf, 'miniMultiGraphMKM{}Classifier.joblib'.format(clusters.astype(int).max())) 
+        dump(clf, 'miniMultiGraphLeiden2{}Classifier.joblib'.format(clusters.astype(int).max())) 
         clf_total = make_pipeline(StandardScaler(), SGDClassifier(loss='log_loss', max_iter=1000, tol=1e-3))
         clf_total.fit(self.latent_unlabelled, clusters)
         clusters = clf.predict(self.latent_unlabelled).astype('int8')
-        dump(clf_total, 'totalMultiGraphMKM{}Classifier.joblib'.format(clusters.astype(int).max())) 
+        dump(clf_total, 'totalMultiGraphLeiden2{}Classifier_dst1.joblib'.format(clusters.astype(int).max())) 
         #self.sub_graphs.ndata['label'] = th.tensor(clusters)
         #self.save_graph()

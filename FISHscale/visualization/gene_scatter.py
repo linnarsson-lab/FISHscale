@@ -139,7 +139,7 @@ class GeneScatter(AxSize):
                     show_legend: bool = True, title: str = None, ax = None, 
                     save: bool=False, save_name: str='', dpi: int=300, 
                     file_format: str='.eps', alpha=1, invert_yaxis=False,
-                    invert_xaxis=False) -> None:
+                    image=None, invert_xaxis=False, reset_xy=False) -> None:
         """Make a scatter plot of the data.
 
         Uses a black background. Plots in real size if `ax_scale_factor` is 1. 
@@ -197,6 +197,9 @@ class GeneScatter(AxSize):
             ax = fig.add_subplot(111)#, rasterized=True)
             ax.set_rasterization_zorder(1)
 
+        if type(image) != type(None):
+            ax.imshow(image, cmap='Greys_r',alpha=0.5)
+
         #Plot points
         if type(colors) == type(None):
             colors = [self.color_dict[g] for g in genes]
@@ -210,6 +213,9 @@ class GeneScatter(AxSize):
                 filt = filt_x & filt_y
                 x = x[filt]
                 y = y[filt]
+                if reset_xy:
+                    x = x - view[0][0]
+                    y = y - view[0][1]
             ax.scatter(x, y, s=s, color=c, zorder=0, label=g, alpha=alpha)
             del data
 
@@ -273,7 +279,7 @@ class MultiGeneScatter(AxSize):
                     show_axes: bool=False, flip_y: bool=False, 
                     show_legend=True, show_title=False, save: bool=False, 
                     save_name: str='', dpi: int=300, file_format: str='.eps', 
-                    alpha=1) -> None:
+                    alpha=1, image=None) -> None:
         """Make a scatter plot of all data.
 
         Use self.arange_grid_offset() to arrange datasets in a grid.   
@@ -359,6 +365,9 @@ class MultiGeneScatter(AxSize):
             if show_title:
                 lw, fs = self._line_font_size(ax)
                 ax.text(d.xy_center[0], d.y_max, d.dataset_name, color='white', ha='center', fontsize=fs)
+        
+        if type(image) != type(None):
+            ax.imshow(image, cmap='Greys_r',alpha=0.5)
             
         #Rescale
         x_extent = x_max - x_min
