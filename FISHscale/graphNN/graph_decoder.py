@@ -44,6 +44,7 @@ class GraphDecoder:
 
         if unique_region:
             self.g.ndata['hex_region'] = th.ones(self.g.num_nodes())
+            self.multinomial_region = {}
             freq = self.g.ndata['gene'].sum(axis=0)
             freq = freq/freq.sum()
             self.multinomial_region[1] = freq
