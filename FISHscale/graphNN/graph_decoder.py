@@ -147,6 +147,7 @@ class GraphDecoder:
             out, _ = dgl.sampling.random_walk(self.g, self.notlost_nodes.tolist() + progressive_loop, length=1)
             out = out[:,1]
             added = np.array(progressive_loop)
+            add_nodes = out[np.isin(out, added, invert=True)]
             shuffle = np.random.choice(np.arange(len(add_nodes)), size=len(add_nodes),replace=False)
             progressive_loop += add_nodes[shuffle].tolist()
 
