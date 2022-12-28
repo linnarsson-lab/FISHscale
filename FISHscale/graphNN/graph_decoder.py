@@ -64,7 +64,7 @@ class GraphDecoder:
 
     def simulate_expression(
         self, 
-        ntimes=10, 
+        ntimes=2, 
         simulation_name='base_simulation',
         unique_region=True,
         ):
@@ -75,7 +75,7 @@ class GraphDecoder:
         simulation_zeros = np.zeros([self.g.num_nodes(), ntimes])
         for n in trange(ntimes):
             #self._lose_identity()
-            self.random_sampler()
+            self.random_sampler_nn()
             simulated_expression= self.random_decoder()
             simulation.append(simulated_expression)
             idx = np.where(self.g.ndata['tmp_gene'].numpy())[1]
