@@ -35,25 +35,41 @@ class GraphDecoder:
         self.attentionNN2_scores = pd.read_parquet(attentionNN2_file)
         self.attentionNN2_scores = self.attentionNN2_scores/self.attentionNN2_scores.sum(axis=0)
 
-    def _multinomial_hexbin(self,spacing=500,
+    def _multinomial_hexbin(
+        self,
+        spacing=5000,
         min_count=0,
+        unique_region=True,
         ) -> None:
 
-        df_hex,centroids = self.data.hexbin_make(spacing=spacing, min_count=min_count)
-        tree = KDTree(centroids)
-        dst, hex_region = tree.query(self.g.ndata['coords'].numpy(), distance_upper_bound=spacing, workers=-1)
-        self.g.ndata['hex_region'] = th.tensor(hex_region)
-
-        self.multinomial_region = {}
-        for h in np.unique(hex_region):
+        if unique_region:
+            self.g.ndata['hex_region'] = th.ones(self.g.num_nodes())
             freq = self.g.ndata['gene'][hex_region == h].sum(axis=0)
             freq = freq/freq.sum()
-            if freq.sum() == 0 or np.isnan(freq.sum()):
-                freq = np.ones_like(freq)/freq.shape[0]
-            self.multinomial_region[h]= freq
+            self.multinomial_region[1] = freq
+        
+        else:
+            df_hex,centroids = self.data.hexbin_make(spacing=spacing, min_count=min_count)
+            tree = KDTree(centroids)
+            dst, hex_region = tree.query(self.g.ndata['coords'].numpy(), distance_upper_bound=spacing, workers=-1)
+            self.g.ndata['hex_region'] = th.tensor(hex_region)
 
-    def simulate_expression(self, ntimes=10, simulation_name='base_simulation'):
-        self._multinomial_hexbin()
+            self.multinomial_region = {}
+            for h in np.unique(hex_region):
+                freq = self.g.ndata['gene'][hex_region == h].sum(axis=0)
+                freq = freq/freq.sum()
+                if freq.sum() == 0 or np.isnan(freq.sum()):
+                    freq = np.ones_like(freq)/freq.shape[0]
+                self.multinomial_region[h]= freq
+
+    def simulate_expression(
+        self, 
+        ntimes=10, 
+        simulation_name='base_simulation',
+        unique_region=True,
+        ):
+
+        self._multinomial_hexbin(unique_region=True)
         simulation = []
 
         simulation_zeros = np.zeros([self.g.num_nodes(), ntimes])
