@@ -35,31 +35,47 @@ class GraphDecoder:
         self.attentionNN2_scores = pd.read_parquet(attentionNN2_file)
         self.attentionNN2_scores = self.attentionNN2_scores/self.attentionNN2_scores.sum(axis=0)
 
-    def _multinomial_hexbin(self,spacing=500,
+    def _multinomial_hexbin(
+        self,
+        spacing=5000,
         min_count=0,
+        unique_region=True,
         ) -> None:
 
-        df_hex,centroids = self.data.hexbin_make(spacing=spacing, min_count=min_count)
-        tree = KDTree(centroids)
-        dst, hex_region = tree.query(self.g.ndata['coords'].numpy(), distance_upper_bound=spacing, workers=-1)
-        self.g.ndata['hex_region'] = th.tensor(hex_region)
-
-        self.multinomial_region = {}
-        for h in np.unique(hex_region):
-            freq = self.g.ndata['gene'][hex_region == h].sum(axis=0)
+        if unique_region:
+            self.g.ndata['hex_region'] = th.ones(self.g.num_nodes())
+            freq = self.g.ndata['gene'].sum(axis=0)
             freq = freq/freq.sum()
-            if freq.sum() == 0 or np.isnan(freq.sum()):
-                freq = np.ones_like(freq)/freq.shape[0]
-            self.multinomial_region[h]= freq
+            self.multinomial_region[1] = freq
+        
+        else:
+            df_hex,centroids = self.data.hexbin_make(spacing=spacing, min_count=min_count)
+            tree = KDTree(centroids)
+            dst, hex_region = tree.query(self.g.ndata['coords'].numpy(), distance_upper_bound=spacing, workers=-1)
+            self.g.ndata['hex_region'] = th.tensor(hex_region)
 
-    def simulate_expression(self, ntimes=10, simulation_name='base_simulation'):
-        self._multinomial_hexbin()
+            self.multinomial_region = {}
+            for h in np.unique(hex_region):
+                freq = self.g.ndata['gene'][hex_region == h].sum(axis=0)
+                freq = freq/freq.sum()
+                if freq.sum() == 0 or np.isnan(freq.sum()):
+                    freq = np.ones_like(freq)/freq.shape[0]
+                self.multinomial_region[h]= freq
+
+    def simulate_expression(
+        self, 
+        ntimes=2, 
+        simulation_name='base_simulation',
+        unique_region=True,
+        ):
+
+        self._multinomial_hexbin(unique_region=True)
         simulation = []
 
         simulation_zeros = np.zeros([self.g.num_nodes(), ntimes])
         for n in trange(ntimes):
-            self._lose_identity()
-            self.random_sampler()
+            logging.info(f'Iteration {n}, using progressive sampler.')
+            self.random_sampler_nn()
             simulated_expression= self.random_decoder()
             simulation.append(simulated_expression)
             idx = np.where(self.g.ndata['tmp_gene'].numpy())[1]
@@ -93,6 +109,7 @@ class GraphDecoder:
             size=int(self.lose_identity_percentage*self.g.num_nodes()),
             replace=False),
             )
+        
 
     def random_sampler(self):
         nodes_gene =  self.g.ndata['gene']
@@ -108,6 +125,45 @@ class GraphDecoder:
                 batch_size=1024, shuffle=True, drop_last=False, num_workers=self.num_workers,
                 persistent_workers=(self.num_workers > 0)
                 )
+
+    def random_sampler_nn(self):
+        """
+        random_sampler_nn: This sampler takes new nodes with lost identity that
+        are only neighbors of nodes with identity.
+
+        """
+        nodes_gene =  self.g.ndata['gene']
+        #self.g.ndata['gene'] = th.tensor(self.g.ndata['gene'],dtype=th.float32)
+        self.g.ndata['tmp_gene'] = th.tensor(nodes_gene.clone(),dtype=th.uint8)
+        self.g.ndata['tmp_gene'][self.lost_nodes,:] = th.zeros_like(self.g.ndata['tmp_gene'][self.lost_nodes,:],dtype=th.uint8)
+
+        self.notlost_nodes = th.tensor(
+            np.arange(self.g.num_nodes())[np.isin(np.arange(self.g.num_nodes()), self.lost_nodes,invert=True)]
+        )
+
+        progressive_loop = []
+        logging.info('Starting progressive node sampling')
+        while True:
+            out, _ = dgl.sampling.random_walk(self.g, self.notlost_nodes.tolist() + progressive_loop, length=1)
+            out = out[:,1]
+            added = np.array(progressive_loop)
+            add_nodes = out[np.isin(out, added, invert=True)]
+            shuffle = np.random.choice(np.arange(len(add_nodes)), size=len(add_nodes),replace=False)
+            progressive_loop += add_nodes[shuffle].tolist()
+
+            if len(progressive_loop) == self.lost_nodes:
+                break
+        logging.info('Finished progressive node sampling')
+
+        logging.info((self.g.ndata['tmp_gene'].sum(axis=1) > 0).sum())
+
+        sampler = dgl.dataloading.MultiLayerFullNeighborSampler(2,prefetch_node_feats=['tmp_gene'])
+        self.decoder_dataloader = dgl.dataloading.DataLoader(
+                self.g.to('cpu'), self.lost_nodes.to('cpu'), sampler,
+                batch_size=1024, shuffle=False, drop_last=False, num_workers=self.num_workers,
+                persistent_workers=(self.num_workers > 0)
+                )
+
                 
     def random_decoder(self):
         for _, nodes, blocks in tqdm(self.decoder_dataloader):
@@ -133,8 +189,6 @@ class GraphDecoder:
 
             probabilities = th.log(probmultinomial_region+1e-6) + logprobs1_hop + logprobs2_hop
             M = dist.Multinomial(total_count=1, logits=probabilities).sample()
-            
-            
             self.g.ndata['tmp_gene'][nodes,:] = th.tensor(M,dtype=th.uint8)
             #logging.info((self.g.ndata['tmp_gene'].sum(axis=1) > 0).sum())
             

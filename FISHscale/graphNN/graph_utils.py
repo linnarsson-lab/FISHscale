@@ -655,7 +655,7 @@ class GraphPlotting:
                         bgcolor='black',
                         aspect='equal',
                         fig_inches=50,
-                        s=1,
+                        s=3,
                         title=str(cl),
                         color=color_dic[cl])
                     
