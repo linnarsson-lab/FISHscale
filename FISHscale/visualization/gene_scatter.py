@@ -139,7 +139,8 @@ class GeneScatter(AxSize):
                     show_legend: bool = True, title: str = None, ax = None, 
                     save: bool=False, save_name: str='', dpi: int=300, 
                     file_format: str='.eps', alpha=1, invert_yaxis=False,
-                    image=None, invert_xaxis=False, reset_xy=False) -> None:
+                    image=None, invert_xaxis=False, reset_xy=False, 
+                    transparent=False,) -> None:
         """Make a scatter plot of the data.
 
         Uses a black background. Plots in real size if `ax_scale_factor` is 1. 
@@ -181,8 +182,9 @@ class GeneScatter(AxSize):
                 point. Even if vector format is given the points will be 
                 rasterized. Defaults to '.eps'.
             alpha (float, optional): transparency. Defaults to 1.
-        """        
-        plt.style.use('dark_background')
+        """     
+        if transparent == False:  
+            plt.style.use('dark_background')
 
         #Check input
         if not isinstance(genes, list) and not isinstance(genes, np.ndarray):
@@ -247,8 +249,9 @@ class GeneScatter(AxSize):
             ax.set_axis_off()
             plt.gca().xaxis.set_major_locator(plt.NullLocator())
             plt.gca().yaxis.set_major_locator(plt.NullLocator())
-        ax.add_patch(plt.Rectangle((0,0), 1, 1, facecolor=(0,0,0),
-                                transform=ax.transAxes, zorder=-1))
+        if transparent == False:
+            ax.add_patch(plt.Rectangle((0,0), 1, 1, facecolor=(0,0,0),
+                                    transform=ax.transAxes, zorder=-1))
         
         if show_legend:
             if len(genes) > 15:
@@ -266,7 +269,7 @@ class GeneScatter(AxSize):
         if save:
             if save_name == '':
                 save_name = f'Scatter_plot_{self.dataset_name}_{strftime("%Y-%m-%d_%H-%M-%S")}'
-            plt.savefig(f'{save_name}', dpi=dpi, bbox_inches='tight', pad_inches=0)
+            plt.savefig(f'{save_name}', dpi=dpi, bbox_inches='tight', pad_inches=0,transparent=transparent)
         
         plt.style.use('default')
         gc.collect()
@@ -279,7 +282,7 @@ class MultiGeneScatter(AxSize):
                     show_axes: bool=False, flip_y: bool=False, 
                     show_legend=True, show_title=False, save: bool=False, 
                     save_name: str='', dpi: int=300, file_format: str='.eps', 
-                    alpha=1, image=None) -> None:
+                    alpha=1, image=None, transparent=False) -> None:
         """Make a scatter plot of all data.
 
         Use self.arange_grid_offset() to arrange datasets in a grid.   
@@ -322,7 +325,10 @@ class MultiGeneScatter(AxSize):
                 rasterized. Defaults to '.eps'.
             alpha (float, optional): transparency. Defaults to 1.
         """   
-        plt.style.use('dark_background')
+
+        if transparent == False:
+            print('black background')
+            plt.style.use('dark_background')
         
         #Check input
         if not isinstance(genes, list) and not isinstance(genes, np.ndarray):
@@ -387,7 +393,8 @@ class MultiGeneScatter(AxSize):
             ax.set_axis_off()
             plt.gca().xaxis.set_major_locator(plt.NullLocator())
             plt.gca().yaxis.set_major_locator(plt.NullLocator())
-        ax.add_patch(plt.Rectangle((0,0), 1, 1, facecolor=(0,0,0),
+        if transparent == False:
+            ax.add_patch(plt.Rectangle((0,0), 1, 1, facecolor=(0,0,0),
                                 transform=ax.transAxes, zorder=-1))
         
         if show_legend:
@@ -402,9 +409,9 @@ class MultiGeneScatter(AxSize):
         if save:
             if save_name == '':
                 save_name = f'Scatter_plot_{self.dataset_name}_{strftime("%Y-%m-%d_%H-%M-%S")}'
-            plt.savefig(f'{save_name}', dpi=dpi, bbox_inches='tight', pad_inches=0)
+            plt.savefig(f'{save_name}', dpi=dpi, bbox_inches='tight', pad_inches=0, transparent=transparent)
         
-        plt.style.use('default')
+        #plt.style.use('default')
         gc.collect()
 
 
