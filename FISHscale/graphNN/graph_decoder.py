@@ -151,8 +151,9 @@ class GraphDecoder:
             add_nodes = out[np.isin(out, added, invert=True)]
             shuffle = np.random.choice(np.arange(len(add_nodes)), size=len(add_nodes),replace=False)
             progressive_loop += add_nodes[shuffle].tolist()
+            logging.info(f'Progressive loop length: {len(progressive_loop)}')
 
-            if len(progressive_loop) == self.lost_nodes:
+            if len(progressive_loop) == self.lost_nodes.shape[0]:
                 break
         logging.info('Finished progressive node sampling')
 
