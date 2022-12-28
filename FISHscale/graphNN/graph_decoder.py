@@ -58,7 +58,7 @@ class GraphDecoder:
 
         simulation_zeros = np.zeros([self.g.num_nodes(), ntimes])
         for n in trange(ntimes):
-            self._lose_identity()
+            #self._lose_identity()
             self.random_sampler()
             simulated_expression= self.random_decoder()
             simulation.append(simulated_expression)
@@ -108,6 +108,60 @@ class GraphDecoder:
                 batch_size=1024, shuffle=True, drop_last=False, num_workers=self.num_workers,
                 persistent_workers=(self.num_workers > 0)
                 )
+
+    def random_sampler_nn(self):
+        """
+        random_sampler_nn: This sampler takes new nodes with lost identity that
+        are only neighbors of nodes with identity.
+
+        """
+        nodes_gene =  self.g.ndata['gene']
+        #self.g.ndata['gene'] = th.tensor(self.g.ndata['gene'],dtype=th.float32)
+        self.g.ndata['tmp_gene'] = th.tensor(nodes_gene.clone(),dtype=th.uint8)
+        self.g.ndata['tmp_gene'][self.lost_nodes,:] = th.zeros_like(self.g.ndata['tmp_gene'][self.lost_nodes,:],dtype=th.uint8)
+
+        logging.info((self.g.ndata['tmp_gene'].sum(axis=1) > 0).sum())
+
+        sampler = dgl.dataloading.MultiLayerFullNeighborSampler(2,prefetch_node_feats=['tmp_gene'])
+        self.decoder_dataloader = dgl.dataloading.DataLoader(
+                self.g.to('cpu'), self.lost_nodes.to('cpu'), sampler,
+                batch_size=1024, shuffle=False, drop_last=False, num_workers=self.num_workers,
+                persistent_workers=(self.num_workers > 0)
+                )
+
+    def random_decoder2(self):
+        for _, nodes, blocks in tqdm(self.decoder_dataloader):
+            block_1hop = blocks[1]
+            block_2hop = blocks[0]
+            
+            probmultinomial_region = th.stack([self.multinomial_region[int(n)] for n in self.g.ndata['hex_region'][nodes] ])
+            block_1hop.srcdata['tmp_gene']=  block_1hop.srcdata['tmp_gene'].float()
+            block_1hop.update_all(fn.copy_u('tmp_gene', 'e'), fn.sum('e', 'h'))
+            genes_1hop = block_1hop.dstdata['h']
+
+            logprobs1_hop = np.log((genes_1hop@self.attentionNN1_scores).values+1e-6)
+
+            block_2hop.srcdata['tmp_gene']=  block_2hop.srcdata['tmp_gene'].float()
+            repeated_nodes = np.where(np.isin(block_2hop.srcnodes(),block_1hop.srcnodes()))[0]
+            block_2hop.srcdata['tmp_gene'][repeated_nodes,:] = th.zeros_like(block_2hop.srcdata['tmp_gene'][repeated_nodes,:]).float()
+            block_2hop.update_all(fn.copy_u('tmp_gene', 'e'), fn.sum('e', 'h'))
+            
+            block_1hop.srcdata['tmp_gene2hop'] = block_2hop.dstdata['h'].float()
+            block_1hop.update_all(fn.copy_u('tmp_gene2hop', 'e2'), fn.sum('e2', 'h2'))
+            genes_2hop = block_1hop.dstdata['h2']
+            logprobs2_hop = np.log((genes_2hop@self.attentionNN2_scores).values+1e-6)
+
+            probabilities = th.log(probmultinomial_region+1e-6) + logprobs1_hop + logprobs2_hop
+            M = dist.Multinomial(total_count=1, logits=probabilities).sample()
+            self.g.ndata['tmp_gene'][nodes,:] = th.tensor(M,dtype=th.uint8)
+            #logging.info((self.g.ndata['tmp_gene'].sum(axis=1) > 0).sum())
+            
+        simulated_genes = self.data.unique_genes[np.where(self.g.ndata['tmp_gene'].numpy() == 1)[1]]
+        logging.info((self.g.ndata['tmp_gene'].sum(axis=1) == 0).sum())
+            
+        #simulated_genes_onehot = self.g.ndata['tmp_gene'].numpy().clone()
+        return simulated_genes#, simulated_genes_onehot
+
                 
     def random_decoder(self):
         for _, nodes, blocks in tqdm(self.decoder_dataloader):
@@ -133,8 +187,6 @@ class GraphDecoder:
 
             probabilities = th.log(probmultinomial_region+1e-6) + logprobs1_hop + logprobs2_hop
             M = dist.Multinomial(total_count=1, logits=probabilities).sample()
-            
-            
             self.g.ndata['tmp_gene'][nodes,:] = th.tensor(M,dtype=th.uint8)
             #logging.info((self.g.ndata['tmp_gene'].sum(axis=1) > 0).sum())
             
