@@ -44,7 +44,7 @@ class GraphDecoder:
 
         if unique_region:
             self.g.ndata['hex_region'] = th.ones(self.g.num_nodes())
-            freq = self.g.ndata['gene'][hex_region == h].sum(axis=0)
+            freq = self.g.ndata['gene'].sum(axis=0)
             freq = freq/freq.sum()
             self.multinomial_region[1] = freq
         
@@ -74,7 +74,7 @@ class GraphDecoder:
 
         simulation_zeros = np.zeros([self.g.num_nodes(), ntimes])
         for n in trange(ntimes):
-            #self._lose_identity()
+            logging.info(f'Iteration {n}, using progressive sampler.')
             self.random_sampler_nn()
             simulated_expression= self.random_decoder()
             simulation.append(simulated_expression)
