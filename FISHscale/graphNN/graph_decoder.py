@@ -154,9 +154,8 @@ class GraphDecoder:
             
             shuffle = np.random.choice(np.arange(len(add_nodes)), size=len(add_nodes),replace=False)
             progressive_loop += add_nodes[shuffle].tolist()
-            
 
-            print(len(progressive_loop))
+            logging.innfo('Nodes progressively sampled: {}'.format(len(progressive_loop)))
             if len(progressive_loop) == self.lost_nodes.shape[0]:
                 
                 break
@@ -166,8 +165,6 @@ class GraphDecoder:
                 shuffle = np.random.choice(np.arange(len(add_nodes)), size=len(add_nodes),replace=False)
                 progressive_loop += add_nodes[shuffle].tolist()
                 
-
-
         logging.info('Finished progressive node sampling')
 
         logging.info((self.g.ndata['tmp_gene'].sum(axis=1) > 0).sum())
