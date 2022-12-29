@@ -147,14 +147,27 @@ class GraphDecoder:
         while True:
             out, _ = dgl.sampling.random_walk(self.g, self.notlost_nodes.tolist() + progressive_loop, length=1)
             out = out[:,1]
-            added = np.array(progressive_loop)
-            add_nodes = out[np.isin(out, added, invert=True)]
+
+            random_walk1 = np.array(out)
+            unique_random_walk1 = np.unique(random_walk1)
+            add_nodes = unique_random_walk1[np.isin(unique_random_walk1, self.notlost_nodes.tolist()+progressive_loop, invert=True)]
+            
             shuffle = np.random.choice(np.arange(len(add_nodes)), size=len(add_nodes),replace=False)
             progressive_loop += add_nodes[shuffle].tolist()
-            logging.info(f'Progressive loop length: {len(progressive_loop)}')
+            
 
+            print(len(progressive_loop))
             if len(progressive_loop) == self.lost_nodes.shape[0]:
+                
                 break
+            
+            elif len(progressive_loop) >= self.lost_nodes.shape[0]*0.90:
+                add_nodes = self.lost_nodes[np.isin(self.lost_nodes, progressive_loop, invert=True)]
+                shuffle = np.random.choice(np.arange(len(add_nodes)), size=len(add_nodes),replace=False)
+                progressive_loop += add_nodes[shuffle].tolist()
+                
+
+
         logging.info('Finished progressive node sampling')
 
         logging.info((self.g.ndata['tmp_gene'].sum(axis=1) > 0).sum())
