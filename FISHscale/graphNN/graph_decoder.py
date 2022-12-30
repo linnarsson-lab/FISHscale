@@ -155,7 +155,7 @@ class GraphDecoder:
             shuffle = np.random.choice(np.arange(len(add_nodes)), size=len(add_nodes),replace=False)
             progressive_loop += add_nodes[shuffle].tolist()
 
-            logging.innfo('Nodes progressively sampled: {}'.format(len(progressive_loop)))
+            logging.info('Nodes progressively sampled: {}'.format(len(progressive_loop)))
             if len(progressive_loop) == self.lost_nodes.shape[0]:
                 
                 break
@@ -171,7 +171,7 @@ class GraphDecoder:
 
         sampler = dgl.dataloading.MultiLayerFullNeighborSampler(2,prefetch_node_feats=['tmp_gene'])
         self.decoder_dataloader = dgl.dataloading.DataLoader(
-                self.g.to('cpu'), self.lost_nodes.to('cpu'), sampler,
+                self.g.to('cpu'), self.lost_nodes, sampler,
                 batch_size=1024, shuffle=False, drop_last=False, num_workers=self.num_workers,
                 persistent_workers=(self.num_workers > 0)
                 )
