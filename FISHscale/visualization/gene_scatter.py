@@ -218,7 +218,7 @@ class GeneScatter(AxSize):
                 if reset_xy:
                     x = x - view[0][0]
                     y = y - view[0][1]
-            ax.scatter(x, y, s=s, color=c, zorder=0, label=g, alpha=alpha)
+            ax.scatter(x, y, s=s, color=c, zorder=0, label=g, alpha=alpha, rasterized=True)
             del data
 
         if invert_yaxis:
@@ -364,9 +364,9 @@ class MultiGeneScatter(AxSize):
                 y_max = y_max_g if y_max_g > y_max else y_max
                 
                 if i == 0:
-                    ax.scatter(x, y, s=s, color=c, zorder=0, label=g, alpha=alpha)
+                    ax.scatter(x, y, s=s, color=c, zorder=0, label=g, alpha=alpha, rasterized=True)
                 else:
-                    ax.scatter(x, y, s=s, color=c, zorder=0, alpha=alpha)
+                    ax.scatter(x, y, s=s, color=c, zorder=0, alpha=alpha, rasterized=True)
                     
             if show_title:
                 lw, fs = self._line_font_size(ax)
@@ -497,7 +497,7 @@ class AttributeScatter(AxSize):
                 filt = filt_x & filt_y
                 x = x[filt]
                 y = y[filt]
-            ax.scatter(x, y, s=s, color=c, zorder=0, label=g, alpha=alpha)
+            ax.scatter(x, y, s=s, color=c, zorder=0, label=g, alpha=alpha, rasterized=True)
             del data
         
         #Rescale
