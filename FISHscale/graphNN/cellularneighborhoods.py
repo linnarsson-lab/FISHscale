@@ -443,11 +443,11 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
         d = features
         edges, molecules, ngh_ = find_nn_distance(coords, t, distance_threshold)
         d= d[molecules,:]
-        g.ndata['label'] = th.tensor(labels[molecules], dtype=th.uint8)
         #d = self.molecules_df(molecules)
         g= dgl.graph((edges[0,:],edges[1,:]),)
         #g = dgl.to_bidirected(g)]
         g.ndata[self.features_name] = th.tensor(d, dtype=th.uint16)#[molecules_id.numpy(),:]
+        g.ndata['label'] = th.tensor(labels[molecules], dtype=th.uint8)
 
         sum_nodes_connected = th.tensor(np.array(ngh_,dtype=np.uint8))
         print('sum nodes' , sum_nodes_connected.shape , sum_nodes_connected.max())
