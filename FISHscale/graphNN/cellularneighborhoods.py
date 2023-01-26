@@ -235,7 +235,6 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
                             self.g,
                             train_nodes,
                             node_sampler,
-                            #negative_sampler=negative_sampler,
                             device=self.device,
                             batch_size=self.batch_size,
                             shuffle=True,
@@ -260,7 +259,6 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
                             self.g,
                             train_edges,
                             edge_sampler,
-                            #negative_sampler=negative_sampler,
                             device=self.device,
                             batch_size=self.batch_size,
                             shuffle=True,
@@ -414,7 +412,7 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
         def find_nn_distance(coords,tree,distance):
             logging.info('Find neighbors below distance: {}'.format(d_th))
             res,nodes,ngh_, ncoords = [],[],[], []
-            for i in trange(coords.shape[0]):
+            for i in coords.shape[0]:
                 # 100 sets the number of neighbors to find for each node
                 #  it is set to 100 since we usually will compute neighbors
                 #  [20,10]
@@ -454,7 +452,7 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
         molecules_connected = molecules[sum_nodes_connected >= self.minimum_nodes_connected]
         remove = molecules[sum_nodes_connected < self.minimum_nodes_connected]
         g.remove_nodes(th.tensor(remove))
-        g.ndata['indices'] = th.tensor(molecules_connected)
-        g.ndata['coords'] = th.tensor(coords[molecules_connected])
+        g.ndata['indices'] = th.tensor(molecules_connected).clone().detach()
+        g.ndata['coords'] = th.tensor(coords[molecules_connected]).clone().detach()
         return g
                 
