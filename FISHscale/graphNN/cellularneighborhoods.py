@@ -129,12 +129,12 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
                 labels = adata.obs['GraphCluster'].values
 
                 g = self.buildGraph(adata, labels, features, d_th =self.distance)
-                g['sample'] = th.tensor([sample]*g.ndata[self.features_name].shape[0])
+                g.ndata['sample'] = th.ones(g.ndata[self.features_name].shape[0]) * np.where(self.unique_samples==sample)[0][0]
                 subgraphs.append(g)
             
-            graph_labels = {"Multigraph": th.arange(len(self.sub_graphs))}
+            graph_labels = {"Multigraph": th.arange(len(subgraphs))}
             logging.info('Saving graph...')
-            dgl.data.utils.save_graphs(dgluns, [self.g], graph_labels)
+            dgl.data.utils.save_graphs(dgluns, subgraphs, graph_labels)
             logging.info('Graph saved.')
         else:
             logging.info('Loading graph.')
@@ -446,7 +446,7 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
         #d = self.molecules_df(molecules)
         g= dgl.graph((edges[0,:],edges[1,:]),)
         #g = dgl.to_bidirected(g)]
-        g.ndata[self.features_name] = th.tensor(d, dtype=th.uint16)#[molecules_id.numpy(),:]
+        g.ndata[self.features_name] = th.tensor(d, dtype=th.int16)#[molecules_id.numpy(),:]
         g.ndata['label'] = th.tensor(labels[molecules], dtype=th.uint8)
 
         sum_nodes_connected = th.tensor(np.array(ngh_,dtype=np.uint8))
