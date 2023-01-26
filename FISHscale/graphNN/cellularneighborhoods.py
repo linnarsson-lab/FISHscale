@@ -48,6 +48,7 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
         aggregator='attentional',
         model_type='unsupervised',#'supervised'
         n_epochs=10,
+        label_name='GraphCluster',
         ):
         """
         GraphData prepared the FISHscale dataset to be analysed in a supervised
@@ -103,11 +104,9 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
         self.model_type = model_type
         self.unique_samples = np.unique(self.anndata.obs['Sample'].values)
         self.device = th.device('cuda' if th.cuda.is_available() else 'cpu')
+        self.label_name = label_name
 
         ###
-        anndata.raw = anndata
-        self.anndata = anndata[:, self.genes]
-
 
         ### Prepare data
         self.folder = self.save_to+self.analysis_name+ '_' +datetime.now().strftime("%Y-%m-%d-%H%M%S")
@@ -122,11 +121,17 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
             for sample in self.unique_samples:
                 adata = self.anndata[self.anndata.obs['Sample']==sample,:]
                 if self.features_name == 'Expression':
-                    features = adata.X
+                    if type(adata.X) == np.ndarray:
+                        features = adata[:,self.genes].X#.toarray()
+                    else: #is sparse
+                        features = adata[:,self.genes].X.toarray()
+                
                 else:
                     features = adata.obs[self.features_name].values
 
-                g = self.buildGraph(adata, features, d_th =self.distance)
+                labels = adata.obs['GraphCluster'].values
+
+                g = self.buildGraph(adata, labels, features, d_th =self.distance)
                 subgraphs.append(g)
             
             graph_labels = {"Multigraph": th.arange(len(self.sub_graphs))}
@@ -135,9 +140,10 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
             logging.info('Graph saved.')
         else:
             logging.info('Loading graph.')
-            glist, _ = dgl.data.utils.load_graphs(dgluns) # glist will be [g1, g2]
-            self.g = glist[0]
+            g, graph_labels = dgl.data.utils.load_graphs(dgluns) # glist will be [g1, g2]
             logging.info('Graph data loaded.')
+
+        self.g = dgl.batch(g)
         
         if self.aggregator == 'attentional':
             # Remove all self loops because data will be saved, otherwise the 
@@ -148,7 +154,7 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
 
         logging.info(self.g)
         self.make_train_test_validation()
-        l_loc,l_scale= self.compute_library_size()
+        l_loc,l_scale= 0,1
         
         ### Prepare Model
         if type(self.model) == type(None):
@@ -158,21 +164,12 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
                                         n_classes=2,
                                         n_hidden=64,
                                         lr=self.lr,
-                                        supervised=self.supervised,
-                                        reference=self.ref_celltypes,
+                                        supervised=True,
                                         device=self.device.type,
-                                        smooth=self.smooth,
                                         aggregator=self.aggregator,
-                                        celltype_distribution=self.dist,
-                                        ncells=self.ncells,
-                                        inference_type=self.inference_type,
-                                        l_loc=l_loc,
-                                        l_scale= l_scale,
-                                        scale_factor=1/(batch_size*self.anndata.unique_genes.shape[0]),
-                                        warmup_factor=int(self.edges_train.shape[0]/self.batch_size)*self.n_epochs,
+                                    
                                     )
 
-        #self.g.ndata['gene'] = th.log(1+self.g.ndata['gene'])
         self.model.to(self.device)
 
         if 'clusters' in self.g.ndata.keys():
@@ -183,10 +180,10 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
         pass
     
     def save_graph(self):
-        dgluns = self.save_to+'graph/{}Unsupervised_smooth{}_dst{}_mNodes{}.graph'.format(self.molecules.shape[0],self.smooth,self.distance_factor,self.minimum_nodes_connected)
-        graph_labels = {"DGL": th.tensor([0])}
+        dgluns = self.save_to+'graph/{}CellularNeighborhoods{}_dst{}_mNodes{}.graph'.format(self.molecules.shape[0],self.smooth,self.distance_factor,self.minimum_nodes_connected)
+        graph_labels = {"Multigraph": th.arange(len(self.sub_graphs))}
         logging.info('Saving graph...')
-        dgl.data.utils.save_graphs(dgluns, [self.g], graph_labels)
+        dgl.data.utils.save_graphs(dgluns, dgl.unbatch(self.g), graph_labels)
         logging.info('Graph saved.')
 
 
@@ -298,25 +295,14 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
         Args:
             labelled (bool, optional): [description]. Defaults to True.
         """        
-        '''self.model.eval()
+        self.model.eval()
 
         self.latent_unlabelled, prediction_unlabelled = self.model.module.inference(self.g,
                         self.model.device,
                         10*512,
                         0)
+
         molecules_id = self.g.ndata['indices']
-        pd.DataFrame({
-            'x':self.anndata.df.x.values.compute()[molecules_id.numpy()], 
-            'y':self.anndata.df.y.values.compute()[molecules_id.numpy()],
-            'g':self.anndata.df.g.values.compute()[molecules_id.numpy()],
-            }
-        ).to_parquet(self.folder+'/molecules_latent.parquet')
-        
-        np.save(self.folder+'/latent',self.latent_unlabelled)
-        if self.supervised:
-            self.prediction_unlabelled = prediction_unlabelled.softmax(dim=-1).detach().numpy()
-            np.save(self.folder+'/labels',self.prediction_unlabelled)
-            np.save(self.folder+'/probabilities',prediction_unlabelled)'''
         self.save_graph()
 
     def get_attention(self):
@@ -358,27 +344,7 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
                         buffer_device=self.g.device)#.detach().numpy()
         return att1, att2
 
-    def compute_distance_th(self,coords):
-        """
-        compute_distance_th: deprecated, now inside BuildGraph
-
-        Computes the distance at which 95 percentile molecules are connected to
-        at least 2 other molecules. Like PArtel & Wahlby
-
-        Args:
-            omega ([type]): [description]
-            tau ([type]): [description]
-        """        
-
-        from scipy.spatial import cKDTree as KDTree
-        x,y = coords
-        kdT = KDTree(np.array([x,y]).T)
-        d,i = kdT.query(np.array([x,y]).T,k=3)
-        d_th = np.percentile(d[:,-1],95)
-        logging.info('Chosen dist to connect molecules into a graph: {}'.format(d_th))
-        return d_th
-
-    def buildGraph(self, adata, features='Expression', d_th=500, coords=None):
+    def buildGraph(self, adata, labels, features='Expression', d_th=500, coords=None):
         """
         buildGraph: makes networkx graph.
 
@@ -407,9 +373,6 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
         t.build(5) # 10 trees
         t.save(tree_file)
 
-        #subs_coords = np.random.choice(np.arange(coords.shape[0]),500000,replace=False)
-        #dists = np.array([t.get_nns_by_item(i, 2,include_distances=True)[1][1] for i in range(coords.shape[0])])
-        #d_th = np.percentile(dists[np.isnan(dists) == False],97)
         distance_threshold = d_th
         logging.info('Chosen dist: {}'.format(distance_threshold))
         
@@ -428,9 +391,6 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
                         pair.append((i,n))
                         n_.append(n)
                 ngh_.append(len(n_))
-                #search = tree.get_nns_by_item(i, neighborhood_size)
-                #pair = [(i,n) for n in search]
-
                 add_node = 0
                 if len(pair) > self.minimum_nodes_connected:
                     res += pair
@@ -442,20 +402,16 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
                     nodes.append(i)
 
             res= th.tensor(np.array(res)).T
-            nodes = th.tensor(np.array(nodes))
-            
+            nodes = th.tensor(np.array(nodes)) 
             return res,nodes,ngh_
 
         d = features
-        edges, molecules,ngh_ = find_nn_distance(coords, t, distance_threshold)
+        edges, molecules, ngh_ = find_nn_distance(coords, t, distance_threshold)
         d= d[molecules,:]
         #d = self.molecules_df(molecules)
         g= dgl.graph((edges[0,:],edges[1,:]),)
         #g = dgl.to_bidirected(g)]
-        g.ndata[self.features_name] = th.tensor(d.toarray(), dtype=th.uint8)#[molecules_id.numpy(),:]
-
-        if self.smooth:
-            g.ndata['gene'] = nghs
+        g.ndata[self.features_name] = th.tensor(d, dtype=th.uint16)#[molecules_id.numpy(),:]
 
         sum_nodes_connected = th.tensor(np.array(ngh_,dtype=np.uint8))
         print('sum nodes' , sum_nodes_connected.shape , sum_nodes_connected.max())

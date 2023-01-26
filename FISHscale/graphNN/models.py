@@ -120,15 +120,18 @@ class SAGELightning(LightningModule):
             mfgs = [mfg.int() for mfg in mfgs]
             batch_inputs = mfgs[0].srcdata[self.features_name]
             if len(batch_inputs.shape) == 1:
-                batch_inputs = F.one_hot(batch_inputs, num_classes=self.in_feats)
+                if self.supervised == False:
+                    batch_inputs = F.one_hot(batch_inputs, num_classes=self.in_feats)
+                else:
+                    batch_inputs = F.one_hot(batch_inputs, num_classes=self.num_classes)
             #print(batch_inputs.shape)
 
             zn_loc = self.module.encoder(batch_inputs,mfgs)
             if self.loss_type == 'unsupervised':
                 graph_loss = self.loss_fcn(zn_loc, pos, neg).mean()
             else:
-                #loss_fcn = nn.CrossEntropyLoss()
                 graph_loss = F.cross_entropy(zn_loc, mfgs[-1].dstdata['label'])
+
             opt_g = self.optimizers()
             opt_g.zero_grad()
             self.manual_backward(graph_loss)
