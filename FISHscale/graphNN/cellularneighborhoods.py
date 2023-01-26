@@ -100,6 +100,7 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
         self.unique_samples = np.unique(anndata.obs['Sample'].values)
         self.device = th.device('cuda' if th.cuda.is_available() else 'cpu')
         self.label_name = label_name
+        self.supervised = supervised
 
         self.unique_labels = np.unique(anndata.obs[self.label_name].values)
         self.anndata = anndata[(anndata[:, self.genes].X.sum(axis=1) > 5), :]
@@ -138,10 +139,10 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
             logging.info('Graph saved.')
         else:
             logging.info('Loading graph.')
-            g, graph_labels = dgl.data.utils.load_graphs(dgluns) # glist will be [g1, g2]
+            subgraphs, graph_labels = dgl.data.utils.load_graphs(dgluns) # glist will be [g1, g2]
             logging.info('Graph data loaded.')
 
-        self.g = dgl.batch(g)
+        self.g = dgl.batch(subgraphs)
         
         if self.aggregator == 'attentional':
             # Remove all self loops because data will be saved, otherwise the 
@@ -151,7 +152,7 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
             self.g = dgl.add_self_loop(self.g)
 
         logging.info(self.g)
-        self.make_train_test_validation()
+        #self.make_train_test_validation()
         l_loc,l_scale= 0,1
         
         ### Prepare Model
@@ -169,7 +170,7 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
                                         n_classes=n_latents,
                                         n_hidden=128,
                                         lr=self.lr,
-                                        supervised=True,
+                                        supervised=self.supervised,
                                         device=self.device.type,
                                         aggregator=self.aggregator,
                                         loss_type=loss_type,
@@ -187,9 +188,10 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
     
     def save_graph(self):
         dgluns = self.save_to+'graph/{}CellularNeighborhoods{}_dst{}_mNodes{}.graph'.format(self.molecules.shape[0],self.smooth,self.distance_factor,self.minimum_nodes_connected)
-        graph_labels = {"Multigraph": th.arange(len(self.sub_graphs))}
+        subgraphs = dgl.unbatch(self.g)
+        graph_labels = {"Multigraph": th.arange(len(subgraphs))}
         logging.info('Saving graph...')
-        dgl.data.utils.save_graphs(dgluns, dgl.unbatch(self.g), graph_labels)
+        dgl.data.utils.save_graphs(dgluns, subgraphs, graph_labels)
         logging.info('Graph saved.')
 
 
@@ -222,8 +224,8 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
             dgl.dataloading.EdgeDataLoader: Deep Graph Library dataloader.
         """        
         if self.supervised:
-            train_p_nodes = int(self.sub_graphs.num_nodes()*(self.train_percentage))
-            train_nodes = th.randperm(self.sub_graphs.num_nodes())[:train_p_nodes]
+            train_p_nodes = int(self.g.num_nodes()*(self.train_p))
+            train_nodes = th.randperm(self.g.num_nodes())[:train_p_nodes]
             
             node_sampler = dgl.dataloading.NeighborSampler(
                 dgl.dataloading.NeighborSampler([int(_) for _ in self.ngh_sizes]),
@@ -244,8 +246,8 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
             return [unlab]
 
         else:
-            train_p_edges = int(self.sub_graphs.num_edges()*(self.train_percentage))
-            train_edges = th.randperm(self.sub_graphs.num_edges())[:train_p_edges]
+            train_p_edges = int(self.g.num_edges()*(self.train_p))
+            train_edges = th.randperm(self.g.num_edges())[:train_p_edges]
             negative_sampler = dgl.dataloading.negative_sampler.Uniform(5)
             
             edge_sampler = dgl.dataloading.as_edge_prediction_sampler(
