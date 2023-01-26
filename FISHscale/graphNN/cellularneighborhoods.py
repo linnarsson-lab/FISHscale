@@ -160,10 +160,12 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
         if supervised:
             in_feats= len(self.genes)
             n_latents = self.unique_labels.shape[0]
+            n_hidden = 128
             loss_type = 'supervised'
         else:
-            in_feats= len(self.unique_labels)
+            in_feats= self.unique_labels.max()+1
             n_latents = 10
+            n_hidden = 24
             loss_type = 'unsupervised'
         
         if type(self.model) == type(None):
@@ -172,7 +174,7 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
                                         n_latent=n_latents,
                                         n_layers=len(self.ngh_sizes),
                                         n_classes=n_latents,
-                                        n_hidden=128,
+                                        n_hidden=n_hidden,
                                         lr=self.lr,
                                         supervised=self.supervised,
                                         device=self.device.type,
