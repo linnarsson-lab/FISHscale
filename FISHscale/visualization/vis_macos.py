@@ -8,7 +8,6 @@ try:
     import open3d as o3d
     from open3d.visualization import gui
     import open3d.visualization.rendering as rendering
-    import threading
 except:
     logging.info('Import Error: open3d')
 import pandas as pd
