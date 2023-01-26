@@ -221,24 +221,53 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
         Returns:
             dgl.dataloading.EdgeDataLoader: Deep Graph Library dataloader.
         """        
-        negative_sampler = dgl.dataloading.negative_sampler.Uniform(self.negative_samples)
-        edge_sampler = dgl.dataloading.as_edge_prediction_sampler(
-            dgl.dataloading.NeighborSampler([int(_) for _ in self.ngh_sizes]),
-            negative_sampler=negative_sampler,
+        if self.supervised:
+            train_p_nodes = int(self.sub_graphs.num_nodes()*(self.train_percentage))
+            train_nodes = th.randperm(self.sub_graphs.num_nodes())[:train_p_nodes]
+            
+            node_sampler = dgl.dataloading.NeighborSampler(
+                dgl.dataloading.NeighborSampler([int(_) for _ in self.ngh_sizes]),
+                prefetch_node_feats=[self.features_name],
+                prefetch_labels=['label']
             )
 
-        unlab = dgl.dataloading.DataLoader(
-                        self.g,
-                        self.edges_train,
-                        edge_sampler,
-                        #negative_sampler=negative_sampler,
-                        device=self.device,
-                        batch_size=self.batch_size,
-                        shuffle=True,
-                        drop_last=True,
-                        num_workers=self.num_workers,
-                        )
-        return [unlab]
+            unlab = dgl.dataloading.DataLoader(
+                            self.g,
+                            train_nodes,
+                            node_sampler,
+                            #negative_sampler=negative_sampler,
+                            device=self.device,
+                            batch_size=self.batch_size,
+                            shuffle=True,
+                            drop_last=True,
+                            num_workers=self.num_workers,
+                            )
+            return [unlab]
+
+        else:
+            train_p_edges = int(self.sub_graphs.num_edges()*(self.train_percentage))
+            train_edges = th.randperm(self.sub_graphs.num_edges())[:train_p_edges]
+            negative_sampler = dgl.dataloading.negative_sampler.Uniform(5)
+            
+            edge_sampler = dgl.dataloading.as_edge_prediction_sampler(
+                dgl.dataloading.NeighborSampler([int(_) for _ in self.ngh_sizes]),
+                negative_sampler=negative_sampler,
+                prefetch_node_feats=[self.features_name],
+                prefetch_labels=['label']
+                )
+
+            unlab = dgl.dataloading.DataLoader(
+                            self.g,
+                            train_edges,
+                            edge_sampler,
+                            #negative_sampler=negative_sampler,
+                            device=self.device,
+                            batch_size=self.batch_size,
+                            shuffle=True,
+                            drop_last=True,
+                            num_workers=self.num_workers,
+                            )
+            return [unlab]
 
 
     def train(self,gpus=0, model_file=None, continue_training=False):
@@ -367,8 +396,8 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
         """        
         logging.info('Building graph...')
 
-        tree_file = os.path.join(self.save_to,'graph/DGL-Tree-{}Nodes-dst{}.ann'.format(self.molecules.shape[0],self.distance_factor))
-        coords = np.array([adata.obs.X.values.compute(), adata.obs.Y.values.compute()]).T
+        tree_file = os.path.join(self.save_to,'graph/DGL-Tree-{}Nodes-dst{}.ann'.format(adata.shape[0],self.distance))
+        coords = np.array([adata.obs.X.values, adata.obs.Y.values]).T
         neighborhood_size = 3
 
         t = AnnoyIndex(2, 'euclidean')  # Length of item vector that will be indexed

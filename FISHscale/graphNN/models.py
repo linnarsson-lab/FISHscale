@@ -115,16 +115,22 @@ class SAGELightning(LightningModule):
         self.reference = self.reference.to(self.device)
         losses = []
         for sub_batch in batch:
-            _, pos, neg, mfgs = sub_batch
-            pos_ids = pos.edges()[0]
-            mfgs = [mfg.int() for mfg in mfgs]
-            batch_inputs = mfgs[0].srcdata[self.features_name]
+            if self.supervised:
+                _, _, mfgs = sub_batch
+                mfgs = [mfg.int() for mfg in mfgs]
+                batch_inputs = mfgs[0].srcdata[self.features_name]
+            
+            else:
+                _, pos, neg, mfgs = sub_batch
+                pos_ids = pos.edges()[0]
+                mfgs = [mfg.int() for mfg in mfgs]
+                batch_inputs = mfgs[0].srcdata[self.features_name]
+
             if len(batch_inputs.shape) == 1:
                 if self.supervised == False:
                     batch_inputs = F.one_hot(batch_inputs, num_classes=self.in_feats)
                 else:
                     batch_inputs = F.one_hot(batch_inputs, num_classes=self.num_classes)
-            #print(batch_inputs.shape)
 
             zn_loc = self.module.encoder(batch_inputs,mfgs)
             if self.loss_type == 'unsupervised':
