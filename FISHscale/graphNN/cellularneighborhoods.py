@@ -113,7 +113,7 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
             os.mkdir(self.save_to+'graph')
         self.setup()
         
-        dgluns = self.save_to+'graph/{}CellularNeighborhoods_dst{}_mNodes{}.graph'.format(anndata.shape[0],self.distance, self.minimum_nodes_connected)
+        dgluns = self.save_to+'graph/CellularNeighborhoods{}_features{}_dst{}_mNodes{}.graph'.format(self.anndata.shape[0],self.features_name,self.distance,self.minimum_nodes_connected)
         if not os.path.isfile(dgluns):
             subgraphs = []
             for sample in tqdm(self.unique_samples):
@@ -158,13 +158,17 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
         ### Prepare Model
 
         if supervised:
+            in_feats= len(self.genes)
             n_latents = self.unique_labels.shape[0]
             loss_type = 'supervised'
         else:
-            n_latents = 48
+            in_feats= len(self.unique_labels)
+            n_latents = 10
+            loss_type = 'unsupervised'
         
         if type(self.model) == type(None):
-            self.model = SAGELightning(in_feats=self.anndata.X.shape[1], 
+            self.model = SAGELightning(
+                                        in_feats=in_feats, 
                                         n_latent=n_latents,
                                         n_layers=len(self.ngh_sizes),
                                         n_classes=n_latents,
@@ -174,6 +178,8 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
                                         device=self.device.type,
                                         aggregator=self.aggregator,
                                         loss_type=loss_type,
+                                        features_name=self.features_name,
+                                        
                                     
                                     )
 
@@ -187,7 +193,7 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
         pass
     
     def save_graph(self):
-        dgluns = self.save_to+'graph/{}CellularNeighborhoods{}_dst{}_mNodes{}.graph'.format(self.molecules.shape[0],self.smooth,self.distance_factor,self.minimum_nodes_connected)
+        dgluns = self.save_to+'graph/CellularNeighborhoods{}_features{}_dst{}_mNodes{}.graph'.format(self.anndata.shape[0],self.features_name,self.distance,self.minimum_nodes_connected)
         subgraphs = dgl.unbatch(self.g)
         graph_labels = {"Multigraph": th.arange(len(subgraphs))}
         logging.info('Saving graph...')
@@ -228,7 +234,7 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
             train_nodes = th.randperm(self.g.num_nodes())[:train_p_nodes]
             
             node_sampler = dgl.dataloading.NeighborSampler(
-                dgl.dataloading.NeighborSampler([int(_) for _ in self.ngh_sizes]),
+                [int(_) for _ in self.ngh_sizes],
                 prefetch_node_feats=[self.features_name],
                 prefetch_labels=['label']
             )
@@ -251,10 +257,13 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
             negative_sampler = dgl.dataloading.negative_sampler.Uniform(5)
             
             edge_sampler = dgl.dataloading.as_edge_prediction_sampler(
-                dgl.dataloading.NeighborSampler([int(_) for _ in self.ngh_sizes]),
-                negative_sampler=negative_sampler,
-                prefetch_node_feats=[self.features_name],
-                prefetch_labels=['label']
+                    dgl.dataloading.NeighborSampler(
+                        [int(_) for _ in self.ngh_sizes],
+                        prefetch_node_feats=[self.features_name],
+                        prefetch_labels=['label']
+                        
+                        ),
+                    negative_sampler=negative_sampler,
                 )
 
             unlab = dgl.dataloading.DataLoader(
@@ -305,6 +314,9 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
                                         n_latent=self.model.n_latent,
                                         n_classes=self.model.module.n_classes,
                                         n_layers=self.model.module.n_layers,
+                                        features_name=self.model.features_name,
+                                        supervised=self.model.supervised,
+                                        loss_fn=self.model.loss_type,
                                         )
 
         
@@ -379,6 +391,27 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
                         buffer_device=self.g.device)#.detach().numpy()
         return att1, att2
 
+    def compute_distance_th(self,coords):
+        """
+        compute_distance_th: deprecated, now inside BuildGraph
+
+        Computes the distance at which 95 percentile molecules are connected to
+        at least 2 other molecules. Like PArtel & Wahlby
+
+        Args:
+            omega ([type]): [description]
+            tau ([type]): [description]
+        """        
+
+        from scipy.spatial import cKDTree as KDTree
+        kdT = KDTree(coords)
+        d,i = kdT.query(coords,k=5)
+        d_th = np.percentile(d[:,-1],95)*2
+        logging.info('Chosen dist to connect molecules into a graph: {}'.format(d_th))
+        print('Chosen dist to connect molecules into a graph: {}'.format(d_th))
+        return d_th
+        
+
     def buildGraph(self, adata, labels, features='Expression', d_th=500, coords=None):
         """
         buildGraph: makes networkx graph.
@@ -395,30 +428,29 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
             dgl.Graph: molecule spatial graph.
         """        
         logging.info('Building graph...')
-
-        tree_file = os.path.join(self.save_to,'graph/DGL-Tree-{}Nodes-dst{}.ann'.format(adata.shape[0],self.distance))
         coords = np.array([adata.obs.X.values, adata.obs.Y.values]).T
-        neighborhood_size = 3
+        neighborhood_size = 100
 
         t = AnnoyIndex(2, 'euclidean')  # Length of item vector that will be indexed
         for i in trange(coords.shape[0]):
             v = coords[i,:]
             t.add_item(i, v)
 
-        t.build(5) # 10 trees
-        t.save(tree_file)
-
+        t.build(10) # 10 trees
+        d_th = self.compute_distance_th(coords)
         distance_threshold = d_th
+        #distance_threshold = d_th
         logging.info('Chosen dist: {}'.format(distance_threshold))
         
         def find_nn_distance(coords,tree,distance):
             logging.info('Find neighbors below distance: {}'.format(d_th))
             res,nodes,ngh_, ncoords = [],[],[], []
-            for i in coords.shape[0]:
+            for i in range(coords.shape[0]):
                 # 100 sets the number of neighbors to find for each node
                 #  it is set to 100 since we usually will compute neighbors
                 #  [20,10]
                 search = tree.get_nns_by_item(i, neighborhood_size, include_distances=True)
+
                 pair = []
                 n_ = []
                 for n,d in zip(search[0],search[1]):
@@ -442,19 +474,21 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
 
         d = features
         edges, molecules, ngh_ = find_nn_distance(coords, t, distance_threshold)
-        d= d[molecules,:]
+        print(edges.shape)
+        d= d[molecules]
         #d = self.molecules_df(molecules)
         g= dgl.graph((edges[0,:],edges[1,:]),)
         #g = dgl.to_bidirected(g)]
+        print(g.num_edges())
         g.ndata[self.features_name] = th.tensor(d, dtype=th.int16)#[molecules_id.numpy(),:]
         g.ndata['label'] = th.tensor(labels[molecules], dtype=th.uint8)
 
         sum_nodes_connected = th.tensor(np.array(ngh_,dtype=np.uint8))
-        print('sum nodes' , sum_nodes_connected.shape , sum_nodes_connected.max())
+        #print('sum nodes' , sum_nodes_connected.shape , sum_nodes_connected.max())
         molecules_connected = molecules[sum_nodes_connected >= self.minimum_nodes_connected]
         remove = molecules[sum_nodes_connected < self.minimum_nodes_connected]
         g.remove_nodes(th.tensor(remove))
-        g.ndata['indices'] = th.tensor(molecules_connected).clone().detach()
-        g.ndata['coords'] = th.tensor(coords[molecules_connected]).clone().detach()
+        g.ndata['indices'] = th.tensor(molecules_connected.clone().detach())
+        g.ndata['coords'] = th.tensor(coords[molecules_connected])
         return g
                 

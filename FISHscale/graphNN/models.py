@@ -46,7 +46,7 @@ class SAGELightning(LightningModule):
                  n_hidden=64,
                  dropout=0.1,
                  lr=0.001,
-                 features_name='gene',
+                 features_name='Expression',
                  supervised=False,
                  reference=0,
                  smooth=False,
@@ -128,9 +128,7 @@ class SAGELightning(LightningModule):
 
             if len(batch_inputs.shape) == 1:
                 if self.supervised == False:
-                    batch_inputs = F.one_hot(batch_inputs, num_classes=self.in_feats)
-                else:
-                    batch_inputs = F.one_hot(batch_inputs, num_classes=self.num_classes)
+                    batch_inputs = F.one_hot(batch_inputs.to(th.int64), num_classes=self.in_feats)
 
             zn_loc = self.module.encoder(batch_inputs,mfgs)
             if self.loss_type == 'unsupervised':
