@@ -46,7 +46,7 @@ class SAGELightning(LightningModule):
                  n_hidden=64,
                  dropout=0.1,
                  lr=0.001,
-                 features_name='Expression',
+                 features_name='gene',
                  supervised=False,
                  reference=0,
                  smooth=False,
