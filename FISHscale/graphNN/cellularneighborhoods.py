@@ -127,7 +127,7 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
                 else:
                     features = adata.obs[self.features_name].values
 
-                labels = adata.obs['GraphCluster'].values
+                labels = adata.obs[self.label_name].values
 
                 g = self.buildGraph(adata, labels, features, d_th =self.distance)
                 g.ndata['sample'] = th.ones(g.ndata[self.features_name].shape[0]) * np.where(self.unique_samples==sample)[0][0]
@@ -476,12 +476,10 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
 
         d = features
         edges, molecules, ngh_ = find_nn_distance(coords, t, distance_threshold)
-        print(edges.shape)
         d= d[molecules]
         #d = self.molecules_df(molecules)
         g= dgl.graph((edges[0,:],edges[1,:]),)
         #g = dgl.to_bidirected(g)]
-        print(g.num_edges())
         g.ndata[self.features_name] = th.tensor(d, dtype=th.int16)#[molecules_id.numpy(),:]
         g.ndata['label'] = th.tensor(labels[molecules], dtype=th.uint8)
 
