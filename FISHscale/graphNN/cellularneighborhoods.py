@@ -131,6 +131,7 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
 
                 g = self.buildGraph(adata, labels, features, d_th =self.distance)
                 g.ndata['sample'] = th.ones(g.ndata[self.features_name].shape[0]) * np.where(self.unique_samples==sample)[0][0]
+                g.ndata['ID'] = th.tensor(adata.obs['ID'].values)
                 subgraphs.append(g)
             
             graph_labels = {"Multigraph": th.arange(len(subgraphs))}
