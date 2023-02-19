@@ -46,8 +46,9 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
         lr=1e-3,
         aggregator='attentional',
         supervised=True,#'supervised'
-        n_epochs=10,
-        label_name='GraphCluster',
+        n_epochs=5,
+        label_name='MolecularNgh',
+        distance_factor=5,
         ):
         """
         GraphData prepared the FISHscale dataset to be analysed in a supervised
@@ -101,6 +102,7 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
         self.device = th.device('cuda' if th.cuda.is_available() else 'cpu')
         self.label_name = label_name
         self.supervised = supervised
+        self.distance_factor = distance_factor
 
         self.unique_labels = np.unique(anndata.obs[self.label_name].values)
         self.anndata = anndata[(anndata[:, self.genes].X.sum(axis=1) > 5), :]
@@ -113,7 +115,7 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
             os.mkdir(self.save_to+'graph')
         self.setup()
         
-        dgluns = self.save_to+'graph/CellularNeighborhoods{}_features{}_dst{}_mNodes{}.graph'.format(self.anndata.shape[0],self.features_name,self.distance,self.minimum_nodes_connected)
+        dgluns = self.save_to+'graph/CellularNeighborhoods{}_features{}_dst{}_mNodes{}.graph'.format(self.anndata.shape[0],self.features_name,self.distance_factor,self.minimum_nodes_connected)
         if not os.path.isfile(dgluns):
             subgraphs = []
             for sample in tqdm(self.unique_samples):
@@ -131,7 +133,7 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
 
                 g = self.buildGraph(adata, labels, features, d_th =self.distance)
                 g.ndata['sample'] = th.ones(g.ndata[self.features_name].shape[0]) * np.where(self.unique_samples==sample)[0][0]
-                g.ndata['ID'] = th.tensor(adata.obs['ID'].values)
+                
                 subgraphs.append(g)
             
             graph_labels = {"Multigraph": th.arange(len(subgraphs))}
@@ -409,7 +411,7 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
         from scipy.spatial import cKDTree as KDTree
         kdT = KDTree(coords)
         d,i = kdT.query(coords,k=5)
-        d_th = np.percentile(d[:,-1],95)*2
+        d_th = np.percentile(d[:,-1],95)*self.distance_factor
         logging.info('Chosen dist to connect molecules into a graph: {}'.format(d_th))
         print('Chosen dist to connect molecules into a graph: {}'.format(d_th))
         return d_th
@@ -483,9 +485,10 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
         #g = dgl.to_bidirected(g)]
         g.ndata[self.features_name] = th.tensor(d, dtype=th.int16)#[molecules_id.numpy(),:]
         g.ndata['label'] = th.tensor(labels[molecules], dtype=th.uint8)
+        g.ndata['ID'] = th.tensor(adata.obs['ID'].values)
 
         sum_nodes_connected = th.tensor(np.array(ngh_,dtype=np.uint8))
-        #print('sum nodes' , sum_nodes_connected.shape , sum_nodes_connected.max())
+        print('Number of edges for sample: {}'.format(g.num_edges()))
         molecules_connected = molecules[sum_nodes_connected >= self.minimum_nodes_connected]
         remove = molecules[sum_nodes_connected < self.minimum_nodes_connected]
         g.remove_nodes(th.tensor(remove))
