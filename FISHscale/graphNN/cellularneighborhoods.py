@@ -165,6 +165,12 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
             n_latents = self.unique_labels.shape[0]
             n_hidden = 128
             loss_type = 'supervised'
+        
+        elif supervised == False and self.features_name == 'Expression':
+            in_feats= len(self.genes)
+            n_latents = 10
+            n_hidden = 128
+            loss_type = 'unsupervised'
         else:
             in_feats= self.unique_labels.max()+1
             n_latents = 10
