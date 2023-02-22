@@ -406,7 +406,7 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
                         buffer_device=self.g.device)#.detach().numpy()
         self.g.edata['attention1'] = self.attention_ngh1
         self.g.edata['attention2'] = self.attention_ngh2
-        self.g.save_graph()
+        self.save_graph()
 
     def get_attention_nodes(self,nodes=None):
         """
@@ -543,8 +543,8 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
         """
         from sklearn.cluster import MiniBatchKMeans
         
-        clusters = MiniBatchKMeans(n_clusters=10).fit_predict(self.latent_unlabelled)
-        self.g.ndata['CellularNgh'] = clusters
+        clusters = MiniBatchKMeans(n_clusters=n_clusters).fit_predict(self.latent_unlabelled)
+        self.g.ndata['CellularNgh'] = th.tensor(clusters)
         self.save_graph()
         return clusters
 
