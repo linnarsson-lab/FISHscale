@@ -360,7 +360,7 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
                         10*512,
                         0)
 
-        molecules_id = self.g.ndata['indices']
+
         self.save_graph()
 
     def get_attention(self):
@@ -380,7 +380,9 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
                         5*512,
                         0,
                         buffer_device=self.g.device)#.detach().numpy()
-
+        self.g.edata['attention1'] = self.attention_ngh1
+        self.g.edata['attention2'] = self.attention_ngh2
+        self.g.save_graph()
 
     def get_attention_nodes(self,nodes=None):
         """
@@ -501,4 +503,25 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
         g.ndata['indices'] = th.tensor(molecules_connected.clone().detach())
         g.ndata['coords'] = th.tensor(coords[molecules_connected])
         return g
+
+    def cluster(self, n_clusters=10):
+        """
+        cluster: cluster the latent space.
+
+        Clusters the latent space using MiniBatchKMeans. The number of clusters
+        is set to 10 by default.
+
+        Args:
+            training_latents ([type]): [description]
+
+        Returns:
+            [type]: [description]
+        """
+        from sklearn.cluster import MiniBatchKMeans
+        
+        clusters = MiniBatchKMeans(n_clusters=10).fit_predict(self.latent_unlabelled)
+        self.g['CellularNgh'] = clusters
+        self.save_graph()
+        return clusters
+
                 
