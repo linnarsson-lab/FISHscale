@@ -48,6 +48,7 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
         supervised=True,#'supervised'
         n_epochs=5,
         label_name='MolecularNgh',
+        id_name = 'ID',
         distance_factor=5,
         ):
         """
@@ -102,6 +103,7 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
         self.device = th.device('cuda' if th.cuda.is_available() else 'cpu')
         self.label_name = label_name
         self.supervised = supervised
+        self.id_name = id_name
         self.distance_factor = distance_factor
 
         self.unique_labels = np.unique(anndata.obs[self.label_name].values)
@@ -493,7 +495,7 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
         #g = dgl.to_bidirected(g)]
         g.ndata[self.features_name] = th.tensor(d, dtype=th.int16)#[molecules_id.numpy(),:]
         g.ndata['label'] = th.tensor(labels[molecules], dtype=th.uint8)
-        g.ndata['ID'] = th.tensor(adata.obs['ID'].values)
+        g.ndata[self.id_name] = th.tensor(adata.obs[self.id_name].values.astype(np.int64))
 
         sum_nodes_connected = th.tensor(np.array(ngh_,dtype=np.uint8))
         print('Number of edges for sample: {}'.format(g.num_edges()))
