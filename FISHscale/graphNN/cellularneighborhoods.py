@@ -322,17 +322,39 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
 
         if is_trained:
             logging.info('Pretrained model exists in folder {}, loading model parameters. If you wish to re-train, delete .ckpt file.'.format(model_path))
-            self.model = self.model.load_from_checkpoint(model_path,
-                                        in_feats=self.model.in_feats,
-                                        n_latent=self.model.n_latent,
-                                        n_classes=self.model.module.n_classes,
-                                        n_layers=self.model.module.n_layers,
-                                        features_name=self.model.features_name,
-                                        supervised=self.model.supervised,
-                                        loss_fn=self.model.loss_type,
-                                        )
-
+            
+            if self.supervised:
+                in_feats= len(self.genes)
+                n_latents = self.unique_labels.shape[0]
+                n_hidden = 128
+                loss_type = 'supervised'
         
+            elif self.supervised == False and self.features_name == 'Expression':
+                in_feats= len(self.genes)
+                n_latents = 10
+                n_hidden = 128
+                loss_type = 'unsupervised'
+            else:
+                in_feats= self.unique_labels.max()+1
+                n_latents = 10
+                n_hidden = 24
+                loss_type = 'unsupervised'
+            
+            self.model = self.model.load_from_checkpoint(
+                                        model_path,
+                                        in_feats=in_feats, 
+                                        n_latent=n_latents,
+                                        n_layers=len(self.ngh_sizes),
+                                        n_classes=n_latents,
+                                        n_hidden=n_hidden,
+                                        lr=self.lr,
+                                        supervised=self.supervised,
+                                        device=self.device.type,
+                                        aggregator=self.aggregator,
+                                        loss_type=loss_type,
+                                        features_name=self.features_name,
+                                        )
+            
         if continue_training or not is_trained:
             trainer.fit(self.model, train_dataloaders=self.train_dataloader())#,val_dataloaders=self.test_dataloader())
 
@@ -522,7 +544,7 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
         from sklearn.cluster import MiniBatchKMeans
         
         clusters = MiniBatchKMeans(n_clusters=10).fit_predict(self.latent_unlabelled)
-        self.g['CellularNgh'] = clusters
+        self.g.ndata['CellularNgh'] = clusters
         self.save_graph()
         return clusters
 
