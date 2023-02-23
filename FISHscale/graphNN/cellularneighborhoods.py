@@ -51,6 +51,7 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
         label_name='MolecularNgh',
         id_name = 'ID',
         distance_factor=5,
+        normalize=True,
         ):
         """
         GraphData prepared the FISHscale dataset to be analysed in a supervised
@@ -110,8 +111,9 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
         self.unique_labels = np.unique(anndata.obs[self.label_name].values)
         anndata = anndata[(anndata[:, self.genes].X.sum(axis=1) > 5), :]
         anndata.raw = anndata
-        sc.pp.normalize_total(anndata, target_sum=1e4)
-        sc.pp.log1p(anndata)
+        if normalize:
+            sc.pp.normalize_total(anndata, target_sum=1e4)
+            sc.pp.log1p(anndata)
         self.anndata = anndata
 
 
