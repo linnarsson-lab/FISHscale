@@ -22,6 +22,7 @@ from pyro.infer import SVI, config_enumerate, Trace_ELBO
 from pyro.infer.autoguide import AutoDiagonalNormal, AutoGuideList, AutoNormal, AutoDelta
 import logging
 from annoy import AnnoyIndex
+import scanpy as sc
 
 
 class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder):
@@ -107,7 +108,13 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
         self.distance_factor = distance_factor
 
         self.unique_labels = np.unique(anndata.obs[self.label_name].values)
-        self.anndata = anndata[(anndata[:, self.genes].X.sum(axis=1) > 5), :]
+        anndata = anndata[(anndata[:, self.genes].X.sum(axis=1) > 5), :]
+        anndata.raw = anndata
+        sc.pp.normalize_total(anndata, target_sum=1e4)
+        sc.pp.log1p(anndata)
+        self.anndata = anndata
+
+
         ###
 
         ### Prepare data
@@ -135,6 +142,7 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
 
                 g = self.buildGraph(adata, labels, features, d_th =self.distance)
                 g.ndata['sample'] = th.ones(g.ndata[self.features_name].shape[0]) * np.where(self.unique_samples==sample)[0][0]
+                
                 
                 subgraphs.append(g)
             
@@ -206,7 +214,7 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
         pass
     
     def save_graph(self):
-        dgluns = self.save_to+'graph/CellularNeighborhoods{}_features{}_dst{}_mNodes{}.graph'.format(self.anndata.shape[0],self.features_name,self.distance,self.minimum_nodes_connected)
+        dgluns = self.save_to+'graph/CellularNeighborhoods{}_features{}_dst{}_mNodes{}.graph'.format(self.anndata.shape[0],self.features_name,self.distance_factor,self.minimum_nodes_connected)
         subgraphs = dgl.unbatch(self.g)
         graph_labels = {"Multigraph": th.arange(len(subgraphs))}
         logging.info('Saving graph...')
