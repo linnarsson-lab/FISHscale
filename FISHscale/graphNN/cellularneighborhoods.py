@@ -523,7 +523,7 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
         #d = self.molecules_df(molecules)
         g= dgl.graph((edges[0,:],edges[1,:]),)
         #g = dgl.to_bidirected(g)]
-        g.ndata[self.features_name] = th.tensor(d, dtype=th.int16)#[molecules_id.numpy(),:]
+        g.ndata[self.features_name] = th.tensor(d) #, dtype=th.int16)#
         g.ndata['label'] = th.tensor(labels[molecules], dtype=th.uint8)
         g.ndata[self.id_name] = th.tensor(adata.obs[self.id_name].values.astype(np.int64))
 
