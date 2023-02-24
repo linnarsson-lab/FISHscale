@@ -149,6 +149,7 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
             self.distance_factor,
             self.minimum_nodes_connected,
             self.n_latents)
+        
         if not os.path.isfile(dgluns):
             subgraphs = []
             for sample in tqdm(self.unique_samples):
@@ -193,8 +194,6 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
         l_loc,l_scale= 0,1
         
         ### Prepare Model
-
-        
         if type(self.model) == type(None):
             self.model = SAGELightning(
                                         in_feats=in_feats, 
