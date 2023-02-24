@@ -399,7 +399,8 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
         """        
         self.model.eval()
 
-        self.latent_unlabelled, prediction_unlabelled = self.model.module.inference(self.g,
+        self.latent_unlabelled, prediction_unlabelled = self.model.module.inference(
+                        self.g,
                         self.model.device,
                         10*512,
                         0)
@@ -419,10 +420,12 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
             labelled (bool, optional): [description]. Defaults to True.
         """        
         self.model.eval()
-        self.attention_ngh1, self.attention_ngh2 = self.model.module.inference_attention(self.g,
+        self.attention_ngh1, self.attention_ngh2 = self.model.module.inference_attention(
+                        self.g,
                         self.model.device,
                         5*512,
                         0,
+                        nodes=self.g.nodes(),
                         buffer_device=self.g.device)#.detach().numpy()
         self.g.edata['attention1'] = self.attention_ngh1
         self.g.edata['attention2'] = self.attention_ngh2

@@ -219,8 +219,14 @@ class SAGE(nn.Module):
                 g.ndata['h'] = th.log(F.one_hot(g.ndata[self.features_name], num_classes=self.in_feats)+1)
                 sampler = dgl.dataloading.MultiLayerFullNeighborSampler(1, prefetch_node_feats=['h'])
                 
-                dataloader = dgl.dataloading.NodeDataLoader(
-                        g, core_nodes.to(g.device), sampler, device=device,
+                if core_nodes == None:
+                    dataloader = dgl.dataloading.NodeDataLoader(
+                            g, core_nodes.to(g.device), sampler, device=device,
+                            batch_size=batch_size, shuffle=False, drop_last=False, num_workers=num_workers,
+                            persistent_workers=(num_workers > 0))
+                else:
+                    dataloader = dgl.dataloading.NodeDataLoader(
+                        g, th.arange(g.num_nodes()).to(g.device), sampler, device=device,
                         batch_size=batch_size, shuffle=False, drop_last=False, num_workers=num_workers,
                         persistent_workers=(num_workers > 0))
 
@@ -264,7 +270,7 @@ class SAGE(nn.Module):
 
     
 
-    def inference_attention(self, g, device, batch_size, num_workers, nodes=None,buffer_device=None):
+    def inference_attention(self, g, device, batch_size, num_workers, nodes=None, buffer_device=None):
         # The difference between this inference function and the one in the official
         # example is that the intermediate results can also benefit from prefetching.
         if type(nodes) == type(None):
