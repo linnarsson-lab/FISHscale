@@ -38,7 +38,7 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
         model=None, # GraphSAGE model
         analysis_name:str='',
         ngh_sizes = [10, 5],
-        minimum_nodes_connected = 3,
+        minimum_nodes_connected = 2,
         train_p = 0.75,
         batch_size= 512,
         num_workers=0,
@@ -452,7 +452,7 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
 
         from scipy.spatial import cKDTree as KDTree
         kdT = KDTree(coords)
-        d,i = kdT.query(coords,k=2)
+        d,i = kdT.query(coords,k=3)
         d_th = np.percentile(d[:,-1],95)*self.distance_factor
         logging.info('Chosen dist to connect molecules into a graph: {}'.format(d_th))
         print('Chosen dist to connect molecules into a graph: {}'.format(d_th))
