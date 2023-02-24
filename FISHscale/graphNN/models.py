@@ -219,14 +219,14 @@ class SAGE(nn.Module):
                 g.ndata['h'] = th.log(F.one_hot(g.ndata[self.features_name], num_classes=self.in_feats)+1)
                 sampler = dgl.dataloading.MultiLayerFullNeighborSampler(1, prefetch_node_feats=['h'])
                 
-                if core_nodes == None:
+                if core_nodes is None:
                     dataloader = dgl.dataloading.NodeDataLoader(
-                            g, core_nodes.to(g.device), sampler, device=device,
+                            g, th.arange(g.num_nodes()).to(g.device), sampler, device=device,
                             batch_size=batch_size, shuffle=False, drop_last=False, num_workers=num_workers,
                             persistent_workers=(num_workers > 0))
                 else:
                     dataloader = dgl.dataloading.NodeDataLoader(
-                        g, th.arange(g.num_nodes()).to(g.device), sampler, device=device,
+                        g, core_nodes.to(g.device), sampler, device=device,
                         batch_size=batch_size, shuffle=False, drop_last=False, num_workers=num_workers,
                         persistent_workers=(num_workers > 0))
 
@@ -266,15 +266,15 @@ class SAGE(nn.Module):
                     y[output_nodes] = h.cpu().detach()#.numpy()
                 g.ndata['h'] = y
             return y, p_class
-    
-
-    
 
     def inference_attention(self, g, device, batch_size, num_workers, nodes=None, buffer_device=None):
         # The difference between this inference function and the one in the official
         # example is that the intermediate results can also benefit from prefetching.
         if type(nodes) == type(None):
             nodes = th.arange(g.num_nodes()).to(g.device)
+
+        if len(g.ndata[self.features_name].shape) == 1:
+            g.ndata['h'] = th.log(F.one_hot(g.ndata[self.features_name], num_classes=self.in_feats)+1)
 
         g.ndata['h'] = th.log(g.ndata[self.features_name]+1)
         sampler = dgl.dataloading.MultiLayerFullNeighborSampler(1, prefetch_node_feats=['h'])
