@@ -275,8 +275,9 @@ class SAGE(nn.Module):
 
         if len(g.ndata[self.features_name].shape) == 1:
             g.ndata['h'] = th.log(F.one_hot(g.ndata[self.features_name], num_classes=self.in_feats)+1)
-
-        g.ndata['h'] = th.log(g.ndata[self.features_name]+1)
+        else:
+            g.ndata['h'] = th.log(g.ndata[self.features_name]+1)
+            
         sampler = dgl.dataloading.MultiLayerFullNeighborSampler(1, prefetch_node_feats=['h'])
         dataloader = dgl.dataloading.NodeDataLoader(
                 g, nodes, sampler, device=device,
