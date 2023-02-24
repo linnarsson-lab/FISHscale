@@ -116,7 +116,24 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
             sc.pp.log1p(anndata)
         self.anndata = anndata
 
-
+        ### Model hyperparameters
+        if supervised:
+            in_feats= len(self.genes)
+            n_latents = self.unique_labels.shape[0]
+            n_hidden = 128
+            loss_type = 'supervised'
+        
+        elif supervised == False and self.features_name == 'Expression':
+            in_feats= len(self.genes)
+            n_latents = 24
+            n_hidden = 128
+            loss_type = 'unsupervised'
+        else:
+            in_feats= self.unique_labels.max()+1
+            n_latents = 24
+            n_hidden = 64
+            loss_type = 'unsupervised'
+        self.n_latents = n_latents
         ###
 
         ### Prepare data
@@ -126,7 +143,12 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
             os.mkdir(self.save_to+'graph')
         self.setup()
         
-        dgluns = self.save_to+'graph/CellularNeighborhoods{}_features{}_dst{}_mNodes{}.graph'.format(self.anndata.shape[0],self.features_name,self.distance_factor,self.minimum_nodes_connected)
+        dgluns = self.save_to+'graph/CellularNeighborhoods{}_features{}_dst{}_mNodes{}_nlatents{}.graph'.format(
+            self.anndata.shape[0],
+            self.features_name,
+            self.distance_factor,
+            self.minimum_nodes_connected,
+            self.n_latents)
         if not os.path.isfile(dgluns):
             subgraphs = []
             for sample in tqdm(self.unique_samples):
@@ -172,22 +194,6 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
         
         ### Prepare Model
 
-        if supervised:
-            in_feats= len(self.genes)
-            n_latents = self.unique_labels.shape[0]
-            n_hidden = 128
-            loss_type = 'supervised'
-        
-        elif supervised == False and self.features_name == 'Expression':
-            in_feats= len(self.genes)
-            n_latents = 10
-            n_hidden = 128
-            loss_type = 'unsupervised'
-        else:
-            in_feats= self.unique_labels.max()+1
-            n_latents = 10
-            n_hidden = 24
-            loss_type = 'unsupervised'
         
         if type(self.model) == type(None):
             self.model = SAGELightning(
@@ -216,7 +222,12 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
         pass
     
     def save_graph(self):
-        dgluns = self.save_to+'graph/CellularNeighborhoods{}_features{}_dst{}_mNodes{}.graph'.format(self.anndata.shape[0],self.features_name,self.distance_factor,self.minimum_nodes_connected)
+        dgluns = self.save_to+'graph/CellularNeighborhoods{}_features{}_dst{}_mNodes{}_nlatents{}.graph'.format(
+            self.anndata.shape[0],
+            self.features_name,
+            self.distance_factor,
+            self.minimum_nodes_connected,
+            self.n_latents)
         subgraphs = dgl.unbatch(self.g)
         graph_labels = {"Multigraph": th.arange(len(subgraphs))}
         logging.info('Saving graph...')
