@@ -320,7 +320,7 @@ class RegionalizeMulti(Decomposition):
             plt.tight_layout()
                 
         df_all = pd.concat(df_all, axis=1, sort=False)
-        samples = np.array(itertools.chain.from_iterable(samples))
+        samples = np.array(list(itertools.chain.from_iterable(samples)))
         return df_all, samples
     
     def cluster_mean(self, data: Any, labels: np.ndarray) -> Any:
