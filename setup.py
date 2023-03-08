@@ -13,7 +13,7 @@ setup(
 		'scikit-learn',
 		'scipy',
 		'networkx',
-		'sklearn',
+		#'sklearn', outdated
 		'tqdm',
 		'umap-learn',
 		'torch',
