@@ -564,7 +564,7 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
         columns_layout: int = 5,
         #If loading from files define:
         x_label: str = 'r_px_microscope_stitched',
-        y_label: str ='c_px_microscope_stitched',
+        y_label: str = 'c_px_microscope_stitched',
         z_label: str = None,
         gene_label: str = 'decoded_genes',
         other_columns: Optional[list] = [],
@@ -683,7 +683,7 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
         elif type(data) == str:
             if parse_num_threads == -1 or parse_num_threads > self.cpu_count:
                 parse_num_threads = self.cpu_count
-            self.load_from_files(data, x_label, y_label, z_label, gene_label, other_columns, unique_genes, exclude_genes, z, 
+            self.load_from_files(data, x_label, y_label, z_label, z, gene_label, other_columns, unique_genes, exclude_genes,
                                  pixel_size, x_offset, y_offset, z_offset, polygon, select_valid, reparse, color_input, 
                                  parse_num_threads)
         else:
@@ -869,8 +869,8 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
         lazy_result = []
 
         for f, zz, pxs, xo, yo, zo, pol in tqdm(zip(files, z, pixel_size, x_offset, y_offset, z_offset, polygon)):
-            lr = dask.delayed(Dataset) (f, x_label, y_label, z_label, gene_label, other_columns, self.unique_genes, exclude_genes, 
-                                        zz, pxs, xo, yo, zo, pol, select_valid, reparse, color_input, verbose = self.verbose, 
+            lr = dask.delayed(Dataset) (f, x_label, y_label, z_label, zz, gene_label, other_columns, self.unique_genes, exclude_genes, 
+                                        pxs, xo, yo, zo, pol, select_valid, reparse, color_input, verbose = self.verbose, 
                                         part_of_multidataset=True)
             lazy_result.append(lr)
         futures = dask.persist(*lazy_result, num_workers=1, num_threads = num_threads)

@@ -327,7 +327,6 @@ class MultiGeneScatter(AxSize):
         """   
 
         if transparent == False:
-            print('black background')
             plt.style.use('dark_background')
         
         #Check input

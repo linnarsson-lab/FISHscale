@@ -50,7 +50,7 @@ class DataLoader_base():
                     if c in existing_columns:
                         valid_columns.append(c)
                     else:
-                        if i < 4: #First 3 columns are critical for data opening
+                        if i < 3: #Columns 0, 1, and 2 are critical for data opening
                             critical_columns.append(c)
                         else:
                             invalid_columns.append(c)
@@ -86,10 +86,7 @@ class DataLoader_base():
             raise Exception(f'Input should be a dictionary, not {type(data_dict)}.')
         
         file_name = path.join(self.FISHscale_data_folder, f'{self.dataset_name}_metadata.pkl')
-        print(f'Dumping file: {file_name}')
         pickle.dump(data_dict, open(file_name, 'wb'))
-        #with open(file_name, 'wb') as pf:
-        #    pickle.dump(data_dict, pf)
         
     def _metadatafile_read(self, file_name=None) -> Dict:
         """Read the full metadata file and return the dictionary.
@@ -107,8 +104,6 @@ class DataLoader_base():
         
         try:
             prop = pickle.load(open(file_name, 'rb'))
-            #with open(file_name, 'rb') as pf:
-            #    prop = pickle.load(pf)
         except FileNotFoundError as e:
             logging.info('Metadata file was not found, please reparse.')
             raise e
@@ -290,8 +285,8 @@ class DataLoader_base():
             shutil.rmtree(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes',attribute_name))
         except:
             makedirs(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes',attribute_name),exist_ok=True)
-        da.groupby(attribute_name).apply(lambda x: self._dump_to_parquet(x, self.dataset_name, self.FISHscale_data_folder+'/attributes/{}'.format(attribute_name),engine='fastparquet'))#, meta=('float64')).compute()
-        self.dask_attrs[attribute_name] = dd.read_parquet(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes/{}'.format(attribute_name), '*.parquet'), engine='fastparquet')   
+        da.groupby(attribute_name).apply(lambda x: self._dump_to_parquet(x, self.dataset_name, path.join(self.FISHscale_data_folder, 'attributes', attribute_name), engine='fastparquet'))#, meta=('float64')).compute()
+        self.dask_attrs[attribute_name] = dd.read_parquet(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes', attribute_name, '*.parquet'), engine='fastparquet')   
         #self.dask_attrs.to_parquet(path.join(self.dataset_folder,self.FISHscale_data_folder,'attributes'))    
 
 class DataLoader(DataLoader_base):
@@ -414,7 +409,6 @@ class DataLoader(DataLoader_base):
             if already_parsed[0] and not reparse:
                 self.vp(f'Found {already_parsed[1]} already parsed files. Skipping parsing.')
             new_parse = True
-            #print(new_parse, 'new parse')
             #Data parsing
             if filename.endswith(('.parquet', '.csv')):
                 
