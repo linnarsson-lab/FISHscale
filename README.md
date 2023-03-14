@@ -17,7 +17,13 @@ Software package for the visualization, exploration and analysis of point based 
 
 The following instructions should work for Linux and Mac, and probably also Windows.
 
-In a fresh Anaconda environment install FISHscale:
+Make a fresh Anaconda environment: (Open3D does not work with python 3.10)
+```
+conda create --name my_env python=3.7 
+conda activate my_env
+```
+
+Then install FISHscale:
 ```
 git clone https://github.com/linnarsson-lab/FISHscale.git
 cd FISHscale
