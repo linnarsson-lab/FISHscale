@@ -24,7 +24,7 @@ setup(
         'pyarrow',
         'fastparquet',
         'annoy',
-        'geopandas',
+        #'geopandas',
         'shapely',
         'numba',
 		'h5py',

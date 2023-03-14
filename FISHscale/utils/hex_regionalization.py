@@ -1,6 +1,5 @@
 import math
 from itertools import  permutations
-import geopandas as gp
 import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
@@ -24,6 +23,10 @@ from functools import lru_cache
 import colorsys
 from sklearn.manifold import TSNE, SpectralEmbedding
 import logging
+try:
+    import geopandas as gp
+except Exception as e:
+    print(f'Geopandas not installed. Install if desired. Error: {e}')
 
 class Regionalize(Iteration, Decomposition):
     """Class for regionalization of multidimensional 2D point data.
