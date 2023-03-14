@@ -64,12 +64,13 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
     def __init__(self,
         filename: str,
         x_label: str = 'r_transformed',
-        y_label: str ='c_transformed',
+        y_label: str = 'c_transformed',
+        z_label: str = None,
+        z: float = 0,
         gene_label: str = 'decoded_genes',
         other_columns: Optional[list] = [],
         unique_genes: Optional[np.ndarray] = None,
         exclude_genes: list = None,
-        z: float = 0,
         pixel_size: str = '1 micrometer',
         x_offset: float = 0,
         y_offset: float = 0,
@@ -92,11 +93,19 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
             y_label (str, optional): Name of the column of the Pandas dataframe
                 that contains the Y coordinates of the points. Defaults to 
                 'c_px_microscope_stitched'.
+            z_label (str, optional): Name of the column of the datafile
+                that contains the Z coordinates of the points. If None, the Z
+                coordinate will default to the z value (see below).
+                Defaults to None.
+            z (float, optional): Z coordinate of the dataset. The z coordinate
+                is also a way to order MultiDatasets. So if your dataset 
+                already contains z values you can still set this. 
+                Defaults to zero.
             gene_label (str, optional):  Name of the column of the Pandas 
                 dataframe that contains the gene labels of the points. 
                 Defaults to 'decoded_genes'.
             other_columns (list, optional): List with labels of other columns 
-                that need to be loaded. Defaults to None.
+                that need to be loaded. Defaults to [].
             unique_genes (np.ndarray, optional): Array with unique gene names.
                 This can also be a selection of genes to load. After a
                 selection is made data needs to be re-parsed to include all
@@ -106,7 +115,6 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
                 Defaults to None.
             exclude_genes (list, optional): List with genes to exclude from
                 dataset. Defaults to None.     
-            z (float, optional): Z coordinate of the dataset. Defaults to zero.
             pixel_size (str, optional): Unit size of the data. Is used to 
                 convert data to micrometer scale. Uses Pint's UnitRegistry.
                 Example: "0.1 micrometer", means that each pixel or unit has 
@@ -194,7 +202,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         #Load data
         self.load_data(self.filename, x_label, y_label, gene_label, self.other_columns, x_offset, y_offset, z_offset, 
                        self.pixel_size.magnitude, unique_genes, exclude_genes, self.polygon, self.select_valid, 
-                       reparse=reparse)
+                       reparse, z_label)
 
         #Gene metadata
         self.gene_index = dict(zip(self.unique_genes, range(self.unique_genes.shape[0])))
@@ -557,6 +565,7 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
         #If loading from files define:
         x_label: str = 'r_px_microscope_stitched',
         y_label: str ='c_px_microscope_stitched',
+        z_label: str = None,
         gene_label: str = 'decoded_genes',
         other_columns: Optional[list] = [],
         exclude_genes: list = None,
@@ -609,12 +618,16 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
             y_label (str, optional): Name of the column of the Pandas dataframe
                 that contains the Y coordinates of the points. Defaults to 
                 'c_px_microscope_stitched'.
+            z_label (str, optional): Name of the column of the datafile
+                that contains the Z coordinates of the points. If None, the Z
+                coordinate will default to the z value (see below).
+                Defaults to None.
             gene_label (str, optional):  Name of the column of the Pandas 
                 dataframe that contains the gene labels of the points. 
                 Defaults to 'decoded_genes'.
             other_columns (list, optional): List with labels of other columns 
                 that need to be loaded. Data will stored under "self.other"
-                as Pandas Dataframe. Defaults to None.
+                as Pandas Dataframe. Defaults to [].
             exclude_genes (list, optional): List with genes to exclude from
                 dataset. Defaults to None.
             z (float, optional): Z coordinate of the dataset. Defaults to zero.
@@ -670,7 +683,7 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
         elif type(data) == str:
             if parse_num_threads == -1 or parse_num_threads > self.cpu_count:
                 parse_num_threads = self.cpu_count
-            self.load_from_files(data, x_label, y_label, gene_label, other_columns, unique_genes, exclude_genes, z, 
+            self.load_from_files(data, x_label, y_label, z_label, gene_label, other_columns, unique_genes, exclude_genes, z, 
                                  pixel_size, x_offset, y_offset, z_offset, polygon, select_valid, reparse, color_input, 
                                  parse_num_threads)
         else:
@@ -712,12 +725,13 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
     def load_from_files(self, 
         filepath: str, 
         x_label: str = 'r_px_microscope_stitched',
-        y_label: str ='c_px_microscope_stitched',
+        y_label: str = 'c_px_microscope_stitched',
+        z_label: str = None,
+        z: float = 0,
         gene_label: str = 'decoded_genes',
         other_columns: Optional[list] = None,
         unique_genes: Optional[np.ndarray] = None,
         exclude_genes: list = None,
-        z: float = 0,
         pixel_size: str = '1 micrometer',
         x_offset: float = 0,
         y_offset: float = 0,
@@ -741,6 +755,11 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
             y_label (str, optional): Name of the column of the Pandas dataframe
                 that contains the Y coordinates of the points. Defaults to 
                 'c_px_microscope_stitched'.
+            z_label (str, optional): Name of the column of the datafile
+                that contains the Z coordinates of the points. If None, the Z
+                coordinate will default to the z value (see below).
+                Defaults to None.
+            z (float, optional): Z coordinate of the dataset. Defaults to zero.
             gene_label (str, optional):  Name of the column of the Pandas 
                 dataframe that contains the gene labels of the points. 
                 Defaults to 'decoded_genes'.
@@ -756,7 +775,6 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
                 Defaults to None.
             exclude_genes (list, optional): List with genes to exclude from
                 dataset. Defaults to None.     
-            z (float, optional): Z coordinate of the dataset. Defaults to zero.
             pixel_size (str, optional): Unit size of the data. Is used to 
                 convert data to micrometer scale. Uses Pint's UnitRegistry.
                 Example: "0.1 micrometer", means that each pixel or unit has 
@@ -791,17 +809,17 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
         """      
 
         #Correct slashes in path
-        if os_name == 'nt': #I guess this would work
-            if not filepath.endswith('\\'):
-                filepath = filepath + '\\'
-        if os_name == 'posix':
-            if not filepath.endswith('/'):
-                filepath = filepath + '/'
+        #if os_name == 'nt': #I guess this would work
+        #    if not filepath.endswith('\\'):
+        #        filepath = filepath + '\\'
+        #if os_name == 'posix':
+        #    if not filepath.endswith('/'):
+        #        filepath = filepath + '/'
 
         #Load data
-        files = glob(filepath + '*' + '.parquet')
+        files = glob(path.join(filepath, '*.parquet'))
         if len(files) == 0:
-            files = glob(filepath + '*' + '.csv')
+            files = glob(path.join(filepath, '*.csv'))
         if len(files) == 0:
             raise Exception(f'No .parquet or .csv files found in {filepath}')
         files = sorted(files)
@@ -851,7 +869,7 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
         lazy_result = []
 
         for f, zz, pxs, xo, yo, zo, pol in tqdm(zip(files, z, pixel_size, x_offset, y_offset, z_offset, polygon)):
-            lr = dask.delayed(Dataset) (f, x_label, y_label, gene_label, other_columns, self.unique_genes, exclude_genes, 
+            lr = dask.delayed(Dataset) (f, x_label, y_label, z_label, gene_label, other_columns, self.unique_genes, exclude_genes, 
                                         zz, pxs, xo, yo, zo, pol, select_valid, reparse, color_input, verbose = self.verbose, 
                                         part_of_multidataset=True)
             lazy_result.append(lr)

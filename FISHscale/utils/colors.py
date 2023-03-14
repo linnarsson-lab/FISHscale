@@ -116,8 +116,9 @@ class ManyColors:
             raise AttributeError('Can not save "color_dict" because it does not exist. Generate a color dictionary with the "make_color_dict()" function.')
         
         file_name = path.join(self.FISHscale_data_folder, f'{self.dataset_name}_color_dictionary.pkl')
-        with open(file_name, 'wb') as f:
-            pickle.dump(self.color_dict, f)
+        #with open(file_name, 'wb') as f:
+        #    pickle.dump(self.color_dict, f)
+        pickle.dump(self.color_dict, open(file_name, 'wb'))
         return file_name
 
     def load_color_dict(self, file: str) -> bool:
@@ -131,8 +132,9 @@ class ManyColors:
 
         """
         try:
-            with open(file, 'rb') as f:
-                self.color_dict = pickle.load(f)
+            #with open(file, 'rb') as f:
+            #    self.color_dict = pickle.load(f)
+            self.color_dict = pickle.load(open(file, 'rb'))
             return True
         except FileNotFoundError:
             return False
