@@ -13,7 +13,7 @@ setup(
 		'scikit-learn',
 		'scipy',
 		'networkx',
-		'sklearn',
+		#'sklearn', outdated
 		'tqdm',
 		'umap-learn',
 		'torch',
@@ -24,7 +24,7 @@ setup(
         'pyarrow',
         'fastparquet',
         'annoy',
-        'geopandas',
+        #'geopandas',
         'shapely',
         'numba',
 		'h5py',

@@ -50,7 +50,7 @@ class DataLoader_base():
                     if c in existing_columns:
                         valid_columns.append(c)
                     else:
-                        if i < 4: #First 3 columns are critical for data opening
+                        if i < 3: #Columns 0, 1, and 2 are critical for data opening
                             critical_columns.append(c)
                         else:
                             invalid_columns.append(c)
@@ -86,8 +86,7 @@ class DataLoader_base():
             raise Exception(f'Input should be a dictionary, not {type(data_dict)}.')
         
         file_name = path.join(self.FISHscale_data_folder, f'{self.dataset_name}_metadata.pkl')
-        with open(file_name, 'wb') as pf:
-            pickle.dump(data_dict, pf)
+        pickle.dump(data_dict, open(file_name, 'wb'))
         
     def _metadatafile_read(self, file_name=None) -> Dict:
         """Read the full metadata file and return the dictionary.
@@ -104,8 +103,7 @@ class DataLoader_base():
             file_name = path.join(self.FISHscale_data_folder, f'{self.dataset_name}_metadata.pkl')
         
         try:
-            with open(file_name, 'rb') as pf:
-                prop = pickle.load(pf)
+            prop = pickle.load(open(file_name, 'rb'))
         except FileNotFoundError as e:
             logging.info('Metadata file was not found, please reparse.')
             raise e
@@ -287,8 +285,8 @@ class DataLoader_base():
             shutil.rmtree(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes',attribute_name))
         except:
             makedirs(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes',attribute_name),exist_ok=True)
-        da.groupby(attribute_name).apply(lambda x: self._dump_to_parquet(x, self.dataset_name, self.FISHscale_data_folder+'/attributes/{}'.format(attribute_name),engine='fastparquet'))#, meta=('float64')).compute()
-        self.dask_attrs[attribute_name] = dd.read_parquet(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes/{}'.format(attribute_name), '*.parquet'), engine='fastparquet')   
+        da.groupby(attribute_name).apply(lambda x: self._dump_to_parquet(x, self.dataset_name, path.join(self.FISHscale_data_folder, 'attributes', attribute_name), engine='fastparquet'))#, meta=('float64')).compute()
+        self.dask_attrs[attribute_name] = dd.read_parquet(path.join(self.dataset_folder, self.FISHscale_data_folder, 'attributes', attribute_name, '*.parquet'), engine='fastparquet')   
         #self.dask_attrs.to_parquet(path.join(self.dataset_folder,self.FISHscale_data_folder,'attributes'))    
 
 class DataLoader(DataLoader_base):
@@ -341,7 +339,7 @@ class DataLoader(DataLoader_base):
     def load_data(self, filename: str, x_label: str, y_label: str, gene_label: str, other_columns: Optional[list], 
                   x_offset: float, y_offset: float, z_offset: float, pixel_size: str, unique_genes: Optional[np.ndarray],
                   exclude_genes: list = None, polygon: np.ndarray = None, select_valid: Union[bool, str] = False,
-                  reparse: bool = False) -> Any:             
+                  reparse: bool = False, z_label: str = None) -> Any:             
         """Load data from data file.
         
         Opens a file containing XY coordinates of points with a gene label.
@@ -354,17 +352,20 @@ class DataLoader(DataLoader_base):
         
         Note: Parsing will save the offsets. To change the offset the data
             needs to be reparsed unfortunately. 
-        Note: The original data file needs to fit into ram RAM.
+        Note: The original data file needs to fit into RAM.
 
         Args:
             filename (str): Path to the datafile to load. Should be in .parquet
                 or .csv format.
-            x_label (str, optional): Name of the column of the Pandas dataframe
+            x_label (str, optional): Name of the column of the datafile
                 that contains the X coordinates of the points. Defaults to 
                 'r_px_microscope_stitched'.
-            y_label (str, optional): Name of the column of the Pandas dataframe
+            y_label (str, optional): Name of the column of the datafile
                 that contains the Y coordinates of the points. Defaults to 
                 'c_px_microscope_stitched'.
+            z_label (str, optional): Name of the column of the datafile
+                that contains the Z coordinates of the points. If None, the Z
+                coordinate will default to self.z. Defaults to None.
             gene_label (str, optional):  Name of the column of the Pandas 
                 dataframe that contains the gene labels of the points. 
                 Defaults to 'below3Hdistance_genes'.
@@ -408,7 +409,6 @@ class DataLoader(DataLoader_base):
             if already_parsed[0] and not reparse:
                 self.vp(f'Found {already_parsed[1]} already parsed files. Skipping parsing.')
             new_parse = True
-            #print(new_parse, 'new parse')
             #Data parsing
             if filename.endswith(('.parquet', '.csv')):
                 
@@ -416,30 +416,36 @@ class DataLoader(DataLoader_base):
                 open_f = self._open_data_function(filename)
                 
                 #Get columns to open              
-                col_to_open = [[gene_label, x_label, y_label], other_columns]
-                col_to_open = list(itertools.chain.from_iterable(col_to_open))
-                rename_col = dict(zip([gene_label, x_label, y_label], ['g', 'x', 'y']))
-                
+                col_to_open = []
+                for i in itertools.chain.from_iterable([[gene_label, x_label, y_label, z_label], other_columns]):
+                    if i != None:
+                        col_to_open.append(i)
+
                 #Read the data file
                 data = open_f(filename, col_to_open)
                     
                 #Rename columns
+                rename_col = dict(zip([gene_label, x_label, y_label, z_label], ['g', 'x', 'y', 'z']))
                 data = data.rename(columns = rename_col)
                 
-                #Offset data
-                if x_offset !=0 or y_offset != 0:
-                    data.loc[:, ['x', 'y']] += [x_offset, y_offset]
-                    self.x_offset = 0
-                    self.y_offset = 0
+                #Add Z coordinate if not present in data
+                if not hasattr(data, 'z'):
+                    data['z'] = self.z
                     
-                #Add z_offset
-                self.z += z_offset
-                data['z'] = self.z
-                self.z_offset = 0
+                #Offset data
+                if x_offset != 0:
+                    data.loc[:, 'x'] += x_offset
+                    self.x_offset = 0
+                if y_offset != 0:
+                    data.loc[:, 'y'] += y_offset
+                    self.y_offset = 0
+                if z_offset != 0:
+                    data.loc[:, 'z'] += z_offset
+                    self.z_offset = 0
                 
                 #Scale the data
                 if pixel_size != 1:
-                    data.loc[:, ['x', 'y']] = data.loc[:, ['x', 'y']] * pixel_size
+                    data.loc[:, ['x', 'y', 'z']] = data.loc[:, ['x', 'y', 'z']] * pixel_size
                 
                 #Find data extent and make metadata file
                 self._coordinate_properties(data)
@@ -472,7 +478,7 @@ class DataLoader(DataLoader_base):
                     data = data.loc[data.g.isin(self.unique_genes)]
                 self._metadatafile_add({'unique_genes': self.unique_genes})    
                 
-                #Filter dots with polygon
+                #Filter dots with XY polygon
                 if type(polygon) != type(None):
                     filt = is_inside_sm_parallel(polygon, data.loc[:,['x', 'y']].to_numpy())
                     data = data.loc[filt,:]

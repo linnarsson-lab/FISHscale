@@ -46,6 +46,7 @@ class SAGELightning(LightningModule):
                  n_hidden=64,
                  dropout=0.1,
                  lr=0.001,
+                 features_name='gene',
                  supervised=False,
                  reference=0,
                  smooth=False,
@@ -69,7 +70,9 @@ class SAGELightning(LightningModule):
                             n_layers=n_layers,
                             dropout=dropout, 
                             supervised=supervised,
-                            aggregator= aggregator)
+                            aggregator= aggregator,
+                            features_name=features_name,
+                            )
 
         self.lr = lr
         self.supervised= supervised
@@ -82,6 +85,7 @@ class SAGELightning(LightningModule):
         self.n_latent = n_latent
         self.inference_type = inference_type
         self.loss_type = loss_type
+        self.features_name = features_name
 
         if self.inference_type == 'VI':
             self.automatic_optimization = False
@@ -92,6 +96,8 @@ class SAGELightning(LightningModule):
 
         self.automatic_optimization = False
         if self.supervised:
+            self.num_classes = n_classes
+            '''   
             self.l_loc = l_loc
             self.l_scale = l_scale
             self.train_acc = torchmetrics.Accuracy()
@@ -102,26 +108,34 @@ class SAGELightning(LightningModule):
             self.alpha = 1
             self.warmup_counter = 0
             self.warmup_factor=warmup_factor
+            '''
 
     def training_step(self, batch, batch_idx):
 
         self.reference = self.reference.to(self.device)
         losses = []
         for sub_batch in batch:
-            _, pos, neg, mfgs = sub_batch
-            pos_ids = pos.edges()[0]
-            mfgs = [mfg.int() for mfg in mfgs]
-            batch_inputs = mfgs[0].srcdata['gene']
+            if self.supervised:
+                _, _, mfgs = sub_batch
+                mfgs = [mfg.int() for mfg in mfgs]
+                batch_inputs = mfgs[0].srcdata[self.features_name]
+            
+            else:
+                _, pos, neg, mfgs = sub_batch
+                pos_ids = pos.edges()[0]
+                mfgs = [mfg.int() for mfg in mfgs]
+                batch_inputs = mfgs[0].srcdata[self.features_name]
+
             if len(batch_inputs.shape) == 1:
-                batch_inputs = F.one_hot(batch_inputs, num_classes=self.in_feats)
-            #print(batch_inputs.shape)
+                if self.supervised == False:
+                    batch_inputs = F.one_hot(batch_inputs.to(th.int64), num_classes=self.in_feats)
 
             zn_loc = self.module.encoder(batch_inputs,mfgs)
             if self.loss_type == 'unsupervised':
                 graph_loss = self.loss_fcn(zn_loc, pos, neg).mean()
             else:
-                #loss_fcn = nn.CrossEntropyLoss()
                 graph_loss = F.cross_entropy(zn_loc, mfgs[-1].dstdata['label'])
+
             opt_g = self.optimizers()
             opt_g.zero_grad()
             self.manual_backward(graph_loss)
@@ -172,7 +186,8 @@ class SAGE(nn.Module):
                 n_layers, 
                 dropout,
                 supervised,
-                aggregator):
+                aggregator,
+                features_name='gene'):
         super().__init__()
         self.n_layers = n_layers
         self.n_hidden = n_hidden
@@ -181,6 +196,7 @@ class SAGE(nn.Module):
         self.supervised = supervised
         self.aggregator = aggregator
         self.in_feats = in_feats
+        self.features_name = features_name
 
         self.encoder = Encoder(in_feats=in_feats,
                                 n_hidden=n_hidden,
@@ -199,17 +215,23 @@ class SAGE(nn.Module):
             layers.
             """
             self.eval()
-            if len(g.ndata['gene'].shape) == 1:
-                g.ndata['h'] = th.log(F.one_hot(g.ndata['gene'], num_classes=self.in_feats)+1)
+            if len(g.ndata[self.features_name].shape) == 1:
+                g.ndata['h'] = th.log(F.one_hot(g.ndata[self.features_name], num_classes=self.in_feats)+1)
                 sampler = dgl.dataloading.MultiLayerFullNeighborSampler(1, prefetch_node_feats=['h'])
                 
-                dataloader = dgl.dataloading.NodeDataLoader(
+                if core_nodes is None:
+                    dataloader = dgl.dataloading.NodeDataLoader(
+                            g, th.arange(g.num_nodes()).to(g.device), sampler, device=device,
+                            batch_size=batch_size, shuffle=False, drop_last=False, num_workers=num_workers,
+                            persistent_workers=(num_workers > 0))
+                else:
+                    dataloader = dgl.dataloading.NodeDataLoader(
                         g, core_nodes.to(g.device), sampler, device=device,
                         batch_size=batch_size, shuffle=False, drop_last=False, num_workers=num_workers,
                         persistent_workers=(num_workers > 0))
 
             else:
-                g.ndata['h'] = th.log(g.ndata['gene']+1)
+                g.ndata['h'] = th.log(g.ndata[self.features_name]+1)
                 sampler = dgl.dataloading.MultiLayerFullNeighborSampler(1, prefetch_node_feats=['h'])
                 dataloader = dgl.dataloading.NodeDataLoader(
                         g, th.arange(g.num_nodes()).to(g.device), sampler, device=device,
@@ -244,17 +266,18 @@ class SAGE(nn.Module):
                     y[output_nodes] = h.cpu().detach()#.numpy()
                 g.ndata['h'] = y
             return y, p_class
-    
 
-    
-
-    def inference_attention(self, g, device, batch_size, num_workers, nodes=None,buffer_device=None):
+    def inference_attention(self, g, device, batch_size, num_workers, nodes=None, buffer_device=None):
         # The difference between this inference function and the one in the official
         # example is that the intermediate results can also benefit from prefetching.
         if type(nodes) == type(None):
             nodes = th.arange(g.num_nodes()).to(g.device)
 
-        g.ndata['h'] = th.log(g.ndata['gene']+1)
+        if len(g.ndata[self.features_name].shape) == 1:
+            g.ndata['h'] = th.log(F.one_hot(g.ndata[self.features_name], num_classes=self.in_feats)+1)
+        else:
+            g.ndata['h'] = th.log(g.ndata[self.features_name]+1)
+            
         sampler = dgl.dataloading.MultiLayerFullNeighborSampler(1, prefetch_node_feats=['h'])
         dataloader = dgl.dataloading.NodeDataLoader(
                 g, nodes, sampler, device=device,

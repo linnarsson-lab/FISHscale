@@ -65,7 +65,7 @@ class GraphDecoder:
 
     def simulate_expression(
         self, 
-        ntimes=2, 
+        ntimes=1, 
         simulation_name='base_simulation',
         unique_region=True,
         ):
@@ -205,7 +205,7 @@ class GraphDecoder:
             #logging.info((self.g.ndata['tmp_gene'].sum(axis=1) > 0).sum())
             
         simulated_genes = self.data.unique_genes[np.where(self.g.ndata['tmp_gene'].numpy() == 1)[1]]
-        logging.info((self.g.ndata['tmp_gene'].sum(axis=1) == 0).sum())
+        logging.info('Simulation Done')
             
         #simulated_genes_onehot = self.g.ndata['tmp_gene'].numpy().clone()
         return simulated_genes#, simulated_genes_onehot
