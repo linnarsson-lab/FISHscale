@@ -198,8 +198,8 @@ class SAGE(nn.Module):
         self.in_feats = in_feats
         self.features_name = features_name
         self.encoder = Encoder(in_feats=in_feats,
-                                n_hidden=n_hidden,
-                                n_latent=n_latent,
+                                n_hidden=128,
+                                n_latent=128,
                                 n_layers=n_layers,
                                 supervised=supervised,
                                 aggregator=aggregator,
@@ -215,7 +215,8 @@ class SAGE(nn.Module):
             """
             self.eval()
             if len(g.ndata[self.features_name].shape) == 1:
-                g.ndata['h'] = th.log(F.one_hot(g.ndata[self.features_name], num_classes=self.in_feats)+1)
+                g.ndata['h'] = self.encoder.embedding(F.one_hot(g.ndata[self.features_name], num_classes=self.in_feats))
+                #g.ndata['h'] = th.log(F.one_hot(g.ndata[self.features_name], num_classes=self.in_feats)+1)
                 sampler = dgl.dataloading.MultiLayerFullNeighborSampler(1, prefetch_node_feats=['h'])
                 
                 if core_nodes is None:
@@ -230,7 +231,8 @@ class SAGE(nn.Module):
                         persistent_workers=(num_workers > 0))
 
             else:
-                g.ndata['h'] = th.log(g.ndata[self.features_name]+1)
+                #g.ndata['h'] = th.log(g.ndata[self.features_name]+1)
+                g.ndata['h'] = self.encoder.embedding(g.ndata[self.features_name])
                 sampler = dgl.dataloading.MultiLayerFullNeighborSampler(1, prefetch_node_feats=['h'])
                 dataloader = dgl.dataloading.NodeDataLoader(
                         g, th.arange(g.num_nodes()).to(g.device), sampler, device=device,
@@ -273,9 +275,11 @@ class SAGE(nn.Module):
             nodes = th.arange(g.num_nodes()).to(g.device)
 
         if len(g.ndata[self.features_name].shape) == 1:
-            g.ndata['h'] = th.log(F.one_hot(g.ndata[self.features_name], num_classes=self.in_feats)+1)
+            #g.ndata['h'] = th.log(F.one_hot(g.ndata[self.features_name], num_classes=self.in_feats)+1)
+            g.ndata['h'] = self.encoder.embedding(F.one_hot(g.ndata[self.features_name], num_classes=self.in_feats))
         else:
-            g.ndata['h'] = th.log(g.ndata[self.features_name]+1)
+            #g.ndata['h'] = th.log(g.ndata[self.features_name]+1)
+            g.ndata['h'] = self.encoder.embedding(g.ndata[self.features_name])
             
         sampler = dgl.dataloading.MultiLayerFullNeighborSampler(1, prefetch_node_feats=['h'])
         dataloader = dgl.dataloading.NodeDataLoader(
@@ -323,9 +327,9 @@ class Encoder(nn.Module):
         ):
         super().__init__()
         self.aggregator = aggregator
-        n_embed = 256
+        n_embed = 128
         self.embedding = nn.Embedding(in_feats, n_embed)
-        
+
         layers = nn.ModuleList()
         if supervised:
             self.norm = F.normalize#PairNorm()#DiffGroupNorm(n_hidden,n_classes,None)
@@ -380,7 +384,9 @@ class Encoder(nn.Module):
         #self.gs_var = nn.Linear(n_hidden, n_latent)
     
     def forward(self, x, blocks=None): 
-        h = th.log(x+1)
+        #h = th.log(x+1)
+        e = self.embedding(x)
+        h = e
         for l, (layer, block) in enumerate(zip(self.encoder_dict['GS'], blocks)):
             if self.aggregator != 'attentional':
                 h = layer(block, h,)
@@ -389,6 +395,7 @@ class Encoder(nn.Module):
                     h = layer(block, h,).flatten(1)
                 else:
                     h = layer(block, h,).mean(1)
+            h = h + e
 
         #z_loc = self.gs_mu(h)
         #z_scale = th.exp(self.gs_var(h)) +1e-6
