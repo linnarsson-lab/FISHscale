@@ -197,9 +197,6 @@ class SAGE(nn.Module):
         self.aggregator = aggregator
         self.in_feats = in_feats
         self.features_name = features_name
-
-        n_embed = 256
-        self.embedding = nn.Embedding(in_feats, n_embed)
         self.encoder = Encoder(in_feats=in_feats,
                                 n_hidden=n_hidden,
                                 n_latent=n_latent,
@@ -326,11 +323,15 @@ class Encoder(nn.Module):
         ):
         super().__init__()
         self.aggregator = aggregator
+        n_embed = 256
+        self.embedding = nn.Embedding(in_feats, n_embed)
+        
         layers = nn.ModuleList()
         if supervised:
             self.norm = F.normalize#PairNorm()#DiffGroupNorm(n_hidden,n_classes,None)
         else:
             self.norm = F.normalize#PairNorm()#DiffGroupNorm(n_hidden,20)
+            
         self.num_heads = 4
         self.n_layers = n_layers
         for i in range(0,n_layers-1):
