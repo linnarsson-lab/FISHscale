@@ -113,7 +113,6 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
         anndata.raw = anndata
         if normalize:
             sc.pp.normalize_total(anndata, target_sum=1e4)
-            sc.pp.log1p(anndata)
         self.anndata = anndata
 
         ### Model hyperparameters
