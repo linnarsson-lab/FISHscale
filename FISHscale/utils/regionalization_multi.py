@@ -5,7 +5,6 @@ import gc
 import glob
 import math
 from itertools import combinations, permutations
-import geopandas as gp
 import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
@@ -28,9 +27,12 @@ import dask
 import colorsys
 from dask.diagnostics import ProgressBar
 import itertools
-
 from collections import Counter
 import logging
+try:
+    import geopandas as gp
+except Exception as e:
+    print(f'Geopandas not installed. Install if desired. Error: {e}')
 
 class RegionalizeMulti(Decomposition):
     
@@ -320,7 +322,7 @@ class RegionalizeMulti(Decomposition):
             plt.tight_layout()
                 
         df_all = pd.concat(df_all, axis=1, sort=False)
-        samples = np.array(itertools.chain.from_iterable(samples))
+        samples = np.array(list(itertools.chain.from_iterable(samples)))
         return df_all, samples
     
     def cluster_mean(self, data: Any, labels: np.ndarray) -> Any:

@@ -131,8 +131,7 @@ class AxSize:
 
 
 class GeneScatter(AxSize):
-
-    def scatter_plot(self, genes: Union[List, np.ndarray], s: float=0.1, 
+    def scatter_plot(self, genes: Union[List, np.ndarray], s: Union[float, list]=0.1, 
                     colors: Union[List, np.ndarray] = None, 
                     ax_scale_factor: int=10, view: Union[Any, List] = None, 
                     scalebar: bool=True, show_axes: bool=False,
@@ -205,7 +204,11 @@ class GeneScatter(AxSize):
         #Plot points
         if type(colors) == type(None):
             colors = [self.color_dict[g] for g in genes]
-        for g, c in zip(genes, colors):
+
+        # Allows to pass different sizes for each gene
+        if type(s) == float:
+            s = [s] * len(genes)
+        for g, c, s_ in zip(genes, colors, s):
             data = self.get_gene(g)
             x = data.x
             y = data.y
@@ -218,7 +221,7 @@ class GeneScatter(AxSize):
                 if reset_xy:
                     x = x - view[0][0]
                     y = y - view[0][1]
-            ax.scatter(x, y, s=s, color=c, zorder=0, label=g, alpha=alpha, rasterized=True)
+            ax.scatter(x, y, s=s_, color=c, zorder=0, label=g, alpha=alpha, rasterized=True)
             del data
 
         if invert_yaxis:
@@ -327,7 +330,6 @@ class MultiGeneScatter(AxSize):
         """   
 
         if transparent == False:
-            print('black background')
             plt.style.use('dark_background')
         
         #Check input
@@ -486,9 +488,11 @@ class AttributeScatter(AxSize):
                     self.color_dict[str(a)] = (r()/255,r()/255,r()/255)
 
             colors = [self.color_dict[g] for g in attributes]
-        for g, c in zip(attributes, colors):
-            data = self.dask_attrs[section]
-            data= data[data[section].isin([g])].compute()
+        # Allows to pass different sizes for each gene
+        if type(s) == float:
+            s = [s] * len(genes)
+        for g, c, s_ in zip(genes, colors, s):
+            data = self.get_gene(g)
             x = data.x
             y = data.y
             if isinstance(view, list):
@@ -497,7 +501,10 @@ class AttributeScatter(AxSize):
                 filt = filt_x & filt_y
                 x = x[filt]
                 y = y[filt]
-            ax.scatter(x, y, s=s, color=c, zorder=0, label=g, alpha=alpha, rasterized=True)
+                if reset_xy:
+                    x = x - view[0][0]
+                    y = y - view[0][1]
+            ax.scatter(x, y, s=s_, color=c, zorder=0, label=g, alpha=alpha, rasterized=True)
             del data
         
         #Rescale
