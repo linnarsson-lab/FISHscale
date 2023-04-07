@@ -218,13 +218,11 @@ class SAGE(nn.Module):
 
             for l, layer in enumerate(self.encoder.encoder_dict['GS']):
                 if l == self.n_layers - 1:
-                    y = th.zeros(g.num_nodes(), self.n_latent) #if not self.supervised else th.zeros(g.num_nodes(), self.n_classes)
+                    y = th.zeros(g.num_nodes(), self.encoder.n_embed) #if not self.supervised else th.zeros(g.num_nodes(), self.n_classes)
                 else:
                     if self.aggregator == 'attentional':
-                        y = th.zeros(g.num_nodes(), self.n_hidden*4)
-                    else:
-                        y = th.zeros(g.num_nodes(), self.n_hidden)
-                
+                        y = th.zeros(g.num_nodes(), self.encoder.n_embed*self.encoder.num_heads)
+
                 if self.supervised:
                     p_class = th.zeros(g.num_nodes(), self.n_classes)
                 else:
@@ -270,10 +268,10 @@ class SAGE(nn.Module):
         
         for l, layer in enumerate(self.encoder.encoder_dict['GS']):
             if l == self.n_layers - 1:
-                    y = th.zeros(g.num_nodes(), self.n_latent,device=buffer_device)
+                    y = th.zeros(g.num_nodes(), self.encoder.n_embed, device=buffer_device)
                     att2_list = [] #if not self.supervised else th.zeros(g.num_nodes(), self.n_classes)
             else:
-                    y = th.zeros(g.num_nodes(), self.n_hidden*4, device=buffer_device)
+                    y = th.zeros(g.num_nodes(), self.encoder.n_embed*self.encoder.num_heads, device=buffer_device)
                     att1_list = []
                 
             for input_nodes, output_nodes, blocks in dataloader:
@@ -314,6 +312,7 @@ class Encoder(nn.Module):
         super().__init__()
         self.aggregator = aggregator
         n_embed = 64
+        self.n_embed = n_embed
         self.embedding = nn.Embedding(in_feats, n_embed)
         self.ln1 = nn.LayerNorm(n_embed)
         self.ln2 = nn.LayerNorm(n_embed)
