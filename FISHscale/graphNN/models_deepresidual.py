@@ -283,12 +283,14 @@ class SAGE(nn.Module):
                 dr = blocks[0].dstdata[self.features_name]
                 if l != self.n_layers-1:
                     h,att1 = layer(blocks[0], x,get_attention=True)
-                    att1_list.append(att1.mean(1).cpu().detach())
+                    #att1_list.append(att1.mean(1).cpu().detach())
+                    att1_list.append(att1.cpu().detach())
                     h= h.flatten(1)
                     
                 else:
                     h, att2 = layer(blocks[0], x,get_attention=True)
-                    att2_list.append(att2.mean(1).cpu().detach())
+                    #att2_list.append(att2.mean(1).cpu().detach())
+                    att2_list.append(att2.cpu().detach())
                     h = h.mean(1)
                     
                     h = self.encoder.ln1(h) + self.encoder.embedding(dr)
@@ -320,19 +322,27 @@ class Encoder(nn.Module):
         layers = nn.ModuleList()
         self.num_heads = 4
         self.n_layers = n_layers
+        [0,1,2]
         for i in range(0,n_layers-1):
-            if i > 0:
-                in_feats = n_hidden
-                x = 0.2
-            else:
-                x = 0
-
+            #if i > 0:
+            #    in_feats = n_hidden
+            #    x = 0.2
+            #else:
+            #    x = 0
+            if i == 0:
                 layers.append(dglnn.GATv2Conv(n_embed, 
                                             n_hidden, 
                                             num_heads=self.num_heads,
-                                            feat_drop=x,
+                                            feat_drop=dropout,
                                             #allow_zero_in_degree=False
                                             ))
+            else:
+                layers.append(dglnn.GATv2Conv(n_embed*self.num_heads, 
+                            n_hidden, 
+                            num_heads=self.num_heads,
+                            feat_drop=dropout,
+                            #allow_zero_in_degree=False
+                            ))
 
 
         layers.append(dglnn.GATv2Conv(n_embed*self.num_heads, 
