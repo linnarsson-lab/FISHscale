@@ -10,7 +10,8 @@ from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 import pytorch_lightning as pl
 import pandas as pd
 import dgl
-from FISHscale.graphNN.models import SAGELightning
+from FISHscale.graphNN.models_deepresidual import SAGELightning
+#from FISHscale.graphNN.models import SAGELightning
 from FISHscale.graphNN.graph_utils import GraphUtils, GraphPlotting
 from FISHscale.graphNN.graph_decoder import GraphDecoder
 
@@ -397,10 +398,10 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
             labelled (bool, optional): [description]. Defaults to True.
         """        
         self.model.eval()
-
-        self.latent_unlabelled, prediction_unlabelled = self.model.module.inference(
+        self.g.to('cuda')
+        self.latent_unlabelled, _ = self.model.module.inference(
                         self.g,
-                        self.model.device,
+                        self.g.device,
                         10*512,
                         0)
 

@@ -45,21 +45,16 @@ class SAGELightning(LightningModule):
                  n_layers,
                  n_hidden=64,
                  dropout=0.1,
-                 lr=0.001,
+                 lr=1e-4,
                  features_name='gene',
                  supervised=False,
                  reference=0,
                  smooth=False,
                  device='cpu',
                  aggregator='attentional',
-                 celltype_distribution=None,
-                 ncells = None,
                  inference_type='deterministic',
-                 l_loc = None,
-                 l_scale = None,
-                 scale_factor = 1,
-                 warmup_factor = 1,
                  loss_type='unsupervised',#or supervised
+                 #decoder_loss=True,
                  ):
         super().__init__()
 
@@ -97,18 +92,6 @@ class SAGELightning(LightningModule):
         self.automatic_optimization = False
         if self.supervised:
             self.num_classes = n_classes
-            '''   
-            self.l_loc = l_loc
-            self.l_scale = l_scale
-            self.train_acc = torchmetrics.Accuracy()
-            self.kl = th.nn.KLDivLoss(reduction='sum')
-            self.dist = celltype_distribution
-            self.ncells = ncells
-            self.scale_factor = scale_factor
-            self.alpha = 1
-            self.warmup_counter = 0
-            self.warmup_factor=warmup_factor
-            '''
 
     def training_step(self, batch, batch_idx):
 
@@ -125,14 +108,24 @@ class SAGELightning(LightningModule):
                 pos_ids = pos.edges()[0]
                 mfgs = [mfg.int() for mfg in mfgs]
                 batch_inputs = mfgs[0].srcdata[self.features_name]
+                dr =  mfgs[-1].dstdata[self.features_name]
 
             if len(batch_inputs.shape) == 1:
                 if self.supervised == False:
-                    batch_inputs = F.one_hot(batch_inputs.to(th.int64), num_classes=self.in_feats)
+                    #batch_inputs = F.one_hot(batch_inputs.to(th.int64), num_classes=self.in_feats)
+                    batch_inputs = batch_inputs.to(th.int64)
 
-            zn_loc = self.module.encoder(batch_inputs,mfgs)
+            zn_loc = self.module.encoder(batch_inputs,mfgs, dr=dr)
             if self.loss_type == 'unsupervised':
                 graph_loss = self.loss_fcn(zn_loc, pos, neg).mean()
+                decoder_n1 = self.module.encoder.decoder(zn_loc).softmax(dim=-1)
+                adjacency_matrix = mfgs[1].adjacency_matrix().to_dense()
+                feats_n1 = F.one_hot((mfgs[1].srcdata[self.features_name]), num_classes=self.in_feats).T
+                feats_n1 = (th.tensor(feats_n1,dtype=th.float32)@adjacency_matrix.to(self.device)).T
+                feats_n1 = feats_n1.softmax(dim=-1)
+                #print(feats_n1.shape, decoder_n1.shape)
+                graph_loss += - nn.CosineSimilarity(dim=1, eps=1e-08)(decoder_n1, feats_n1).mean(axis=0)
+
             else:
                 graph_loss = F.cross_entropy(zn_loc, mfgs[-1].dstdata['label'])
 
@@ -198,8 +191,8 @@ class SAGE(nn.Module):
         self.in_feats = in_feats
         self.features_name = features_name
         self.encoder = Encoder(in_feats=in_feats,
-                                n_hidden=128,
-                                n_latent=128,
+                                n_hidden= 64,
+                                n_latent= 64,
                                 n_layers=n_layers,
                                 supervised=supervised,
                                 aggregator=aggregator,
@@ -214,31 +207,15 @@ class SAGE(nn.Module):
             layers.
             """
             self.eval()
-            if len(g.ndata[self.features_name].shape) == 1:
-                g.ndata['h'] = self.encoder.embedding(F.one_hot(g.ndata[self.features_name], num_classes=self.in_feats))
-                #g.ndata['h'] = th.log(F.one_hot(g.ndata[self.features_name], num_classes=self.in_feats)+1)
-                sampler = dgl.dataloading.MultiLayerFullNeighborSampler(1, prefetch_node_feats=['h'])
-                
-                if core_nodes is None:
-                    dataloader = dgl.dataloading.NodeDataLoader(
-                            g, th.arange(g.num_nodes()).to(g.device), sampler, device=device,
-                            batch_size=batch_size, shuffle=False, drop_last=False, num_workers=num_workers,
-                            persistent_workers=(num_workers > 0))
-                else:
-                    dataloader = dgl.dataloading.NodeDataLoader(
-                        g, core_nodes.to(g.device), sampler, device=device,
-                        batch_size=batch_size, shuffle=False, drop_last=False, num_workers=num_workers,
-                        persistent_workers=(num_workers > 0))
+            g.ndata['h'] = g.ndata[self.features_name]
+            sampler = dgl.dataloading.MultiLayerFullNeighborSampler(1, prefetch_node_feats=['h'])
 
-            else:
-                #g.ndata['h'] = th.log(g.ndata[self.features_name]+1)
-                g.ndata['h'] = self.encoder.embedding(g.ndata[self.features_name])
-                sampler = dgl.dataloading.MultiLayerFullNeighborSampler(1, prefetch_node_feats=['h'])
-                dataloader = dgl.dataloading.NodeDataLoader(
-                        g, th.arange(g.num_nodes()).to(g.device), sampler, device=device,
-                        batch_size=batch_size, shuffle=False, drop_last=False, num_workers=num_workers,
-                        persistent_workers=(num_workers > 0))
-            
+            dataloader = dgl.dataloading.NodeDataLoader(
+                    g, th.arange(g.num_nodes()).to(g.device), sampler, device=device,
+                    batch_size=batch_size, shuffle=False, drop_last=False, num_workers=num_workers,
+                    persistent_workers=(num_workers > 0))
+
+
             for l, layer in enumerate(self.encoder.encoder_dict['GS']):
                 if l == self.n_layers - 1:
                     y = th.zeros(g.num_nodes(), self.n_latent) #if not self.supervised else th.zeros(g.num_nodes(), self.n_classes)
@@ -254,16 +231,22 @@ class SAGE(nn.Module):
                     p_class = None
 
                 for input_nodes, output_nodes, blocks in tqdm.tqdm(dataloader):
-                    x = blocks[0].srcdata['h']
-                    if l != self.n_layers-1:
-                        h = layer(blocks[0], x)
-                        if self.aggregator == 'attentional':
-                            h= h.flatten(1)
+                    if l == 0:
+                        x = self.encoder.embedding(blocks[0].srcdata['h'])
                     else:
-                        h = layer(blocks[0], x)
-                        if self.aggregator == 'attentional':
-                            h = h.mean(1)
-                        #h = self.encoder.gs_mu(h)
+                        x = blocks[0].srcdata['h']
+                    dr = blocks[0].dstdata[self.features_name]
+                    if l != self.n_layers-1:
+                        h,att1 = layer(blocks[0], x,get_attention=True)
+                        h= h.flatten(1)
+                        
+                    else:
+                        h, att2 = layer(blocks[0], x,get_attention=True)
+                        h = h.mean(1)
+                        
+                        h = self.encoder.ln1(h) + self.encoder.embedding(dr)
+                        h = self.encoder.fw(self.encoder.ln2(h)) + h
+
                     y[output_nodes] = h.cpu().detach()#.numpy()
                 g.ndata['h'] = y
             return y, p_class
@@ -274,13 +257,8 @@ class SAGE(nn.Module):
         if type(nodes) == type(None):
             nodes = th.arange(g.num_nodes()).to(g.device)
 
-        if len(g.ndata[self.features_name].shape) == 1:
-            #g.ndata['h'] = th.log(F.one_hot(g.ndata[self.features_name], num_classes=self.in_feats)+1)
-            g.ndata['h'] = self.encoder.embedding(F.one_hot(g.ndata[self.features_name], num_classes=self.in_feats))
-        else:
-            #g.ndata['h'] = th.log(g.ndata[self.features_name]+1)
-            g.ndata['h'] = self.encoder.embedding(g.ndata[self.features_name])
-            
+
+        g.ndata['h'] = g.ndata[self.features_name]    
         sampler = dgl.dataloading.MultiLayerFullNeighborSampler(1, prefetch_node_feats=['h'])
         dataloader = dgl.dataloading.NodeDataLoader(
                 g, nodes, sampler, device=device,
@@ -299,7 +277,12 @@ class SAGE(nn.Module):
                     att1_list = []
                 
             for input_nodes, output_nodes, blocks in dataloader:
-                x = blocks[0].srcdata['h']
+                #x = blocks[0].srcdata['h']
+                if l == 0:
+                    x = self.encoder.embedding(blocks[0].srcdata['h'])
+                else:
+                    x = blocks[0].srcdata['h']
+                dr = blocks[0].dstdata[self.features_name]
                 if l != self.n_layers-1:
                     h,att1 = layer(blocks[0], x,get_attention=True)
                     att1_list.append(att1.mean(1).cpu().detach())
@@ -309,7 +292,10 @@ class SAGE(nn.Module):
                     h, att2 = layer(blocks[0], x,get_attention=True)
                     att2_list.append(att2.mean(1).cpu().detach())
                     h = h.mean(1)
-                    #h = self.encoder.gs_mu(h)   
+                    
+                    h = self.encoder.ln1(h) + self.encoder.embedding(dr)
+                    h = self.encoder.fw(self.encoder.ln2(h)) + h
+
                 y[output_nodes] = h.cpu().detach().to(buffer_device)
             g.ndata['h'] = y
         return th.concat(att1_list), th.concat(att2_list)
@@ -327,15 +313,12 @@ class Encoder(nn.Module):
         ):
         super().__init__()
         self.aggregator = aggregator
-        n_embed = 128
+        n_embed = 64
         self.embedding = nn.Embedding(in_feats, n_embed)
+        self.ln1 = nn.LayerNorm(n_embed)
+        self.ln2 = nn.LayerNorm(n_embed)
 
         layers = nn.ModuleList()
-        if supervised:
-            self.norm = F.normalize#PairNorm()#DiffGroupNorm(n_hidden,n_classes,None)
-        else:
-            self.norm = F.normalize#PairNorm()#DiffGroupNorm(n_hidden,20)
-            
         self.num_heads = 4
         self.n_layers = n_layers
         for i in range(0,n_layers-1):
@@ -345,48 +328,42 @@ class Encoder(nn.Module):
             else:
                 x = 0
 
-            if aggregator == 'attentional':
-                layers.append(dglnn.GATv2Conv(in_feats, 
+                layers.append(dglnn.GATv2Conv(n_embed, 
                                             n_hidden, 
                                             num_heads=self.num_heads,
                                             feat_drop=x,
                                             #allow_zero_in_degree=False
                                             ))
 
-            else:
-                layers.append(dglnn.SAGEConv(in_feats, 
-                                            n_hidden, 
-                                            aggregator_type=aggregator,
-                                            #feat_drop=0.2,
-                                            activation=F.relu,
-                                            norm=self.norm,
-                                            ))
 
-        if aggregator == 'attentional':
-            layers.append(dglnn.GATv2Conv(n_hidden*self.num_heads, 
-                                        n_latent, 
-                                        num_heads=self.num_heads, 
-                                        feat_drop=dropout,
-                                        #allow_zero_in_degree=False
-                                        ))
-
-        else:
-            layers.append(dglnn.SAGEConv(n_hidden, 
-                                            n_latent, 
-                                            aggregator_type=aggregator,
-                                            feat_drop=dropout,
-                                            activation=F.relu,
-                                            norm=self.norm
-                                            ))
+        layers.append(dglnn.GATv2Conv(n_embed*self.num_heads, 
+                                    n_latent, 
+                                    num_heads=self.num_heads, 
+                                    feat_drop=dropout,
+                                    #allow_zero_in_degree=False
+                                    ))
 
         self.encoder_dict = nn.ModuleDict({'GS': layers})
-        #self.gs_mu = nn.Linear(n_hidden, n_latent)
-        #self.gs_var = nn.Linear(n_hidden, n_latent)
+        #self.fw = nn.Linear(n_hidden, n_embed)
+        self.fw = nn.Sequential(
+            nn.Linear(n_latent, 4 * n_latent),
+            nn.ReLU(),
+            nn.Linear(4 * n_latent, n_latent),
+            nn.Dropout(dropout),
+        )
+
+        self.decoder = nn.Sequential(
+            nn.Linear(n_latent, 4 * n_latent),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(4 * n_latent, in_feats),    
+        )
     
-    def forward(self, x, blocks=None): 
+    def forward(self, x, blocks=None, dr=0): 
         #h = th.log(x+1)
         e = self.embedding(x)
         h = e
+        #print(h.shape)
         for l, (layer, block) in enumerate(zip(self.encoder_dict['GS'], blocks)):
             if self.aggregator != 'attentional':
                 h = layer(block, h,)
@@ -395,8 +372,7 @@ class Encoder(nn.Module):
                     h = layer(block, h,).flatten(1)
                 else:
                     h = layer(block, h,).mean(1)
-            h = h + e
-
-        #z_loc = self.gs_mu(h)
+        h = self.ln1(h) + self.embedding(dr)
+        h = self.fw(self.ln2(h)) + h
         #z_scale = th.exp(self.gs_var(h)) +1e-6
         return h
