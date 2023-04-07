@@ -111,7 +111,7 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
 
         self.unique_labels = np.unique(anndata.obs[self.label_name].values)
         anndata = anndata[(anndata[:, self.genes].X.sum(axis=1) > 5), :]
-        anndata.raw = anndata
+        #anndata.raw = anndata
         if normalize:
             sc.pp.normalize_total(anndata, target_sum=1e4)
         self.anndata = anndata
@@ -420,15 +420,16 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
             labelled (bool, optional): [description]. Defaults to True.
         """        
         self.model.eval()
-        self.attention_ngh1, self.attention_ngh2 = self.model.module.inference_attention(
+        self.attention = self.model.module.inference_attention(
                         self.g,
                         self.model.device,
                         5*512,
                         0,
                         nodes=self.g.nodes(),
                         buffer_device=self.g.device)#.detach().numpy()
-        self.g.edata['attention1'] = self.attention_ngh1
-        self.g.edata['attention2'] = self.attention_ngh2
+        for e, a in enumerate(self.attention):
+            self.g.edata['attention{}'.format(e+1)] = a
+
         self.save_graph()
 
     def get_attention_nodes(self,nodes=None):
@@ -443,13 +444,13 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
             labelled (bool, optional): [description]. Defaults to True.
         """        
         self.model.eval()
-        att1,att2 =  self.model.module.inference_attention(self.g,
+        att =  self.model.module.inference_attention(self.g,
                         self.model.device,
                         5*512,
                         0,
                         nodes=nodes,
                         buffer_device=self.g.device)#.detach().numpy()
-        return att1, att2
+        return att
 
     def compute_distance_th(self,coords):
         """

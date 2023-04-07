@@ -119,9 +119,12 @@ class SAGELightning(LightningModule):
             if self.loss_type == 'unsupervised':
                 graph_loss = self.loss_fcn(zn_loc, pos, neg).mean()
                 decoder_n1 = self.module.encoder.decoder(zn_loc).softmax(dim=-1)
-                adjacency_matrix = mfgs[1].adjacency_matrix().to_dense()
-                feats_n1 = F.one_hot((mfgs[1].srcdata[self.features_name]), num_classes=self.in_feats).T
-                feats_n1 = (th.tensor(feats_n1,dtype=th.float32)@adjacency_matrix.to(self.device)).T
+                feats_n1 = F.one_hot((mfgs[-1].srcdata[self.features_name]), num_classes=self.in_feats).T
+                #feats_n1 = (th.tensor(feats_n1,dtype=th.float32)@adjacency_matrix.to(self.device)).T
+                feats_n1 = th.sparse.mm(
+                    th.tensor(feats_n1,dtype=th.float32).to_sparse_coo(),
+                    mfgs[-1].adjacency_matrix().to(self.device)
+                    ).to_dense().T
                 feats_n1 = feats_n1.softmax(dim=-1)
                 #print(feats_n1.shape, decoder_n1.shape)
                 graph_loss += - nn.CosineSimilarity(dim=1, eps=1e-08)(decoder_n1, feats_n1).mean(axis=0)
@@ -265,16 +268,15 @@ class SAGE(nn.Module):
 
         if buffer_device is None:
             buffer_device = device
+        self.attention_list = [[] for x in range(self.n_layers)]
         
         for l, layer in enumerate(self.encoder.encoder_dict['GS']):
             if l == self.n_layers - 1:
                     y = th.zeros(g.num_nodes(), self.encoder.n_embed, device=buffer_device)
-                    att2_list = [] #if not self.supervised else th.zeros(g.num_nodes(), self.n_classes)
             else:
                     y = th.zeros(g.num_nodes(), self.encoder.n_embed*self.encoder.num_heads, device=buffer_device)
-                    att1_list = []
                 
-            for input_nodes, output_nodes, blocks in dataloader:
+            for input_nodes, output_nodes, blocks in tqdm.tqdm(dataloader):
                 #x = blocks[0].srcdata['h']
                 if l == 0:
                     x = self.encoder.embedding(blocks[0].srcdata['h'])
@@ -282,15 +284,15 @@ class SAGE(nn.Module):
                     x = blocks[0].srcdata['h']
                 dr = blocks[0].dstdata[self.features_name]
                 if l != self.n_layers-1:
-                    h,att1 = layer(blocks[0], x,get_attention=True)
+                    h,att = layer(blocks[0], x,get_attention=True)
                     #att1_list.append(att1.mean(1).cpu().detach())
-                    att1_list.append(att1.cpu().detach())
+                    self.attention_list[l].append(att.cpu().detach())
                     h= h.flatten(1)
                     
                 else:
-                    h, att2 = layer(blocks[0], x,get_attention=True)
+                    h, att = layer(blocks[0], x,get_attention=True)
                     #att2_list.append(att2.mean(1).cpu().detach())
-                    att2_list.append(att2.cpu().detach())
+                    self.attention_list[l].append(att.cpu().detach())
                     h = h.mean(1)
                     
                     h = self.encoder.ln1(h) + self.encoder.embedding(dr)
@@ -298,7 +300,7 @@ class SAGE(nn.Module):
 
                 y[output_nodes] = h.cpu().detach().to(buffer_device)
             g.ndata['h'] = y
-        return th.concat(att1_list), th.concat(att2_list)
+        return [th.concat(a) for a in self.attention_list]
 
 class Encoder(nn.Module):
     def __init__(
