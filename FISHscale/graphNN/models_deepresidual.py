@@ -322,7 +322,6 @@ class Encoder(nn.Module):
         layers = nn.ModuleList()
         self.num_heads = 4
         self.n_layers = n_layers
-        [0,1,2]
         for i in range(0,n_layers-1):
             #if i > 0:
             #    in_feats = n_hidden
