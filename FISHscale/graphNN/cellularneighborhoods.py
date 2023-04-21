@@ -398,10 +398,10 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
             labelled (bool, optional): [description]. Defaults to True.
         """        
         self.model.eval()
-        self.g.to('cuda')
+        #self.g.to('cuda')
         self.latent_unlabelled, _ = self.model.module.inference(
                         self.g,
-                        self.g.device,
+                        self.model.device,
                         10*512,
                         0)
 
@@ -466,8 +466,8 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
 
         from scipy.spatial import cKDTree as KDTree
         kdT = KDTree(coords)
-        d,i = kdT.query(coords,k=3)
-        d_th = np.percentile(d[:,-1],95)*self.distance_factor
+        d,i = kdT.query(coords,k=2)
+        d_th = np.percentile(d[:,-1],97)*self.distance_factor
         logging.info('Chosen dist to connect molecules into a graph: {}'.format(d_th))
         print('Chosen dist to connect molecules into a graph: {}'.format(d_th))
         return d_th
@@ -566,9 +566,42 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
             [type]: [description]
         """
         from sklearn.cluster import MiniBatchKMeans
+        import scanpy as sc
+        from sklearn.linear_model import SGDClassifier
+        from sklearn.preprocessing import StandardScaler
+        from sklearn.pipeline import make_pipeline
         
         clusters = MiniBatchKMeans(n_clusters=n_clusters).fit_predict(self.latent_unlabelled)
         self.g.ndata['CellularNgh'] = th.tensor(clusters)
+        
+        '''logging.info('Latent embeddings generated for {} molecules'.format(self.latent_unlabelled.shape[0]))
+        
+
+        random_sample_train = np.random.choice(
+                                len(self.latent_unlabelled ), 
+                                np.min([len(self.latent_unlabelled ),250000]), 
+                                replace=False)
+
+        training_latents = self.latent_unlabelled[random_sample_train,:]
+        adata = sc.AnnData(X=training_latents.detach().numpy())
+        logging.info('Building neighbor graph for clustering...')
+        sc.pp.neighbors(adata, n_neighbors=15)
+        logging.info('Running Leiden clustering...')
+        sc.tl.leiden(adata, random_state=42, resolution=1)
+        logging.info('Leiden clustering done.')
+        clusters= adata.obs['leiden'].values
+
+        logging.info('Total of {} found'.format(len(np.unique(clusters))))
+        clf = make_pipeline(StandardScaler(), SGDClassifier(loss='log_loss', max_iter=1000, tol=1e-3))
+        clf.fit(training_latents, clusters)
+        clusters = clf.predict(self.latent_unlabelled).astype('int8')
+
+        clf_total = make_pipeline(StandardScaler(), SGDClassifier(loss='log_loss', max_iter=1000, tol=1e-3))
+        clf_total.fit(self.latent_unlabelled.detach().numpy(), clusters)
+        clusters = clf.predict(self.latent_unlabelled.detach().numpy()).astype('int8')
+        self.g.ndata['CellularNgh'] = th.tensor(clusters)'''
+
+
         self.save_graph()
         return clusters
 

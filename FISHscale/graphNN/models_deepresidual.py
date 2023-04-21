@@ -118,7 +118,7 @@ class SAGELightning(LightningModule):
             zn_loc = self.module.encoder(batch_inputs,mfgs, dr=dr)
             if self.loss_type == 'unsupervised':
                 graph_loss = self.loss_fcn(zn_loc, pos, neg).mean()
-                decoder_n1 = self.module.encoder.decoder(zn_loc).softmax(dim=-1)
+                '''decoder_n1 = self.module.encoder.decoder(zn_loc).softmax(dim=-1)
                 feats_n1 = F.one_hot((mfgs[-1].srcdata[self.features_name]), num_classes=self.in_feats).T
                 #feats_n1 = (th.tensor(feats_n1,dtype=th.float32)@adjacency_matrix.to(self.device)).T
                 feats_n1 = th.sparse.mm(
@@ -127,7 +127,7 @@ class SAGELightning(LightningModule):
                     ).to_dense().T
                 feats_n1 = feats_n1.softmax(dim=-1)
                 #print(feats_n1.shape, decoder_n1.shape)
-                graph_loss += - nn.CosineSimilarity(dim=1, eps=1e-08)(decoder_n1, feats_n1).mean(axis=0)
+                graph_loss += - nn.CosineSimilarity(dim=1, eps=1e-08)(decoder_n1, feats_n1).mean(axis=0)'''
 
             else:
                 graph_loss = F.cross_entropy(zn_loc, mfgs[-1].dstdata['label'])
@@ -210,7 +210,7 @@ class SAGE(nn.Module):
             layers.
             """
             self.eval()
-            g.ndata['h'] = g.ndata[self.features_name]
+            g.ndata['h'] = g.ndata[self.features_name].long()
             sampler = dgl.dataloading.MultiLayerFullNeighborSampler(1, prefetch_node_feats=['h'])
 
             dataloader = dgl.dataloading.NodeDataLoader(
@@ -236,7 +236,7 @@ class SAGE(nn.Module):
                         x = self.encoder.embedding(blocks[0].srcdata['h'])
                     else:
                         x = blocks[0].srcdata['h']
-                    dr = blocks[0].dstdata[self.features_name]
+                    dr = blocks[0].dstdata[self.features_name].long()
                     if l != self.n_layers-1:
                         h,att1 = layer(blocks[0], x,get_attention=True)
                         h= h.flatten(1)
@@ -259,7 +259,7 @@ class SAGE(nn.Module):
             nodes = th.arange(g.num_nodes()).to(g.device)
 
 
-        g.ndata['h'] = g.ndata[self.features_name]    
+        g.ndata['h'] = g.ndata[self.features_name].long()
         sampler = dgl.dataloading.MultiLayerFullNeighborSampler(1, prefetch_node_feats=['h'])
         dataloader = dgl.dataloading.NodeDataLoader(
                 g, nodes, sampler, device=device,
@@ -282,7 +282,7 @@ class SAGE(nn.Module):
                     x = self.encoder.embedding(blocks[0].srcdata['h'])
                 else:
                     x = blocks[0].srcdata['h']
-                dr = blocks[0].dstdata[self.features_name]
+                dr = blocks[0].dstdata[self.features_name].long()
                 if l != self.n_layers-1:
                     h,att = layer(blocks[0], x,get_attention=True)
                     #att1_list.append(att1.mean(1).cpu().detach())
@@ -382,7 +382,7 @@ class Encoder(nn.Module):
                     h = layer(block, h,).flatten(1)
                 else:
                     h = layer(block, h,).mean(1)
-        h = self.ln1(h) + self.embedding(dr)
+        h = self.ln1(h) + self.embedding(dr.long())
         h = self.fw(self.ln2(h)) + h
         #z_scale = th.exp(self.gs_var(h)) +1e-6
         return h
