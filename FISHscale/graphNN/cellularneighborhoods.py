@@ -10,7 +10,8 @@ from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 import pytorch_lightning as pl
 import pandas as pd
 import dgl
-from FISHscale.graphNN.models import SAGELightning
+from FISHscale.graphNN.models_deepresidual import SAGELightning
+#from FISHscale.graphNN.models import SAGELightning
 from FISHscale.graphNN.graph_utils import GraphUtils, GraphPlotting
 from FISHscale.graphNN.graph_decoder import GraphDecoder
 
@@ -110,10 +111,9 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
 
         self.unique_labels = np.unique(anndata.obs[self.label_name].values)
         anndata = anndata[(anndata[:, self.genes].X.sum(axis=1) > 5), :]
-        anndata.raw = anndata
+        #anndata.raw = anndata
         if normalize:
             sc.pp.normalize_total(anndata, target_sum=1e4)
-            sc.pp.log1p(anndata)
         self.anndata = anndata
 
         ### Model hyperparameters
@@ -398,8 +398,8 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
             labelled (bool, optional): [description]. Defaults to True.
         """        
         self.model.eval()
-
-        self.latent_unlabelled, prediction_unlabelled = self.model.module.inference(
+        #self.g.to('cuda')
+        self.latent_unlabelled, _ = self.model.module.inference(
                         self.g,
                         self.model.device,
                         10*512,
@@ -420,15 +420,16 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
             labelled (bool, optional): [description]. Defaults to True.
         """        
         self.model.eval()
-        self.attention_ngh1, self.attention_ngh2 = self.model.module.inference_attention(
+        self.attention = self.model.module.inference_attention(
                         self.g,
                         self.model.device,
                         5*512,
                         0,
                         nodes=self.g.nodes(),
                         buffer_device=self.g.device)#.detach().numpy()
-        self.g.edata['attention1'] = self.attention_ngh1
-        self.g.edata['attention2'] = self.attention_ngh2
+        for e, a in enumerate(self.attention):
+            self.g.edata['attention{}'.format(e+1)] = a
+
         self.save_graph()
 
     def get_attention_nodes(self,nodes=None):
@@ -443,13 +444,13 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
             labelled (bool, optional): [description]. Defaults to True.
         """        
         self.model.eval()
-        att1,att2 =  self.model.module.inference_attention(self.g,
+        att =  self.model.module.inference_attention(self.g,
                         self.model.device,
                         5*512,
                         0,
                         nodes=nodes,
                         buffer_device=self.g.device)#.detach().numpy()
-        return att1, att2
+        return att
 
     def compute_distance_th(self,coords):
         """
@@ -465,8 +466,8 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
 
         from scipy.spatial import cKDTree as KDTree
         kdT = KDTree(coords)
-        d,i = kdT.query(coords,k=3)
-        d_th = np.percentile(d[:,-1],95)*self.distance_factor
+        d,i = kdT.query(coords,k=2)
+        d_th = np.percentile(d[:,-1],97)*self.distance_factor
         logging.info('Chosen dist to connect molecules into a graph: {}'.format(d_th))
         print('Chosen dist to connect molecules into a graph: {}'.format(d_th))
         return d_th
@@ -565,9 +566,42 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
             [type]: [description]
         """
         from sklearn.cluster import MiniBatchKMeans
+        import scanpy as sc
+        from sklearn.linear_model import SGDClassifier
+        from sklearn.preprocessing import StandardScaler
+        from sklearn.pipeline import make_pipeline
         
         clusters = MiniBatchKMeans(n_clusters=n_clusters).fit_predict(self.latent_unlabelled)
         self.g.ndata['CellularNgh'] = th.tensor(clusters)
+        
+        '''logging.info('Latent embeddings generated for {} molecules'.format(self.latent_unlabelled.shape[0]))
+        
+
+        random_sample_train = np.random.choice(
+                                len(self.latent_unlabelled ), 
+                                np.min([len(self.latent_unlabelled ),250000]), 
+                                replace=False)
+
+        training_latents = self.latent_unlabelled[random_sample_train,:]
+        adata = sc.AnnData(X=training_latents.detach().numpy())
+        logging.info('Building neighbor graph for clustering...')
+        sc.pp.neighbors(adata, n_neighbors=15)
+        logging.info('Running Leiden clustering...')
+        sc.tl.leiden(adata, random_state=42, resolution=1)
+        logging.info('Leiden clustering done.')
+        clusters= adata.obs['leiden'].values
+
+        logging.info('Total of {} found'.format(len(np.unique(clusters))))
+        clf = make_pipeline(StandardScaler(), SGDClassifier(loss='log_loss', max_iter=1000, tol=1e-3))
+        clf.fit(training_latents, clusters)
+        clusters = clf.predict(self.latent_unlabelled).astype('int8')
+
+        clf_total = make_pipeline(StandardScaler(), SGDClassifier(loss='log_loss', max_iter=1000, tol=1e-3))
+        clf_total.fit(self.latent_unlabelled.detach().numpy(), clusters)
+        clusters = clf.predict(self.latent_unlabelled.detach().numpy()).astype('int8')
+        self.g.ndata['CellularNgh'] = th.tensor(clusters)'''
+
+
         self.save_graph()
         return clusters
 
