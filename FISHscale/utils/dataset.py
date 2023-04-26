@@ -1069,7 +1069,7 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
         """Reset the working selection to include all datapoints.
         """
         for d in self.datasets:
-            self.set_working_selection(level = None)
+            d.set_working_selection(level = None)
 
     def visualize(
                 self,
