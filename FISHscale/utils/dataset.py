@@ -22,6 +22,7 @@ from FISHscale.spatial.gene_order import Gene_order
 from FISHscale.segmentation.cellpose import Cellpose
 from FISHscale.utils.regionalization_gradient import Regionalization_Gradient, Regionalization_Gradient_Multi
 from FISHscale.utils.volume_align import Volume_Align
+from FISHscale.utils.binning import Binning, Binning_multi
 import sys
 from datetime import datetime
 from tqdm import tqdm
@@ -54,7 +55,7 @@ logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s',stream=sy
 
 class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, AttributeScatter, SpatialMetrics, DataLoader, Normalization, 
               Density1D, BoneFight, Decomposition, Boundaries, Gene_order, Cellpose, 
-              Regionalization_Gradient):
+              Regionalization_Gradient, Binning):
     """
     Base Class for FISHscale, still under development
 
@@ -549,7 +550,8 @@ def _segmentation_dots(partition, func):
 
 
 class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base, Normalization, RegionalizeMulti,
-                   Decomposition, BoneFightMulti, Regionalization_Gradient_Multi, Boundaries_Multi, Volume_Align):
+                   Decomposition, BoneFightMulti, Regionalization_Gradient_Multi, Boundaries_Multi, Volume_Align,
+                   Binning_multi):
     """Load multiple datasets as Dataset objects.
     """
 

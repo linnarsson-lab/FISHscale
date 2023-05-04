@@ -69,7 +69,8 @@ class DataLoader_base():
                     
         # .csv files
         else:
-            open_f = lambda f, c: dd.read_csv(f, usecols = c)
+            def open_f(f, c):
+                return pd.read_csv(f, usecols = c)
             
         return open_f
     
@@ -427,6 +428,8 @@ class DataLoader(DataLoader_base):
                 #Rename columns
                 rename_col = dict(zip([gene_label, x_label, y_label, z_label], ['g', 'x', 'y', 'z']))
                 data = data.rename(columns = rename_col)
+                
+                print(data.columns)
                 
                 #Add Z coordinate if not present in data
                 if not hasattr(data, 'z'):

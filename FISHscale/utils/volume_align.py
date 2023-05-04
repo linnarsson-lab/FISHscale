@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from skimage.registration import optical_flow_tvl1
+from skimage.registration import optical_flow_tvl1, phase_cross_correlation
 from skimage.transform import warp
 import dask
 from dask import delayed
@@ -10,144 +10,7 @@ import math
 from scipy.interpolate import LinearNDInterpolator
 import logging
 
-class Volume_Align():
-    
-    def _check_z_sort(self):
-        
-        if not all([hasattr(dd, 'z') for dd in self.datasets]):
-            raise Exception('Not all datasets have a z coordinate. Not possbile to run 3D alignment without.')
-        
-        z_sorted = np.argsort([d.z for d in self.datasets])
-        
-        return z_sorted
-    
-    def get_z_range_datasets(self):
-        
-        all_z = np.array([d.z for d in self.datasets])
-        return all_z.min(), all_z.max()
-        
-
-    def find_max_width_height(self, margin: float=0.05):
-        
-        width = 0
-        height = 0
-
-        #Find largest dataset
-        for dd in self.datasets:
-            if dd.x_extent > width:
-                width = dd.x_extent
-                
-            if dd.y_extent > height:
-                height = dd.y_extent
-        
-        #Add margin
-        width = width + (margin * width)
-        height = height + (margin * height)
-        
-        return width, height
-    
-    def squarebin_data_single(self, dd, genes: list, width: float, height: float, bin_size: float=100, percentile: float=97,
-                         plot: bool=True):
-        
-        x_half = width/2
-        y_half = height/2
-
-        use_range = np.array([[dd.xy_center[0] - x_half, dd.xy_center[0] + x_half],
-                            [dd.xy_center[1] - y_half, dd.xy_center[1] + y_half]])
-
-        x_nbins = int(width / bin_size)
-        y_nbins = int(height / bin_size)
-        
-        #Bin data
-        images = []
-        for gene in genes:
-            data = dd.get_gene(gene)
-
-            img, xbin, ybin = np.histogram2d(data.x, data.y, range=use_range, bins=np.array([x_nbins, y_nbins]))
-            pc = np.percentile(img, percentile)
-            if pc == 0:
-                pc = img.max()
-            img = img/pc
-            img = np.clip(img, a_min=0, a_max=1)
-            images.append(img)
-        
-        #Integrate multiple genes
-        img = np.mean(np.array(images), axis=0)    
-        
-        if plot:
-            plt.figure(figsize=(7,7))
-            plt.imshow(img)
-            plt.title(f'Composite image: {genes}', fontsize=10)
-            plt.xlabel('Your gene slection should give a high contrast image.')
-        
-        return img, xbin, ybin
-    
-    def squarebin_data_multi(self, genes: list, margin: float=0.05, bin_size: float=100, percentile: float=97):
-        
-        z_ordered = self._check_z_sort()
-        width, height = self.find_max_width_height(margin=margin)
-        images = []
-        xbins = []
-        ybins = []
-        
-        for i in z_ordered:
-            d = self.datasets[i]
-            self.vp(f'Z level: {d.z} (these should be consecutive)')
-            img, xbin, ybin = self.squarebin_data_single(d, 
-                                                    genes, 
-                                                    width, 
-                                                    height, 
-                                                    bin_size=bin_size, 
-                                                    percentile=percentile, 
-                                                    plot=False)
-            
-            images.append(img)
-            xbins.append(xbin)
-            ybins.append(ybin)
-            
-        return images, xbins, ybins
-    
-    def _squarebin_worker(self, dataset, width: float, height: float, bin_size: float=100):
-        
-        x_half = width/2
-        y_half = height/2
-
-        use_range = np.array([[dataset.xy_center[0] - x_half, dataset.xy_center[0] + x_half],
-                            [dataset.xy_center[1] - y_half, dataset.xy_center[1] + y_half]])
-
-        x_nbins = int(width / bin_size)
-        y_nbins = int(height / bin_size)
-        
-        def worker(x, y, use_range, bins):
-            img, xbin, ybin = np.histogram2d(x, y, range=use_range, bins=bins)
-            return img
-        
-        #Bin data      
-        binned = []
-        for g in dataset.unique_genes:
-            xy = dataset.get_gene(g)
-            r = delayed(worker)(xy.x, xy.y, use_range, np.array([x_nbins, y_nbins]))
-            binned.append(r)
-        
-        with ProgressBar():
-            binned_results = dask.compute(*binned)   
-            
-        return np.stack(binned_results, axis=2)
-    
-    def squarebin_make(self, bin_size: float=100, margin=0.1):
-        
-        width, height = self.find_max_width_height(margin=margin)
-        z_ordered = self._check_z_sort()
-        
-        #Bin datasets in sorted Z order
-        results = []        
-        for i in z_ordered:
-            d = self.datasets[i]
-            results.append(self._squarebin_worker(d, width, height, bin_size=bin_size))
-            
-        return results        
-    
-    def _register_worker(self, imgA: np.ndarray, imgB: np.ndarray, 
+def _register_worker(imgA: np.ndarray, imgB: np.ndarray, 
                          attachment: int=20, tightness: float=0.3, 
                          num_warp: int=10, num_iter: int=10, 
                          tol: float=0.0001, prefilter: bool=False):
@@ -165,7 +28,8 @@ class Volume_Align():
         
         return v, u
     
-    def _warp(self, img: np.ndarray, v: np.ndarray, u: np.ndarray, factor: float=1):
+def _warp( img: np.ndarray, v: np.ndarray, u: np.ndarray, factor: float=1, 
+          categorical_data: bool=False):
         
         if factor < 0 or factor > 1:
             raise Exception('Factor should be between 0 and 1')
@@ -174,14 +38,28 @@ class Volume_Align():
         
         nr, nc = img.shape[:2]
         row_coords, col_coords = np.meshgrid(np.arange(nr), np.arange(nc), indexing='ij')
-        img_warp = warp(img, np.array([row_coords + v, col_coords + u]), mode='edge', clip=False)
+        #Indexing of old data for categorical input
+        if categorical_data:
+            rc = row_coords + np.round(v).astype(int)
+            cc = col_coords + np.round(u).astype(int)
+            rc = np.clip(rc, 0, nr-1)
+            cc = np.clip(cc, 0, nc-1)
+            img_warp = img[rc, cc]
+        #Image warping
+        else:
+            img_warp = warp(img, np.array([row_coords + v, col_coords + u]), mode='edge', clip=False)
         
         return img_warp
+    
+class Volume_Align():
+    """UNDER CONSTRUCTION DO NOT USE"""
+
     
     def find_warp(self, images: list, attachment: int=20, 
                   tightness: float=0.3, num_warp: int=10, num_iter: int=10, 
                   tol: float=0.0001, prefilter: bool=False, 
-                  mixing_factor: float=0.3, second_order=True):
+                  mixing_factor: float=0.3, second_order=True,
+                  categorical_data: bool=False):
         
         #Mixing_factor = 0 #Completely use synthetic made by img0 and img2
         #Mixing_factor = 0.3 # All three images weigh equal. 
@@ -191,22 +69,25 @@ class Volume_Align():
         z_ordered = self._check_z_sort()
         z_loc = [self.datasets[i].z for i in z_ordered]
         n_datasets = len(self.datasets)
-        dataset_names = [self.datasets[i].dataset_name for i in z_ordered]
         
-        
-        
-        def worker(i, images, attachment, tightness, num_warp, num_iter, tol, prefilter, mixing_factor, second_order):
+        def worker(i, images, attachment, tightness, num_warp, num_iter, tol, 
+                   prefilter, mixing_factor, second_order, categorical_data):
             
-            def reg_warp(img0, img1, factor):
-                v, u = self._register_worker(img0, img1,
+            def reg_warp(img0, img1, factor, categorical_data):
+                v, u = _register_worker(img0, img1,
                                 attachment=attachment,
                                 tightness=tightness,
                                 num_warp=num_warp,
                                 num_iter=num_iter,
                                 tol=tol,
                                 prefilter=prefilter)
+                
+                if categorical_data:
+                    v = np.round(v).astype(int)
+                    u = np.round(u).astype(int)
+                
                 #Make synthetic image that would be the image inbetween img0 and img1
-                warped = self._warp(img1, v, u, factor=factor)
+                warped = _warp(img1, v, u, factor=factor, categorical_data=categorical_data)
                 
                 return warped, v, u
             
@@ -219,7 +100,7 @@ class Volume_Align():
                 img1 = images[i]
                 #img2
                 if second_order == True:
-                    img2, _, _ = reg_warp(images[i+1], images[i+2], factor=0.5)
+                    img2, _, _ = reg_warp(images[i+1], images[i+2], factor=0.5, categorical_data=categorical_data)
                 else:
                     img2 = images[i+1]   
                 factor = 0.333 #Closer to first section
@@ -228,7 +109,7 @@ class Volume_Align():
             elif i >= n_datasets-2:
                 #img0
                 if second_order == True:
-                    img0, _, _ = reg_warp(images[i-1], images[i-2], factor=0.5)
+                    img0, _, _ = reg_warp(images[i-1], images[i-2], factor=0.5, categorical_data=categorical_data)
                 else:
                     img0 = images[i-1] 
                 #img1
@@ -241,7 +122,7 @@ class Volume_Align():
             else:
                 #img0
                 if second_order == True:
-                    img0, _, _ = reg_warp(images[i-1], images[i-2], factor=0.5)
+                    img0, _, _ = reg_warp(images[i-1], images[i-2], factor=0.5, categorical_data=categorical_data)
                     z0 = z_loc[i-1] -  z_loc[i-2]
                     z0 = z_loc[i-2] + (0.5 * z0)
                 else:
@@ -252,7 +133,7 @@ class Volume_Align():
                 z1 = z_loc[i]
                 #img2
                 if second_order == True:
-                    img2, _, _ = reg_warp(images[i+1], images[i+2], factor=0.5)
+                    img2, _, _ = reg_warp(images[i+1], images[i+2], factor=0.5, categorical_data=categorical_data)
                     z2 = z_loc[i+2] - z_loc[i+1]
                     z2 = z_loc[i+1] + (0.5 * z2)
                 else:
@@ -264,11 +145,11 @@ class Volume_Align():
                     
             #Warp
             #Make synthetic image
-            synt_image, _, _ = reg_warp(img0, img2, factor=0.5)
+            synt_image, _, _ = reg_warp(img0, img2, factor=0.5, categorical_data=categorical_data)
             #Let img1 weigh into the synthetic image
-            synt_image, _, _ = reg_warp(img1, synt_image, factor=mixing_factor)
+            synt_image, _, _ = reg_warp(img1, synt_image, factor=mixing_factor, categorical_data=categorical_data)
             #Warp image
-            warped_image, v, u = reg_warp(synt_image, img1, factor=factor)
+            warped_image, v, u = reg_warp(synt_image, img1, factor=factor, categorical_data=categorical_data)
             
             return v, u, synt_image, warped_image
 
@@ -276,11 +157,12 @@ class Volume_Align():
         images_delayed = delayed(images)
 
         for i in range(n_datasets):
-            r = delayed(worker)(i, images_delayed, attachment, tightness, num_warp, num_iter, tol, prefilter, mixing_factor, second_order)
+            r = delayed(worker)(i, images_delayed, attachment, tightness, num_warp, num_iter, tol, prefilter, 
+                                mixing_factor, second_order, categorical_data)
             lazy_results.append(r)
             
         with ProgressBar():
-            result = dask.compute(*lazy_results)#, scheduler='processes', n_workers=self.cpu_count)
+            result = dask.compute(*lazy_results, scheduler='processes', n_workers=self.cpu_count)
 
         vs = []
         us = []
@@ -293,22 +175,6 @@ class Volume_Align():
             warped_images.append(r[3])
             
         return vs, us, synthetic_images, warped_images
-        
-        
-        #self.vp(f'Warping datasets. Z levels should be consecutive')
-        #for i, dn in enumerate(dataset_names):
-        #    self.vp(f'Finding warp for dataset {i+1}/{n_datasets} with Z: {self.datasets[i].z}')
-
-            
-
-            #Output handling
-            #synthetic_images.append(synt_image)
-            #warped_images.append(warped_image)
-            #vs.append(v)
-            #us.append(u)
-            
-        #return vs, us, synthetic_images, warped_images
-
     
     def warp_all(self, squarebin:list, v:list, u:list):
         
@@ -322,7 +188,7 @@ class Volume_Align():
         return result
     
     
-    def warped_to_pandas(self, warped, min_count=1):
+    def _warped_to_pandas_OLD(self, warped, min_count=1): #See binning.py
         
         z_ordered = self._check_z_sort()
         
@@ -342,10 +208,10 @@ class Volume_Align():
             
         return results, filters, w.shape[:2]
     
-    def voxels_to_pandas(self, interpolated, min_count=1):
+    def _voxels_to_pandas_OLD(self, interpolated, min_count=1): #See binning.py
         #Assumes interpolated is in same order as self.unique_genes
         
-        interp_sum = np.sum(np.stack(interpolated), axis=0) #Change to "interpolated_all" if rerun
+        interp_sum = np.sum(np.stack(interpolated), axis=0)
         interp_filt = interp_sum >= min_count
         interp_stack = np.stack(interpolated, axis=3) #Genes as 4th dimension
         shape = interp_stack.shape

@@ -12,6 +12,13 @@ from scipy.spatial import distance
 from tqdm import tqdm
 import logging
 
+from skimage.feature import local_binary_pattern
+from scipy.ndimage import gaussian_filter, laplace
+from skimage.restoration import denoise_nl_means, estimate_sigma
+from skimage.filters import laplace
+from dask import delayed, compute
+from dask.diagnostics import ProgressBar
+
 def _worker_bisect(points: np.ndarray, grid: np.ndarray, radius: float, 
                    lines: list, n_angles: int):
     """Bisect cloud of points around grid points.
@@ -277,6 +284,97 @@ class Boundaries:
         
         return results2, image, grid, grid_filt, filt_grid, shape
     
+    ###########################################################################
+    # LBP boundaries
+    
+    def _LBP_worker(self, img: np.ndarray, mask: np.ndarray, 
+                    h_factor: int=5, patch_size: int=5, patch_distance :int=6,
+                    n_points: int=10, radius: int=2) -> np.ndarray:
+        """Worker function for LBP calculation. 
+        
+        See boundaries_LBP_make for documentation on in and output.
+        """
+        
+        #Denoise data
+        sigma_est = np.mean(estimate_sigma(img))
+        denoise = denoise_nl_means(img, 
+                                   h= h_factor*sigma_est, 
+                                   fast_mode = True, 
+                                   sigma = sigma_est, 
+                                   preserve_range = True, 
+                                   patch_size = patch_size, 
+                                   patch_distance = patch_distance)
+        denoise[~mask] = 0
+
+        #Calculate Local Binary Pattern
+        lbp = local_binary_pattern(denoise, 
+                                   n_points, 
+                                   radius,
+                                   'var')
+
+        #Clean output
+        lbp[np.isnan(lbp)] = 0
+        lbp[~mask] = np.nan
+        
+        return lbp
+                
+    
+    def boundaries_LBP_make(self, squarebin: np.ndarray, mask: np.ndarray,
+                            h_factor: int=5, patch_size: int=5, 
+                            patch_distance :int=6,
+                            n_points: int=12, radius: float=1.5) -> np.ndarray:
+        """Calculate gene boundaries using Local Binary Patterns (LBP).
+        
+        Calculates the boundary strength for each gene using LBP. Please see
+        skimage.feature.local_binary_pattern() for more background. 
+        Data is denoised using non-local means. See 
+        skimage.restoration.denoise_nl_means() for more details. 
+
+        Args:
+            squarebin (np.ndarray): Array with the binned gene counts.
+            mask (np.ndarray): Array with a boolean mask of the valid data 
+                pixels.
+            h_factor (int): Factor to multiply the calculated sigma with. For
+                denoising the size of the standard deviation (sigma) of the
+                noise is calculated. This factor multiplies the sigma so that
+                the image is denoised with a larger sigma to remove background.
+                For more information see skimage.restoration.estimate_sigma()
+                and skimage.restoration.denoise_nl_means().
+                Defaults to 5.
+            patch_size (int): Size of the patches used for denoising.
+                See skimage.restoration.denoise_nl_means() for more details.
+                Defaults to 5
+            patch_distance (int): Maximal distance in pixels where to search 
+                patches used for denoising.
+                See skimage.restoration.denoise_nl_means() for more details.
+                Defaults to 6
+            n_points (int, optional): Number of points to calculate the LBP on.
+                Number of circularly symmetric neighbor set points 
+                (quantization of the angular space). Defaults to 12.
+            radius (float, optional): Radius of the LBP. Radius of circle 
+                (spatial resolution of the operator). The unit is pixels.
+                Defaults to 1.5.
+
+        Returns:
+            np.ndarray: Array in the shape (X, Y, n_genes) with the results.
+                The genes in the last axis are in the same order as 
+                self.unique_genes.
+
+        """
+        
+        n_genes = squarebin.shape[-1]
+        LBP_results = []
+        for i in range(n_genes):
+            r = delayed(self._LBP_worker)(squarebin[:,:,i], mask, h_factor, patch_size, patch_distance, n_points, radius)
+            LBP_results.append(r)
+        
+        with ProgressBar():
+            results = compute(*LBP_results)
+        
+        return np.stack(results, axis=2)
+        
+        
+    
 class Boundaries_Multi:
     
     def boundaries_make_multi(self, bin_size: int = 100, radius: int = 200, n_angles: int = 6,
@@ -349,4 +447,54 @@ class Boundaries_Multi:
             results[d.dataset_name]['filt_grid'] = filt_grid
             results[d.dataset_name]['shape'] = shape
             
+        return results
+    
+    def boundaries_LBP_make_multi(self, squarebin: list, 
+                                  masks: list, h_factor: int=5, 
+                                  patch_size: int=5, patch_distance :int=6,
+                                  n_points: int=12, 
+                                  radius: float=1.5) -> list:
+        """Calculate gene boundaries using Local Binary Patterns (LBP).
+        
+        Calculates the boundary strength for each gene using LBP. Please see
+        skimage.feature.local_binary_pattern() for more background. 
+        Data is denoised using non-local means. See 
+        skimage.restoration.denoise_nl_means() for more details. 
+
+        Args:
+            squarebin (list): List of arrays with the binned gene counts. 
+                Arrays should have the shape (X, Y, n_genes)
+            masks (list): List with arrays with a boolean mask of the valid data 
+                pixels.
+            h_factor (int): Factor to multiply the calculated sigma with. For
+                denoising the size of the standard deviation (sigma) of the
+                noise is calculated. This factor multiplies the sigma so that
+                the image is denoised with a larger sigma to remove background.
+                For more information see skimage.restoration.estimate_sigma()
+                and skimage.restoration.denoise_nl_means().
+                Defaults to 5.
+            patch_size (int): Size of the patches used for denoising.
+                See skimage.restoration.denoise_nl_means() for more details.
+                Defaults to 5
+            patch_distance (int): Maximal distance in pixels where to search 
+                patches used for denoising.
+                See skimage.restoration.denoise_nl_means() for more details.
+                Defaults to 6
+            n_points (int, optional): Number of points to calculate the LBP on.
+                Number of circularly symmetric neighbor set points 
+                (quantization of the angular space). Defaults to 12.
+            radius (float, optional): Radius of the LBP. Radius of circle 
+                (spatial resolution of the operator). The unit is pixels.
+                Defaults to 1.5.
+
+        Returns:
+            list : List of array in the shape (X, Y, n_genes) with the results.
+                The genes in the last axis are in the same order as 
+                self.unique_genes.
+
+        """
+        results = []
+        for dd, img, mask in zip(self.datasets, squarebin, masks):
+            results.append(dd.boundaries_LBP_make(img, mask, h_factor, patch_size, patch_distance, n_points, radius))
+        
         return results
