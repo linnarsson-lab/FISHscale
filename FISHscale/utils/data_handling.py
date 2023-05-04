@@ -429,8 +429,6 @@ class DataLoader(DataLoader_base):
                 rename_col = dict(zip([gene_label, x_label, y_label, z_label], ['g', 'x', 'y', 'z']))
                 data = data.rename(columns = rename_col)
                 
-                print(data.columns)
-                
                 #Add Z coordinate if not present in data
                 if not hasattr(data, 'z'):
                     data['z'] = self.z
