@@ -39,8 +39,8 @@ class Binning:
         x_half = width/2
         y_half = height/2
 
-        use_range = np.array([[self.xy_center[0] - x_half, self.xy_center[0] + x_half],
-                            [self.xy_center[1] - y_half, self.xy_center[1] + y_half]])
+        use_range = np.array([[self.xyz_center[0] - x_half, self.xyz_center[0] + x_half],
+                            [self.xyz_center[1] - y_half, self.xyz_center[1] + y_half]])
 
         x_nbins = int(width / bin_size)
         y_nbins = int(height / bin_size)
@@ -111,8 +111,8 @@ class Binning:
         #Calculate range
         x_half = width/2
         y_half = height/2
-        use_range = np.array([[self.xy_center[0] - x_half, self.xy_center[0] + x_half],
-                            [self.xy_center[1] - y_half, self.xy_center[1] + y_half]])
+        use_range = np.array([[self.xyz_center[0] - x_half, self.xyz_center[0] + x_half],
+                            [self.xyz_center[1] - y_half, self.xyz_center[1] + y_half]])
 
         #Calculate number of bins
         x_nbins = int(width / bin_size)
@@ -198,8 +198,8 @@ class Binning:
         #Calculate range
         x_half = width/2
         y_half = height/2
-        use_range = np.array([[self.xy_center[0] - x_half, self.xy_center[0] + x_half],
-                            [self.xy_center[1] - y_half, self.xy_center[1] + y_half]])
+        use_range = np.array([[self.xyz_center[0] - x_half, self.xyz_center[0] + x_half],
+                            [self.xyz_center[1] - y_half, self.xyz_center[1] + y_half]])
 
         #Calculate number of bins
         x_nbins = int(width / bin_size)

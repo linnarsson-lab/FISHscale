@@ -295,18 +295,22 @@ class DataLoader(DataLoader_base):
     def _coordinate_properties(self, data):
         """Calculate properties of coordinates.
 
-        Calculates XY min, max, extent and center of the points. 
+        Calculates XYZ min, max, extent and center of the points. 
         """
         self.x_min, self.x_max = data.x.min(), data.x.max()
         self.y_min, self.y_max = data.y.min(), data.y.max()
+        self.z_min, self.z_max = data.z.min(), data.z.max()
         self.x_extent = self.x_max - self.x_min
         self.y_extent = self.y_max - self.y_min 
-        self.xy_center = (self.x_max - 0.5*self.x_extent, self.y_max - 0.5*self.y_extent)
+        self.z_extent = self.z_max - self.z_min
+        self.xyz_center = (self.x_max - 0.5*self.x_extent, self.y_max - 0.5*self.y_extent, self.z_max - 0.5*self.z_extent)
         
         prop = {'x_min': self.x_min,
                 'x_max': self.x_max,
                 'y_min': self.y_min,
-                'y_max': self.y_max}
+                'y_max': self.y_max,
+                'z_min': self.z_min,
+                'z_max': self.z_max}
         self._metadatafile_make(prop)
 
     def _get_coordinate_properties(self):
@@ -319,9 +323,11 @@ class DataLoader(DataLoader_base):
         self.x_max = prop['x_max']
         self.y_min = prop['y_min']
         self.y_max = prop['y_max']
+        self.z_min = prop['z_min']
+        self.z_max = prop['z_max']
         self.x_extent = self.x_max - self.x_min
         self.y_extent = self.y_max - self.y_min 
-        self.xy_center = (self.x_max - 0.5*self.x_extent, self.y_max - 0.5*self.y_extent)
+        self.xyz_center = (self.x_max - 0.5*self.x_extent, self.y_max - 0.5*self.y_extent, self.z_max - 0.5*self.z_extent)
         self.shape = prop['shape']
         
     def _numberstring_sort(self, l): 
@@ -581,20 +587,27 @@ class DataLoader(DataLoader_base):
         self.x_min, self.y_min, self.x_max, self.y_max = self.y_min, self.x_min, self.y_max, self.x_max
         self.x_extent = self.x_max - self.x_min
         self.y_extent = self.y_max - self.y_min 
-        self.xy_center = (self.x_max - 0.5*self.x_extent, self.y_max - 0.5*self.y_extent)
+        self.xyz_center = (self.x_max - 0.5*self.x_extent, self.y_max - 0.5*self.y_extent, self.z_max - 0.5*self.z_extent)
     
     def flip_x(self):
         """Flips the X coordinates around the X center.
         
         This operation does NOT survive reloading the data.
         """
-        self.df.x = -(self.df.x - self.xy_center[0]) + self.xy_center[0]
+        self.df.x = -(self.df.x - self.xyz_center[0]) + self.xyz_center[0]
     
     def flip_y(self):
         """Flips the Y coordinates around the Y center.
         
         This operation does NOT survive reloading the data.
         """
-        self.df.y = -(self.df.y - self.xy_center[1]) + self.xy_center[1]
+        self.df.y = -(self.df.y - self.xyz_center[1]) + self.xyz_center[1]
+        
+    def flip_z(self):
+        """Flips the Z coordinates around the Z center.
+        
+        This operation does NOT survive reloading the data.
+        """
+        self.df.z = -(self.df.z - self.xyz_center[2]) + self.xyz_center[2]
 
 

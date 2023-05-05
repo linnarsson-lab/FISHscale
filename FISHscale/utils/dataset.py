@@ -261,10 +261,13 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         if z_offset != 0:
             self.z_offset += z_offset
             self.df.z += z_offset
+            self.z_min += z_offset
+            self.z_max += z_offset
 
         self.x_extent = self.x_max - self.x_min
         self.y_extent = self.y_max - self.y_min 
-        self.xy_center = (self.x_max - 0.5*self.x_extent, self.y_max - 0.5*self.y_extent)
+        self.z_extent = self.z_max - self.z_min 
+        self.xyz_center = (self.x_max - 0.5*self.x_extent, self.y_max - 0.5*self.y_extent, self.z_max - 0.5*self.z_extent)
 
     def visualize(self,
                 remote=False,
