@@ -327,6 +327,7 @@ class DataLoader(DataLoader_base):
         self.z_max = prop['z_max']
         self.x_extent = self.x_max - self.x_min
         self.y_extent = self.y_max - self.y_min 
+        self.z_extent = self.z_max = self.z_min
         self.xyz_center = (self.x_max - 0.5*self.x_extent, self.y_max - 0.5*self.y_extent, self.z_max - 0.5*self.z_extent)
         self.shape = prop['shape']
         
