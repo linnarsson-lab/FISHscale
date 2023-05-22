@@ -376,7 +376,7 @@ class MultiGeneScatter(AxSize):
                     
             if show_title:
                 lw, fs = self._line_font_size(ax)
-                ax.text(d.xy_center[0], d.y_max, d.dataset_name, color='white', ha='center', fontsize=fs)
+                ax.text(d.xyz_center[0], d.y_max, d.dataset_name, color='white', ha='center', fontsize=fs)
         
         if type(image) != type(None):
             ax.imshow(image, cmap='Greys_r',alpha=0.5)

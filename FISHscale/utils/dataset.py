@@ -1032,7 +1032,7 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
         for i, s in enumerate(sorted):
             offset_x = x[i]
             offset_y = y[i]
-            dataset_center = self.datasets[s].xy_center
+            dataset_center = self.datasets[s].xyz_center
             offset_x = offset_x - dataset_center[0]
             offset_y = offset_y - dataset_center[1]
             self.datasets[s].offset_data_temp(offset_x, offset_y, 0)
@@ -1047,8 +1047,8 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
         """
 
         for d in self.datasets:
-            x_offset = -d.xy_center[0]
-            y_offset = -d.xy_center[1]
+            x_offset = -d.xyz_center[0]
+            y_offset = -d.xyz_center[1]
             if z:
                 z_offset = d.z
             else:
