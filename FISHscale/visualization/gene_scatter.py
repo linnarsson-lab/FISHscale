@@ -139,7 +139,7 @@ class GeneScatter(AxSize):
                     save: bool=False, save_name: str='', dpi: int=300, 
                     file_format: str='.eps', alpha=1, invert_yaxis=False,
                     image=None, invert_xaxis=False, reset_xy=False, 
-                    transparent=False,) -> None:
+                    transparent=False, alpha_img=0.5) -> None:
         """Make a scatter plot of the data.
 
         Uses a black background. Plots in real size if `ax_scale_factor` is 1. 
@@ -199,7 +199,7 @@ class GeneScatter(AxSize):
             ax.set_rasterization_zorder(1)
 
         if type(image) != type(None):
-            ax.imshow(image, cmap='Greys_r',alpha=0.5)
+            ax.imshow(image, cmap='Greys_r',alpha=alpha_img)
 
         #Plot points
         if type(colors) == type(None):
@@ -276,6 +276,7 @@ class GeneScatter(AxSize):
         
         plt.style.use('default')
         gc.collect()
+        return ax
 
 
 class MultiGeneScatter(AxSize):
@@ -424,7 +425,7 @@ class AttributeScatter(AxSize):
                     scalebar: bool=True, show_axes: bool=False,
                     show_legend: bool = True, title: str = None, ax = None, 
                     save: bool=False, save_name: str='', dpi: int=300, 
-                    file_format: str='.eps', alpha=1) -> None:
+                    reset_xy=False, file_format: str='.eps', alpha=1) -> None:
         """Make a scatter plot of the data.
 
         Uses a black background. Plots in real size if `ax_scale_factor` is 1. 
@@ -490,8 +491,8 @@ class AttributeScatter(AxSize):
             colors = [self.color_dict[g] for g in attributes]
         # Allows to pass different sizes for each gene
         if type(s) == float:
-            s = [s] * len(genes)
-        for g, c, s_ in zip(genes, colors, s):
+            s = [s] * len(attributes)
+        for g, c, s_ in zip(attributes, colors, s):
             data = self.get_gene(g)
             x = data.x
             y = data.y
