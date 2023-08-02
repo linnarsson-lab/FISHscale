@@ -6,6 +6,8 @@
 
 Software package for the visualization, exploration and analysis of point based spatial transcriptomics data. FISHscale can load single or multiple datasets.  
 
+FISHscale is made for the future with ever increasing dataset size, and where multiple datasets need to be jointly analyzed. FISHscale uses Dask to store all data on disk and only loads what it needs to make analysis memory efficient.
+
 # Gallery
 ### Visualization
 ![](FISHscale_open_3D_2.gif)

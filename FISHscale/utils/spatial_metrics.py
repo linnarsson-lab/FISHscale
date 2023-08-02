@@ -18,6 +18,11 @@ def _ripleyk_calc(r, s, xy, bc, csr):
 class SpatialMetrics:
 
     def largest_extend(self):
+        """Returns the largest size of the X or Y dimention. 
+
+        Returns:
+            float: Extent of either the X or Y dimention.
+        """
 
         if self.x_extend > self.y_extend:
             return self.x_extend
@@ -118,7 +123,7 @@ class SpatialMetrics:
         plt.scatter(data[:,0], data[:,1], s=0.02, c='gray')
         
         y_positions = np.linspace(self.y_min, self.y_max, len(r))
-        center = self.xy_center[0]
+        center = self.xyz_center[0]
         for i, y in zip(r, y_positions):
             plt.hlines(y, center - (0.5*i), center + (0.5*i), color='red')
             plt.text(center + (0.5*i), y, f' {i*self.unit_scale}', va = 'center')

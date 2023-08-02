@@ -68,7 +68,7 @@ class Regionalize(Iteration, Decomposition):
         """
         Bin 2D point data with hexagonal bins.
         
-        Stores the centroids of the exagons under self.hexagon_coordinates,
+        Stores the centroids of the hexagons under self.hexagon_coordinates,
         and the hexagon shape under self.hexbin_hexagon_shape.
         Args:
             spacing (float): distance between tile centers, in same units as 

@@ -139,7 +139,8 @@ class GeneScatter(AxSize):
                     save: bool=False, save_name: str='', dpi: int=300, 
                     file_format: str='.eps', alpha=1, invert_yaxis=False,
                     image=None, invert_xaxis=False, reset_xy=False, 
-                    transparent=False, alpha_img=0.5) -> None:
+                    switch_xy=True, transparent=False,) -> None:
+
         """Make a scatter plot of the data.
 
         Uses a black background. Plots in real size if `ax_scale_factor` is 1. 
@@ -212,6 +213,9 @@ class GeneScatter(AxSize):
             data = self.get_gene(g)
             x = data.x
             y = data.y
+            if switch_xy:
+                x, y = y, x
+
             if isinstance(view, list):
                 filt_x = (x > view[0][0]) & (x < view[1][0])
                 filt_y = (y > view[0][1] )& (y < view[1][1])
@@ -373,7 +377,7 @@ class MultiGeneScatter(AxSize):
                     
             if show_title:
                 lw, fs = self._line_font_size(ax)
-                ax.text(d.xy_center[0], d.y_max, d.dataset_name, color='white', ha='center', fontsize=fs)
+                ax.text(d.xyz_center[0], d.y_max, d.dataset_name, color='white', ha='center', fontsize=fs)
         
         if type(image) != type(None):
             ax.imshow(image, cmap='Greys_r',alpha=0.5)

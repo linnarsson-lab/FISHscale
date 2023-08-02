@@ -22,6 +22,7 @@ from FISHscale.spatial.gene_order import Gene_order
 from FISHscale.segmentation.cellpose import Cellpose
 from FISHscale.utils.regionalization_gradient import Regionalization_Gradient, Regionalization_Gradient_Multi
 from FISHscale.utils.volume_align import Volume_Align
+from FISHscale.utils.binning import Binning, Binning_multi
 import sys
 from datetime import datetime
 from tqdm import tqdm
@@ -54,7 +55,7 @@ logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s',stream=sy
 
 class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, AttributeScatter, SpatialMetrics, DataLoader, Normalization, 
               Density1D, BoneFight, Decomposition, Boundaries, Gene_order, Cellpose, 
-              Regionalization_Gradient):
+              Regionalization_Gradient, Binning):
     """
     Base Class for FISHscale, still under development
 
@@ -260,10 +261,13 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         if z_offset != 0:
             self.z_offset += z_offset
             self.df.z += z_offset
+            self.z_min += z_offset
+            self.z_max += z_offset
 
         self.x_extent = self.x_max - self.x_min
         self.y_extent = self.y_max - self.y_min 
-        self.xy_center = (self.x_max - 0.5*self.x_extent, self.y_max - 0.5*self.y_extent)
+        self.z_extent = self.z_max - self.z_min 
+        self.xyz_center = (self.x_max - 0.5*self.x_extent, self.y_max - 0.5*self.y_extent, self.z_max - 0.5*self.z_extent)
 
     def visualize(self,
                 remote=False,
@@ -549,7 +553,8 @@ def _segmentation_dots(partition, func):
 
 
 class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base, Normalization, RegionalizeMulti,
-                   Decomposition, BoneFightMulti, Regionalization_Gradient_Multi, Boundaries_Multi, Volume_Align):
+                   Decomposition, BoneFightMulti, Regionalization_Gradient_Multi, Boundaries_Multi, Volume_Align,
+                   Binning_multi):
     """Load multiple datasets as Dataset objects.
     """
 
@@ -1027,7 +1032,7 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
         for i, s in enumerate(sorted):
             offset_x = x[i]
             offset_y = y[i]
-            dataset_center = self.datasets[s].xy_center
+            dataset_center = self.datasets[s].xyz_center
             offset_x = offset_x - dataset_center[0]
             offset_y = offset_y - dataset_center[1]
             self.datasets[s].offset_data_temp(offset_x, offset_y, 0)
@@ -1042,8 +1047,8 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
         """
 
         for d in self.datasets:
-            x_offset = -d.xy_center[0]
-            y_offset = -d.xy_center[1]
+            x_offset = -d.xyz_center[0]
+            y_offset = -d.xyz_center[1]
             if z:
                 z_offset = d.z
             else:
@@ -1069,7 +1074,7 @@ class MultiDataset(ManyColors, MultiIteration, MultiGeneScatter, DataLoader_base
         """Reset the working selection to include all datapoints.
         """
         for d in self.datasets:
-            self.set_working_selection(level = None)
+            d.set_working_selection(level = None)
 
     def visualize(
                 self,
