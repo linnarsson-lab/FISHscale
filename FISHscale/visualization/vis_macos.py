@@ -80,6 +80,7 @@ class Window:
                 self.dic_pointclouds['File'].append(str(x.filename))
             self.pass_multi_data()
 
+        images = [x.image for x in self.dataset]
         self.vis = Visualizer(self.dataset,
                                 self.dic_pointclouds, 
                                 color_dic=self.color_dic,
@@ -88,6 +89,7 @@ class Window:
                                 x_alt=self.x_alt,
                                 y_alt=self.y_alt,
                                 alt=self.c_alt,
+                                image=images,
                                 )
 
     def pass_multi_data(self):
@@ -133,6 +135,7 @@ class Visualizer:
                 x_alt=None,
                 y_alt=None,
                 alt={},
+                image=None,
                 ):
 
         self.data = data
@@ -145,6 +148,7 @@ class Visualizer:
         self.genes_points_materials = {}
         self.material = rendering.MaterialRecord()
         self.material.base_color = [0.9, 0.9, 0.9, 1.0]
+        self.image = image
         self.vis_init()
 
     
@@ -265,6 +269,12 @@ class Visualizer:
         self.visM.add_child(self._settings_panel) 
 
         datasets_names = [d.dataset_name for d in self.data]
+
+
+        self.images = [o3d.geometry.Image(i) for i in self.image if i is not None]
+        
+        for i in self.images:
+            self._scene.scene.add_geometry(i)
 
         for d, label in zip(self.data, datasets_names):
             x = d.x_min + 100
