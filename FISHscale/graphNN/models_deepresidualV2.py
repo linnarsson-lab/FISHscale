@@ -233,7 +233,7 @@ class SAGE(nn.Module):
 
                 for input_nodes, output_nodes, blocks in tqdm.tqdm(dataloader):
                     if l == 0:
-                        x = self.encoder.embedding(blocks[0].srcdata['h'])
+                        x = blocks[0].srcdata['h']#self.encoder.embedding(blocks[0].srcdata['h'])
                     else:
                         x = blocks[0].srcdata['h']
                     dr = blocks[0].dstdata[self.features_name].long()
@@ -245,7 +245,7 @@ class SAGE(nn.Module):
                         h, att2 = layer(blocks[0], x,get_attention=True)
                         h = h.mean(1)
                         
-                        h = self.encoder.ln1(h) + self.encoder.embedding(dr)
+                        h = self.encoder.ln1(h) + dr#self.encoder.embedding(dr)
                         h = self.encoder.fw(self.encoder.ln2(h)) + h
 
                     y[output_nodes] = h.cpu().detach()#.numpy()
@@ -279,7 +279,7 @@ class SAGE(nn.Module):
             for input_nodes, output_nodes, blocks in tqdm.tqdm(dataloader):
                 #x = blocks[0].srcdata['h']
                 if l == 0:
-                    x = self.encoder.embedding(blocks[0].srcdata['h'])
+                    x = blocks[0].srcdata['h']#self.encoder.embedding(blocks[0].srcdata['h'])
                 else:
                     x = blocks[0].srcdata['h']
                 dr = blocks[0].dstdata[self.features_name].long()
@@ -295,7 +295,7 @@ class SAGE(nn.Module):
                     self.attention_list[l].append(att.cpu().detach())
                     h = h.mean(1)
                     
-                    h = self.encoder.ln1(h) + self.encoder.embedding(dr)
+                    h = self.encoder.ln1(h) + dr#self.encoder.embedding(dr)
                     h = self.encoder.fw(self.encoder.ln2(h)) + h
 
                 y[output_nodes] = h.cpu().detach().to(buffer_device)
@@ -371,7 +371,7 @@ class Encoder(nn.Module):
     
     def forward(self, x, blocks=None, dr=0): 
         #h = th.log(x+1)
-        e = self.embedding(x)
+        e = x#self.embedding(x)
         h = e
         #print(h.shape)
         for l, (layer, block) in enumerate(zip(self.encoder_dict['GS'], blocks)):

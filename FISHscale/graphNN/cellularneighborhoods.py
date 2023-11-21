@@ -10,7 +10,7 @@ from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 import pytorch_lightning as pl
 import pandas as pd
 import dgl
-from FISHscale.graphNN.models_deepresidual import SAGELightning
+from FISHscale.graphNN.models_deepresidualV2 import SAGELightning
 #from FISHscale.graphNN.models import SAGELightning
 from FISHscale.graphNN.graph_utils import GraphUtils, GraphPlotting
 from FISHscale.graphNN.graph_decoder import GraphDecoder
@@ -466,8 +466,8 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
 
         from scipy.spatial import cKDTree as KDTree
         kdT = KDTree(coords)
-        d,i = kdT.query(coords,k=2)
-        d_th = np.percentile(d[:,-1],97)*self.distance_factor
+        d,i = kdT.query(coords,k=3)
+        d_th = np.percentile(d[:,-1],95)#*self.distance_factor
         logging.info('Chosen dist to connect molecules into a graph: {}'.format(d_th))
         print('Chosen dist to connect molecules into a graph: {}'.format(d_th))
         return d_th
@@ -540,6 +540,8 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
         g= dgl.graph((edges[0,:],edges[1,:]),)
         #g = dgl.to_bidirected(g)]
         g.ndata[self.features_name] = th.tensor(d) #, dtype=th.int16)#
+        print(labels)
+        print(molecules.dtype)
         g.ndata['label'] = th.tensor(labels[molecules], dtype=th.uint8)
         g.ndata[self.id_name] = th.tensor(adata.obs[self.id_name].values.astype(np.int64))
 
