@@ -82,7 +82,9 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         color_input: Optional[Union[str, dict]] = None,
         working_selection: str = None,
         verbose: bool = True,
-        part_of_multidataset: bool = False):
+        part_of_multidataset: bool = False,
+        image=None,
+        ):
         """initiate Dataset
 
         Args:
@@ -224,6 +226,10 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         #Verbosity
         self.verbose = verbose
         self.vp(f'Loaded: {self.dataset_name}')
+        if image is None:
+            self.image = None
+        else:
+            self.image = self.read_image(image)
             
     def vp(self, *args):
         """Function to print output if verbose mode is True
@@ -269,13 +275,48 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
         self.z_extent = self.z_max - self.z_min 
         self.xyz_center = (self.x_max - 0.5*self.x_extent, self.y_max - 0.5*self.y_extent, self.z_max - 0.5*self.z_extent)
 
+    def read_image(self, filename):
+        #Read image
+        from skimage import img_as_bool
+        import cv2
+        logging.info(f'Reading image: {filename}')
+        
+        if filename.count('.zarr'):
+            import zarr
+            print(filename)
+            img = zarr.load(filename)
+            img[img >0] = 1
+            logging.info(f'Rescaling image')
+            width = int(img.shape[1] * .27)
+            height = int(img.shape[0] * .27)
+            dim = (width, height)
+            # resize image
+            img = cv2.resize(img, dim, interpolation = cv2.INTER_AREA)
+            img[img >0] = 1
+            img = img_as_bool(img)*255
+            img = img.astype('uint8')
+            img[img > 0] = 1
+            img = img_as_bool(img)
+            mx = np.max(img.shape)
+            square_image = np.zeros([mx,mx])
+            square_image[:img.shape[0],:img.shape[1]] = img
+        elif filename.count('.tif'):
+            import tifffile
+            img = tifffile.imread(filename)
+            img[img >0] = 1
+            img_d = rescale(img, self.pixel_size.magnitude, anti_aliasing=False)
+            img_d[img_d >0] = 1
+            img_d = img_as_bool(img_d)
+        return square_image
+
     def visualize(self,
                 remote=False,
                 columns:list=[],
                 color_dic=None,
                 x=None,
                 y=None,
-                c={}):
+                c={},
+                ):
         """
         Run open3d visualization on self.data
         Pass to columns a list of strings, each string will be the class of the dots to be colored by. example: color by gene
