@@ -10,7 +10,8 @@ from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 import pytorch_lightning as pl
 import pandas as pd
 import dgl
-from FISHscale.graphNN.models_deepresidualV2 import SAGELightning
+from FISHscale.graphNN.models_deepresidualV2 import SAGELightning as modelExpression
+from FISHscale.graphNN.models_deepresidual import SAGELightning as modelClass
 #from FISHscale.graphNN.models import SAGELightning
 from FISHscale.graphNN.graph_utils import GraphUtils, GraphPlotting
 from FISHscale.graphNN.graph_decoder import GraphDecoder
@@ -114,6 +115,7 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
         #anndata.raw = anndata
         if normalize:
             sc.pp.normalize_total(anndata, target_sum=1e4)
+            sc.pp.log1p(anndata)
         self.anndata = anndata
 
         ### Model hyperparameters
@@ -122,17 +124,22 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
             n_latents = self.unique_labels.shape[0]
             n_hidden = 128
             loss_type = 'supervised'
+            model = modelClass
         
         elif supervised == False and self.features_name == 'Expression':
             in_feats= len(self.genes)
             n_latents = 24
             n_hidden = 128
             loss_type = 'unsupervised'
+            model = modelExpression
+
         else:
             in_feats= self.unique_labels.max()+1
             n_latents = 24
             n_hidden = 64
             loss_type = 'unsupervised'
+            model = modelClass
+            
         self.n_latents = n_latents
         ###
 
@@ -473,7 +480,7 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
         return d_th
         
 
-    def buildGraph(self, adata, labels, features='Expression', d_th=500, coords=None):
+    def buildGraph(self, adata, labels, features='Expression', d_th=50, coords=None):
         """
         buildGraph: makes networkx graph.
 
