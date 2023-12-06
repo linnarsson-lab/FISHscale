@@ -213,7 +213,7 @@ class SAGE(nn.Module):
             g.ndata['h'] = g.ndata[self.features_name].long()
             sampler = dgl.dataloading.MultiLayerFullNeighborSampler(1, prefetch_node_feats=['h'])
 
-            dataloader = dgl.dataloading.NodeDataLoader(
+            dataloader = dgl.dataloading.DataLoader(
                     g, th.arange(g.num_nodes()).to(g.device), sampler, device=device,
                     batch_size=batch_size, shuffle=False, drop_last=False, num_workers=num_workers,
                     persistent_workers=(num_workers > 0))
@@ -317,7 +317,7 @@ class Encoder(nn.Module):
         self.aggregator = aggregator
         n_embed = 64
         self.n_embed = n_embed
-        #self.embedding = nn.Embedding(in_feats, n_embed)
+        self.embedding = nn.Embedding(in_feats, n_embed)
         self.ln1 = nn.LayerNorm(n_embed)
         self.ln2 = nn.LayerNorm(n_embed)
 

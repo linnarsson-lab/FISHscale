@@ -139,7 +139,7 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
             n_hidden = 64
             loss_type = 'unsupervised'
             model = modelClass
-            
+
         self.n_latents = n_latents
         ###
 
@@ -202,7 +202,7 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
         
         ### Prepare Model
         if type(self.model) == type(None):
-            self.model = SAGELightning(
+            self.model = model(
                                         in_feats=in_feats, 
                                         n_latent=n_latents,
                                         n_layers=len(self.ngh_sizes),
@@ -283,7 +283,7 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
                             self.g,
                             train_nodes,
                             node_sampler,
-                            device=self.device,
+                            device='cpu',
                             batch_size=self.batch_size,
                             shuffle=True,
                             drop_last=True,
@@ -310,7 +310,7 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
                             self.g,
                             train_edges,
                             edge_sampler,
-                            device=self.device,
+                            device='cpu',
                             batch_size=self.batch_size,
                             shuffle=True,
                             drop_last=True,
@@ -542,13 +542,14 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
 
         d = features
         edges, molecules, ngh_ = find_nn_distance(coords, t, distance_threshold)
+        if th.is_tensor(molecules):
+            molecules = molecules.numpy()
         d= d[molecules]
         #d = self.molecules_df(molecules)
         g= dgl.graph((edges[0,:],edges[1,:]),)
         #g = dgl.to_bidirected(g)]
         g.ndata[self.features_name] = th.tensor(d) #, dtype=th.int16)#
-        print(labels)
-        print(molecules.dtype)
+
         g.ndata['label'] = th.tensor(labels[molecules], dtype=th.uint8)
         g.ndata[self.id_name] = th.tensor(adata.obs[self.id_name].values.astype(np.int64))
 
@@ -557,7 +558,7 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
         molecules_connected = molecules[sum_nodes_connected >= self.minimum_nodes_connected]
         remove = molecules[sum_nodes_connected < self.minimum_nodes_connected]
         g.remove_nodes(th.tensor(remove))
-        g.ndata['indices'] = th.tensor(molecules_connected.clone().detach())
+        g.ndata['indices'] = th.tensor(molecules_connected)
         g.ndata['coords'] = th.tensor(coords[molecules_connected])
         return g
 
