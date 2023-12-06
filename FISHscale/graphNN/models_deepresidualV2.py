@@ -358,7 +358,6 @@ class Encoder(nn.Module):
             nn.Linear(n_latent, 4 * n_latent),
             nn.ReLU(),
             nn.Linear(4 * n_latent, n_latent),
-            nn.Dropout(dropout),
         )
 
         self.decoder = nn.Sequential(
