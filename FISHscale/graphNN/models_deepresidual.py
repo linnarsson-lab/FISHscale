@@ -236,17 +236,18 @@ class SAGE(nn.Module):
                         x = self.encoder.embedding(blocks[0].srcdata['h'])
                     else:
                         x = blocks[0].srcdata['h']
-                    dr = blocks[0].dstdata[self.features_name].long()
+                    #print(dr.shape)
+                    
                     if l != self.n_layers-1:
                         h,att1 = layer(blocks[0], x,get_attention=True)
                         h= h.flatten(1)
                         
                     else:
+                        #dr = blocks[0].dstdata[self.features_name].long()
                         h, att2 = layer(blocks[0], x,get_attention=True)
                         h = h.mean(1)
-                        
-                        h = self.encoder.ln1(h) + self.encoder.embedding(dr)
-                        h = self.encoder.fw(self.encoder.ln2(h)) + h
+                        h = h #+ self.encoder.embedding(dr)
+                        #h = self.encoder.fw(self.encoder.ln2(h)) + h
 
                     y[output_nodes] = h.cpu().detach()#.numpy()
                 g.ndata['h'] = y
@@ -282,6 +283,7 @@ class SAGE(nn.Module):
                     x = self.encoder.embedding(blocks[0].srcdata['h'])
                 else:
                     x = blocks[0].srcdata['h']
+                #mfgs[-1].dstdata[self.features_name]
                 dr = blocks[0].dstdata[self.features_name].long()
                 if l != self.n_layers-1:
                     h,att = layer(blocks[0], x,get_attention=True)
@@ -294,9 +296,10 @@ class SAGE(nn.Module):
                     #att2_list.append(att2.mean(1).cpu().detach())
                     self.attention_list[l].append(att.cpu().detach())
                     h = h.mean(1)
+                    h = self.encoder.fw(h)
                     
-                    h = self.encoder.ln1(h) + self.encoder.embedding(dr)
-                    h = self.encoder.fw(self.encoder.ln2(h)) + h
+                    #h = self.encoder.ln1(h) #+ self.encoder.embedding(dr)
+                    #h = self.encoder.fw(self.encoder.ln2(h)) #+ h
 
                 y[output_nodes] = h.cpu().detach().to(buffer_device)
             g.ndata['h'] = y
@@ -318,23 +321,18 @@ class Encoder(nn.Module):
         n_embed = 64
         self.n_embed = n_embed
         self.embedding = nn.Embedding(in_feats, n_embed)
-        self.ln1 = nn.LayerNorm(n_embed)
-        self.ln2 = nn.LayerNorm(n_embed)
 
         layers = nn.ModuleList()
         self.num_heads = 4
         self.n_layers = n_layers
         for i in range(0,n_layers-1):
-            #if i > 0:
-            #    in_feats = n_hidden
-            #    x = 0.2
-            #else:
-            #    x = 0
+
             if i == 0:
                 layers.append(dglnn.GATv2Conv(n_embed, 
                                             n_hidden, 
                                             num_heads=self.num_heads,
                                             feat_drop=dropout,
+                                            residual=True,
                                             #allow_zero_in_degree=False
                                             ))
             else:
@@ -342,6 +340,7 @@ class Encoder(nn.Module):
                             n_hidden, 
                             num_heads=self.num_heads,
                             feat_drop=dropout,
+                            residual=True,
                             #allow_zero_in_degree=False
                             ))
 
@@ -350,30 +349,19 @@ class Encoder(nn.Module):
                                     n_latent, 
                                     num_heads=self.num_heads, 
                                     feat_drop=dropout,
+                                    residual=True,
                                     #allow_zero_in_degree=False
                                     ))
 
         self.encoder_dict = nn.ModuleDict({'GS': layers})
-        #self.fw = nn.Linear(n_hidden, n_embed)
         self.fw = nn.Sequential(
             nn.Linear(n_latent, 4 * n_latent),
             nn.ReLU(),
             nn.Linear(4 * n_latent, n_latent),
-            nn.Dropout(dropout),
-        )
-
-        self.decoder = nn.Sequential(
-            nn.Linear(n_latent, 4 * n_latent),
-            nn.ReLU(),
-            nn.Dropout(dropout),
-            nn.Linear(4 * n_latent, in_feats),    
         )
     
     def forward(self, x, blocks=None, dr=0): 
-        #h = th.log(x+1)
-        e = self.embedding(x)
-        h = e
-        #print(h.shape)
+        h = self.embedding(x)
         for l, (layer, block) in enumerate(zip(self.encoder_dict['GS'], blocks)):
             if self.aggregator != 'attentional':
                 h = layer(block, h,)
@@ -382,7 +370,5 @@ class Encoder(nn.Module):
                     h = layer(block, h,).flatten(1)
                 else:
                     h = layer(block, h,).mean(1)
-        h = self.ln1(h) + self.embedding(dr.long())
-        h = self.fw(self.ln2(h)) + h
-        #z_scale = th.exp(self.gs_var(h)) +1e-6
+        h = self.fw(h)
         return h

@@ -10,7 +10,7 @@ from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 import pytorch_lightning as pl
 import pandas as pd
 import dgl
-from FISHscale.graphNN.models_deepresidualV2 import SAGELightning as modelExpression
+from FISHscale.graphNN.models_deepresidualExpression import SAGELightning as modelX
 from FISHscale.graphNN.models_deepresidual import SAGELightning as modelClass
 #from FISHscale.graphNN.models import SAGELightning
 from FISHscale.graphNN.graph_utils import GraphUtils, GraphPlotting
@@ -40,7 +40,7 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
         model=None, # GraphSAGE model
         analysis_name:str='',
         ngh_sizes = [10, 5],
-        minimum_nodes_connected = 2,
+        minimum_nodes_connected = 3,
         train_p = 0.75,
         batch_size= 512,
         num_workers=0,
@@ -122,21 +122,21 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
         if supervised:
             in_feats= len(self.genes)
             n_latents = self.unique_labels.shape[0]
-            n_hidden = 128
+            n_hidden = 48
             loss_type = 'supervised'
             model = modelClass
         
         elif supervised == False and self.features_name == 'Expression':
             in_feats= len(self.genes)
             n_latents = 24
-            n_hidden = 128
+            n_hidden = 48
             loss_type = 'unsupervised'
-            model = modelExpression
+            model = modelX#Expression
 
         else:
             in_feats= self.unique_labels.max()+1
-            n_latents = 24
-            n_hidden = 64
+            n_latents = 10
+            n_hidden =48
             loss_type = 'unsupervised'
             model = modelClass
 
@@ -172,7 +172,7 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
 
                 labels = adata.obs[self.label_name].values
 
-                g = self.buildGraph(adata, labels, features, d_th =self.distance)
+                g = self.buildGraph(adata, labels, features)
                 g.ndata['sample'] = th.ones(g.ndata[self.features_name].shape[0]) * np.where(self.unique_samples==sample)[0][0]
                 
                 
@@ -283,7 +283,7 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
                             self.g,
                             train_nodes,
                             node_sampler,
-                            device='cpu',
+                            device=self.device,
                             batch_size=self.batch_size,
                             shuffle=True,
                             drop_last=True,
@@ -473,14 +473,14 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
 
         from scipy.spatial import cKDTree as KDTree
         kdT = KDTree(coords)
-        d,i = kdT.query(coords,k=3)
-        d_th = np.percentile(d[:,-1],95)#*self.distance_factor
+        d,i = kdT.query(coords,k=5)
+        d_th = np.percentile(d[:,-1],95)*self.distance_factor
         logging.info('Chosen dist to connect molecules into a graph: {}'.format(d_th))
         print('Chosen dist to connect molecules into a graph: {}'.format(d_th))
         return d_th
         
 
-    def buildGraph(self, adata, labels, features='Expression', d_th=50, coords=None):
+    def buildGraph(self, adata, labels, features='Expression', coords=None):
         """
         buildGraph: makes networkx graph.
 

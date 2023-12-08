@@ -220,12 +220,12 @@ class SAGE(nn.Module):
                 sampler = dgl.dataloading.MultiLayerFullNeighborSampler(1, prefetch_node_feats=['h'])
                 
                 if core_nodes is None:
-                    dataloader = dgl.dataloading.NodeDataLoader(
+                    dataloader = dgl.dataloading.DataLoader(
                             g, th.arange(g.num_nodes()).to(g.device), sampler, device=device,
                             batch_size=batch_size, shuffle=False, drop_last=False, num_workers=num_workers,
                             persistent_workers=(num_workers > 0))
                 else:
-                    dataloader = dgl.dataloading.NodeDataLoader(
+                    dataloader = dgl.dataloading.DataLoader(
                         g, core_nodes.to(g.device), sampler, device=device,
                         batch_size=batch_size, shuffle=False, drop_last=False, num_workers=num_workers,
                         persistent_workers=(num_workers > 0))
@@ -329,17 +329,20 @@ class Encoder(nn.Module):
             self.norm = F.normalize#PairNorm()#DiffGroupNorm(n_hidden,n_classes,None)
         else:
             self.norm = F.normalize#PairNorm()#DiffGroupNorm(n_hidden,20)
+        n_embed = 24
+        self.embedding = nn.Embedding(in_feats, n_embed)
+        self.ln1 = nn.LayerNorm(n_embed)
         self.num_heads = 4
         self.n_layers = n_layers
         for i in range(0,n_layers-1):
             if i > 0:
                 in_feats = n_hidden
-                x = 0.2
+                x = 0.1
             else:
                 x = 0
 
             if aggregator == 'attentional':
-                layers.append(dglnn.GATv2Conv(in_feats, 
+                layers.append(dglnn.GATv2Conv(n_embed, 
                                             n_hidden, 
                                             num_heads=self.num_heads,
                                             feat_drop=x,
@@ -347,7 +350,7 @@ class Encoder(nn.Module):
                                             ))
 
             else:
-                layers.append(dglnn.SAGEConv(in_feats, 
+                layers.append(dglnn.SAGEConv(n_embed, 
                                             n_hidden, 
                                             aggregator_type=aggregator,
                                             #feat_drop=0.2,
@@ -377,12 +380,14 @@ class Encoder(nn.Module):
         #self.gs_var = nn.Linear(n_hidden, n_latent)
     
     def forward(self, x, blocks=None): 
-        h = th.log(x+1)
+        h = self.embedding(x)
+        
         for l, (layer, block) in enumerate(zip(self.encoder_dict['GS'], blocks)):
             if self.aggregator != 'attentional':
                 h = layer(block, h,)
             else:
                 if l != self.n_layers-1:
+                    #print(block)
                     h = layer(block, h,).flatten(1)
                 else:
                     h = layer(block, h,).mean(1)

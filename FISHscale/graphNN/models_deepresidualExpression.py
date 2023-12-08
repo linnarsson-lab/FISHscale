@@ -213,7 +213,7 @@ class SAGE(nn.Module):
             g.ndata['h'] = g.ndata[self.features_name]#.long()
             sampler = dgl.dataloading.MultiLayerFullNeighborSampler(1, prefetch_node_feats=['h'])
 
-            dataloader = dgl.dataloading.NodeDataLoader(
+            dataloader = dgl.dataloading.DataLoader(
                     g, th.arange(g.num_nodes()).to(g.device), sampler, device=device,
                     batch_size=batch_size, shuffle=False, drop_last=False, num_workers=num_workers,
                     persistent_workers=(num_workers > 0))
@@ -238,11 +238,11 @@ class SAGE(nn.Module):
                         x = blocks[0].srcdata['h']
                     dr = self.encoder.embedding(blocks[0].dstdata[self.features_name])#.long()
                     if l != self.n_layers-1:
-                        h,att1 = layer(blocks[0], x,get_attention=True)
-                        h= h.flatten(1)
+                        h = layer(blocks[0], x)
+                        h = h.flatten(1)
                         
                     else:
-                        h, att2 = layer(blocks[0], x,get_attention=True)
+                        h = layer(blocks[0], x)
                         h = h.mean(1)
                         h = self.encoder.ln1(h) + dr
                         h = self.encoder.fw(self.encoder.ln2(h)) + h
@@ -358,13 +358,6 @@ class Encoder(nn.Module):
             nn.Linear(n_latent, 4 * n_latent),
             nn.ReLU(),
             nn.Linear(4 * n_latent, n_latent),
-        )
-
-        self.decoder = nn.Sequential(
-            nn.Linear(n_latent, 4 * n_latent),
-            nn.ReLU(),
-            nn.Dropout(dropout),
-            nn.Linear(4 * n_latent, in_feats),    
         )
     
     def forward(self, x, blocks=None, dr=0): 
