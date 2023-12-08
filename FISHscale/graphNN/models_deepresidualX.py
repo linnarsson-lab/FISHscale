@@ -316,7 +316,6 @@ class Encoder(nn.Module):
         self.aggregator = aggregator
         n_embed = 64
         self.n_embed = n_embed
-        self.embedding = nn.Linear(in_feats, n_embed)
         self.ln1 = nn.LayerNorm(n_embed)
         self.ln2 = nn.LayerNorm(n_embed)
 
@@ -330,7 +329,7 @@ class Encoder(nn.Module):
             #else:
             #    x = 0
             if i == 0:
-                layers.append(dglnn.GATv2Conv(n_embed, 
+                layers.append(dglnn.GATv2Conv(in_feats, 
                                             n_hidden, 
                                             num_heads=self.num_heads,
                                             feat_drop=dropout,
