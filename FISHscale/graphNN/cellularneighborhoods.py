@@ -10,7 +10,7 @@ from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 import pytorch_lightning as pl
 import pandas as pd
 import dgl
-from FISHscale.graphNN.models_deepresidualExpression import SAGELightning as modelX
+from FISHscale.graphNN.models_deepresidualX import SAGELightning as modelX
 from FISHscale.graphNN.models_deepresidual import SAGELightning as modelClass
 #from FISHscale.graphNN.models import SAGELightning
 from FISHscale.graphNN.graph_utils import GraphUtils, GraphPlotting
@@ -115,7 +115,6 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
         #anndata.raw = anndata
         if normalize:
             sc.pp.normalize_total(anndata, target_sum=1e4)
-            sc.pp.log1p(anndata)
         self.anndata = anndata
 
         ### Model hyperparameters
@@ -131,7 +130,7 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
             n_latents = 24
             n_hidden = 48
             loss_type = 'unsupervised'
-            model = modelX#Expression
+            model = modelX
 
         else:
             in_feats= self.unique_labels.max()+1

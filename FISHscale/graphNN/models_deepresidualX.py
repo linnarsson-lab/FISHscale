@@ -361,10 +361,7 @@ class Encoder(nn.Module):
         )
     
     def forward(self, x, blocks=None, dr=0): 
-        #h = th.log(x+1)
-        e = self.embedding(x)
-        h = e
-        #print(h.shape)
+        h = th.log(x+1)
         for l, (layer, block) in enumerate(zip(self.encoder_dict['GS'], blocks)):
             if self.aggregator != 'attentional':
                 h = layer(block, h,)
@@ -374,7 +371,5 @@ class Encoder(nn.Module):
                 else:
                     h = layer(block, h,).mean(1)
         
-        h = self.ln1(h) + self.embedding(dr)
-        h = self.fw(self.ln2(h)) + h
-        #z_scale = th.exp(self.gs_var(h)) +1e-6
+        h = self.fw(h)
         return h
