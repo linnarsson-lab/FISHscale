@@ -218,7 +218,6 @@ class SAGE(nn.Module):
                     batch_size=batch_size, shuffle=False, drop_last=False, num_workers=num_workers,
                     persistent_workers=(num_workers > 0))
 
-
             for l, layer in enumerate(self.encoder.encoder_dict['GS']):
                 if l == self.n_layers - 1:
                     y = th.zeros(g.num_nodes(), self.encoder.n_embed) #if not self.supervised else th.zeros(g.num_nodes(), self.n_classes)
@@ -232,11 +231,7 @@ class SAGE(nn.Module):
                     p_class = None
 
                 for input_nodes, output_nodes, blocks in tqdm.tqdm(dataloader):
-                    if l == 0:
-                        x = self.encoder.embedding(blocks[0].srcdata['h'])
-                    else:
-                        x = blocks[0].srcdata['h']
-                    dr = self.encoder.embedding(blocks[0].dstdata[self.features_name])#.long()
+                    x = blocks[0].srcdata['h']
                     if l != self.n_layers-1:
                         h = layer(blocks[0], x)
                         h = h.flatten(1)
@@ -244,8 +239,7 @@ class SAGE(nn.Module):
                     else:
                         h = layer(blocks[0], x)
                         h = h.mean(1)
-                        h = self.encoder.ln1(h) + dr
-                        h = self.encoder.fw(self.encoder.ln2(h)) + h
+                        h = self.encoder.fw(h)
 
                     y[output_nodes] = h.cpu().detach()#.numpy()
                 g.ndata['h'] = y
@@ -323,16 +317,12 @@ class Encoder(nn.Module):
         self.num_heads = 4
         self.n_layers = n_layers
         for i in range(0,n_layers-1):
-            #if i > 0:
-            #    in_feats = n_hidden
-            #    x = 0.2
-            #else:
-            #    x = 0
             if i == 0:
                 layers.append(dglnn.GATv2Conv(in_feats, 
                                             n_hidden, 
                                             num_heads=self.num_heads,
                                             feat_drop=dropout,
+                                            residual=True,
                                             #allow_zero_in_degree=False
                                             ))
             else:
@@ -340,6 +330,7 @@ class Encoder(nn.Module):
                             n_hidden, 
                             num_heads=self.num_heads,
                             feat_drop=dropout,
+                            residual=True,
                             #allow_zero_in_degree=False
                             ))
 
@@ -348,6 +339,7 @@ class Encoder(nn.Module):
                                     n_latent, 
                                     num_heads=self.num_heads, 
                                     feat_drop=dropout,
+                                    residual=True,
                                     #allow_zero_in_degree=False
                                     ))
 
@@ -355,6 +347,7 @@ class Encoder(nn.Module):
         #self.fw = nn.Linear(n_hidden, n_embed)
         self.fw = nn.Sequential(
             nn.Linear(n_latent, 4 * n_latent),
+            nn.BatchNorm1d(n_latent * 4, momentum=0.01, eps=0.001),
             nn.ReLU(),
             nn.Linear(4 * n_latent, n_latent),
         )
