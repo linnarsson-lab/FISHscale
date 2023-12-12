@@ -108,7 +108,6 @@ class SAGELightning(LightningModule):
                 pos_ids = pos.edges()[0]
                 mfgs = [mfg.int() for mfg in mfgs]
                 batch_inputs = mfgs[0].srcdata[self.features_name]
-                dr =  mfgs[-1].dstdata[self.features_name]
 
             if len(batch_inputs.shape) == 1:
                 if self.supervised == False:
@@ -131,7 +130,7 @@ class SAGELightning(LightningModule):
 
             else:
                 graph_loss = F.cross_entropy(zn_loc, mfgs[-1].dstdata['label'])
-                print(graph_loss.shape)
+                #print(graph_loss)
 
             opt_g = self.optimizers()
             opt_g.zero_grad()
@@ -220,8 +219,10 @@ class SAGE(nn.Module):
                     persistent_workers=(num_workers > 0))
 
             for l, layer in enumerate(self.encoder.encoder_dict['GS']):
-                if l == self.n_layers - 1:
+                if l == self.n_layers - 1 and self.supervised == False:
                     y = th.zeros(g.num_nodes(), self.encoder.n_embed) #if not self.supervised else th.zeros(g.num_nodes(), self.n_classes)
+                elif l == self.n_layers - 1 and self.supervised:
+                    y = th.zeros(g.num_nodes(), self.n_latent)
                 else:
                     if self.aggregator == 'attentional':
                         y = th.zeros(g.num_nodes(), self.encoder.n_embed*self.encoder.num_heads)
@@ -324,7 +325,7 @@ class Encoder(nn.Module):
                                             n_hidden, 
                                             num_heads=self.num_heads,
                                             feat_drop=dropout,
-                                            residual=True,
+                                            #residual=True,
                                             #allow_zero_in_degree=False
                                             ))
             else:
@@ -332,16 +333,16 @@ class Encoder(nn.Module):
                             n_hidden, 
                             num_heads=self.num_heads,
                             feat_drop=dropout,
-                            residual=True,
+                            #residual=True,
                             #allow_zero_in_degree=False
                             ))
 
 
         layers.append(dglnn.GATv2Conv(n_embed*self.num_heads, 
-                                    n_latent * 4, 
+                                    n_hidden * 4, 
                                     num_heads=self.num_heads, 
                                     feat_drop=dropout,
-                                    residual=True,
+                                    #residual=True,
                                     #allow_zero_in_degree=False
                                     ))
 
@@ -349,10 +350,7 @@ class Encoder(nn.Module):
         #self.fw = nn.Linear(n_hidden, n_embed)
 
         self.fw = nn.Sequential(
-            nn.Linear(4 * n_latent, n_latent*2),
-            nn.BatchNorm1d(n_latent * 2, momentum=0.01, eps=0.001),
-            nn.ReLU(),
-            nn.Linear(2 * n_latent, n_latent),
+            nn.Linear(4 * n_hidden, n_latent),
         )
     
     def forward(self, x, blocks=None): 
