@@ -121,10 +121,11 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
         if supervised:
             logging.info('Supervised model.')
             in_feats= len(self.genes)
-            n_latents = self.unique_labels.shape[0]
+            n_latents = self.unique_labels.max() + 1
             n_hidden = 48
             loss_type = 'supervised'
             model = modelX
+            print(n_latents)
         
         elif supervised == False and self.features_name == 'Expression':
             in_feats= len(self.genes)
@@ -136,11 +137,12 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
         else:
             in_feats= self.unique_labels.max()+1
             n_latents = 10
-            n_hidden =48
+            n_hidden = 48
             loss_type = 'unsupervised'
             model = modelClass
 
         self.n_latents = n_latents
+        print(self.n_latents)
         ###
 
         ### Prepare data
@@ -197,26 +199,24 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
             self.g = dgl.add_self_loop(self.g)
 
         logging.info(self.g)
-        #self.make_train_test_validation()
-        l_loc,l_scale= 0,1
         
         ### Prepare Model
         if type(self.model) == type(None):
             self.model = model(
-                                        in_feats=in_feats, 
-                                        n_latent=n_latents,
-                                        n_layers=len(self.ngh_sizes),
-                                        n_classes=n_latents,
-                                        n_hidden=n_hidden,
-                                        lr=self.lr,
-                                        supervised=self.supervised,
-                                        device=self.device.type,
-                                        aggregator=self.aggregator,
-                                        loss_type=loss_type,
-                                        features_name=self.features_name,
-                                        
-                                    
-                                    )
+                            in_feats=in_feats, 
+                            n_latent=n_latents,
+                            n_layers=len(self.ngh_sizes),
+                            n_classes=n_latents,
+                            n_hidden=n_hidden,
+                            lr=self.lr,
+                            supervised=self.supervised,
+                            device=self.device.type,
+                            aggregator=self.aggregator,
+                            loss_type=loss_type,
+                            features_name=self.features_name,
+                            
+                        
+                        )
 
         self.model.to(self.device)
 

@@ -130,7 +130,6 @@ class SAGELightning(LightningModule):
                 graph_loss += - nn.CosineSimilarity(dim=1, eps=1e-08)(decoder_n1, feats_n1).mean(axis=0)'''
 
             else:
-                print(zn_loc.shape)
                 graph_loss = F.cross_entropy(zn_loc, mfgs[-1].dstdata['label'])
                 print(graph_loss.shape)
 
@@ -197,7 +196,7 @@ class SAGE(nn.Module):
         self.features_name = features_name
         self.encoder = Encoder(in_feats=in_feats,
                                 n_hidden= 64,
-                                n_latent= 64,
+                                n_latent= n_latent,
                                 n_layers=n_layers,
                                 supervised=supervised,
                                 aggregator=aggregator,
