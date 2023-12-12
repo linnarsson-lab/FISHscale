@@ -119,11 +119,12 @@ class CellularNeighborhoods(pl.LightningDataModule, GraphPlotting, GraphDecoder)
 
         ### Model hyperparameters
         if supervised:
+            logging.info('Supervised model.')
             in_feats= len(self.genes)
             n_latents = self.unique_labels.shape[0]
             n_hidden = 48
             loss_type = 'supervised'
-            model = modelClass
+            model = modelX
         
         elif supervised == False and self.features_name == 'Expression':
             in_feats= len(self.genes)

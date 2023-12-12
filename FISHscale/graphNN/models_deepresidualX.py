@@ -115,7 +115,7 @@ class SAGELightning(LightningModule):
                     #batch_inputs = F.one_hot(batch_inputs.to(th.int64), num_classes=self.in_feats)
                     batch_inputs = batch_inputs.to(th.int64)
 
-            zn_loc = self.module.encoder(batch_inputs,mfgs, dr=dr)
+            zn_loc = self.module.encoder(batch_inputs,mfgs)
             if self.loss_type == 'unsupervised':
                 graph_loss = self.loss_fcn(zn_loc, pos, neg).mean()
                 '''decoder_n1 = self.module.encoder.decoder(zn_loc).softmax(dim=-1)
@@ -130,7 +130,9 @@ class SAGELightning(LightningModule):
                 graph_loss += - nn.CosineSimilarity(dim=1, eps=1e-08)(decoder_n1, feats_n1).mean(axis=0)'''
 
             else:
+                print(zn_loc.shape)
                 graph_loss = F.cross_entropy(zn_loc, mfgs[-1].dstdata['label'])
+                print(graph_loss.shape)
 
             opt_g = self.optimizers()
             opt_g.zero_grad()
@@ -316,6 +318,7 @@ class Encoder(nn.Module):
         layers = nn.ModuleList()
         self.num_heads = 4
         self.n_layers = n_layers
+        
         for i in range(0,n_layers-1):
             if i == 0:
                 layers.append(dglnn.GATv2Conv(in_feats, 
@@ -336,7 +339,7 @@ class Encoder(nn.Module):
 
 
         layers.append(dglnn.GATv2Conv(n_embed*self.num_heads, 
-                                    n_latent, 
+                                    n_latent * 4, 
                                     num_heads=self.num_heads, 
                                     feat_drop=dropout,
                                     residual=True,
@@ -345,14 +348,15 @@ class Encoder(nn.Module):
 
         self.encoder_dict = nn.ModuleDict({'GS': layers})
         #self.fw = nn.Linear(n_hidden, n_embed)
+
         self.fw = nn.Sequential(
-            nn.Linear(n_latent, 4 * n_latent),
-            nn.BatchNorm1d(n_latent * 4, momentum=0.01, eps=0.001),
+            nn.Linear(4 * n_latent, n_latent*2),
+            nn.BatchNorm1d(n_latent * 2, momentum=0.01, eps=0.001),
             nn.ReLU(),
-            nn.Linear(4 * n_latent, n_latent),
+            nn.Linear(2 * n_latent, n_latent),
         )
     
-    def forward(self, x, blocks=None, dr=0): 
+    def forward(self, x, blocks=None): 
         h = th.log(x+1)
         for l, (layer, block) in enumerate(zip(self.encoder_dict['GS'], blocks)):
             if self.aggregator != 'attentional':
