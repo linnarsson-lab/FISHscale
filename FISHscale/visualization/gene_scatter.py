@@ -139,7 +139,7 @@ class GeneScatter(AxSize):
                     save: bool=False, save_name: str='', dpi: int=300, 
                     file_format: str='.eps', alpha=1, invert_yaxis=False,
                     image=None, invert_xaxis=False, reset_xy=False, 
-                    switch_xy=True, transparent=False,) -> None:
+                    switch_xy=True, transparent=False,alpha_img=1) -> None:
 
         """Make a scatter plot of the data.
 

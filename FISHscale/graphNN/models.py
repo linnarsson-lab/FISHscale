@@ -239,13 +239,17 @@ class SAGE(nn.Module):
                         persistent_workers=(num_workers > 0))
             
             for l, layer in enumerate(self.encoder.encoder_dict['GS']):
-                if l == self.n_layers - 1:
+                if l == self.n_layers - 1 and self.supervised == False:
+                    print('a')
                     y = th.zeros(g.num_nodes(), self.n_latent) #if not self.supervised else th.zeros(g.num_nodes(), self.n_classes)
+                
+                elif l == self.n_layers - 1 and self.supervised:
+                    print('b')
+                    y = th.zeros(g.num_nodes(), self.n_latent)
                 else:
                     if self.aggregator == 'attentional':
-                        y = th.zeros(g.num_nodes(), self.n_hidden*4)
-                    else:
-                        y = th.zeros(g.num_nodes(), self.n_hidden)
+                        print('c')
+                        y = th.zeros(g.num_nodes(), self.encoder.n_embed*self.encoder.num_heads)
                 
                 if self.supervised:
                     p_class = th.zeros(g.num_nodes(), self.n_classes)
@@ -330,6 +334,7 @@ class Encoder(nn.Module):
         else:
             self.norm = F.normalize#PairNorm()#DiffGroupNorm(n_hidden,20)
         n_embed = 24
+        self.n_embed = n_embed
         self.embedding = nn.Embedding(in_feats, n_embed)
         self.ln1 = nn.LayerNorm(n_embed)
         self.num_heads = 4

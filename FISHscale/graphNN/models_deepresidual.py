@@ -194,8 +194,8 @@ class SAGE(nn.Module):
         self.in_feats = in_feats
         self.features_name = features_name
         self.encoder = Encoder(in_feats=in_feats,
-                                n_hidden= 64,
-                                n_latent= 64,
+                                n_hidden= n_hidden,
+                                n_latent= n_latent,
                                 n_layers=n_layers,
                                 supervised=supervised,
                                 aggregator=aggregator,
@@ -220,12 +220,13 @@ class SAGE(nn.Module):
 
 
             for l, layer in enumerate(self.encoder.encoder_dict['GS']):
-                if l == self.n_layers - 1:
-                    y = th.zeros(g.num_nodes(), self.encoder.n_embed) #if not self.supervised else th.zeros(g.num_nodes(), self.n_classes)
+                if l == self.n_layers - 1 and self.supervised == False:
+                    y = th.zeros(g.num_nodes(), self.n_latent) #if not self.supervised else th.zeros(g.num_nodes(), self.n_classes)
+                elif l == self.n_layers - 1 and self.supervised:
+                    y = th.zeros(g.num_nodes(), self.n_latent)
                 else:
                     if self.aggregator == 'attentional':
                         y = th.zeros(g.num_nodes(), self.encoder.n_embed*self.encoder.num_heads)
-
                 if self.supervised:
                     p_class = th.zeros(g.num_nodes(), self.n_classes)
                 else:
@@ -246,7 +247,9 @@ class SAGE(nn.Module):
                         #dr = blocks[0].dstdata[self.features_name].long()
                         h, att2 = layer(blocks[0], x,get_attention=True)
                         h = h.mean(1)
-                        h = h #+ self.encoder.embedding(dr)
+                        h = self.encoder.fw(h)
+                        if l == self.n_layers - 1:
+                            print(h.shape)
                         #h = self.encoder.fw(self.encoder.ln2(h)) + h
 
                     y[output_nodes] = h.cpu().detach()#.numpy()
@@ -318,7 +321,7 @@ class Encoder(nn.Module):
         ):
         super().__init__()
         self.aggregator = aggregator
-        n_embed = 64
+        n_embed = n_hidden
         self.n_embed = n_embed
         self.embedding = nn.Embedding(in_feats, n_embed)
 
@@ -346,7 +349,7 @@ class Encoder(nn.Module):
 
 
         layers.append(dglnn.GATv2Conv(n_embed*self.num_heads, 
-                                    n_latent, 
+                                    n_hidden, 
                                     num_heads=self.num_heads, 
                                     feat_drop=dropout,
                                     residual=True,
@@ -355,9 +358,9 @@ class Encoder(nn.Module):
 
         self.encoder_dict = nn.ModuleDict({'GS': layers})
         self.fw = nn.Sequential(
-            nn.Linear(n_latent, 4 * n_latent),
+            nn.Linear(n_hidden, 2 * n_latent),
             nn.ReLU(),
-            nn.Linear(4 * n_latent, n_latent),
+            nn.Linear(2 * n_latent, n_latent),
         )
     
     def forward(self, x, blocks=None, dr=0): 

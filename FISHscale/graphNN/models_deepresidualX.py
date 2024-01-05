@@ -45,7 +45,7 @@ class SAGELightning(LightningModule):
                  n_layers,
                  n_hidden=64,
                  dropout=0.1,
-                 lr=1e-4,
+                 lr=1e-3,
                  features_name='gene',
                  supervised=False,
                  reference=0,
@@ -200,7 +200,7 @@ class SAGE(nn.Module):
                                 supervised=supervised,
                                 aggregator=aggregator,
                                 dropout= dropout,
-                                )
+                            )
 
     def inference(self, g, device, batch_size, num_workers, core_nodes=None):
             """
@@ -210,7 +210,8 @@ class SAGE(nn.Module):
             layers.
             """
             self.eval()
-            g.ndata['h'] = g.ndata[self.features_name]#.long()
+            g.ndata['h'] = th.log(g.ndata[self.features_name] + 1)#.long()
+            #g.ndata['h'] = g.ndata[self.features_name]
             sampler = dgl.dataloading.MultiLayerFullNeighborSampler(1, prefetch_node_feats=['h'])
 
             dataloader = dgl.dataloading.DataLoader(
@@ -220,7 +221,8 @@ class SAGE(nn.Module):
 
             for l, layer in enumerate(self.encoder.encoder_dict['GS']):
                 if l == self.n_layers - 1 and self.supervised == False:
-                    y = th.zeros(g.num_nodes(), self.encoder.n_embed) #if not self.supervised else th.zeros(g.num_nodes(), self.n_classes)
+                    y = th.zeros(g.num_nodes(), self.n_latent) #if not self.supervised else th.zeros(g.num_nodes(), self.n_classes)
+                
                 elif l == self.n_layers - 1 and self.supervised:
                     y = th.zeros(g.num_nodes(), self.n_latent)
                 else:
@@ -234,6 +236,9 @@ class SAGE(nn.Module):
 
                 for input_nodes, output_nodes, blocks in tqdm.tqdm(dataloader):
                     x = blocks[0].srcdata['h']
+                    if l == 0:
+                        x = self.encoder.fw1(x)
+
                     if l != self.n_layers-1:
                         h = layer(blocks[0], x)
                         h = h.flatten(1)
@@ -310,7 +315,7 @@ class Encoder(nn.Module):
         ):
         super().__init__()
         self.aggregator = aggregator
-        n_embed = 64
+        n_embed = n_hidden
         self.n_embed = n_embed
         self.ln1 = nn.LayerNorm(n_embed)
         self.ln2 = nn.LayerNorm(n_embed)
@@ -319,13 +324,21 @@ class Encoder(nn.Module):
         self.num_heads = 4
         self.n_layers = n_layers
         
+        self.fw1 = nn.Sequential(
+            nn.Linear(in_feats, n_embed),
+            nn.BatchNorm1d(n_embed),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+        )
+        
         for i in range(0,n_layers-1):
             if i == 0:
-                layers.append(dglnn.GATv2Conv(in_feats, 
+                layers.append(dglnn.GATv2Conv(n_embed, 
                                             n_hidden, 
                                             num_heads=self.num_heads,
                                             feat_drop=dropout,
-                                            #residual=True,
+                                            activation=F.elu,
+                                            residual=True,
                                             #allow_zero_in_degree=False
                                             ))
             else:
@@ -333,7 +346,8 @@ class Encoder(nn.Module):
                             n_hidden, 
                             num_heads=self.num_heads,
                             feat_drop=dropout,
-                            #residual=True,
+                            activation=F.elu,
+                            residual=True,
                             #allow_zero_in_degree=False
                             ))
 
@@ -342,7 +356,8 @@ class Encoder(nn.Module):
                                     n_hidden * 4, 
                                     num_heads=self.num_heads, 
                                     feat_drop=dropout,
-                                    #residual=True,
+                                    activation=F.elu,
+                                    residual=True,
                                     #allow_zero_in_degree=False
                                     ))
 
@@ -354,7 +369,7 @@ class Encoder(nn.Module):
         )
     
     def forward(self, x, blocks=None): 
-        h = th.log(x+1)
+        h = self.fw1(th.log(1+x))#th.log(x+1)
         for l, (layer, block) in enumerate(zip(self.encoder_dict['GS'], blocks)):
             if self.aggregator != 'attentional':
                 h = layer(block, h,)
