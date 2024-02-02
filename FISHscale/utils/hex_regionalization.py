@@ -623,6 +623,24 @@ class Regionalize(Iteration, Decomposition):
         angle = np.rad2deg(math.atan2(dy, dx))
 
         return angle
+
+    def get_rotation_rad(self, x1: float, y1: float, x2: float, y2: float) -> float:
+        """Calculates the rotation of a vector between 2 points and the origin.
+        Args:
+            x1 (float): X coordinate of point 1.
+            y1 (float): Y coordinate of point 1.
+            x2 (float): X coordinate of point 2.
+            y2 (float): Y coordinate of point 2.
+        Returns:
+            float: radians
+        
+        """
+        dx = x2 - x1
+        dy = y2 - y1
+        
+        angle = math.atan2(dy, dx)
+
+        return angle
     
     def hex_get_shared_corners(self, angle, corner_dict, x=0, y=0):
         """
