@@ -15,7 +15,7 @@ def close_polygon(polygon: np.ndarray):
     Returns:
         [np.ndarray]: [description]
     """
-    if np.all(polygon[0] != polygon[-1]):
+    if np.any(polygon[0] != polygon[-1]):
         polygon = np.vstack((polygon, polygon[0]))
         
     return polygon
