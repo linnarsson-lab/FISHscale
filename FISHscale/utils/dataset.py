@@ -57,9 +57,7 @@ class Dataset(Regionalize, Iteration, ManyColors, GeneCorr, GeneScatter, Attribu
               Density1D, BoneFight, Decomposition, Boundaries, Gene_order, Cellpose, 
               Regionalization_Gradient, Binning):
     """
-    Base Class for FISHscale, still under development
-
-    Add methods to the class to run segmentation, make loom files, visualize (spatial localization, UMAP, TSNE).
+    Base Class for FISHscale.
     """
 
     def __init__(self,
