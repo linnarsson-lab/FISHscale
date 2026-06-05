@@ -8,6 +8,16 @@ Software package for the visualization, exploration and analysis of point based 
 
 FISHscale is made for the future with ever increasing dataset size, and where multiple datasets need to be jointly analyzed. FISHscale uses Dask to store all data on disk and only loads what it needs to make analysis memory efficient.
 
+# Applied to adult mouse EEL spatial transcriptomics data
+
+Paper: [BioRxiv](https://www.biorxiv.org/content/10.1101/2022.01.12.476082v1)
+
+Images are available here: [EEL-FISH data](https://figshare.com/projects/Scalable_in_situ_single-cell_profiling_by_electrophoretic_capture_of_mRNA_using_EEL_FISH/143616)
+
+The raw image data is large, around 20 TB for all datasets. If you want to have access to any or all datasets please contact us. The best way is probably by shipping a hard drive.
+
+If you require any other raw data or have questions about the files, feel free to contact us.
+
 # Gallery
 ### Visualization
 ![](FISHscale_open_3D_2.gif)
